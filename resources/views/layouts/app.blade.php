@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>{{ $judul ?? 'MNP' }} · PT Multi Niaga Putra</title>
+    <style>
+        :root { --latar: #f5f6f8; --kartu: #fff; --teks: #1f2933; --redup: #616e7c; --garis: #e4e7eb; --aksen: #0b6e4f; --merah: #b42318; --hijau-muda: #e6f4ee; --merah-muda: #fdecea; }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--latar); color: var(--teks); font-size: 15px; }
+        header { background: var(--kartu); border-bottom: 1px solid var(--garis); padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; }
+        header strong { color: var(--aksen); }
+        main { max-width: 960px; margin: 24px auto; padding: 0 16px; }
+        .kartu { background: var(--kartu); border: 1px solid var(--garis); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+        .pesan { padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; }
+        .pesan.sukses { background: var(--hijau-muda); color: var(--aksen); }
+        .pesan.galat { background: var(--merah-muda); color: var(--merah); }
+        .tombol { display: inline-block; background: var(--aksen); color: #fff; border: 0; border-radius: 8px; padding: 10px 18px; font-size: 15px; text-decoration: none; cursor: pointer; }
+        .tombol.polos { background: none; color: var(--redup); border: 1px solid var(--garis); padding: 6px 12px; font-size: 13px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--garis); }
+        th { color: var(--redup); font-weight: 600; font-size: 13px; }
+        .redup { color: var(--redup); font-size: 13px; }
+        a { color: var(--aksen); }
+    </style>
+</head>
+<body>
+    @auth
+        <header>
+            <div><strong>MNP</strong> · PT Multi Niaga Putra</div>
+            <form method="POST" action="{{ route('logout') }}">
+                @csrf
+                <span class="redup">{{ auth()->user()->email }}</span>
+                <button class="tombol polos" type="submit">Keluar</button>
+            </form>
+        </header>
+    @endauth
+    <main>
+        @if (session('success'))
+            <div class="pesan sukses">{{ session('success') }}</div>
+        @endif
+        @if (session('error'))
+            <div class="pesan galat">{{ session('error') }}</div>
+        @endif
+        @yield('isi')
+    </main>
+</body>
+</html>
