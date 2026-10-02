@@ -1,33 +1,33 @@
 @extends('layouts.app', ['judul' => 'Beranda'])
 
 @section('isi')
+    @if ($bulanTerakhir)
+        <div class="kartu">
+            <h3 style="margin-top: 0;">Kas Bank Jago · {{ $bulanTerakhir->bulan->translatedFormat('F Y') }}</h3>
+            <div class="ringkas" style="margin-bottom: 8px;">
+                <div><span class="redup">Saldo awal</span><b>{{ rp($bulanTerakhir->saldo_awal) }}</b></div>
+                <div><span class="redup">Uang masuk</span><b>{{ rp($bulanTerakhir->total_debet) }}</b></div>
+                <div><span class="redup">Transfer keluar</span><b>{{ rp($bulanTerakhir->total_kredit) }}</b></div>
+                <div><span class="redup">Saldo akhir</span><b>{{ rp($bulanTerakhir->saldo_akhir) }}</b></div>
+            </div>
+            <p class="redup" style="margin: 0;">
+                {{ $jumlahBulan }} bulan diimpor, terakhir {{ $bulanTerakhir->diimpor_pada->translatedFormat('j M Y H:i') }}.
+                @if ($bulanBercatatan->isNotEmpty())
+                    Bulan dengan catatan rekonsiliasi: {{ $bulanBercatatan->implode(', ') }}.
+                @else
+                    Semua bulan cocok 100%.
+                @endif
+                <a href="{{ route('kas.index') }}">Buka Kas Harian →</a>
+            </p>
+        </div>
+    @endif
+
     <div class="kartu">
         <h3 style="margin-top: 0;">Akses Google Sheets</h3>
         @if ($emailGoogle)
-            <p>Terhubung ke <strong>{{ $emailGoogle }}</strong>. Aplikasi bisa membaca semua spreadsheet di akun ini.</p>
+            <p style="margin-bottom: 0;">Terhubung ke <strong>{{ $emailGoogle }}</strong>. Data kas diambil dari spreadsheet <em>Kas Harian MNP - 2026</em>.</p>
         @else
-            <p class="redup">Belum terhubung. Keluar lalu masuk lagi dengan Google dan centang semua izin.</p>
+            <p class="redup" style="margin-bottom: 0;">Belum terhubung. Keluar lalu masuk lagi dengan Google dan centang semua izin.</p>
         @endif
     </div>
-
-    @if ($galat)
-        <div class="pesan galat">{{ $galat }}</div>
-    @endif
-
-    @if ($daftar)
-        <div class="kartu">
-            <h3 style="margin-top: 0;">Spreadsheet terakhir diubah</h3>
-            <table>
-                <thead><tr><th>Nama</th><th>Diubah</th></tr></thead>
-                <tbody>
-                    @foreach ($daftar as $f)
-                        <tr>
-                            <td><a href="{{ $f['webViewLink'] }}" target="_blank" rel="noopener">{{ $f['name'] }}</a></td>
-                            <td class="redup">{{ \Illuminate\Support\Carbon::parse($f['modifiedTime'])->timezone(config('app.timezone'))->translatedFormat('j M Y H:i') }}</td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
-        </div>
-    @endif
 @endsection

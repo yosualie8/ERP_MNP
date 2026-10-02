@@ -1,0 +1,97 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\AkunGl;
+use App\Models\CostCenter;
+use App\Models\KasBulan;
+use App\Models\KasTransfer;
+use App\Models\KodeGl;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\View\View;
+
+class KasController extends Controller
+{
+    /** Buku rekening per bulan: transfer + rincian bon, saldo berjalan seperti lembar bulanan. */
+    public function index(Request $request): View
+    {
+        $daftarBulan = KasBulan::orderBy('bulan')->get();
+        $bulan = $daftarBulan->firstWhere('lembar', $request->query('lembar')) ?? $daftarBulan->last();
+        $q = trim((string) $request->query('q'));
+        $tanggal = $request->integer('tgl') ?: null;
+
+        $transfer = collect();
+        $daftarTanggal = collect();
+        if ($bulan) {
+            $daftarTanggal = KasTransfer::where('kas_bulan_id', $bulan->id)->distinct()->orderBy('tanggal')->pluck('tanggal');
+            $transfer = KasTransfer::where('kas_bulan_id', $bulan->id)
+                ->with(['bon.kodeGl.akun', 'bon.kodeGl.costCenter'])
+                ->when($tanggal, fn ($query) => $query->whereDay('tanggal', $tanggal))
+                ->when($q !== '', function ($query) use ($q) {
+                    $like = '%'.$q.'%';
+                    $query->where(fn ($w) => $w->where('keterangan', 'like', $like)
+                        ->orWhere('nama_tujuan', 'like', $like)
+                        ->orWhereHas('bon', fn ($b) => $b->where('keterangan', 'like', $like)
+                            ->orWhere('pic', 'like', $like)
+                            ->orWhere('id_transaksi', 'like', $like)
+                            ->orWhereHas('kodeGl', fn ($k) => $k->where('kode_asli', 'like', $like))));
+                })
+                ->orderBy('baris')
+                ->get();
+        }
+
+        return view('kas.index', compact('daftarBulan', 'bulan', 'transfer', 'q', 'tanggal', 'daftarTanggal'));
+    }
+
+    /** Pengeluaran (jumlah bon) per akun × bulan, bisa disaring per cost center. */
+    public function rekap(Request $request): View
+    {
+        $daftarBulan = KasBulan::orderBy('bulan')->get(['id', 'lembar', 'bulan']);
+        $costCenter = CostCenter::orderBy('kode')->get();
+        $ccDipilih = $request->query('cc');
+
+        $baris = DB::table('kas_bon as b')
+            ->join('kas_transfer as t', 't.id', '=', 'b.kas_transfer_id')
+            ->leftJoin('kode_gl as k', 'k.id', '=', 'b.kode_gl_id')
+            ->leftJoin('akun_gl as a', 'a.id', '=', 'k.akun_gl_id')
+            ->leftJoin('cost_center as c', 'c.id', '=', 'k.cost_center_id')
+            ->when($ccDipilih === '-', fn ($q) => $q->whereNull('k.cost_center_id'))
+            ->when($ccDipilih && $ccDipilih !== '-', fn ($q) => $q->where('c.kode', $ccDipilih))
+            ->groupBy('a.kelompok', 'a.nama', 't.kas_bulan_id')
+            ->select('a.kelompok', 'a.nama', 't.kas_bulan_id', DB::raw('SUM(b.nominal) as total'), DB::raw('COUNT(*) as jumlah'))
+            ->get();
+
+        // kelompok => akun => [kas_bulan_id => total]
+        $matriks = [];
+        foreach ($baris as $r) {
+            $kelompok = $r->kelompok ?? 'Tanpa Kode GL';
+            $akun = $r->nama ?? '(Kode GL kosong)';
+            $matriks[$kelompok][$akun][$r->kas_bulan_id] = (int) $r->total;
+        }
+        $urutan = array_flip([...AkunGl::KELOMPOK, 'Tanpa Kode GL']);
+        uksort($matriks, fn ($a, $b) => ($urutan[$a] ?? 99) <=> ($urutan[$b] ?? 99));
+        foreach ($matriks as &$akun) {
+            uasort($akun, fn ($a, $b) => array_sum($b) <=> array_sum($a));
+        }
+        unset($akun);
+
+        return view('kas.rekap', compact('daftarBulan', 'costCenter', 'ccDipilih', 'matriks'));
+    }
+
+    /** Semua Kode GL yang pernah ditulis di sheet beserta hasil urainya. */
+    public function kodeGl(Request $request): View
+    {
+        $saring = $request->query('saring');
+        $kode = KodeGl::with(['akun', 'costCenter'])
+            ->withCount('bon')
+            ->withSum('bon', 'nominal')
+            ->when($saring === 'tanpa-cc', fn ($q) => $q->whereNull('cost_center_id'))
+            ->get()
+            ->sortBy([['akun.kelompok', 'asc'], ['akun.nama', 'asc'], ['costCenter.kode', 'asc'], ['bon_sum_nominal', 'desc']]);
+
+        $tanpaKode = DB::table('kas_bon')->whereNull('kode_gl_id')->selectRaw('COUNT(*) as jumlah, COALESCE(SUM(nominal),0) as total')->first();
+
+        return view('kas.kode-gl', compact('kode', 'saring', 'tanpaKode'));
+    }
+}
