@@ -18,6 +18,19 @@
         .hapus { background: none; border: 0; color: var(--merah); cursor: pointer; font-size: 18px; line-height: 1; padding: 8px 6px; }
         .total-bon { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
         .galat-isian { color: var(--merah); font-size: 13px; margin: 4px 0 0; }
+        .isian-saran { position: relative; }
+        .saran { position: absolute; left: 0; right: 0; top: 100%; z-index: 20; margin-top: 2px; background: #fff; border: 1px solid var(--garis);
+            border-radius: 8px; box-shadow: 0 8px 24px rgba(16, 42, 67, .12); max-height: 340px; overflow-y: auto; }
+        .saran.menetap { position: static; box-shadow: none; margin-top: 6px; border-color: var(--aksen); }
+        .saran .judul-saran { padding: 6px 12px; font-size: 12px; color: var(--redup); background: var(--latar); border-bottom: 1px solid var(--garis); }
+        .saran button { display: flex; width: 100%; justify-content: space-between; gap: 12px; align-items: baseline; text-align: left;
+            padding: 8px 12px; border: 0; border-bottom: 1px solid #f1f3f5; background: none; cursor: pointer; font: inherit; color: var(--teks); }
+        .saran button:last-child { border-bottom: 0; }
+        .saran button.sorot, .saran button:hover { background: var(--hijau-muda); }
+        .saran .rek { font-size: 13px; color: var(--redup); }
+        .saran .rek b { color: var(--teks); font-weight: 600; font-variant-numeric: tabular-nums; }
+        .saran .pakai { font-size: 11px; color: var(--redup); white-space: nowrap; }
+        .saran mark { background: #fff3bf; color: inherit; padding: 0; }
     </style>
 
     <form method="POST" action="{{ route('kas.input.store') }}" class="form-kas" id="form-kas">
@@ -49,20 +62,19 @@
                     <label for="tanggal">Tanggal</label>
                     <input type="date" name="tanggal" id="tanggal" value="{{ old('tanggal', now()->toDateString()) }}" required>
                 </div>
-                <div style="grid-column: span 2;">
+                <div style="grid-column: span 2;" class="isian-saran">
                     <label for="nama_tujuan"><span data-keluar>Nama rekening tujuan</span><span data-masuk hidden>Dari (nama pengirim)</span></label>
-                    <input type="text" name="nama_tujuan" id="nama_tujuan" list="daftar-tujuan" value="{{ old('nama_tujuan') }}" autocomplete="off" required>
-                    <datalist id="daftar-tujuan">
-                        @foreach ($tujuan as $nama => $_)
-                            <option value="{{ $nama }}">
-                        @endforeach
-                    </datalist>
+                    <input type="text" name="nama_tujuan" id="nama_tujuan" value="{{ old('nama_tujuan') }}" autocomplete="off" required
+                           placeholder="Ketik nama, pilih rekeningnya dari daftar">
+                    <div class="saran" id="saran-nama" hidden></div>
                 </div>
             </div>
             <div class="baris2">
-                <div>
+                <div class="isian-saran">
                     <label for="no_rek">No. rekening</label>
-                    <input type="text" name="no_rek" id="no_rek" value="{{ old('no_rek') }}" inputmode="numeric" autocomplete="off">
+                    <input type="text" name="no_rek" id="no_rek" value="{{ old('no_rek') }}" inputmode="numeric" autocomplete="off"
+                           placeholder="Atau ketik nomornya">
+                    <div class="saran" id="saran-norek" hidden></div>
                 </div>
                 <div style="grid-column: span 2;">
                     <label for="bank">Bank</label>
@@ -141,7 +153,7 @@
 
     <script>
         (() => {
-            const tujuan = @json($tujuan);
+            const rekening = @json($rekening);
             const awal = @json(old('bon', []));
             const daftar = document.getElementById('daftar-bon');
             const templat = document.getElementById('templat-bon');
@@ -176,16 +188,126 @@
             });
             (awal.length ? awal : [{}]).forEach(b => tambah(b));
 
-            // Rekening tujuan yang pernah dipakai: isi No Rek & Bank otomatis.
+            // Rekening tujuan yang pernah dipakai, dua arah: ketik nama → pilih bank & nomor; ketik nomor → nama & bank.
             const nama = document.getElementById('nama_tujuan');
             const noRek = document.getElementById('no_rek');
             const bank = document.getElementById('bank');
-            nama.addEventListener('change', () => {
-                const t = tujuan[nama.value];
-                if (t) { noRek.value = t.no_rek ?? ''; bank.value = t.bank ?? ''; aturBiaya(); }
+            const saranNama = document.getElementById('saran-nama');
+            const saranNorek = document.getElementById('saran-norek');
+            const kecil = s => (s || '').toLowerCase().trim();
+            const kunciRek = s => (s || '').replace(/\D/g, '').replace(/^0+/, '');
+            const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+            const tandai = (teks, cari) => {
+                const i = cari ? String(teks).toLowerCase().indexOf(cari.toLowerCase()) : -1;
+                return i < 0 ? esc(teks) : esc(teks.slice(0, i)) + '<mark>' + esc(teks.slice(i, i + cari.length)) + '</mark>' + esc(teks.slice(i + cari.length));
+            };
+            // Isian yang diisi otomatis boleh ditimpa saran berikutnya; yang diketik sendiri tidak.
+            const otomatis = new Set();
+            const isi = (el, v) => { el.value = v ?? ''; otomatis.add(el); };
+
+            const cocokNama = q => {
+                q = kecil(q);
+                if (!q) return [];
+                return rekening.map(r => {
+                    const n = kecil(r.nama);
+                    const skor = n === q ? 0 : n.startsWith(q) ? 1 : n.split(/\s+/).some(k => k.startsWith(q)) ? 2 : n.includes(q) ? 3 : -1;
+                    return {r, skor};
+                }).filter(x => x.skor >= 0).sort((a, b) => a.skor - b.skor || b.r.dipakai - a.r.dipakai).map(x => x.r);
+            };
+            const cocokNorek = q => {
+                const k = kunciRek(q);
+                if (k.length < 3) return [];
+                return rekening.map(r => ({r, skor: r.kunci === k ? 0 : r.kunci.startsWith(k) ? 1 : r.kunci.includes(k) ? 2 : -1}))
+                    .filter(x => x.skor >= 0).sort((a, b) => a.skor - b.skor || b.r.dipakai - a.r.dipakai).map(x => x.r);
+            };
+
+            let aktif = {panel: null, daftar: [], sorot: -1};
+            const tutup = panel => { panel.hidden = true; panel.classList.remove('menetap'); if (aktif.panel === panel) aktif = {panel: null, daftar: [], sorot: -1}; };
+            const tampil = (panel, daftar, judul, cariNama = '', cariNorek = '', menetap = false) => {
+                if (!daftar.length) { tutup(panel); return; }
+                const tampilkan = daftar.slice(0, 8);
+                panel.innerHTML = (judul ? `<div class="judul-saran">${esc(judul)}</div>` : '') + tampilkan.map((r, i) => `
+                    <button type="button" data-i="${i}">
+                        <span><b>${tandai(r.nama, cariNama)}</b><br><span class="rek">${esc(r.bank || 'Bank ?')} · <b>${tandai(r.no_rek, cariNorek)}</b></span></span>
+                        <span class="pakai">${r.dipakai}× · terakhir ${esc(r.terakhir)}</span>
+                    </button>`).join('') + (daftar.length > 8 ? `<div class="judul-saran">${daftar.length - 8} lainnya, ketik lebih lengkap</div>` : '');
+                panel.classList.toggle('menetap', menetap);
+                panel.hidden = false;
+                aktif = {panel, daftar: tampilkan, sorot: -1};
+                panel.querySelectorAll('button').forEach(b => b.addEventListener('mousedown', e => {
+                    e.preventDefault(); // jangan sampai isian kehilangan fokus sebelum pilihan dipakai
+                    pilih(tampilkan[+b.dataset.i]);
+                }));
+            };
+            const pilih = r => {
+                nama.value = r.nama; noRek.value = r.no_rek; bank.value = r.bank || '';
+                [nama, noRek, bank].forEach(el => otomatis.delete(el));
+                tutup(saranNama); tutup(saranNorek);
+                aturBiaya();
+                document.getElementById('keterangan').focus();
+            };
+
+            nama.addEventListener('input', () => {
+                otomatis.delete(nama);
+                const q = nama.value.trim();
+                const daftar = cocokNama(q);
+                const persis = daftar.filter(r => kecil(r.nama) === kecil(q));
+                tampil(saranNama, daftar, persis.length > 1 ? `${persis[0].nama} punya ${persis.length} rekening, pilih salah satu:` : '', q);
             });
+            nama.addEventListener('focus', () => nama.value.trim() && nama.dispatchEvent(new Event('input')));
+            nama.addEventListener('blur', () => {
+                tutup(saranNama);
+                const persis = rekening.filter(r => kecil(r.nama) === kecil(nama.value));
+                const norekBebas = !noRek.value || otomatis.has(noRek);
+                if (persis.length === 1 && norekBebas) {
+                    isi(noRek, persis[0].no_rek);
+                    if (!bank.value || otomatis.has(bank)) isi(bank, persis[0].bank);
+                    aturBiaya();
+                } else if (persis.length > 1 && norekBebas) {
+                    // Nama sama persis tetapi rekeningnya lebih dari satu: biarkan daftar terbuka sampai admin memilih.
+                    tampil(saranNama, persis, `${persis[0].nama} punya ${persis.length} rekening, pilih salah satu:`, '', '', true);
+                }
+            });
+
+            noRek.addEventListener('input', () => {
+                otomatis.delete(noRek);
+                const q = noRek.value.trim();
+                const daftar = cocokNorek(q);
+                const persis = daftar.filter(r => r.kunci === kunciRek(q));
+                tampil(saranNorek, daftar, persis.length > 1 ? `Nomor ini tercatat dengan ${persis.length} nama/bank, pilih salah satu:` : '', '', q.replace(/\D/g, '').replace(/^0+/, ''));
+            });
+            noRek.addEventListener('focus', () => noRek.value.trim() && noRek.dispatchEvent(new Event('input')));
+            noRek.addEventListener('blur', () => {
+                tutup(saranNorek);
+                const persis = rekening.filter(r => r.kunci === kunciRek(noRek.value));
+                if (persis.length === 1) {
+                    if (!nama.value || otomatis.has(nama)) isi(nama, persis[0].nama);
+                    if (!bank.value || otomatis.has(bank)) isi(bank, persis[0].bank);
+                    aturBiaya();
+                } else if (persis.length > 1 && (!nama.value || otomatis.has(nama))) {
+                    tampil(saranNorek, persis, `Nomor ini tercatat dengan ${persis.length} nama/bank, pilih salah satu:`, '', '', true);
+                }
+            });
+
+            // Panah atas/bawah + Enter untuk memilih, Esc untuk menutup.
+            [nama, noRek].forEach(el => el.addEventListener('keydown', e => {
+                if (!aktif.panel || aktif.panel.hidden) return;
+                const tombol = aktif.panel.querySelectorAll('button');
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    aktif.sorot = (aktif.sorot + (e.key === 'ArrowDown' ? 1 : -1) + tombol.length) % tombol.length;
+                    tombol.forEach((b, i) => b.classList.toggle('sorot', i === aktif.sorot));
+                    tombol[aktif.sorot].scrollIntoView({block: 'nearest'});
+                } else if (e.key === 'Enter' && aktif.sorot >= 0) {
+                    e.preventDefault();
+                    pilih(aktif.daftar[aktif.sorot]);
+                } else if (e.key === 'Escape') {
+                    tutup(aktif.panel);
+                }
+            }));
+
             document.querySelectorAll('[data-bank]').forEach(a => a.addEventListener('click', e => {
-                e.preventDefault(); bank.value = a.dataset.bank; aturBiaya();
+                e.preventDefault(); bank.value = a.dataset.bank; otomatis.delete(bank); aturBiaya();
             }));
 
             // Transfer ke bank selain Jago biasanya kena biaya 2.500.

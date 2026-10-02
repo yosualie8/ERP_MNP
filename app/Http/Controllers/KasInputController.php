@@ -32,15 +32,47 @@ class KasInputController extends Controller
         $pic = KasBon::where('tanggal', '>=', $sejak)->whereNotNull('pic')
             ->select('pic', DB::raw('COUNT(*) as n'))->groupBy('pic')->orderByDesc('n')->pluck('pic');
 
-        // Rekening tujuan terakhir per nama, untuk mengisi No Rek & Bank otomatis.
-        $tujuan = KasTransfer::whereNotNull('nama_tujuan')->whereNotNull('no_rek_tujuan')
-            ->orderByDesc('tanggal')->orderByDesc('id')->get(['nama_tujuan', 'no_rek_tujuan', 'bank_tujuan'])
-            ->unique('nama_tujuan')->mapWithKeys(fn ($t) => [$t->nama_tujuan => ['no_rek' => $t->no_rek_tujuan, 'bank' => $t->bank_tujuan]]);
+        $rekening = $this->daftarRekening();
 
         $bank = KasTransfer::whereNotNull('bank_tujuan')->where('tanggal', '>=', $sejak)
             ->select('bank_tujuan', DB::raw('COUNT(*) as n'))->groupBy('bank_tujuan')->orderByDesc('n')->limit(8)->pluck('bank_tujuan');
 
-        return view('kas.input', compact('kodeGl', 'pic', 'tujuan', 'bank'));
+        return view('kas.input', compact('kodeGl', 'pic', 'rekening', 'bank'));
+    }
+
+    /**
+     * Semua rekening tujuan yang pernah dipakai (nama + bank + nomor), untuk saran dua arah di form.
+     * Nomor yang sama setelah nol di depan dan tanda baca diabaikan digabung (sheet sering menghapus nol depan),
+     * memakai tulisan yang paling sering dipakai.
+     *
+     * @return array<int, array{nama: string, bank: ?string, no_rek: string, kunci: string, dipakai: int, terakhir: string}>
+     */
+    private function daftarRekening(): array
+    {
+        return KasTransfer::whereNotNull('nama_tujuan')->whereNotNull('no_rek_tujuan')
+            ->select('nama_tujuan', 'no_rek_tujuan', 'bank_tujuan', DB::raw('COUNT(*) as n'), DB::raw('MAX(tanggal) as terakhir'))
+            ->groupBy('nama_tujuan', 'no_rek_tujuan', 'bank_tujuan')
+            ->get()
+            ->map(fn ($r) => [...$r->toArray(), 'kunci' => ltrim(preg_replace('/\D/', '', $r->no_rek_tujuan), '0')])
+            ->filter(fn ($r) => $r['kunci'] !== '')
+            ->groupBy(fn ($r) => mb_strtolower(trim($r['nama_tujuan'])).'|'.mb_strtolower(trim((string) $r['bank_tujuan'])).'|'.$r['kunci'])
+            ->map(function ($varian) {
+                $utama = $varian->sortByDesc(fn ($r) => [$r['n'], strlen(preg_replace('/\D/', '', $r['no_rek_tujuan']))])->first();
+
+                return [
+                    'nama' => trim($utama['nama_tujuan']),
+                    'bank' => $utama['bank_tujuan'],
+                    'no_rek' => preg_replace('/[^\d]/', '', $utama['no_rek_tujuan']),
+                    'kunci' => $utama['kunci'],
+                    'dipakai' => (int) $varian->sum('n'),
+                    'terakhir' => Carbon::parse($varian->max('terakhir'))->translatedFormat('j M Y'),
+                    'urut' => $varian->max('terakhir'),
+                ];
+            })
+            ->sortByDesc('urut')
+            ->map(fn ($r) => collect($r)->except('urut')->all())
+            ->values()
+            ->all();
     }
 
     public function store(Request $request): RedirectResponse
