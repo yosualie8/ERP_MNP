@@ -57,7 +57,7 @@
             <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
                 <div><strong>MNP</strong> · PT Multi Niaga Putra</div>
                 <nav>
-                    @foreach (['dashboard' => 'Beranda', 'kas.index' => 'Kas Harian', 'kas.rekap' => 'Rekap Biaya', 'kas.kode-gl' => 'Kode GL'] as $rute => $nama)
+                    @foreach (['dashboard' => 'Beranda', 'kas.input' => 'Input Kas', 'kas.index' => 'Kas Harian','kas.rekap' => 'Rekap Biaya', 'kas.kode-gl' => 'Kode GL'] as $rute => $nama)
                         <a href="{{ route($rute) }}" @class(['aktif' => request()->routeIs($rute)])>{{ $nama }}</a>
                     @endforeach
                 </nav>

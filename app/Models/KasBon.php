@@ -9,9 +9,9 @@ class KasBon extends Model
 {
     protected $table = 'kas_bon';
 
-    protected $fillable = ['kas_transfer_id', 'tanggal', 'baris', 'nominal', 'pic', 'keterangan', 'gl', 'kode_gl_id', 'kode_bon', 'no_id', 'id_transaksi'];
+    protected $fillable = ['kas_transfer_id', 'tanggal', 'baris', 'nominal', 'pic', 'keterangan', 'gl', 'kode_gl_id', 'kode_gl_ditebak', 'kode_bon', 'no_id', 'id_transaksi'];
 
-    protected $casts = ['tanggal' => 'date'];
+    protected $casts = ['tanggal' => 'date', 'kode_gl_ditebak' => 'boolean'];
 
     public function transfer(): BelongsTo
     {

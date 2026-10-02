@@ -82,6 +82,59 @@ class GoogleSheets
         return $hasil;
     }
 
+    /**
+     * Tulis beberapa range sekaligus, diisi seperti diketik di sheet (USER_ENTERED: rumus & tanggal dikenali).
+     *
+     * @param  array<string, array<int, array<int, mixed>>>  $data  range A1 => baris
+     */
+    public function tulis(string $id, array $data): void
+    {
+        $res = $this->api()->post(self::API."/{$id}/values:batchUpdate", [
+            'valueInputOption' => 'USER_ENTERED',
+            'data' => collect($data)->map(fn ($nilai, $range) => ['range' => self::kutip($range), 'values' => $nilai])->values()->all(),
+        ]);
+        $this->pastikan($res, 'menulis ke sheet');
+    }
+
+    /** Sisipkan $jumlah baris kosong mulai baris $baris (nomor baris sheet, 1 = baris pertama), mewarisi format baris di atasnya. */
+    public function sisipBaris(string $id, int $sheetId, int $baris, int $jumlah): void
+    {
+        $res = $this->api()->post(self::API."/{$id}:batchUpdate", ['requests' => [[
+            'insertDimension' => [
+                'range' => ['sheetId' => $sheetId, 'dimension' => 'ROWS', 'startIndex' => $baris - 1, 'endIndex' => $baris - 1 + $jumlah],
+                'inheritFromBefore' => true,
+            ],
+        ]]]);
+        $this->pastikan($res, 'menyisipkan baris');
+    }
+
+    /** Buat spreadsheet baru (dipakai untuk uji coba tulis di salinan). */
+    public function buat(string $judul): string
+    {
+        $res = $this->api()->post(self::API, ['properties' => ['title' => $judul]]);
+        $this->pastikan($res, 'membuat spreadsheet');
+
+        return $res->json('spreadsheetId');
+    }
+
+    /** Salin satu lembar ke spreadsheet lain; kembalikan sheetId lembar hasil salinan. */
+    public function salinLembar(string $dariId, int $sheetId, string $keId): int
+    {
+        $res = $this->api()->post(self::API."/{$dariId}/sheets/{$sheetId}:copyTo", ['destinationSpreadsheetId' => $keId]);
+        $this->pastikan($res, 'menyalin lembar');
+
+        return $res->json('sheetId');
+    }
+
+    /** Ganti judul lembar. */
+    public function gantiJudulLembar(string $id, int $sheetId, string $judul): void
+    {
+        $res = $this->api()->post(self::API."/{$id}:batchUpdate", ['requests' => [[
+            'updateSheetProperties' => ['properties' => ['sheetId' => $sheetId, 'title' => $judul], 'fields' => 'title'],
+        ]]]);
+        $this->pastikan($res, 'mengganti judul lembar');
+    }
+
     /** @return array<int, array{id: string, name: string, modifiedTime: string, webViewLink: string}> */
     public function daftarSpreadsheet(int $jumlah = 20): array
     {

@@ -1,0 +1,131 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\AkunGl;
+use App\Models\KasBon;
+use App\Models\KasTransfer;
+use App\Models\KodeGl;
+use App\Support\GoogleSheets;
+use App\Support\ImporKas;
+use App\Support\TulisKasSheet;
+use App\Support\UraiKodeGl;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\View\View;
+
+/** Input transfer + bon langsung dari aplikasi; ditulis ke lembar bulanan di sheet lalu lembar itu diimpor ulang. */
+class KasInputController extends Controller
+{
+    public function create(): View
+    {
+        $sejak = now()->subDays(120);
+
+        // Kode GL ditulis rapi (akun + cost center + tahap), urut dari yang paling sering dipakai.
+        $kodeGl = KodeGl::with(['akun', 'costCenter'])->withCount(['bon' => fn ($q) => $q->where('tanggal', '>=', $sejak)])->get()
+            ->filter->akun
+            ->groupBy(fn ($k) => trim(implode(' ', array_filter([$k->akun->nama, $k->costCenter?->kode, $k->ref]))))
+            ->map->sum('bon_count')->sortDesc()->keys()->values();
+
+        $pic = KasBon::where('tanggal', '>=', $sejak)->whereNotNull('pic')
+            ->select('pic', DB::raw('COUNT(*) as n'))->groupBy('pic')->orderByDesc('n')->pluck('pic');
+
+        // Rekening tujuan terakhir per nama, untuk mengisi No Rek & Bank otomatis.
+        $tujuan = KasTransfer::whereNotNull('nama_tujuan')->whereNotNull('no_rek_tujuan')
+            ->orderByDesc('tanggal')->orderByDesc('id')->get(['nama_tujuan', 'no_rek_tujuan', 'bank_tujuan'])
+            ->unique('nama_tujuan')->mapWithKeys(fn ($t) => [$t->nama_tujuan => ['no_rek' => $t->no_rek_tujuan, 'bank' => $t->bank_tujuan]]);
+
+        $bank = KasTransfer::whereNotNull('bank_tujuan')->where('tanggal', '>=', $sejak)
+            ->select('bank_tujuan', DB::raw('COUNT(*) as n'))->groupBy('bank_tujuan')->orderByDesc('n')->limit(8)->pluck('bank_tujuan');
+
+        return view('kas.input', compact('kodeGl', 'pic', 'tujuan', 'bank'));
+    }
+
+    public function store(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'tanggal' => ['required', 'date'],
+            'arah' => ['required', 'in:keluar,masuk'],
+            'nama_tujuan' => ['required', 'string', 'max:200'],
+            'no_rek' => ['nullable', 'string', 'max:40'],
+            'bank' => ['nullable', 'string', 'max:40'],
+            'keterangan' => ['nullable', 'string', 'max:300'],
+            'nominal_masuk' => ['required_if:arah,masuk', 'nullable', 'integer', 'min:1'],
+            'biaya_transfer' => ['nullable', 'boolean'],
+            'bon' => ['required_if:arah,keluar', 'array'],
+            'bon.*.nominal' => ['required', 'integer', 'min:1'],
+            'bon.*.pic' => ['nullable', 'string', 'max:60'],
+            'bon.*.keterangan' => ['required', 'string', 'max:300'],
+            'bon.*.kode_gl' => ['required', 'string', 'max:120'],
+        ], [
+            'bon.required_if' => 'Isi minimal satu bon untuk transfer keluar.',
+            'bon.*.keterangan.required' => 'Keterangan setiap bon wajib diisi.',
+            'bon.*.kode_gl.required' => 'Kode GL setiap bon wajib diisi.',
+            'bon.*.nominal.required' => 'Nominal setiap bon wajib diisi.',
+        ]);
+
+        $tanggal = Carbon::parse($data['tanggal']);
+        $input = [
+            'tanggal' => $tanggal,
+            'arah' => $data['arah'],
+            'nama_tujuan' => $data['nama_tujuan'],
+            'no_rek' => $data['no_rek'] ?? null,
+            'bank' => $data['bank'] ?? null,
+            'keterangan' => $data['keterangan'] ?? null,
+            'nominal_masuk' => (int) ($data['nominal_masuk'] ?? 0),
+            'bon' => $data['arah'] === 'keluar' ? array_values($data['bon']) : [],
+            'biaya_transfer' => $data['arah'] === 'keluar' && $request->boolean('biaya_transfer'),
+        ];
+
+        try {
+            $hasil = (new TulisKasSheet(GoogleSheets::wajib()))->tulis($input);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->withInput()->with('error', 'Gagal menulis ke sheet: '.$e->getMessage());
+        }
+
+        $pesanImpor = '';
+        try {
+            $impor = new ImporKas;
+            $impor->simpan(ImporKas::baca(ImporKas::ambilDariSheet([$hasil['lembar']])));
+        } catch (\Throwable $e) {
+            report($e);
+            $pesanImpor = ' Data sudah masuk sheet, tetapi impor ulang ke aplikasi gagal ('.$e->getMessage().'); klik "Sinkron dari sheet".';
+        }
+
+        $akunBaru = collect($input['bon'])->pluck('kode_gl')
+            ->map(fn ($k) => UraiKodeGl::urai($k)['akun'])->filter()
+            ->reject(fn ($a) => AkunGl::where('nama', $a)->exists())->unique();
+
+        $nilai = $input['arah'] === 'masuk' ? $input['nominal_masuk'] : array_sum(array_column($input['bon'], 'nominal'));
+
+        return redirect()->route('kas.index', ['lembar' => $hasil['lembar'], 'tgl' => $tanggal->day])->with(
+            $pesanImpor ? 'error' : 'success',
+            ($input['arah'] === 'masuk' ? 'Uang masuk ' : 'Transfer ').rp($nilai).' tersimpan di sheet lembar '.$hasil['lembar']
+            .' baris '.$hasil['baris_awal'].($hasil['baris_akhir'] > $hasil['baris_awal'] ? '–'.$hasil['baris_akhir'] : '')
+            .' (NO ID '.reset($hasil['no_id']).(count($hasil['no_id']) > 1 ?'–'.end($hasil['no_id']) : '').').'
+            .($akunBaru->isNotEmpty() ? ' Akun baru: '.$akunBaru->implode(', ').'.' : '')
+            .$pesanImpor
+        );
+    }
+
+    /** Impor ulang satu lembar dari sheet (setelah admin mengubah sheet langsung). */
+    public function sinkron(Request $request): RedirectResponse
+    {
+        $lembar = $request->validate(['lembar' => ['required', 'regex:/^\d{4}$/']])['lembar'];
+        try {
+            $hasil = ImporKas::baca(ImporKas::ambilDariSheet([$lembar]));
+            (new ImporKas)->simpan($hasil);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', 'Sinkron gagal: '.$e->getMessage());
+        }
+        $h = reset($hasil);
+
+        return back()->with('success', "Lembar {$lembar} disinkronkan dari sheet: ".count($h['transfer']).' transfer, '.$h['jumlah_bon'].' bon, saldo akhir '.rp($h['saldo_akhir']).'.');
+    }
+}

@@ -23,7 +23,7 @@
                     <th style="padding-left: 14px;">Kelompok</th>
                     <th>Akun baku</th>
                     <th>Cost center</th>
-                    <th>No. T</th>
+                    <th>Tahap</th>
                     <th>Tulisan di sheet</th>
                     <th class="angka">Bon</th>
                     <th class="angka" style="padding-right: 14px;">Total</th>
@@ -36,7 +36,7 @@
                         <td><b>{{ $k->akun?->nama ?? '—' }}</b></td>
                         <td>
                             @if ($k->costCenter)
-                                <span class="label">{{ $k->costCenter->kode }}</span>
+                                <span class="label" title="{{ $k->costCenter->nama }}">{{ $k->costCenter->kode }}</span>
                             @else
                                 <span class="redup">—</span>
                             @endif

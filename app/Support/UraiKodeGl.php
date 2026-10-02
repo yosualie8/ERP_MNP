@@ -30,8 +30,19 @@ class UraiKodeGl
     /** Cost center di akhir kode, dicocokkan dari yang terpanjang. */
     public const COST_CENTER = ['PM Infra Marina', 'Infra PM', 'DT Buhut', 'Infra', 'PM', 'ASG', 'JKT', 'Buhut', 'DPN', 'Kendal', 'AB'];
 
-    /** "DT Buhut" = dump truck di Buhut; akunnya tetap Sparepart, cost center Buhut. */
-    private const ALIAS_COST_CENTER = ['DT Buhut' => 'Buhut'];
+    /**
+     * "DT Buhut" = dump truck di Buhut; akunnya tetap Sparepart, cost center Buhut.
+     * "PM Infra Marina" sama dengan "Infra PM" (konfirmasi user 2 Okt 2026).
+     */
+    private const ALIAS_COST_CENTER = ['DT Buhut' => 'Buhut', 'PM Infra Marina' => 'Infra PM'];
+
+    /** Keterangan cost center dari user (2 Okt 2026). Nomor T = tahap proyek. */
+    public const NAMA_COST_CENTER = [
+        'Buhut' => 'Lokasi Buhut, Kalimantan',
+        'DPN' => 'Lokasi DPN, Kalimantan',
+        'Kendal' => 'Lokasi Kendal, Jawa Tengah',
+        'AB' => 'Alat Berat',
+    ];
 
     /** @return array{akun: ?string, cost_center: ?string, ref: ?string} */
     public static function urai(?string $kode): array
@@ -61,6 +72,7 @@ class UraiKodeGl
     public static function kelompok(string $akun): string
     {
         return match (true) {
+            in_array($akun, [TebakKodeGl::TALANGAN, TebakKodeGl::SALAH_TRANSFER, 'Pindah Uang Antar Kantong'], true) => 'Non-biaya',
             str_starts_with($akun, 'HPP') => 'HPP',
             str_starts_with($akun, 'Gaji'), in_array($akun, ['Biaya THR', 'Biaya Lembur', 'Biaya BPJS', 'Biaya Komisi'], true) => 'Gaji & Tunjangan',
             str_starts_with($akun, 'Piutang') => 'Piutang',
