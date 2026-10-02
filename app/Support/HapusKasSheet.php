@@ -40,7 +40,7 @@ class HapusKasSheet
                 $blok[] = $biaya;
             }
             $dari = $t->baris;
-            $sampai = max(...array_map(fn ($x) => max($x->baris, (int) $x->bon->max('baris')), $blok));
+            $sampai = max(array_map(fn ($x) => max($x->baris, (int) $x->bon->max('baris')), $blok));
 
             $info = collect($this->sheets->info($this->spreadsheetId)['sheets'])->firstWhere('properties.title', $lembar)
                 ?? throw new RuntimeException("Lembar {$lembar} tidak ditemukan di sheet.");
