@@ -4,9 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\AkunGl;
 use App\Models\KasBon;
+use App\Models\KasRiwayat;
 use App\Models\KasTransfer;
 use App\Models\KodeGl;
 use App\Support\GoogleSheets;
+use App\Support\HapusKasSheet;
 use App\Support\ImporKas;
 use App\Support\TulisKasSheet;
 use App\Support\UraiKodeGl;
@@ -119,20 +121,19 @@ class KasInputController extends Controller
             return back()->withInput()->with('error', 'Gagal menulis ke sheet: '.$e->getMessage());
         }
 
-        $pesanImpor = '';
-        try {
-            $impor = new ImporKas;
-            $impor->simpan(ImporKas::baca(ImporKas::ambilDariSheet([$hasil['lembar']])));
-        } catch (\Throwable $e) {
-            report($e);
-            $pesanImpor = ' Data sudah masuk sheet, tetapi impor ulang ke aplikasi gagal ('.$e->getMessage().'); klik "Sinkron dari sheet".';
-        }
-
+        $nilai = $input['arah'] === 'masuk' ? $input['nominal_masuk'] : array_sum(array_column($input['bon'], 'nominal'));
+        KasRiwayat::create([
+            'aksi' => 'tambah', 'lembar' => $hasil['lembar'], 'baris_awal' => $hasil['baris_awal'], 'baris_akhir' => $hasil['baris_akhir'],
+            'ringkasan' => ($input['arah'] === 'masuk' ? 'Uang masuk ' : 'Transfer ').rp($nilai).' '.$tanggal->translatedFormat('j M Y').' '
+                .trim($input['nama_tujuan'].' — '.$input['keterangan'], ' —').' ('.count($input['bon']).' bon)',
+            'isi' => ['input' => [...$input, 'tanggal' => $tanggal->toDateString()], 'no_id' => $hasil['no_id']],
+            'user_id' => $request->user()->id,
+        ]);
+        // Dicek sebelum impor ulang, karena impor itulah yang membuat akun barunya.
         $akunBaru = collect($input['bon'])->pluck('kode_gl')
             ->map(fn ($k) => UraiKodeGl::urai($k)['akun'])->filter()
             ->reject(fn ($a) => AkunGl::where('nama', $a)->exists())->unique();
-
-        $nilai = $input['arah'] === 'masuk' ? $input['nominal_masuk'] : array_sum(array_column($input['bon'], 'nominal'));
+        $pesanImpor = $this->imporUlang($hasil['lembar']);
 
         return redirect()->route('kas.index', ['lembar' => $hasil['lembar'], 'tgl' => $tanggal->day])->with(
             $pesanImpor ? 'error' : 'success',
@@ -142,6 +143,50 @@ class KasInputController extends Controller
             .($akunBaru->isNotEmpty() ? ' Akun baru: '.$akunBaru->implode(', ').'.' : '')
             .$pesanImpor
         );
+    }
+
+    /** Hapus transfer + seluruh bonnya dari sheet (opsional beserta baris biaya transfernya), lalu impor ulang lembarnya. */
+    public function hapus(Request $request, KasTransfer $transfer): RedirectResponse
+    {
+        $transfer->load('bon', 'kasBulan');
+        $lembar = $transfer->kasBulan->lembar;
+        $ringkasan = ($transfer->debet ? 'Uang masuk ' : 'Transfer ').rp($transfer->debet ?: $transfer->kredit)
+            .' '.$transfer->tanggal->translatedFormat('j M Y').' '.trim($transfer->nama_tujuan.' — '.$transfer->keterangan, ' —')
+            .' ('.$transfer->bon->count().' bon)';
+
+        try {
+            $hasil = (new HapusKasSheet(GoogleSheets::wajib()))->hapus($transfer, $request->boolean('dengan_biaya'));
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', 'Gagal menghapus: '.$e->getMessage());
+        }
+
+        KasRiwayat::create([
+            'aksi' => 'hapus', 'lembar' => $lembar, 'baris_awal' => $hasil['baris_awal'], 'baris_akhir' => $hasil['baris_akhir'],
+            'ringkasan' => $ringkasan, 'isi' => $hasil['isi'], 'user_id' => $request->user()->id,
+        ]);
+        $pesanImpor = $this->imporUlang($lembar);
+
+        return redirect()->route('kas.index', ['lembar' => $lembar, 'tgl' => $request->integer('tgl') ?: null, 'q' => $request->input('q') ?: null])->with(
+            $pesanImpor ? 'error' : 'success',
+            "Dihapus dari sheet lembar {$lembar} baris {$hasil['baris_awal']}".($hasil['baris_akhir'] > $hasil['baris_awal'] ? "–{$hasil['baris_akhir']}" : '')
+            .": {$ringkasan}.".$pesanImpor
+        );
+    }
+
+    /** @return string kosong bila berhasil, atau pesan kegagalan untuk ditampilkan */
+    private function imporUlang(string $lembar): string
+    {
+        try {
+            (new ImporKas)->simpan(ImporKas::baca(ImporKas::ambilDariSheet([$lembar])));
+
+            return '';
+        } catch (\Throwable $e) {
+            report($e);
+
+            return ' Sheet sudah diubah, tetapi impor ulang ke aplikasi gagal ('.$e->getMessage().'); klik "Sinkron dari sheet".';
+        }
     }
 
     /** Impor ulang satu lembar dari sheet (setelah admin mengubah sheet langsung). */

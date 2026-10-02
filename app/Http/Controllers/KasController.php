@@ -7,6 +7,7 @@ use App\Models\CostCenter;
 use App\Models\KasBulan;
 use App\Models\KasTransfer;
 use App\Models\KodeGl;
+use App\Support\TulisKasSheet;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
@@ -41,7 +42,23 @@ class KasController extends Controller
                 ->get();
         }
 
-        return view('kas.index', compact('daftarBulan', 'bulan', 'transfer', 'q', 'tanggal', 'daftarTanggal'));
+        // Transfer yang tepat di bawahnya ada baris "Biaya Transfer Keluar" miliknya (ditanyakan saat menghapus).
+        $punyaBiaya = [];
+        if ($bulan) {
+            $semua = KasTransfer::where('kas_bulan_id', $bulan->id)->withMax('bon', 'baris')->withCount('bon')
+                ->orderBy('baris')->get(['id', 'baris', 'kredit', 'keterangan'])->values();
+            foreach ($semua as $i => $t) {
+                $berikut = $semua[$i + 1] ?? null;
+                if ($berikut && $berikut->kredit === TulisKasSheet::BIAYA_TRANSFER && $berikut->bon_count <= 1
+                    && stripos((string) $berikut->keterangan, 'biaya transfer') !== false
+                    && stripos((string) $t->keterangan, 'biaya transfer') === false
+                    && $berikut->baris === max($t->baris, (int) $t->bon_max_baris) + 1) {
+                    $punyaBiaya[$t->id] = true;
+                }
+            }
+        }
+
+        return view('kas.index', compact('daftarBulan', 'bulan', 'transfer', 'q', 'tanggal', 'daftarTanggal', 'punyaBiaya'));
     }
 
     /** Pengeluaran (jumlah bon) per akun × bulan, bisa disaring per cost center. */

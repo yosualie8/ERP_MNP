@@ -84,6 +84,7 @@
                         <th class="angka">Masuk</th>
                         <th class="angka">Keluar / Bon</th>
                         <th class="angka">Saldo</th>
+                        <th></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -97,16 +98,40 @@
                             <td class="angka">{{ rp($t->debet, true) }}</td>
                             <td class="angka"><b>{{ rp($t->kredit, true) }}</b></td>
                             <td class="angka">{{ rp($t->saldo) }}</td>
+                            <td><button type="button" class="tombol-hapus" data-hapus="{{ route('kas.hapus', $t) }}" data-baris="{{ $t->baris }}"
+                                    data-ringkasan="{{ ($t->debet ? 'Uang masuk ' : 'Transfer ').rp($t->debet ?: $t->kredit).' · '.$t->tanggal->translatedFormat('j M').' · '.($t->nama_tujuan ?? '').' · '.($t->keterangan ?? '') }}"
+                                    data-bon="{{ $t->bon->count() }}" @if (isset($punyaBiaya[$t->id])) data-biaya="1" @endif>Hapus</button></td>
                         </tr>
                         @foreach ($t->bon as $b)
                             @php($k = $b->kodeGl)
-                            <tr class="b"><td></td><td class="p">{{ $b->pic }}</td><td>{{ $b->keterangan }}</td><td>@if ($k){{ $k->akun?->nama ?? $k->kode_asli }}@if ($k->costCenter) <i>{{ $k->costCenter->kode }}</i>@endif @if ($k->ref)<i title="Tahap proyek">{{ $k->ref }}</i>@endif @if ($b->kode_gl_ditebak)<i title="Kode GL kosong di sheet, ditebak dari keterangan">ditebak</i>@endif @else<i class="x">tanpa Kode GL</i>@endif</td><td></td><td class="angka">{{ rp($b->nominal) }}</td><td class="i">{{ $b->id_transaksi }}</td></tr>
+                            <tr class="b"><td></td><td class="p">{{ $b->pic }}</td><td>{{ $b->keterangan }}</td><td>@if ($k){{ $k->akun?->nama ?? $k->kode_asli }}@if ($k->costCenter) <i>{{ $k->costCenter->kode }}</i>@endif @if ($k->ref)<i title="Tahap proyek">{{ $k->ref }}</i>@endif @if ($b->kode_gl_ditebak)<i title="Kode GL kosong di sheet, ditebak dari keterangan">ditebak</i>@endif @else<i class="x">tanpa Kode GL</i>@endif</td><td></td><td class="angka">{{ rp($b->nominal) }}</td><td class="i">{{ $b->id_transaksi }}</td><td></td></tr>
                         @endforeach
                     @empty
-                        <tr><td colspan="7" class="redup" style="padding: 20px 14px;">Tidak ada transfer yang cocok.</td></tr>
+                        <tr><td colspan="8" class="redup" style="padding: 20px 14px;">Tidak ada transfer yang cocok.</td></tr>
                     @endforelse
                 </tbody>
             </table>
         </div>
+
+        <form method="POST" id="form-hapus" hidden>
+            @csrf
+            @method('DELETE')
+            <input type="hidden" name="dengan_biaya" value="0">
+            <input type="hidden" name="tgl" value="{{ $tanggal }}">
+            <input type="hidden" name="q" value="{{ $q }}">
+        </form>
+        <script>
+            document.querySelectorAll('[data-hapus]').forEach(tombol => tombol.addEventListener('click', () => {
+                const d = tombol.dataset;
+                const bon = +d.bon ? ` beserta ${d.bon} bon di bawahnya` : '';
+                if (!confirm(`Hapus dari sheet (lembar {{ $bulan->lembar }}, baris ${d.baris})${bon}?\n\n${d.ringkasan}\n\nBaris di sheet akan dihapus. Isinya tetap tersimpan di riwayat aplikasi.`)) return;
+                const form = document.getElementById('form-hapus');
+                form.dengan_biaya.value = d.biaya && confirm('Tepat di bawahnya ada baris "Biaya Transfer Keluar" 2.500 untuk transfer ini.\n\nHapus juga? (OK = hapus juga, Batal = biarkan)') ? '1' : '0';
+                form.action = d.hapus;
+                tombol.disabled = true;
+                tombol.textContent = 'Menghapus…';
+                form.submit();
+            }));
+        </script>
     @endif
 @endsection

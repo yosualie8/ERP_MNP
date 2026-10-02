@@ -108,6 +108,15 @@ class GoogleSheets
         $this->pastikan($res, 'menyisipkan baris');
     }
 
+    /** Hapus baris $dari sampai $sampai (nomor baris sheet, inklusif). */
+    public function hapusBaris(string $id, int $sheetId, int $dari, int $sampai): void
+    {
+        $res = $this->api()->post(self::API."/{$id}:batchUpdate", ['requests' => [[
+            'deleteDimension' => ['range' => ['sheetId' => $sheetId, 'dimension' => 'ROWS', 'startIndex' => $dari - 1, 'endIndex' => $sampai]],
+        ]]]);
+        $this->pastikan($res, 'menghapus baris');
+    }
+
     /** Buat spreadsheet baru (dipakai untuk uji coba tulis di salinan). */
     public function buat(string $judul): string
     {

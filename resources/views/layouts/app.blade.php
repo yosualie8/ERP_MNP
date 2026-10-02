@@ -29,12 +29,20 @@
         table.kas td, table.kas th { padding: 6px; }
         table.kas td:first-child, table.kas th:first-child { padding-left: 14px; }
         table.kas td:last-child, table.kas th:last-child { padding-right: 14px; }
-        table.kas tr.t { background: #fafbfc; }
-        table.kas tr.t.m { background: #f0f9f4; }
-        table.kas tr.t td { border-top: 2px solid var(--garis); }
-        table.kas tr.b td { color: var(--teks); border-bottom-color: #f1f3f5; }
+        /* Transfer (master) terang, rincian bon (detail) lebih gelap supaya kontras. */
+        table.kas tr.t { background: #fff; }
+        table.kas tr.t.m { background: #e6f4ea; }
+        table.kas tr.t td { border-top: 2px solid #c5ccd3; border-bottom: 0; }
+        table.kas tr.b { background: #e4e9ee; }
+        table.kas tr.b td { color: var(--teks); border-bottom: 1px solid #d3dae1; }
+        table.kas tr.b:hover { background: #d8dfe6; }
+        table.kas tr.t:hover { background: #f5f7f9; }
+        table.kas tr.t.m:hover { background: #d9efe0; }
+        table.kas tr.b i { background: #fff; }
+        .tombol-hapus { background: none; border: 1px solid transparent; border-radius: 6px; color: var(--merah); cursor: pointer; font-size: 12px; padding: 2px 8px; }
+        .tombol-hapus:hover { border-color: var(--merah); background: var(--merah-muda); }
         table.kas tr.b td.p { color: var(--redup); padding-left: 18px; }
-        table.kas td.i { color: var(--redup); font-size: 11px; }
+        table.kas td.i { color: var(--redup); font-size: 11px; white-space: nowrap; }
         table.kas i { font-style: normal; display: inline-block; font-size: 11px; padding: 0 5px; border-radius: 4px; background: var(--latar); color: var(--redup); }
         table.kas i.x { background: var(--merah-muda); color: var(--merah); }
         input[type=search] { padding: 8px 10px; border: 1px solid var(--garis); border-radius: 8px; font-size: 14px; min-width: 260px; }
