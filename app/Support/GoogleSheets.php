@@ -126,6 +126,24 @@ class GoogleSheets
         return $res->json('sheetId');
     }
 
+    /** Info lokal spreadsheet (locale & zona waktu). */
+    public function lokal(string $id): array
+    {
+        $res = $this->api()->get(self::API."/{$id}", ['fields' => 'properties(locale,timeZone)']);
+        $this->pastikan($res, 'membaca lokal spreadsheet');
+
+        return $res->json('properties');
+    }
+
+    /** Samakan locale & zona waktu (dipakai salinan uji supaya angka, tanggal, dan pemisah rumus sama dengan aslinya). */
+    public function aturLokal(string $id, string $locale, string $timeZone): void
+    {
+        $res = $this->api()->post(self::API."/{$id}:batchUpdate", ['requests' => [[
+            'updateSpreadsheetProperties' => ['properties' => ['locale' => $locale, 'timeZone' => $timeZone], 'fields' => 'locale,timeZone'],
+        ]]]);
+        $this->pastikan($res, 'mengatur lokal spreadsheet');
+    }
+
     /** Ganti judul lembar. */
     public function gantiJudulLembar(string $id, int $sheetId, string $judul): void
     {

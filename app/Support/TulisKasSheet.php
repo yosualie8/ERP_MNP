@@ -46,7 +46,6 @@ class TulisKasSheet
         $nilai = $this->sheets->nilai($this->spreadsheetId, [$lembar])[$lembar];
         [$judul, $total, $terakhir] = $this->posisi($nilai, $lembar);
 
-        $totalAwal = $total;
         $baris = $this->susunBaris($input, $nilai, $judul, $total);
         $butuh = count($baris);
         $mulai = $terakhir + 1;
@@ -61,7 +60,7 @@ class TulisKasSheet
             $total += $butuh;
         }
 
-        $noId = $this->noIdBerikut($nilai, $judul, $totalAwal, $lembar);
+        $noId = $this->noIdBerikut();
         $data = [];
         $daftarNoId = [];
         foreach ($baris as $i => $sel) {
@@ -114,18 +113,18 @@ class TulisKasSheet
         return [$judul, $total, $terakhir];
     }
 
-    /** NO ID lanjutan: terbesar di lembar ini, atau di lembar bulan sebelumnya bila lembar ini masih kosong. */
-    private function noIdBerikut(array $nilai, int $judul, int $total, string $lembar): int
+    /**
+     * NO ID berlanjut lintas bulan (Sep berakhir 30666, Okt mulai 30667), jadi ambil yang terbesar dari semua
+     * lembar bulanan — supaya input bertanggal bulan lalu tidak memakai nomor yang sudah dipakai bulan ini.
+     */
+    private function noIdBerikut(): int
     {
-        $maks = collect(array_slice($nilai, $judul, $total - $judul - 1))
-            ->map(fn ($r) => (int) preg_replace('/\D/', '', (string) ($r[16] ?? '')))->max();
+        $lembar = collect($this->sheets->info($this->spreadsheetId)['sheets'])->pluck('properties.title')
+            ->filter(fn ($t) => preg_match('/^\d{4}$/', $t))->map(fn ($t) => "{$t}!Q:Q")->values()->all();
+        $maks = collect($this->sheets->nilai($this->spreadsheetId, $lembar))->flatten()
+            ->map(fn ($v) => (int) preg_replace('/\D/', '', (string) $v))->max();
         if (! $maks) {
-            $sebelum = now()->setDate(2000 + (int) substr($lembar, 2), (int) substr($lembar, 0, 2), 1)->subMonth()->format('my');
-            $lalu = rescue(fn () => $this->sheets->nilai($this->spreadsheetId, ["{$sebelum}!Q:Q"])["{$sebelum}!Q:Q"], [], false);
-            $maks = collect($lalu)->map(fn ($r) => (int) preg_replace('/\D/', '', (string) ($r[0] ?? '')))->max();
-        }
-        if (! $maks) {
-            throw new RuntimeException("NO ID terakhir tidak ditemukan di lembar {$lembar} maupun bulan sebelumnya.");
+            throw new RuntimeException('NO ID terakhir tidak ditemukan di lembar bulanan mana pun.');
         }
 
         return $maks + 1;

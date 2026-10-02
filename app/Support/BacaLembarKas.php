@@ -40,6 +40,7 @@ class BacaLembarKas
 
         $saldoAwal = null;
         $saldoAkhirSheet = null;
+        $adaTotal = false;
         $transfer = [];
         $catatan = [];
         $sel = fn (array $r, string $nama) => trim((string) ($r[$k[$nama]] ?? ''));
@@ -48,6 +49,7 @@ class BacaLembarKas
             $r = $baris[$i];
             $no = $i + 1;
             if (strtoupper($sel($r, 'tanggal')) === 'TOTAL') {
+                $adaTotal = true;
                 $saldoAkhirSheet = self::rupiah($sel($r, 'saldo'));
                 break;
             }
@@ -103,8 +105,10 @@ class BacaLembarKas
         if ($saldoAwal === null) {
             $catatan[] = 'Baris "Saldo Awal" tidak ditemukan; saldo awal dianggap 0.';
         }
-        if ($saldoAkhirSheet === null) {
+        if (! $adaTotal) {
             $catatan[] = 'Baris TOTAL tidak ditemukan; seluruh baris sampai akhir lembar dibaca.';
+        } elseif ($saldoAkhirSheet === null) {
+            $catatan[] = 'Saldo di baris TOTAL tidak terbaca (kosong atau error seperti #REF!).';
         }
         foreach ($transfer as $t) {
             $jumlahBon = array_sum(array_column($t['bon'], 'nominal'));
