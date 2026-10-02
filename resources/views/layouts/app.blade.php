@@ -39,6 +39,16 @@
         table.kas tr.t:hover { background: #f5f7f9; }
         table.kas tr.t.m:hover { background: #d9efe0; }
         table.kas tr.b i { background: #fff; }
+        /* Bon tertutup kecuali grupnya dibuka; saat tertutup, kolom Kode GL transfer berisi ringkasan akun bon. */
+        table.kas tbody.grup:not(.buka) tr.b { display: none; }
+        table.kas tbody.grup.buka .ringkas-gl { visibility: hidden; }
+        table.kas .ringkas-gl { color: var(--redup); font-size: 12px; }
+        table.kas tr.t.ada-bon { cursor: pointer; }
+        table.kas .panah { display: inline-block; width: 12px; color: var(--redup); transition: transform .15s; }
+        table.kas tbody.grup.buka .panah { transform: rotate(90deg); }
+        table.kas .jumlah-bon { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px; background: var(--latar);
+            color: var(--redup); font-size: 11px; text-align: center; }
+        table.kas td:first-child { white-space: nowrap; }
         .tombol-hapus { background: none; border: 1px solid transparent; border-radius: 6px; color: var(--merah); cursor: pointer; font-size: 12px; padding: 2px 8px; }
         .tombol-hapus:hover { border-color: var(--merah); background: var(--merah-muda); }
         table.kas tr.b td.p { color: var(--redup); padding-left: 18px; }

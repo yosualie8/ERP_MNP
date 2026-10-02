@@ -38,7 +38,8 @@ class KasController extends Controller
                             ->orWhere('id_transaksi', 'like', $like)
                             ->orWhereHas('kodeGl', fn ($k) => $k->where('kode_asli', 'like', $like))));
                 })
-                ->orderBy('baris')
+                // Terbaru di atas: baris paling bawah di sheet = yang terakhir diinput.
+                ->orderByDesc('baris')
                 ->get();
         }
 

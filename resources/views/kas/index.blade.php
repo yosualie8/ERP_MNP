@@ -63,7 +63,8 @@
             @if ($q !== '')
                 <a href="{{ route('kas.index', ['lembar' => $bulan->lembar, 'tgl' => $tanggal]) }}" class="redup">Hapus pencarian</a>
             @endif
-            <span class="redup">{{ $transfer->count() }} transfer · {{ $transfer->sum(fn ($t) => $t->bon->count()) }} bon</span>
+            <span class="redup">{{ $transfer->count() }} transfer · {{ $transfer->sum(fn ($t) => $t->bon->count()) }} bon · terbaru di atas</span>
+            <button type="button" class="tombol polos" id="buka-semua">Buka semua bon</button>
             <span class="redup" style="margin-left: auto;">Diimpor {{ $bulan->diimpor_pada->translatedFormat('j M Y H:i') }} dari lembar {{ $bulan->lembar }}</span>
             <button type="submit" form="form-sinkron" class="tombol polos" title="Ambil ulang lembar ini dari sheet (setelah sheet diubah langsung)">Sinkron dari sheet</button>
             <a href="{{ route('kas.input') }}" class="tombol" style="padding: 8px 14px;">+ Input kas</a>
@@ -87,14 +88,19 @@
                         <th></th>
                     </tr>
                 </thead>
-                <tbody>
-                    @forelse ($transfer as $t)
-                        @php($jumlahBon = $t->bon->sum('nominal'))
-                        <tr @class(['t', 'm' => $t->debet])>
-                            <td>{{ $t->tanggal->translatedFormat('j M') }}</td>
+                @forelse ($transfer as $t)
+                    @php($jumlahBon = $t->bon->sum('nominal'))
+                    @php($akunBon = $t->bon->map(fn ($b) => $b->kodeGl ? ($b->kodeGl->akun?->nama ?? $b->kodeGl->kode_asli).($b->kodeGl->costCenter ? ' '.$b->kodeGl->costCenter->kode : '') : 'tanpa Kode GL')->unique()->values())
+                    <tbody @class(['grup', 'buka' => $q !== ''])>
+                        <tr @class(['t', 'm' => $t->debet, 'ada-bon' => $t->bon->isNotEmpty()])>
+                            <td>
+                                <span class="panah" aria-hidden="true">@if ($t->bon->isNotEmpty())▸@endif</span>
+                                {{ $t->tanggal->translatedFormat('j M') }}
+                                @if ($t->bon->count() > 1)<span class="jumlah-bon" title="{{ $t->bon->count() }} bon">{{ $t->bon->count() }}</span>@endif
+                            </td>
                             <td><b>{{ $t->nama_tujuan ?? '—' }}</b> <span class="redup">{{ $t->bank_tujuan }} {{ $t->no_rek_tujuan }}</span></td>
                             <td>{{ $t->keterangan }}@if ($t->kredit && $jumlahBon !== $t->kredit) <i class="x">bon {{ rp($jumlahBon) }}</i>@endif</td>
-                            <td></td>
+                            <td class="ringkas-gl">{{ $akunBon->take(2)->implode(', ') }}@if ($akunBon->count() > 2) +{{ $akunBon->count() - 2 }}@endif</td>
                             <td class="angka">{{ rp($t->debet, true) }}</td>
                             <td class="angka"><b>{{ rp($t->kredit, true) }}</b></td>
                             <td class="angka">{{ rp($t->saldo) }}</td>
@@ -106,10 +112,10 @@
                             @php($k = $b->kodeGl)
                             <tr class="b"><td></td><td class="p">{{ $b->pic }}</td><td>{{ $b->keterangan }}</td><td>@if ($k){{ $k->akun?->nama ?? $k->kode_asli }}@if ($k->costCenter) <i>{{ $k->costCenter->kode }}</i>@endif @if ($k->ref)<i title="Tahap proyek">{{ $k->ref }}</i>@endif @if ($b->kode_gl_ditebak)<i title="Kode GL kosong di sheet, ditebak dari keterangan">ditebak</i>@endif @else<i class="x">tanpa Kode GL</i>@endif</td><td></td><td class="angka">{{ rp($b->nominal) }}</td><td class="i">{{ $b->id_transaksi }}</td><td></td></tr>
                         @endforeach
-                    @empty
-                        <tr><td colspan="8" class="redup" style="padding: 20px 14px;">Tidak ada transfer yang cocok.</td></tr>
-                    @endforelse
-                </tbody>
+                    </tbody>
+                @empty
+                    <tbody><tr><td colspan="8" class="redup" style="padding: 20px 14px;">Tidak ada transfer yang cocok.</td></tr></tbody>
+                @endforelse
             </table>
         </div>
 
@@ -121,6 +127,22 @@
             <input type="hidden" name="q" value="{{ $q }}">
         </form>
         <script>
+            // Bon tertutup di awal; klik baris transfer untuk membuka/menutup.
+            document.querySelectorAll('tbody.grup tr.t.ada-bon').forEach(tr => tr.addEventListener('click', e => {
+                if (e.target.closest('button, a') || getSelection().toString()) return;
+                tr.parentElement.classList.toggle('buka');
+                aturTombolSemua();
+            }));
+            const tombolSemua = document.getElementById('buka-semua');
+            const grup = () => [...document.querySelectorAll('tbody.grup')].filter(g => g.querySelector('tr.b'));
+            const aturTombolSemua = () => tombolSemua.textContent = grup().every(g => g.classList.contains('buka')) ? 'Tutup semua bon' : 'Buka semua bon';
+            tombolSemua.addEventListener('click', () => {
+                const buka = !grup().every(g => g.classList.contains('buka'));
+                grup().forEach(g => g.classList.toggle('buka', buka));
+                aturTombolSemua();
+            });
+            aturTombolSemua();
+
             document.querySelectorAll('[data-hapus]').forEach(tombol => tombol.addEventListener('click', () => {
                 const d = tombol.dataset;
                 const bon = +d.bon ? ` beserta ${d.bon} bon di bawahnya` : '';
