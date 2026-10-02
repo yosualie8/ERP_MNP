@@ -95,13 +95,18 @@
                 <label for="nominal_masuk">Nominal masuk</label>
                 <input type="number" name="nominal_masuk" id="nominal_masuk" class="angka-input" min="1" value="{{ old('nominal_masuk') }}">
             </div>
+            <div data-keluar style="margin-top: 12px; max-width: 260px;">
+                <label for="nominal_transfer">Nominal transfer <span class="redup">(sesuai mutasi bank)</span></label>
+                <input type="number" name="nominal_transfer" id="nominal_transfer" class="angka-input" min="1" value="{{ old('nominal_transfer') }}" required>
+            </div>
         </div>
 
         <div class="kartu" data-keluar>
             <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px;">
                 <h3 style="margin: 0 0 4px;">Rincian bon</h3>
-                <span class="redup">Nilai transfer = jumlah bon: <span class="total-bon" id="total-bon">0</span></span>
+                <span class="redup">Jumlah bon <span class="total-bon" id="total-bon">0</span> dari transfer <b id="nilai-transfer">0</b></span>
             </div>
+            <div id="status-cocok" class="pesan" style="margin: 8px 0 10px; padding: 8px 12px;"></div>
             <p class="redup" style="margin: 0 0 10px;">Satu transfer bisa berisi beberapa bon (mis. reimburse). Kode GL ditulis seperti di sheet, mis. <i>Biaya BBM ASG</i> atau <i>Gaji Karyawan ASG T116</i>.</p>
             <table class="bon">
                 <thead>
@@ -161,10 +166,28 @@
 
             const urutkanNama = () => daftar.querySelectorAll('tr').forEach((tr, i) =>
                 tr.querySelectorAll('[data-nama]').forEach(el => el.name = `bon[${i}][${el.dataset.nama}]`));
+            // Jumlah bon wajib sama persis dengan nominal transfer; selama belum sama, tombol Simpan dikunci.
+            const nominalTransfer = document.getElementById('nominal_transfer');
+            const statusCocok = document.getElementById('status-cocok');
+            const tombolSimpan = document.getElementById('simpan');
+            const arahMasuk = () => document.getElementById('arah-masuk').checked;
             const hitung = () => {
                 const total = [...daftar.querySelectorAll('[data-nama=nominal]')].reduce((s, el) => s + (parseInt(el.value) || 0), 0);
+                const transfer = parseInt(nominalTransfer.value) || 0;
+                const selisih = transfer - total;
                 document.getElementById('total-bon').textContent = fmt(total);
+                document.getElementById('nilai-transfer').textContent = fmt(transfer);
+                const cocok = transfer > 0 && selisih === 0;
+                statusCocok.className = 'pesan ' + (cocok ? 'sukses' : 'galat');
+                statusCocok.textContent = !transfer ? 'Isi nominal transfer dulu.'
+                    : cocok ? '✓ Jumlah bon sama dengan nominal transfer.'
+                    : selisih > 0 ? `Bon kurang ${fmt(selisih)} — tambah bon atau perbaiki nominalnya.`
+                    : `Bon lebih ${fmt(-selisih)} dari nominal transfer — perbaiki nominalnya.`;
+                tombolSimpan.disabled = !arahMasuk() && !cocok;
+                tombolSimpan.title = tombolSimpan.disabled ? 'Jumlah bon harus sama dengan nominal transfer' : '';
+                return cocok;
             };
+            nominalTransfer.addEventListener('input', hitung);
             const tambah = (isi = {}) => {
                 const tr = templat.content.firstElementChild.cloneNode(true);
                 tr.querySelectorAll('[data-nama]').forEach(el => el.value = isi[el.dataset.nama] ?? '');
@@ -330,15 +353,21 @@
                 document.querySelectorAll('[data-keluar]').forEach(el => el.hidden = masuk);
                 daftar.querySelectorAll('input').forEach(el => el.disabled = masuk);
                 biaya.disabled = masuk;
+                nominalTransfer.disabled = masuk;
                 document.getElementById('nominal_masuk').required = masuk;
+                hitung();
             };
             document.querySelectorAll('[name=arah]').forEach(r => r.addEventListener('change', aturArah));
             aturArah();
 
-            document.getElementById('form-kas').addEventListener('submit', () => {
-                const tombol = document.getElementById('simpan');
-                tombol.disabled = true;
-                tombol.textContent = 'Menyimpan ke sheet…';
+            document.getElementById('form-kas').addEventListener('submit', e => {
+                if (!arahMasuk() && !hitung()) {
+                    e.preventDefault();
+                    statusCocok.scrollIntoView({block: 'center'});
+                    return;
+                }
+                tombolSimpan.disabled = true;
+                tombolSimpan.textContent = 'Menyimpan ke sheet…';
             });
         })();
     </script>

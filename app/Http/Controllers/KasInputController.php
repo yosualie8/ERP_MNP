@@ -87,6 +87,7 @@ class KasInputController extends Controller
             'bank' => ['nullable', 'string', 'max:40'],
             'keterangan' => ['nullable', 'string', 'max:300'],
             'nominal_masuk' => ['required_if:arah,masuk', 'nullable', 'integer', 'min:1'],
+            'nominal_transfer' => ['required_if:arah,keluar', 'nullable', 'integer', 'min:1'],
             'biaya_transfer' => ['nullable', 'boolean'],
             'bon' => ['required_if:arah,keluar', 'array'],
             'bon.*.nominal' => ['required', 'integer', 'min:1'],
@@ -98,7 +99,18 @@ class KasInputController extends Controller
             'bon.*.keterangan.required' => 'Keterangan setiap bon wajib diisi.',
             'bon.*.kode_gl.required' => 'Kode GL setiap bon wajib diisi.',
             'bon.*.nominal.required' => 'Nominal setiap bon wajib diisi.',
+            'nominal_transfer.required_if' => 'Nominal transfer wajib diisi.',
         ]);
+
+        // Jumlah bon wajib sama persis dengan nominal transfer; bila tidak, transaksi ditolak dan tidak ditulis ke sheet.
+        if ($data['arah'] === 'keluar') {
+            $jumlahBon = array_sum(array_map(fn ($b) => (int) $b['nominal'], $data['bon']));
+            $nominal = (int) $data['nominal_transfer'];
+            if ($jumlahBon !== $nominal) {
+                return back()->withInput()->withErrors(['nominal_transfer' => 'Ditolak: jumlah bon '.rp($jumlahBon).' tidak sama dengan nominal transfer '.rp($nominal)
+                    .' (selisih '.rp(abs($nominal - $jumlahBon)).'). Transaksi tidak ditulis ke sheet.']);
+            }
+        }
 
         $tanggal = Carbon::parse($data['tanggal']);
         $input = [
@@ -109,6 +121,7 @@ class KasInputController extends Controller
             'bank' => $data['bank'] ?? null,
             'keterangan' => $data['keterangan'] ?? null,
             'nominal_masuk' => (int) ($data['nominal_masuk'] ?? 0),
+            'nominal_transfer' => $data['arah'] === 'keluar' ? (int) $data['nominal_transfer'] : null,
             'bon' => $data['arah'] === 'keluar' ? array_values($data['bon']) : [],
             'biaya_transfer' => $data['arah'] === 'keluar' && $request->boolean('biaya_transfer'),
         ];
