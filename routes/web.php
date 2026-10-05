@@ -26,6 +26,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/kas/input', [KasInputController::class, 'create'])->name('kas.input');
     Route::post('/kas/input', [KasInputController::class, 'store'])->name('kas.input.store');
     Route::delete('/kas/transfer/{transfer}', [KasInputController::class, 'hapus'])->name('kas.hapus');
+    Route::get('/kas/transaksi/{noId}/edit', [KasInputController::class, 'edit'])->whereNumber('noId')->name('kas.edit');
+    Route::put('/kas/transaksi/{noId}', [KasInputController::class, 'update'])->whereNumber('noId')->name('kas.update');
     Route::get('/kas/bon/{noId}', [KasFotoController::class, 'index'])->whereNumber('noId')->name('kas.bon');
     Route::post('/kas/bon/{noId}', [KasFotoController::class, 'store'])->whereNumber('noId')->name('kas.bon.store');
     Route::get('/kas/foto/{foto}', [KasFotoController::class, 'tampil'])->name('kas.foto');

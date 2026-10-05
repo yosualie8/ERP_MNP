@@ -6,6 +6,7 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     {{-- Dimuat di head karena dipakai skrip di dalam halaman (Input Kas, halaman Bon). --}}
     <script src="{{ asset('js/penampil-foto.js') }}?v={{ filemtime(public_path('js/penampil-foto.js')) }}"></script>
+    <script src="{{ asset('js/tebak-kode-gl.js') }}?v={{ filemtime(public_path('js/tebak-kode-gl.js')) }}"></script>
     <script src="{{ asset('js/kecilkan-foto.js') }}?v={{ filemtime(public_path('js/kecilkan-foto.js')) }}"></script>
     <title>{{ $judul ?? 'MNP' }} · PT Multi Niaga Putra</title>
     <style>
@@ -52,6 +53,8 @@
         table.kas .jumlah-bon { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 4px; border-radius: 9px; background: var(--latar);
             color: var(--redup); font-size: 11px; text-align: center; }
         table.kas td:first-child { white-space: nowrap; }
+        .tombol-edit { font-size: 12px; padding: 2px 8px; border-radius: 6px; color: var(--aksen); text-decoration: none; border: 1px solid transparent; }
+        .tombol-edit:hover { border-color: var(--aksen); background: var(--hijau-muda); }
         .tombol-hapus { background: none; border: 1px solid transparent; border-radius: 6px; color: var(--merah); cursor: pointer; font-size: 12px; padding: 2px 8px; }
         .tombol-hapus:hover { border-color: var(--merah); background: var(--merah-muda); }
         table.kas tr.b td.p { color: var(--redup); padding-left: 18px; }

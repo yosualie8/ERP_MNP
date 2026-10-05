@@ -106,6 +106,7 @@
                             <td class="angka">{{ rp($t->saldo) }}</td>
                             <td style="white-space: nowrap;">
                                 @if ($t->no_id)
+                                    <a href="{{ route('kas.edit', $t->no_id) }}" class="tombol-edit" title="Edit transaksi ini (ditulis ulang di sheet)">Edit</a>
                                     @if ($n = $jumlahFoto[$t->no_id] ?? 0)
                                         <a href="{{ route('kas.bon', $t->no_id) }}" class="lampiran ada" title="Lihat {{ $n }} foto bon">📎 {{ $n }}</a>
                                     @else

@@ -61,25 +61,101 @@ class TulisKasSheet
         }
 
         $noId = $this->noIdBerikut();
+        $daftarNoId = range($noId, $noId + $butuh - 1);
+        $this->sheets->tulis($this->spreadsheetId, $this->dataBlok($lembar, $baris, $mulai, $daftarNoId, $total));
+
+        return ['lembar' => $lembar, 'baris_awal' => $mulai, 'baris_akhir' => $mulai + $butuh - 1, 'no_id' => $daftarNoId];
+    }
+
+    /**
+     * Ubah transaksi yang sudah ada (beserta baris "Biaya Transfer Keluar" miliknya) di tempat yang sama.
+     * NO ID & nomor Kode Bon lama dipakai lagi; baris tambahan mendapat NO ID lanjutan sheet.
+     * Bila tanggal pindah bulan: dihapus dari lembar lama lalu ditulis di lembar bulan baru.
+     *
+     * @return array{lembar: string, lembar_lama: string, baris_awal: int, baris_akhir: int, no_id: int[], sebelum: array}
+     */
+    public function ubah(\App\Models\KasTransfer $t, array $input): array
+    {
+        $t->loadMissing('bon', 'kasBulan');
+        $lembarLama = $t->kasBulan->lembar;
+        $biaya = HapusKasSheet::biayaTransferMilik($t);
+
+        if ($input['tanggal']->format('my') !== $lembarLama) {
+            $hapus = (new HapusKasSheet($this->sheets, $this->spreadsheetId))->hapus($t, (bool) $biaya);
+            $tulis = $this->tulis($input);
+
+            return [...$tulis, 'lembar_lama' => $lembarLama, 'sebelum' => $hapus['isi']];
+        }
+
+        return Cache::lock('tulis-kas-sheet', 60)->block(30, function () use ($t, $input, $lembarLama, $biaya) {
+            $lembar = $lembarLama;
+            $sheetId = collect($this->sheets->info($this->spreadsheetId)['sheets'])->firstWhere('properties.title', $lembar)['properties']['sheetId']
+                ?? throw new RuntimeException("Lembar {$lembar} tidak ditemukan di sheet.");
+            $nilai = $this->sheets->nilai($this->spreadsheetId, [$lembar])[$lembar];
+            [$judul, $total] = $this->posisi($nilai, $lembar);
+
+            $blok = array_filter([$t, $biaya]);
+            $dari = $t->baris;
+            $sampai = max(array_map(fn ($x) => max($x->baris, (int) $x->bon->max('baris')), $blok));
+            if ($sampai >= $total) {
+                throw new RuntimeException("Transaksi ini tidak berada di atas baris TOTAL lembar {$lembar}.");
+            }
+            $sebelum = array_slice($nilai, $dari - 1, $sampai - $dari + 2);
+            HapusKasSheet::cocokkan($blok, $sebelum, $dari, $sampai);
+
+            // Nomor Kode Bon lama per PIC (tanggal sama) dipakai lagi supaya kodenya tidak berubah.
+            $nnTetap = [];
+            foreach (array_slice($sebelum, 0, $sampai - $dari + 1) as $r) {
+                if (preg_match('/^'.$input['tanggal']->format('Ymd').'-(.+)-(\d+)(?:-\d+)?$/', trim((string) ($r[15] ?? '')), $m)) {
+                    $nnTetap[strtolower($m[1])] ??= (int) $m[2];
+                }
+            }
+            $baris = $this->susunBaris($input, $nilai, $judul, $total, range($dari, $sampai), $nnTetap);
+            $n = count($baris);
+            $m = $sampai - $dari + 1;
+
+            $idLama = array_values(array_filter(array_map(fn ($r) => self::angkaNoId($r[16] ?? ''), array_slice($sebelum, 0, $m))));
+            $ids = array_slice($idLama, 0, $n);
+            if (count($ids) < $n) {
+                $berikut = $this->noIdBerikut();
+                while (count($ids) < $n) {
+                    $ids[] = $berikut++;
+                }
+            }
+
+            // Sisip di dalam blok (sebelum baris terakhirnya) supaya jangkauan SUM baris TOTAL ikut melebar.
+            if ($n > $m) {
+                $this->sheets->sisipBaris($this->spreadsheetId, $sheetId, $sampai, $n - $m);
+            } elseif ($n < $m) {
+                $this->sheets->hapusBaris($this->spreadsheetId, $sheetId, $dari + $n, $sampai);
+            }
+            $total += $n - $m;
+
+            $this->sheets->tulis($this->spreadsheetId, $this->dataBlok($lembar, $baris, $dari, $ids, $total));
+
+            return ['lembar' => $lembar, 'lembar_lama' => $lembarLama, 'baris_awal' => $dari, 'baris_akhir' => $dari + $n - 1, 'no_id' => $ids,
+                'sebelum' => array_slice($sebelum, 0, $m)];
+        });
+    }
+
+    /** Isi sel B..R untuk blok baris mulai $mulai (rumus Saldo & ID TRANSAKSI) + sambungan saldo baris sesudahnya. */
+    private function dataBlok(string $lembar, array $baris, int $mulai, array $noId, int $total): array
+    {
         $data = [];
-        $daftarNoId = [];
         foreach ($baris as $i => $sel) {
             $n = $mulai + $i;
             $sel[8] = "=I".($n - 1)."+G{$n}-H{$n}";
-            $sel[16] = $noId;
+            $sel[16] = $noId[$i];
             $sel[17] = '=CONCATENATE(TEXT(B'.$n.';"yymmdd");"-Jago-";Q'.$n.')';
-            $daftarNoId[] = $noId++;
             $data["{$lembar}!B{$n}:R{$n}"] = [array_values(array_slice(array_replace(array_fill(1, 17, ''), $sel), 0, 17))];
         }
-        // Baris kosong pertama setelah blok: rumus saldonya harus menyambung ke baris terakhir yang ditulis.
-        $setelah = $mulai + $butuh;
+        // Baris pertama setelah blok: rumus saldonya harus menyambung ke baris terakhir yang ditulis.
+        $setelah = $mulai + count($baris);
         if ($setelah < $total) {
             $data["{$lembar}!I{$setelah}"] = [["=I".($setelah - 1)."+G{$setelah}-H{$setelah}"]];
         }
 
-        $this->sheets->tulis($this->spreadsheetId, $data);
-
-        return ['lembar' => $lembar, 'baris_awal' => $mulai, 'baris_akhir' => $mulai + $butuh - 1, 'no_id' => $daftarNoId];
+        return $data;
     }
 
     /** @return array{0: int, 1: int, 2: int} nomor baris judul, baris TOTAL, baris terakhir yang terisi */
@@ -146,7 +222,7 @@ class TulisKasSheet
     }
 
     /** @return array<int, array<int, mixed>> per baris: indeks kolom (B=1 … R=17) => isi */
-    private function susunBaris(array $input, array $nilai, int $judul, int $total): array
+    private function susunBaris(array $input, array $nilai, int $judul, int $total, array $kecualiBaris = [], array $nnTetap = []): array
     {
         $tgl = $input['tanggal']->format('Y-m-d');
         $teks = fn (?string $v) => self::teks($v);
@@ -161,7 +237,7 @@ class TulisKasSheet
         if (! $bon || (isset($input['nominal_transfer']) && (int) $input['nominal_transfer'] !== $jumlahBon)) {
             throw new RuntimeException('Jumlah transaksi detail '.rp($jumlahBon).' tidak sama dengan nominal transfer '.rp((int) ($input['nominal_transfer'] ?? 0)).'; tidak ditulis.');
         }
-        $kodeBon = $this->kodeBon($input['tanggal'], $bon, $nilai, $judul, $total);
+        $kodeBon = $this->kodeBon($input['tanggal'], $bon, $nilai, $judul, $total, $kecualiBaris, $nnTetap);
         $baris = [];
         foreach ($bon as $i => $b) {
             $sel = $i === 0 ? $kepala + [7 => array_sum(array_column($bon, 'nominal'))] : [1 => $tgl];
@@ -176,12 +252,19 @@ class TulisKasSheet
         return $baris;
     }
 
-    /** Kode Bon per bon: nomor urut per tanggal & PIC melanjutkan yang sudah ada di lembar. */
-    private function kodeBon(CarbonInterface $tanggal, array $bon, array $nilai, int $judul, int $total): array
+    /**
+     * Kode Bon per detail: nomor urut per tanggal & PIC melanjutkan yang sudah ada di lembar.
+     * Saat edit: baris milik transaksi itu sendiri tidak dihitung, dan nomor lamanya ($nnTetap) dipakai lagi.
+     */
+    private function kodeBon(CarbonInterface $tanggal, array $bon, array $nilai, int $judul, int $total, array $kecualiBaris = [], array $nnTetap = []): array
     {
         $awalan = $tanggal->format('Ymd');
         $terpakai = [];
-        foreach (array_slice($nilai, $judul, $total - $judul - 1) as $r) {
+        $kecuali = array_flip($kecualiBaris);
+        foreach (array_slice($nilai, $judul, $total - $judul - 1, true) as $i => $r) {
+            if (isset($kecuali[$i + 1])) {
+                continue;
+            }
             if (preg_match('/^'.$awalan.'-(.+)-(\d+)(?:-\d+)?$/', trim((string) ($r[15] ?? '')), $m)) {
                 $pic = strtolower($m[1]);
                 $terpakai[$pic] = max($terpakai[$pic] ?? 0, (int) $m[2]);
@@ -196,7 +279,7 @@ class TulisKasSheet
         }
         $kode = array_fill(0, count($bon), '');
         foreach ($perPic as $kunci => $indeks) {
-            $nn = str_pad((string) (($terpakai[$kunci] ?? 0) + 1), 2, '0', STR_PAD_LEFT);
+            $nn = str_pad((string) ($nnTetap[$kunci] ?? (($terpakai[$kunci] ?? 0) + 1)), 2, '0', STR_PAD_LEFT);
             $namaPic = trim($bon[$indeks[0]]['pic']);
             foreach ($indeks as $ke => $i) {
                 $kode[$i] = "{$awalan}-{$namaPic}-{$nn}".(count($indeks) > 1 ? '-'.($ke + 1) : '');

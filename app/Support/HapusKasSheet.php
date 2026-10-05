@@ -49,7 +49,7 @@ class HapusKasSheet
             // Baca blok + satu baris sesudahnya untuk memastikan batas blok.
             $range = "{$lembar}!A{$dari}:R".($sampai + 1);
             $isi = $this->sheets->nilai($this->spreadsheetId, [$range])[$range];
-            $this->cocokkan($blok, $isi, $dari, $sampai);
+            self::cocokkan($blok, $isi, $dari, $sampai);
 
             $semua = $this->sheets->nilai($this->spreadsheetId, ["{$lembar}!B:B"])["{$lembar}!B:B"];
             $total = collect($semua)->search(fn ($r) => strtoupper(trim((string) ($r[0] ?? ''))) === 'TOTAL');
@@ -70,11 +70,11 @@ class HapusKasSheet
         });
     }
 
-    /** Isi sheet harus sama dengan data aplikasi: nominal transfer, keterangan, nominal tiap bon, dan baris sesudah blok bukan bon. */
-    private function cocokkan(array $blok, array $isi, int $dari, int $sampai): void
+    /** Dipakai juga oleh Edit. Isi sheet (kolom A=0) harus sama dengan data aplikasi: nominal transfer, keterangan, nominal tiap bon, dan baris sesudah blok bukan bon. */
+    public static function cocokkan(array $blok, array $isi, int $dari, int $sampai): void
     {
         $sel = fn (int $baris, int $kolom) => trim((string) ($isi[$baris - $dari][$kolom] ?? ''));
-        $berubah = fn (string $alasan) => new RuntimeException("Isi sheet sudah berubah sejak sinkron terakhir ({$alasan}). Klik \"Sinkron dari sheet\", periksa lagi, lalu hapus ulang.");
+        $berubah = fn (string $alasan) => new RuntimeException("Isi sheet sudah berubah sejak sinkron terakhir ({$alasan}). Klik \"Sinkron dari sheet\", periksa lagi, lalu coba ulang.");
 
         foreach ($blok as $t) {
             if ((BacaLembarKas::rupiah($sel($t->baris, 6)) ?? 0) !== $t->debet || (BacaLembarKas::rupiah($sel($t->baris, 7)) ?? 0) !== $t->kredit) {

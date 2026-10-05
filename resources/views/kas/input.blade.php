@@ -36,6 +36,12 @@
         .panel-foto { position: sticky; top: 12px; }
         .panel-foto .kartu { margin-bottom: 0; padding: 16px; }
         .panel-foto .penampil { height: calc(100vh - 230px); margin-top: 10px; }
+        /* Kode GL tebakan otomatis (ungu muda) + saran yang bisa diklik. */
+        .form-kas input.tebakan { background: #f3efff; border-color: #c9bdf2; }
+        .saran-kode { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+        .saran-kode button { border: 1px solid var(--garis); background: #fff; border-radius: 999px; padding: 1px 8px; font-size: 11px; color: var(--redup); cursor: pointer; }
+        .saran-kode button:hover { border-color: #9a87e0; color: var(--teks); }
+        .saran-kode button.dipilih { background: #ece6ff; border-color: #9a87e0; color: #3f2f8a; }
         .info-foto { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; color: var(--redup); margin-top: 6px; }
         @media (max-width: 1100px) {
             .tata-foto { grid-template-columns: minmax(0, 1fr); }
@@ -44,7 +50,12 @@
         }
     </style>
 
-    <form method="POST" action="{{ route('kas.input.store') }}" class="form-kas tata-foto" id="form-kas" enctype="multipart/form-data">
+    @php($edit ??= null)
+    <form method="POST" action="{{ $edit ? route('kas.update', $edit['no_id']) : route('kas.input.store') }}" class="form-kas tata-foto" id="form-kas" enctype="multipart/form-data">
+        @if ($edit)
+            @method('PUT')
+            <input type="hidden" name="versi" value="{{ $edit['versi'] }}">
+        @endif
         @csrf
         <div class="kolom-utama">
         @if ($errors->any())
@@ -60,11 +71,17 @@
 
         <div class="kartu">
             <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px;">
-                <h3 style="margin: 0;">Input kas Bank Jago</h3>
+                <h3 style="margin: 0;">
+                    @if ($edit)
+                        Edit transaksi <span class="redup" style="font-size: 13px; font-weight: normal;">NO ID {{ $edit['no_id'] }} · lembar {{ $edit['lembar'] }} baris {{ $edit['baris'] }}</span>
+                    @else
+                        Input kas Bank Jago
+                    @endif
+                </h3>
                 <div class="pilihan">
-                    <input type="radio" name="arah" id="arah-keluar" value="keluar" @checked(old('arah', 'keluar') === 'keluar')>
+                    <input type="radio" name="arah" id="arah-keluar" value="keluar" @checked(old('arah', $edit['arah'] ?? 'keluar') === 'keluar')>
                     <label for="arah-keluar">Transfer keluar</label>
-                    <input type="radio" name="arah" id="arah-masuk" value="masuk" @checked(old('arah') === 'masuk')>
+                    <input type="radio" name="arah" id="arah-masuk" value="masuk" @checked(old('arah', $edit['arah'] ?? 'keluar') === 'masuk')>
                     <label for="arah-masuk">Uang masuk</label>
                 </div>
             </div>
@@ -72,11 +89,11 @@
             <div class="baris2">
                 <div>
                     <label for="tanggal">Tanggal</label>
-                    <input type="date" name="tanggal" id="tanggal" value="{{ old('tanggal', now()->toDateString()) }}" required>
+                    <input type="date" name="tanggal" id="tanggal" value="{{ old('tanggal', $edit['tanggal'] ?? now()->toDateString()) }}" required>
                 </div>
                 <div style="grid-column: span 2;" class="isian-saran">
                     <label for="nama_tujuan"><span data-keluar>Nama rekening tujuan</span><span data-masuk hidden>Dari (nama pengirim)</span></label>
-                    <input type="text" name="nama_tujuan" id="nama_tujuan" value="{{ old('nama_tujuan') }}" autocomplete="off" required
+                    <input type="text" name="nama_tujuan" id="nama_tujuan" value="{{ old('nama_tujuan', $edit['nama_tujuan'] ?? '') }}" autocomplete="off" required
                            placeholder="Ketik nama, pilih rekeningnya dari daftar">
                     <div class="saran" id="saran-nama" hidden></div>
                 </div>
@@ -84,13 +101,13 @@
             <div class="baris2">
                 <div class="isian-saran">
                     <label for="no_rek">No. rekening</label>
-                    <input type="text" name="no_rek" id="no_rek" value="{{ old('no_rek') }}" inputmode="numeric" autocomplete="off"
+                    <input type="text" name="no_rek" id="no_rek" value="{{ old('no_rek', $edit['no_rek'] ?? '') }}" inputmode="numeric" autocomplete="off"
                            placeholder="Atau ketik nomornya">
                     <div class="saran" id="saran-norek" hidden></div>
                 </div>
                 <div style="grid-column: span 2;">
                     <label for="bank">Bank</label>
-                    <input type="text" name="bank" id="bank" value="{{ old('bank') }}" autocomplete="off" style="max-width: 200px; margin-bottom: 6px;">
+                    <input type="text" name="bank" id="bank" value="{{ old('bank', $edit['bank'] ?? '') }}" autocomplete="off" style="max-width: 200px; margin-bottom: 6px;">
                     <div>
                         @foreach ($bank as $b)
                             <a href="#" class="chip" data-bank="{{ $b }}">{{ $b }}</a>
@@ -100,16 +117,16 @@
             </div>
             <div>
                 <label for="keterangan">Keterangan transfer <span class="redup">(seperti kolom Keterangan di sheet)</span></label>
-                <input type="text" name="keterangan" id="keterangan" value="{{ old('keterangan') }}" autocomplete="off">
+                <input type="text" name="keterangan" id="keterangan" value="{{ old('keterangan', $edit['keterangan'] ?? '') }}" autocomplete="off">
             </div>
 
             <div data-masuk hidden style="margin-top: 12px; max-width: 260px;">
                 <label for="nominal_masuk">Nominal masuk</label>
-                <input type="number" name="nominal_masuk" id="nominal_masuk" class="angka-input" min="1" value="{{ old('nominal_masuk') }}">
+                <input type="number" name="nominal_masuk" id="nominal_masuk" class="angka-input" min="1" value="{{ old('nominal_masuk', $edit['nominal_masuk'] ?? '') }}">
             </div>
             <div data-keluar style="margin-top: 12px; max-width: 260px;">
                 <label for="nominal_transfer">Nominal transfer <span class="redup">(sesuai mutasi bank)</span></label>
-                <input type="number" name="nominal_transfer" id="nominal_transfer" class="angka-input" min="1" value="{{ old('nominal_transfer') }}" required>
+                <input type="number" name="nominal_transfer" id="nominal_transfer" class="angka-input" min="1" value="{{ old('nominal_transfer', $edit['nominal_transfer'] ?? '') }}" required>
             </div>
         </div>
 
@@ -146,14 +163,17 @@
 
             <label style="display: flex; align-items: center; gap: 8px; margin-top: 16px; color: var(--teks); font-size: 14px;">
                 <input type="hidden" name="biaya_transfer" value="0">
-                <input type="checkbox" name="biaya_transfer" id="biaya_transfer" value="1" @checked(old('biaya_transfer', '1') === '1')>
+                <input type="checkbox" name="biaya_transfer" id="biaya_transfer" value="1" @checked(old('biaya_transfer', $edit['biaya_transfer'] ?? '1') === '1')>
                 Catat biaya transfer {{ rp(\App\Support\TulisKasSheet::BIAYA_TRANSFER) }} (baris "Biaya Transfer Keluar", Kode GL Biaya Transfer Antar Bank)
             </label>
             <p class="redup" id="catatan-biaya" style="margin: 4px 0 0 24px;"></p>
         </div>
 
         <div style="display: flex; gap: 12px; align-items: center;">
-            <button type="submit" class="tombol" id="simpan">Simpan ke sheet</button>
+            <button type="submit" class="tombol" id="simpan">{{ $edit ? 'Simpan perubahan ke sheet' : 'Simpan ke sheet' }}</button>
+            @if ($edit)
+                <a href="{{ url()->previous() !== url()->current() ? url()->previous() : route('kas.index') }}" class="tombol polos">Batal</a>
+            @endif
             <span class="redup">Data ditulis ke lembar bulan sesuai tanggal di sheet <i>Kas Harian MNP</i>, lalu langsung muncul di Kas Harian.</span>
         </div>
         </div>
@@ -183,7 +203,7 @@
             <td><input type="number" class="angka-input" data-nama="nominal" min="1" required></td>
             <td><input type="text" data-nama="pic" list="daftar-pic" autocomplete="off"></td>
             <td><input type="text" data-nama="keterangan" autocomplete="off" required></td>
-            <td><input type="text" data-nama="kode_gl" list="daftar-kode" autocomplete="off" required></td>
+            <td><input type="text" data-nama="kode_gl" list="daftar-kode" autocomplete="off" required><div class="saran-kode"></div></td>
             <td><button type="button" class="hapus" title="Hapus baris detail">×</button></td>
         </tr>
     </template>
@@ -191,7 +211,7 @@
     <script>
         (() => {
             const rekening = @json($rekening);
-            const awal = @json(old('bon', []));
+            const awal = @json(old('bon', $edit['bon'] ?? []));
             const daftar = document.getElementById('daftar-bon');
             const templat = document.getElementById('templat-bon');
             const fmt = n => new Intl.NumberFormat('id-ID').format(n || 0);
@@ -233,13 +253,63 @@
             };
             daftar.addEventListener('input', hitung);
 
+            // Tebak Kode GL dari keterangan + PIC, seketika di browser. Kode yang diisi otomatis (ungu) boleh ditimpa
+            // tebakan berikutnya; begitu admin mengetik/memilih sendiri, tidak disentuh lagi.
+            const modelKode = @json($modelKode);
+            const tebakBaris = tr => {
+                const kode = tr.querySelector('[data-nama=kode_gl]');
+                const saran = tr.querySelector('.saran-kode');
+                const ket = tr.querySelector('[data-nama=keterangan]').value;
+                const hasil = ket.trim().length >= 3 ? TebakKodeGl.tebak(modelKode, ket, tr.querySelector('[data-nama=pic]').value) : [];
+                const otomatis = !kode.value || kode.dataset.otomatis === '1';
+                if (otomatis) {
+                    kode.value = hasil[0]?.[0] ?? '';
+                    kode.dataset.otomatis = '1';
+                    kode.classList.toggle('tebakan', !!hasil.length);
+                    kode.title = hasil.length ? `Tebakan otomatis (${Math.round(hasil[0][1] * 100)}%) — periksa, atau pilih saran di bawah` : '';
+                }
+                saran.innerHTML = '';
+                hasil.forEach(([k, p]) => {
+                    const b = document.createElement('button');
+                    b.type = 'button';
+                    b.textContent = `${k} ${Math.round(p * 100)}%`;
+                    b.className = k === kode.value ? 'dipilih' : '';
+                    b.addEventListener('click', () => {
+                        kode.value = k;
+                        kode.dataset.otomatis = '0';
+                        kode.classList.remove('tebakan');
+                        kode.title = '';
+                        saran.querySelectorAll('button').forEach(x => x.classList.toggle('dipilih', x === b));
+                    });
+                    saran.appendChild(b);
+                });
+            };
+            daftar.addEventListener('input', e => {
+                const tr = e.target.closest('tr');
+                const nama = e.target.dataset.nama;
+                if (nama === 'kode_gl') {
+                    e.target.dataset.otomatis = '0';
+                    e.target.classList.remove('tebakan');
+                    e.target.title = '';
+                    tr.querySelectorAll('.saran-kode button').forEach(b => b.classList.toggle('dipilih', b.textContent.startsWith(e.target.value + ' ')));
+                } else if (nama === 'keterangan' || nama === 'pic') {
+                    tebakBaris(tr);
+                }
+            });
+
             document.getElementById('tambah-bon').addEventListener('click', () => {
                 const sebelumnya = daftar.lastElementChild;
-                // Bon berikutnya biasanya PIC & Kode GL yang sama (mis. reimburse satu orang).
+                // Baris berikutnya biasanya PIC & Kode GL yang sama (mis. reimburse satu orang);
+                // Kode GL salinan ditandai otomatis supaya diganti tebakan bila keterangannya beda jenis.
                 const tr = tambah(sebelumnya ? {
                     pic: sebelumnya.querySelector('[data-nama=pic]').value,
                     kode_gl: sebelumnya.querySelector('[data-nama=kode_gl]').value,
                 } : {});
+                const kode = tr.querySelector('[data-nama=kode_gl]');
+                if (kode.value) {
+                    kode.dataset.otomatis = '1';
+                    kode.classList.add('tebakan');
+                }
                 tr.querySelector('[data-nama=nominal]').focus();
             });
             (awal.length ? awal : [{}]).forEach(b => tambah(b));
@@ -369,7 +439,8 @@
             // Transfer ke bank selain Jago biasanya kena biaya 2.500.
             const biaya = document.getElementById('biaya_transfer');
             const catatanBiaya = document.getElementById('catatan-biaya');
-            let biayaDiubahManual = {{ old('biaya_transfer') !== null ? 'true' : 'false' }};
+            // Saat edit, centang biaya transfer mengikuti data yang ada (tidak diatur ulang otomatis dari bank).
+            let biayaDiubahManual = {{ old('biaya_transfer') !== null || $edit ? 'true' : 'false' }};
             biaya.addEventListener('change', () => biayaDiubahManual = true);
             const aturBiaya = () => {
                 const jago = bank.value.trim().toLowerCase() === 'jago' || bank.value.trim() === '';
@@ -399,36 +470,46 @@
             const daftarGambar = document.getElementById('daftar-gambar');
             const infoFoto = document.getElementById('info-foto');
             const tombolBuang = document.getElementById('buang-foto');
-            let daftarFoto = []; // {file, ukuranAsli, url}
+            let daftarFoto = []; // {file, ukuranAsli, url} — foto baru
+            const fotoTersimpan = @json($edit['foto'] ?? []); // {penuh, kecil}
             let pilihan = -1;
             const ukuran = b => b > 1048576 ? (b / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.round(b / 1024) + ' KB';
+            // Daftar yang tampil = foto tersimpan (saat edit, hanya dilihat) + foto baru (ikut diunggah, bisa dibuang).
+            const semuaFoto = () => [
+                ...fotoTersimpan.map(x => ({tersimpan: true, url: x.penuh, kecil: x.kecil})),
+                ...daftarFoto.map(f => ({tersimpan: false, url: f.url, kecil: f.url, f})),
+            ];
             const tampilFoto = () => {
                 const dt = new DataTransfer();
                 daftarFoto.forEach(f => dt.items.add(f.file));
                 inputFoto.files = dt.files;
                 daftarGambar.innerHTML = '';
-                daftarFoto.forEach((f, i) => {
+                const semua = semuaFoto();
+                semua.forEach((x, i) => {
                     const b = document.createElement('button');
                     b.type = 'button';
-                    b.title = f.file.name;
+                    b.title = x.tersimpan ? 'Foto tersimpan' : x.f.file.name;
                     b.className = i === pilihan ? 'aktif' : '';
                     b.innerHTML = '<img alt="">';
-                    b.querySelector('img').src = f.url;
+                    b.querySelector('img').src = x.kecil;
                     b.addEventListener('click', () => { pilihan = i; tampilFoto(); });
                     daftarGambar.appendChild(b);
                 });
-                const f = daftarFoto[pilihan];
-                penampil.tampilkan(f ? f.url : '');
-                tombolBuang.hidden = !f;
-                infoFoto.textContent = !f ? 'Belum ada foto.'
-                    : `Foto ${pilihan + 1}/${daftarFoto.length} · ${f.ukuranAsli > f.file.size ? ukuran(f.ukuranAsli) + ' → ' : ''}${ukuran(f.file.size)}`;
+                const x = semua[pilihan];
+                penampil.tampilkan(x ? x.url : '');
+                tombolBuang.hidden = !x || x.tersimpan;
+                infoFoto.textContent = !x ? 'Belum ada foto.'
+                    : x.tersimpan ? `Foto ${pilihan + 1}/${semua.length} · tersimpan (hapus lewat halaman bon 📎)`
+                    : `Foto ${pilihan + 1}/${semua.length} · baru · ${x.f.ukuranAsli > x.f.file.size ? ukuran(x.f.ukuranAsli) + ' → ' : ''}${ukuran(x.f.file.size)}`;
             };
             tombolBuang.addEventListener('click', () => {
-                URL.revokeObjectURL(daftarFoto[pilihan].url);
-                daftarFoto.splice(pilihan, 1);
-                pilihan = Math.min(pilihan, daftarFoto.length - 1);
+                const i = pilihan - fotoTersimpan.length;
+                URL.revokeObjectURL(daftarFoto[i].url);
+                daftarFoto.splice(i, 1);
+                pilihan = Math.min(pilihan, semuaFoto().length - 1);
                 tampilFoto();
             });
+            if (fotoTersimpan.length) { pilihan = 0; tampilFoto(); }
             inputFoto.addEventListener('change', async () => {
                 const baru = [...inputFoto.files].filter(f => f.type.startsWith('image/')).slice(0, 6 - daftarFoto.length);
                 inputFoto.files = new DataTransfer().files;
@@ -438,7 +519,7 @@
                     const kecil = await kecilkanFoto(asli);
                     daftarFoto.push({file: kecil, ukuranAsli: asli.size, url: URL.createObjectURL(kecil)});
                 }
-                pilihan = daftarFoto.length - 1;
+                pilihan = semuaFoto().length - 1;
                 tampilFoto();
             });
 

@@ -7,7 +7,11 @@ use App\Models\KasBon;
 use App\Models\KasRiwayat;
 use App\Models\KasTransfer;
 use App\Models\KodeGl;
+use App\Models\KasBulan;
+use App\Models\KasFoto;
 use App\Support\FotoBon;
+use App\Support\ModelKodeGl;
+use Illuminate\Support\Facades\Cache;
 use App\Support\GoogleSheets;
 use App\Support\HapusKasSheet;
 use App\Support\ImporKas;
@@ -40,7 +44,11 @@ class KasInputController extends Controller
         $bank = KasTransfer::whereNotNull('bank_tujuan')->where('tanggal', '>=', $sejak)
             ->select('bank_tujuan', DB::raw('COUNT(*) as n'))->groupBy('bank_tujuan')->orderByDesc('n')->limit(8)->pluck('bank_tujuan');
 
-        return view('kas.input', compact('kodeGl', 'pic', 'rekening', 'bank'));
+        // Model tebak Kode GL dari semua transaksi detail; dibuat ulang tiap kali ada impor baru.
+        $versi = (string) KasBulan::max('diimpor_pada');
+        $modelKode = Cache::remember('model-kode-gl:'.md5($versi), now()->addDay(), fn () => ModelKodeGl::latih(ModelKodeGl::dataLatih()));
+
+        return view('kas.input', compact('kodeGl', 'pic', 'rekening', 'bank', 'modelKode'));
     }
 
     /**
@@ -78,7 +86,11 @@ class KasInputController extends Controller
             ->all();
     }
 
-    public function store(Request $request): RedirectResponse
+    /**
+     * Validasi form Input/Edit Kas → data siap ditulis ke sheet, atau redirect kembali bila ditolak
+     * (mis. jumlah transaksi detail tidak sama dengan nominal transfer).
+     */
+    private function bacaInput(Request $request): array|RedirectResponse
     {
         $data = $request->validate([
             'tanggal' => ['required', 'date'],
@@ -129,6 +141,17 @@ class KasInputController extends Controller
             'bon' => $data['arah'] === 'keluar' ? array_values($data['bon']) : [],
             'biaya_transfer' => $data['arah'] === 'keluar' && $request->boolean('biaya_transfer'),
         ];
+
+        return $input;
+    }
+
+    public function store(Request $request): RedirectResponse
+    {
+        $input = $this->bacaInput($request);
+        if ($input instanceof RedirectResponse) {
+            return $input;
+        }
+        $tanggal = $input['tanggal'];
 
         try {
             $hasil = (new TulisKasSheet(GoogleSheets::wajib()))->tulis($input);
@@ -202,6 +225,112 @@ class KasInputController extends Controller
             "Dihapus dari sheet lembar {$lembar} baris {$hasil['baris_awal']}".($hasil['baris_akhir'] > $hasil['baris_awal'] ? "–{$hasil['baris_akhir']}" : '')
             .": {$ringkasan}.".$pesanImpor
         );
+    }
+
+    /** Form Input Kas berisi transaksi yang sudah ada (dicari lewat NO ID, kunci yang tidak berubah saat impor ulang). */
+    public function edit(int $noId): View|RedirectResponse
+    {
+        $t = KasTransfer::where('no_id', $noId)->with('bon.kodeGl', 'kasBulan')->first();
+        if (! $t) {
+            return redirect()->route('kas.index')->with('error', "Transaksi NO ID {$noId} tidak ditemukan. Mungkin sudah dihapus atau sheet berubah — klik \"Sinkron dari sheet\".");
+        }
+        $biaya = HapusKasSheet::biayaTransferMilik($t);
+
+        $edit = [
+            'no_id' => $noId,
+            'versi' => $this->versi($t),
+            'lembar' => $t->kasBulan->lembar,
+            'baris' => $t->baris,
+            'tanggal' => $t->tanggal->toDateString(),
+            'arah' => $t->debet ? 'masuk' : 'keluar',
+            'nama_tujuan' => $t->nama_tujuan,
+            'no_rek' => $t->no_rek_tujuan,
+            'bank' => $t->bank_tujuan,
+            'keterangan' => $t->keterangan,
+            'nominal_masuk' => $t->debet ?: null,
+            'nominal_transfer' => $t->kredit ?: null,
+            'biaya_transfer' => $biaya ? '1' : '0',
+            'bon' => $t->bon->map(fn ($b) => ['nominal' => $b->nominal, 'pic' => $b->pic, 'keterangan' => $b->keterangan, 'kode_gl' => $b->kodeGl?->kode_asli])->all(),
+            'foto' => KasFoto::where('no_id', $noId)->orderBy('id')->get()
+                ->map(fn ($f) => ['penuh' => route('kas.foto', $f), 'kecil' => route('kas.foto', ['foto' => $f, 'ukuran' => 'kecil'])])->all(),
+        ];
+
+        return $this->create()->with('edit', $edit);
+    }
+
+    public function update(Request $request, int $noId): RedirectResponse
+    {
+        $t = KasTransfer::where('no_id', $noId)->with('bon', 'kasBulan')->first();
+        if (! $t || $request->input('versi') !== $this->versi($t)) {
+            return back()->withInput()->with('error', 'Transaksi ini sudah berubah di sheet sejak form dibuka (atau baru disinkron). Buka Edit lagi supaya perubahan tidak menimpa data terbaru.');
+        }
+        $input = $this->bacaInput($request);
+        if ($input instanceof RedirectResponse) {
+            return $input;
+        }
+        $ringkasLama = $this->ringkasan($t);
+
+        try {
+            $hasil = (new TulisKasSheet(GoogleSheets::wajib()))->ubah($t, $input);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->withInput()->with('error', 'Gagal mengubah di sheet: '.$e->getMessage());
+        }
+
+        // Foto lama ikut pindah bila NO ID baris transfer berubah (pindah bulan); foto baru ditautkan ke NO ID transfer.
+        if ($hasil['no_id'][0] !== $noId) {
+            KasFoto::where('no_id', $noId)->update(['no_id' => $hasil['no_id'][0], 'lembar' => $hasil['lembar']]);
+        }
+        $jumlahFoto = 0;
+        foreach ($request->file('foto', []) as $file) {
+            FotoBon::simpan($file, $hasil['no_id'][0], $hasil['lembar'], $request->user()->id);
+            $jumlahFoto++;
+        }
+
+        KasRiwayat::create([
+            'aksi' => 'ubah', 'lembar' => $hasil['lembar'], 'baris_awal' => $hasil['baris_awal'], 'baris_akhir' => $hasil['baris_akhir'],
+            'ringkasan' => mb_strimwidth("{$ringkasLama} → ".$this->ringkasanInput($input), 0, 490, '…'),
+            'isi' => ['sebelum' => $hasil['sebelum'], 'input' => [...$input, 'tanggal' => $input['tanggal']->toDateString()], 'no_id' => $hasil['no_id']],
+            'user_id' => $request->user()->id,
+        ]);
+        $pesanImpor = $this->imporUlang($hasil['lembar']);
+        if ($hasil['lembar_lama'] !== $hasil['lembar']) {
+            $pesanImpor .= $this->imporUlang($hasil['lembar_lama']);
+        }
+
+        return redirect()->route('kas.index', ['lembar' => $hasil['lembar'], 'tgl' => $input['tanggal']->day])->with(
+            $pesanImpor ? 'error' : 'success',
+            'Perubahan tersimpan di sheet lembar '.$hasil['lembar'].' baris '.$hasil['baris_awal']
+            .($hasil['baris_akhir'] > $hasil['baris_awal'] ? '–'.$hasil['baris_akhir'] : '')
+            .($hasil['lembar_lama'] !== $hasil['lembar'] ? " (dipindah dari lembar {$hasil['lembar_lama']})" : '')
+            .': '.$this->ringkasanInput($input).'.'
+            .($jumlahFoto ? " {$jumlahFoto} foto bon ditambahkan." : '')
+            .$pesanImpor
+        );
+    }
+
+    /** Sidik transaksi saat form dibuka; bila berbeda saat disimpan, berarti sheet sudah berubah di antaranya. */
+    private function versi(KasTransfer $t): string
+    {
+        $t->loadMissing('bon');
+
+        return sha1(json_encode([$t->baris, $t->tanggal->toDateString(), $t->debet, $t->kredit, $t->keterangan, $t->nama_tujuan,
+            $t->bon->map(fn ($b) => [$b->baris, $b->nominal, $b->keterangan, $b->pic, $b->kode_gl_id])->all()]));
+    }
+
+    private function ringkasan(KasTransfer $t): string
+    {
+        return ($t->debet ? 'Uang masuk ' : 'Transfer ').rp($t->debet ?: $t->kredit).' '.$t->tanggal->translatedFormat('j M Y')
+            .' '.trim($t->nama_tujuan.' — '.$t->keterangan, ' —').' ('.$t->bon->count().' detail)';
+    }
+
+    private function ringkasanInput(array $input): string
+    {
+        $nilai = $input['arah'] === 'masuk' ? $input['nominal_masuk'] : array_sum(array_column($input['bon'], 'nominal'));
+
+        return ($input['arah'] === 'masuk' ? 'Uang masuk ' : 'Transfer ').rp($nilai).' '.$input['tanggal']->translatedFormat('j M Y')
+            .' '.trim($input['nama_tujuan'].' — '.$input['keterangan'], ' —').' ('.count($input['bon']).' detail)';
     }
 
     /** @return string kosong bila berhasil, atau pesan kegagalan untuk ditampilkan */
