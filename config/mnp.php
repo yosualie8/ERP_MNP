@@ -8,4 +8,7 @@ return [
     'dokumen_berlaku_sejak' => '1 Oktober 2026',
     // Spreadsheet "Kas Harian MNP - 2026": lembar bulanan 0126, 0226, … = rekening Bank Jago.
     'sheet_kas_harian' => env('MNP_SHEET_KAS_HARIAN', '1C2nAZKVAWiyOJKAaStzoMTzuAHi8HW5R1dotGyc3dYI'),
+    // Foto bon: folder Google Drive "Foto Bon MNP" milik akun perusahaan (subfolder per lembar dibuat otomatis).
+    'drive_foto_folder' => env('MNP_DRIVE_FOTO_FOLDER', '1Rs3zaSYnOrnZTdQofyKID9qezYy8yEVw'),
+    'drive_foto_email' => env('MNP_DRIVE_FOTO_EMAIL', 'ptmultiniagaputra@gmail.com'),
 ];

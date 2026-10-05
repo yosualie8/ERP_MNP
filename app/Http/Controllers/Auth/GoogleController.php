@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use App\Models\GoogleIntegrasi;
 use App\Models\User;
+use App\Support\DriveFoto;
 use App\Support\GoogleSheets;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -36,7 +37,7 @@ class GoogleController extends Controller
     public function hubungkanSheets(Request $request): RedirectResponse
     {
         abort_unless($request->user()->isSuperAdmin(), 403);
-        $request->session()->put(self::SESI_HUBUNGKAN, true);
+        $request->session()->put(self::SESI_HUBUNGKAN, 'sheets');
 
         return Socialite::driver('google')
             ->scopes(GoogleSheets::SCOPES)
@@ -54,6 +55,9 @@ class GoogleController extends Controller
         }
 
         $googleUser = Socialite::driver('google')->user();
+        if ($hubungkan === 'foto' && $request->user()?->isSuperAdmin()) {
+            return $this->simpanIntegrasiFoto($request, $googleUser);
+        }
         if ($hubungkan && $request->user()?->isSuperAdmin()) {
             return $this->simpanIntegrasi($request, $googleUser);
         }
@@ -93,8 +97,9 @@ class GoogleController extends Controller
             return redirect()->route('dashboard')->with('error', 'Google tidak memberikan izin jangka panjang. Cabut akses "MNP ERP" di myaccount.google.com/permissions, lalu hubungkan ulang.');
         }
 
-        GoogleIntegrasi::query()->delete();
+        GoogleIntegrasi::where('keperluan', 'sheets')->delete();
         GoogleIntegrasi::create([
+            'keperluan' => 'sheets',
             'email' => $email,
             'refresh_token' => $googleUser->refreshToken,
             'access_token' => $googleUser->token,
@@ -104,6 +109,54 @@ class GoogleController extends Controller
         ]);
 
         return redirect()->route('dashboard')->with('success', "Google Sheets terhubung dengan akun {$email}.");
+    }
+
+    /** Super admin: hubungkan akun perusahaan (izin Drive) untuk menyimpan foto bon di folder "Foto Bon MNP". */
+    public function hubungkanDriveFoto(Request $request): RedirectResponse
+    {
+        abort_unless($request->user()->isSuperAdmin(), 403);
+        $request->session()->put(self::SESI_HUBUNGKAN, 'foto');
+
+        return Socialite::driver('google')
+            ->scopes([DriveFoto::SCOPE])
+            ->with(['access_type' => 'offline', 'prompt' => 'select_account consent', 'login_hint' => config('mnp.drive_foto_email')])
+            ->redirect();
+    }
+
+    private function simpanIntegrasiFoto(Request $request, GoogleUser $googleUser): RedirectResponse
+    {
+        $email = strtolower((string) $googleUser->getEmail());
+        $wajib = strtolower(config('mnp.drive_foto_email'));
+        if ($email !== $wajib) {
+            Http::asForm()->timeout(15)->post('https://oauth2.googleapis.com/revoke', ['token' => $googleUser->refreshToken ?: $googleUser->token]);
+
+            return redirect()->route('dashboard')->with('error', "Foto bon disimpan di Google Drive {$wajib}, tetapi yang dipilih {$email}. Klik \"Hubungkan Google Drive foto\" lagi dan pilih akun {$wajib}.");
+        }
+        if (! in_array(DriveFoto::SCOPE, $googleUser->approvedScopes ?? [], true)) {
+            return redirect()->route('dashboard')->with('error', 'Izin Google Drive tidak dicentang. Klik "Hubungkan Google Drive foto" lagi dan centang izinnya.');
+        }
+        if (! $googleUser->refreshToken) {
+            return redirect()->route('dashboard')->with('error', "Google tidak memberikan izin jangka panjang. Login ke {$wajib}, cabut akses \"MNP ERP\" di myaccount.google.com/permissions, lalu hubungkan ulang.");
+        }
+
+        GoogleIntegrasi::where('keperluan', 'foto')->delete();
+        GoogleIntegrasi::create([
+            'keperluan' => 'foto',
+            'email' => $email,
+            'refresh_token' => $googleUser->refreshToken,
+            'access_token' => $googleUser->token,
+            'access_token_kedaluwarsa' => now()->addSeconds(max(60, (int) $googleUser->expiresIn - 120)),
+            'izin' => array_values($googleUser->approvedScopes ?? []),
+            'user_id' => $request->user()->id,
+        ]);
+
+        try {
+            $folder = DriveFoto::terhubung()->periksaFolder();
+        } catch (\Throwable $e) {
+            return redirect()->route('dashboard')->with('error', "Akun {$email} terhubung, tetapi folder foto belum bisa dipakai: ".$e->getMessage());
+        }
+
+        return redirect()->route('dashboard')->with('success', "Google Drive {$email} terhubung. Foto bon disimpan ke folder \"{$folder}\" (dipindah otomatis tiap menit).");
     }
 
     public function logout(Request $request): RedirectResponse

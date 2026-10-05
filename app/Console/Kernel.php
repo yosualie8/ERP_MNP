@@ -14,6 +14,8 @@ class Kernel extends ConsoleKernel
     {
         // Perubahan yang diketik admin langsung di sheet ikut masuk ke aplikasi.
         $schedule->command('mnp:impor-kas --bulan-berjalan --simpan')->hourly()->withoutOverlapping();
+        // Foto bon yang baru diunggah dipindah ke Google Drive perusahaan; admin tidak perlu menunggu.
+        $schedule->command('mnp:unggah-foto-drive')->everyMinute()->withoutOverlapping(10);
     }
 
     /**

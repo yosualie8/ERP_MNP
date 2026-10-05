@@ -5,11 +5,16 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * Koneksi Google yang disimpan aplikasi:
+ * - sheets: akun pemilik sheet Kas Harian (izin Sheets + Drive baca-saja)
+ * - foto: akun perusahaan untuk menyimpan foto bon di Google Drive (izin Drive)
+ */
 class GoogleIntegrasi extends Model
 {
     protected $table = 'google_integrasi';
 
-    protected $fillable = ['email', 'refresh_token', 'access_token', 'access_token_kedaluwarsa', 'izin', 'user_id'];
+    protected $fillable = ['keperluan', 'email', 'refresh_token', 'access_token', 'access_token_kedaluwarsa', 'izin', 'user_id'];
 
     protected $hidden = ['refresh_token', 'access_token'];
 
@@ -27,6 +32,11 @@ class GoogleIntegrasi extends Model
 
     public static function aktif(): ?self
     {
-        return self::latest('id')->first();
+        return self::where('keperluan', 'sheets')->latest('id')->first();
+    }
+
+    public static function foto(): ?self
+    {
+        return self::where('keperluan', 'foto')->latest('id')->first();
     }
 }

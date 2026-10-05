@@ -38,6 +38,7 @@ Route::middleware('auth')->group(function () {
     // Khusus super admin.
     Route::middleware('can:super-admin')->group(function () {
         Route::get('/auth/google/hubungkan-sheets', [GoogleController::class, 'hubungkanSheets'])->name('google.hubungkan-sheets');
+        Route::get('/auth/google/hubungkan-drive-foto', [GoogleController::class, 'hubungkanDriveFoto'])->name('google.hubungkan-drive-foto');
         Route::get('/pengguna', [PenggunaController::class, 'index'])->name('pengguna.index');
         Route::post('/pengguna', [PenggunaController::class, 'store'])->name('pengguna.store');
         Route::patch('/pengguna/{user}', [PenggunaController::class, 'update'])->name('pengguna.update');

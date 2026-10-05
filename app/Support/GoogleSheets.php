@@ -193,6 +193,12 @@ class GoogleSheets
         return $sel === null ? $lembar : "{$lembar}!{$sel}";
     }
 
+    /** Klien HTTP ber-token untuk API Google lain (mis. Drive foto bon) memakai koneksi yang sama. */
+    public function http(int $timeout = 120): \Illuminate\Http\Client\PendingRequest
+    {
+        return Http::withToken($this->token())->timeout($timeout);
+    }
+
     private function api()
     {
         return Http::withToken($this->token())->timeout(120)->acceptJson();

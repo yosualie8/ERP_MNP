@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\KasFoto;
 use App\Models\KasTransfer;
+use App\Support\DriveFoto;
 use App\Support\FotoBon;
+use Illuminate\Http\Response;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -39,11 +41,25 @@ class KasFotoController extends Controller
         return back()->with('success', count($request->file('foto')).' foto bon ditambahkan.');
     }
 
-    public function tampil(KasFoto $foto): StreamedResponse
+    /** ?ukuran=kecil → pratinjau di server; selain itu foto penuh (di server bila belum dipindah, atau diambil dari Drive). */
+    public function tampil(Request $request, KasFoto $foto): Response|StreamedResponse
     {
-        abort_unless(Storage::exists($foto->path), 404);
+        $kepala = ['Cache-Control' => 'private, max-age=604800'];
+        if ($request->query('ukuran') === 'kecil' && $foto->path_kecil && Storage::exists($foto->path_kecil)) {
+            return Storage::response($foto->path_kecil, null, $kepala);
+        }
+        if ($foto->path && Storage::exists($foto->path)) {
+            return Storage::response($foto->path, $foto->nama_asli, $kepala);
+        }
+        abort_unless($foto->drive_file_id && ($drive = DriveFoto::terhubung()), 404);
+        try {
+            $isi = $drive->ambil($foto->drive_file_id);
+        } catch (\Throwable $e) {
+            report($e);
+            abort(502, 'Foto tidak bisa diambil dari Google Drive.');
+        }
 
-        return Storage::response($foto->path, $foto->nama_asli, ['Cache-Control' => 'private, max-age=86400']);
+        return response($isi, 200, [...$kepala, 'Content-Type' => 'image/jpeg']);
     }
 
     public function destroy(KasFoto $foto): RedirectResponse

@@ -36,4 +36,28 @@
             </p>
         @endcan
     </div>
+
+    <div class="kartu">
+        <h3 style="margin-top: 0;">Google Drive foto bon</h3>
+        @if ($emailDriveFoto)
+            <p>Foto bon disimpan di Google Drive <strong>{{ $emailDriveFoto }}</strong>, folder
+                <a href="https://drive.google.com/drive/folders/{{ config('mnp.drive_foto_folder') }}" target="_blank" rel="noopener">Foto Bon MNP</a>.
+                Server hanya menyimpan pratinjau kecil.</p>
+        @else
+            <p class="redup">Belum terhubung — foto bon sementara disimpan di server dan akan dipindah ke Drive setelah akun {{ config('mnp.drive_foto_email') }} dihubungkan.</p>
+        @endif
+        <p class="redup" style="margin-bottom: 0;">
+            Di Drive: {{ $fotoStatus['terunggah'] ?? 0 }} foto
+            · menunggu dipindah: {{ $fotoStatus['menunggu'] ?? 0 }}
+            @if ($fotoStatus['gagal'] ?? 0)
+                · <span class="label merah">gagal: {{ $fotoStatus['gagal'] }}</span>
+            @endif
+        </p>
+        @can('super-admin')
+            <p style="margin-bottom: 0;">
+                <a href="{{ route('google.hubungkan-drive-foto') }}" class="tombol polos">{{ $emailDriveFoto ? 'Hubungkan ulang Google Drive foto' : 'Hubungkan Google Drive foto' }}</a>
+                <span class="redup">Login sebagai {{ config('mnp.drive_foto_email') }} dan centang izin Google Drive.</span>
+            </p>
+        @endcan
+    </div>
 @endsection

@@ -4,6 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    {{-- Dimuat di head karena dipakai skrip di dalam halaman (Input Kas, halaman Bon). --}}
+    <script src="{{ asset('js/penampil-foto.js') }}?v={{ filemtime(public_path('js/penampil-foto.js')) }}"></script>
+    <script src="{{ asset('js/kecilkan-foto.js') }}?v={{ filemtime(public_path('js/kecilkan-foto.js')) }}"></script>
     <title>{{ $judul ?? 'MNP' }} · PT Multi Niaga Putra</title>
     <style>
         :root { --latar: #f5f6f8; --kartu: #fff; --teks: #1f2933; --redup: #616e7c; --garis: #e4e7eb; --aksen: #0b6e4f; --merah: #b42318; --hijau-muda: #e6f4ee; --merah-muda: #fdecea; }
@@ -56,13 +59,23 @@
         table.kas i { font-style: normal; display: inline-block; font-size: 11px; padding: 0 5px; border-radius: 4px; background: var(--latar); color: var(--redup); }
         table.kas i.x { background: var(--merah-muda); color: var(--merah); }
         input[type=search] { padding: 8px 10px; border: 1px solid var(--garis); border-radius: 8px; font-size: 14px; min-width: 260px; }
-        /* Foto bon: klik untuk layar penuh, klik lagi untuk ukuran asli (geser untuk melihat bagian lain). */
-        img[data-perbesar] { cursor: zoom-in; }
-        #lihat-foto { position: fixed; inset: 0; z-index: 100; background: rgba(16, 24, 32, .92); display: flex; align-items: center; justify-content: center; overflow: auto; }
-        #lihat-foto img { max-width: 96vw; max-height: 92vh; cursor: zoom-in; }
-        #lihat-foto.asli { align-items: flex-start; justify-content: flex-start; }
-        #lihat-foto.asli img { max-width: none; max-height: none; cursor: zoom-out; }
-        #lihat-foto button { position: fixed; top: 12px; right: 16px; background: #fff; border: 0; border-radius: 8px; padding: 8px 14px; font-size: 15px; cursor: pointer; }
+        /* Penampil foto bon (public/js/penampil-foto.js): zoom & geser seperti Photoshop. */
+        .penampil { display: flex; flex-direction: column; border: 1px solid var(--garis); border-radius: 10px; overflow: hidden; background: #2a3440; height: 70vh; min-height: 320px; }
+        .penampil:fullscreen { height: 100vh; border-radius: 0; }
+        .penampil.kosong .penampil-kanvas::after { content: 'Belum ada foto'; color: #9aa5b1; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+        .penampil-alat { display: flex; align-items: center; gap: 4px; padding: 6px 8px; background: #1f2933; }
+        .penampil-alat button { background: #3e4c59; color: #fff; border: 0; border-radius: 6px; min-width: 32px; padding: 5px 9px; font-size: 14px; cursor: pointer; }
+        .penampil-alat button:hover { background: #52606d; }
+        .penampil-persen { color: #cbd2d9; font-size: 12px; min-width: 44px; text-align: center; font-variant-numeric: tabular-nums; }
+        .penampil-alat [data-aksi=layar] { margin-left: auto; }
+        .penampil-kanvas { position: relative; flex: 1; overflow: hidden; cursor: grab; touch-action: none; outline: none; }
+        .penampil-kanvas.menyeret { cursor: grabbing; }
+        .penampil-kanvas img { position: absolute; left: 0; top: 0; transform-origin: 0 0; max-width: none; user-select: none; -webkit-user-drag: none; }
+        .penampil-petunjuk { font-size: 11px; color: #9aa5b1; background: #1f2933; padding: 3px 8px; }
+        .gambar-kecil { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+        .gambar-kecil button { position: relative; padding: 0; border: 2px solid transparent; border-radius: 6px; background: none; cursor: pointer; }
+        .gambar-kecil button.aktif { border-color: var(--aksen); }
+        .gambar-kecil img { width: 64px; height: 64px; object-fit: cover; border-radius: 4px; display: block; }
         .lampiran { text-decoration: none; font-size: 12px; white-space: nowrap; padding: 2px 6px; border-radius: 6px; }
         .lampiran.ada { background: var(--hijau-muda); color: var(--aksen); }
         .lampiran.kosong { color: var(--redup); opacity: .55; }
@@ -110,20 +123,5 @@
         @endif
         @yield('isi')
     </main>
-    <script>
-        // Penampil foto bon (dipakai Input Kas & halaman Bon).
-        document.addEventListener('click', e => {
-            const img = e.target.closest('img[data-perbesar]');
-            if (!img) return;
-            const lapis = document.createElement('div');
-            lapis.id = 'lihat-foto';
-            lapis.innerHTML = '<button type="button">Tutup ✕</button><img alt="Foto bon">';
-            lapis.querySelector('img').src = img.dataset.perbesar || img.src;
-            lapis.querySelector('img').addEventListener('click', ev => { ev.stopPropagation(); lapis.classList.toggle('asli'); });
-            lapis.addEventListener('click', () => lapis.remove());
-            document.addEventListener('keydown', function tutup(ev) { if (ev.key === 'Escape') { lapis.remove(); document.removeEventListener('keydown', tutup); } });
-            document.body.appendChild(lapis);
-        });
-    </script>
 </body>
 </html>
