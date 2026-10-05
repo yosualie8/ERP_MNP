@@ -2,23 +2,19 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Pengaturan;
 use App\Models\User;
-use App\Support\BacaBon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
-/** Daftar pengguna yang boleh login (super admin saja) dan pengaturan API key Claude untuk scan bon. */
+/** Daftar pengguna yang boleh login (super admin saja). */
 class PenggunaController extends Controller
 {
     public function index(): View
     {
         return view('pengguna.index', [
             'pengguna' => User::orderByRaw("role = 'super_admin' desc")->orderBy('name')->get(),
-            'apiKeyAda' => BacaBon::apiKey() !== null,
-            'apiKeyDariEnv' => (bool) config('services.anthropic.key'),
         ]);
     }
 
@@ -55,17 +51,5 @@ class PenggunaController extends Controller
         $user->delete();
 
         return back()->with('success', "{$user->email} dihapus dan tidak bisa login lagi.");
-    }
-
-    public function simpanApiKey(Request $request): RedirectResponse
-    {
-        $data = $request->validate(['api_key' => ['nullable', 'string', 'max:300']]);
-        $key = trim((string) ($data['api_key'] ?? ''));
-        if ($key !== '' && ! str_starts_with($key, 'sk-ant-')) {
-            return back()->with('error', 'API key Claude diawali "sk-ant-". Periksa lagi yang ditempel.');
-        }
-        Pengaturan::simpan(Pengaturan::API_KEY_CLAUDE, $key ?: null, $request->user()->id);
-
-        return back()->with('success', $key ? 'API key Claude disimpan (terenkripsi). Fitur Scan foto bon aktif.' : 'API key Claude dihapus.');
     }
 }

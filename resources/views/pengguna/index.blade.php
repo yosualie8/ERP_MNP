@@ -51,26 +51,4 @@
         </table>
     </div>
 
-    <div class="kartu">
-        <h3 style="margin-top: 0;">Scan foto bon (Claude)</h3>
-        <p class="redup" style="margin-top: 0;">
-            Tombol "Scan foto bon" di Input Kas membaca nota dengan Claude (Anthropic). Perlu API key dari
-            <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com</a>.
-            Status:
-            @if ($apiKeyAda)
-                <span class="label hijau">aktif{{ $apiKeyDariEnv ? ' (dari .env server)' : '' }}</span>
-            @else
-                <span class="label merah">belum diisi</span>
-            @endif
-        </p>
-        <form method="POST" action="{{ route('pengguna.api-key') }}" style="display: flex; gap: 8px; flex-wrap: wrap;">
-            @csrf
-            <input type="password" name="api_key" placeholder="sk-ant-…" autocomplete="off" style="min-width: 320px; padding: 8px 10px; border: 1px solid var(--garis); border-radius: 8px;">
-            <button class="tombol" type="submit" style="padding: 8px 14px;">Simpan API key</button>
-            @if ($apiKeyAda && ! $apiKeyDariEnv)
-                <button class="tombol polos" type="submit" name="api_key" value="" onclick="return confirm('Hapus API key? Scan foto bon akan berhenti.')">Hapus</button>
-            @endif
-        </form>
-        <p class="redup" style="margin-bottom: 0;">Disimpan terenkripsi di database dan tidak pernah ditampilkan lagi.</p>
-    </div>
 @endsection

@@ -40,10 +40,4 @@ return [
 
     'super_admin_emails' => env('SUPER_ADMIN_EMAILS', ''),
 
-    // Scan foto bon. API key bisa juga diisi super admin dari menu Pengguna (disimpan terenkripsi di DB).
-    'anthropic' => [
-        'key' => env('ANTHROPIC_API_KEY'),
-        'model' => env('ANTHROPIC_MODEL', 'claude-opus-5-5'),
-    ],
-
 ];

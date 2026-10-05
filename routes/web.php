@@ -24,7 +24,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/kas', [KasController::class, 'index'])->name('kas.index');
     Route::get('/kas/input', [KasInputController::class, 'create'])->name('kas.input');
     Route::post('/kas/input', [KasInputController::class, 'store'])->name('kas.input.store');
-    Route::post('/kas/scan-bon', [KasInputController::class, 'scanBon'])->middleware('throttle:30,1')->name('kas.scan-bon');
     Route::delete('/kas/transfer/{transfer}', [KasInputController::class, 'hapus'])->name('kas.hapus');
     Route::post('/kas/sinkron', [KasInputController::class, 'sinkron'])->name('kas.sinkron');
     Route::get('/kas/rekap', [KasController::class, 'rekap'])->name('kas.rekap');
@@ -38,6 +37,5 @@ Route::middleware('auth')->group(function () {
         Route::post('/pengguna', [PenggunaController::class, 'store'])->name('pengguna.store');
         Route::patch('/pengguna/{user}', [PenggunaController::class, 'update'])->name('pengguna.update');
         Route::delete('/pengguna/{user}', [PenggunaController::class, 'destroy'])->name('pengguna.destroy');
-        Route::post('/pengguna/api-key-claude', [PenggunaController::class, 'simpanApiKey'])->name('pengguna.api-key');
     });
 });
