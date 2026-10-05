@@ -16,9 +16,31 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 /** Foto bon sebagai referensi: lihat, tambah, hapus. Ditautkan ke NO ID transfer di sheet. */
 class KasFotoController extends Controller
 {
-    public const ATURAN = ['foto' => ['required', 'array', 'max:6'], 'foto.*' => ['image', 'max:15360']];
+    /** Batas foto bon per sekali simpan (satu transaksi master bisa beberapa bon). */
+    public const MAKS_FOTO = 10;
 
-    public const PESAN = ['foto.max' => 'Maksimal 6 foto sekali unggah.', 'foto.*.image' => 'File harus berupa foto (JPG/PNG).', 'foto.*.max' => 'Satu foto maksimal 15 MB.'];
+    public const ATURAN = ['foto' => ['required', 'array', 'max:'.self::MAKS_FOTO], 'foto.*' => ['image', 'max:15360']];
+
+    public const PESAN = ['foto.max' => 'Maksimal '.self::MAKS_FOTO.' foto sekali unggah.','foto.*.image' => 'File harus berupa foto (JPG/PNG).', 'foto.*.max' => 'Satu foto maksimal 15 MB.'];
+
+    /**
+     * Batas unggah PHP di server (byte) agar form bisa menolak lebih dulu di browser,
+     * bukan dibuang diam-diam oleh PHP saat total kiriman melebihi post_max_size.
+     *
+     * @return array{file: int, total: int}
+     */
+    public static function batasUnggah(): array
+    {
+        $byte = function (string $v): int {
+            $n = (int) $v;
+
+            return match (strtoupper(substr(trim($v), -1))) {
+                'G' => $n * 1024 ** 3, 'M' => $n * 1024 ** 2, 'K' => $n * 1024, default => $n,
+            };
+        };
+
+        return ['file' => $byte(ini_get('upload_max_filesize')), 'total' => $byte(ini_get('post_max_size'))];
+    }
 
     public function index(int $noId): View
     {

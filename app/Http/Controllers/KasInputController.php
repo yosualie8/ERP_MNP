@@ -115,7 +115,7 @@ class KasInputController extends Controller
             'bon.*.pic' => ['nullable', 'string', 'max:60'],
             'bon.*.keterangan' => ['required', 'string', 'max:300'],
             'bon.*.kode_gl' => ['required', 'string', 'max:120'],
-            'foto' => ['nullable', 'array', 'max:6'],
+            'foto' => ['nullable', 'array', 'max:'.KasFotoController::MAKS_FOTO],
             'foto.*' => KasFotoController::ATURAN['foto.*'],
         ], [
             ...KasFotoController::PESAN,

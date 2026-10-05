@@ -33,6 +33,8 @@
         .saran mark { background: #fff3bf; color: inherit; padding: 0; }
         /* Foto bon di antara transaksi master & detail, lebar penuh supaya leluasa di-zoom. */
         .kartu-foto .penampil { height: 62vh; margin-top: 10px; }
+        .gambar-kecil .tambah-foto { width: 68px; height: 68px; border: 2px dashed var(--garis); color: var(--redup); font-size: 26px; }
+        .gambar-kecil .tambah-foto:hover { border-color: var(--aksen); color: var(--aksen); }
         /* Belum ada foto: ringkas supaya Transaksi detail tidak terdorong jauh ke bawah. */
         .kartu-foto .penampil.kosong { height: 120px; min-height: 0; }
         .kartu-foto .penampil.kosong .penampil-alat, .kartu-foto .penampil.kosong .penampil-petunjuk { display: none; }
@@ -129,11 +131,11 @@
             <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
                 <h3 style="margin: 0;">Foto bon</h3>
                 <label class="tombol polos" style="display: inline-block; cursor: pointer; color: var(--teks); font-size: 14px; padding: 6px 12px;">
-                    📷 Pilih / ambil foto
+                    <span id="label-foto">📷 Pilih / ambil foto</span>
                     <input type="file" name="foto[]" id="foto-bon" accept="image/*" multiple hidden>
                 </label>
             </div>
-            <p class="redup" style="margin: 4px 0 0; font-size: 13px;">Referensi saat mengetik detail. Diperkecil otomatis sebelum diunggah, lalu disimpan di Google Drive perusahaan.</p>
+            <p class="redup" style="margin: 4px 0 0; font-size: 13px;">Satu transaksi bisa beberapa bon (maks. {{ \App\Http\Controllers\KasFotoController::MAKS_FOTO }} foto): pilih sekaligus, atau tambah satu per satu. Diperkecil otomatis sebelum diunggah, lalu disimpan di Google Drive perusahaan.</p>
             @if ($errors->has('foto') || $errors->has('foto.*'))
                 <p class="galat-isian">Pilih ulang fotonya — foto tidak bisa dipertahankan setelah form ditolak.</p>
             @endif
@@ -148,7 +150,7 @@
                 <span class="redup">Jumlah detail <span class="total-bon" id="total-bon">0</span> dari transfer <b id="nilai-transfer">0</b></span>
             </div>
             <div id="status-cocok" class="pesan" style="margin: 8px 0 10px; padding: 8px 12px;"></div>
-            <p class="redup" style="margin: 0 0 10px;">Satu transaksi master (biasanya 1 bon/nota) berisi satu atau beberapa transaksi detail di bawahnya. Kode GL ditulis seperti di sheet, mis. <i>Biaya BBM ASG</i> atau <i>Gaji Karyawan ASG T116</i>.</p>
+            <p class="redup" style="margin: 0 0 10px;">Satu transaksi master (bisa satu atau beberapa bon/nota) berisi satu atau beberapa transaksi detail di bawahnya. Kode GL ditulis seperti di sheet, mis. <i>Biaya BBM ASG</i> atau <i>Gaji Karyawan ASG T116</i>.</p>
             <table class="bon">
                 <thead>
                     <tr>
@@ -479,7 +481,10 @@
             document.querySelectorAll('[name=arah]').forEach(r => r.addEventListener('change', aturArah));
             aturArah();
 
-            // Foto bon: diperkecil di browser (cepat diunggah), tampil di penampil zoom/geser; maks. 6, bisa dibuang.
+            // Foto bon: diperkecil di browser (cepat diunggah), tampil di penampil zoom/geser; beberapa per transaksi, bisa dibuang.
+            const MAKS_FOTO = {{ \App\Http\Controllers\KasFotoController::MAKS_FOTO }};
+            const BATAS = @json(\App\Http\Controllers\KasFotoController::batasUnggah());
+            const labelFoto = document.getElementById('label-foto');
             const inputFoto = document.getElementById('foto-bon');
             const penampil = PenampilFoto.pasang(document.getElementById('penampil-input'));
             const daftarGambar = document.getElementById('daftar-gambar');
@@ -510,6 +515,17 @@
                     b.addEventListener('click', () => { pilihan = i; tampilFoto(); });
                     daftarGambar.appendChild(b);
                 });
+                if (daftarFoto.length < MAKS_FOTO) {
+                    const tambah = document.createElement('button');
+                    tambah.type = 'button';
+                    tambah.className = 'tambah-foto';
+                    tambah.title = 'Tambah foto bon';
+                    tambah.textContent = '＋';
+                    tambah.addEventListener('click', () => inputFoto.click());
+                    if (semua.length) daftarGambar.appendChild(tambah);
+                }
+                labelFoto.textContent = !semua.length ? '📷 Pilih / ambil foto'
+                    : daftarFoto.length >= MAKS_FOTO ? `${semua.length} foto (maks.)` : `＋ Tambah foto bon (${semua.length})`;
                 const x = semua[pilihan];
                 penampil.tampilkan(x ? x.url : '');
                 tombolBuang.hidden = !x || x.tersimpan;
@@ -526,22 +542,38 @@
             });
             if (fotoTersimpan.length) { pilihan = 0; tampilFoto(); }
             inputFoto.addEventListener('change', async () => {
-                const baru = [...inputFoto.files].filter(f => f.type.startsWith('image/')).slice(0, 6 - daftarFoto.length);
+                const dipilih = [...inputFoto.files].filter(f => f.type.startsWith('image/'));
+                const baru = dipilih.slice(0, MAKS_FOTO - daftarFoto.length);
                 inputFoto.files = new DataTransfer().files;
                 if (!baru.length) { tampilFoto(); return; }
-                infoFoto.textContent = 'Memperkecil foto…';
-                for (const asli of baru) {
+                const awal = semuaFoto().length;
+                const ditolak = [];
+                for (const [i, asli] of baru.entries()) {
+                    infoFoto.textContent = `Memperkecil foto ${i + 1}/${baru.length}…`;
                     const kecil = await kecilkanFoto(asli);
+                    if (kecil.size > BATAS.file) { ditolak.push(asli.name); continue; }
                     daftarFoto.push({file: kecil, ukuranAsli: asli.size, url: URL.createObjectURL(kecil)});
                 }
-                pilihan = semuaFoto().length - 1;
+                pilihan = Math.max(awal, 0) < semuaFoto().length ? awal : semuaFoto().length - 1;
                 tampilFoto();
+                const catatan = [
+                    dipilih.length > baru.length ? `Hanya ${MAKS_FOTO} foto per transaksi; ${dipilih.length - baru.length} foto tidak ditambahkan.` : '',
+                    ditolak.length ? `Terlalu besar (maks. ${ukuran(BATAS.file)}), tidak ditambahkan: ${ditolak.join(', ')}.` : '',
+                ].filter(Boolean).join(' ');
+                if (catatan) alert(catatan);
             });
 
             document.getElementById('form-kas').addEventListener('submit', e => {
                 if (!arahMasuk() && !hitung()) {
                     e.preventDefault();
                     statusCocok.scrollIntoView({block: 'center'});
+                    return;
+                }
+                // Kiriman melebihi post_max_size dibuang PHP tanpa pesan; tolak di sini dengan pesan yang jelas.
+                const totalFoto = daftarFoto.reduce((s, f) => s + f.file.size, 0);
+                if (totalFoto > BATAS.total - 512 * 1024) {
+                    e.preventDefault();
+                    alert(`Total foto ${ukuran(totalFoto)} melebihi batas server ${ukuran(BATAS.total)}. Buang sebagian foto, lalu tambahkan sisanya lewat tombol 📎 setelah transaksi tersimpan.`);
                     return;
                 }
                 tombolSimpan.disabled = true;

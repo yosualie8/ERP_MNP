@@ -97,7 +97,7 @@
                 const label = input.previousElementSibling;
                 label.textContent = 'Memperkecil…';
                 const dt = new DataTransfer();
-                for (const f of [...input.files].slice(0, 6)) dt.items.add(await kecilkanFoto(f));
+                for (const f of [...input.files].slice(0, {{ \App\Http\Controllers\KasFotoController::MAKS_FOTO }})) dt.items.add(await kecilkanFoto(f));
                 input.files = dt.files;
                 label.textContent = 'Mengunggah…';
                 input.form.submit();
