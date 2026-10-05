@@ -63,8 +63,8 @@
             @if ($q !== '')
                 <a href="{{ route('kas.index', ['lembar' => $bulan->lembar, 'tgl' => $tanggal]) }}" class="redup">Hapus pencarian</a>
             @endif
-            <span class="redup">{{ $transfer->count() }} transfer · {{ $transfer->sum(fn ($t) => $t->bon->count()) }} bon · terbaru di atas</span>
-            <button type="button" class="tombol polos" id="buka-semua">Buka semua bon</button>
+            <span class="redup">{{ $transfer->count() }} transfer · {{ $transfer->sum(fn ($t) => $t->bon->count()) }} detail · terbaru di atas</span>
+            <button type="button" class="tombol polos" id="buka-semua">Buka semua detail</button>
             <span class="redup" style="margin-left: auto;">Diimpor {{ $bulan->diimpor_pada->translatedFormat('j M Y H:i') }} dari lembar {{ $bulan->lembar }}</span>
             <button type="submit" form="form-sinkron" class="tombol polos" title="Ambil ulang lembar ini dari sheet (setelah sheet diubah langsung)">Sinkron dari sheet</button>
             <a href="{{ route('kas.input') }}" class="tombol" style="padding: 8px 14px;">+ Input kas</a>
@@ -83,7 +83,7 @@
                         <th>Keterangan</th>
                         <th>Kode GL</th>
                         <th class="angka">Masuk</th>
-                        <th class="angka">Keluar / Bon</th>
+                        <th class="angka">Keluar / Detail</th>
                         <th class="angka">Saldo</th>
                         <th></th>
                     </tr>
@@ -96,10 +96,10 @@
                             <td>
                                 <span class="panah" aria-hidden="true">@if ($t->bon->isNotEmpty())▸@endif</span>
                                 {{ $t->tanggal->translatedFormat('j M') }}
-                                @if ($t->bon->count() > 1)<span class="jumlah-bon" title="{{ $t->bon->count() }} bon">{{ $t->bon->count() }}</span>@endif
+                                @if ($t->bon->count() > 1)<span class="jumlah-bon" title="{{ $t->bon->count() }} transaksi detail">{{ $t->bon->count() }}</span>@endif
                             </td>
                             <td><b>{{ $t->nama_tujuan ?? '—' }}</b> <span class="redup">{{ $t->bank_tujuan }} {{ $t->no_rek_tujuan }}</span></td>
-                            <td>{{ $t->keterangan }}@if ($t->kredit && $jumlahBon !== $t->kredit) <i class="x">bon {{ rp($jumlahBon) }}</i>@endif</td>
+                            <td>{{ $t->keterangan }}@if ($t->kredit && $jumlahBon !== $t->kredit) <i class="x">detail {{ rp($jumlahBon) }}</i>@endif</td>
                             <td class="ringkas-gl">{{ $akunBon->take(2)->implode(', ') }}@if ($akunBon->count() > 2) +{{ $akunBon->count() - 2 }}@endif</td>
                             <td class="angka">{{ rp($t->debet, true) }}</td>
                             <td class="angka"><b>{{ rp($t->kredit, true) }}</b></td>
@@ -143,7 +143,7 @@
             }));
             const tombolSemua = document.getElementById('buka-semua');
             const grup = () => [...document.querySelectorAll('tbody.grup')].filter(g => g.querySelector('tr.b'));
-            const aturTombolSemua = () => tombolSemua.textContent = grup().every(g => g.classList.contains('buka')) ? 'Tutup semua bon' : 'Buka semua bon';
+            const aturTombolSemua = () => tombolSemua.textContent = grup().every(g => g.classList.contains('buka')) ? 'Tutup semua detail' : 'Buka semua detail';
             tombolSemua.addEventListener('click', () => {
                 const buka = !grup().every(g => g.classList.contains('buka'));
                 grup().forEach(g => g.classList.toggle('buka', buka));
@@ -153,7 +153,7 @@
 
             document.querySelectorAll('[data-hapus]').forEach(tombol => tombol.addEventListener('click', () => {
                 const d = tombol.dataset;
-                const bon = +d.bon ? ` beserta ${d.bon} bon di bawahnya` : '';
+                const bon = +d.bon ? ` beserta ${d.bon} transaksi detail di bawahnya` : '';
                 if (!confirm(`Hapus dari sheet (lembar {{ $bulan->lembar }}, baris ${d.baris})${bon}?\n\n${d.ringkasan}\n\nBaris di sheet akan dihapus. Isinya tetap tersimpan di riwayat aplikasi.`)) return;
                 const form = document.getElementById('form-hapus');
                 form.dengan_biaya.value = d.biaya && confirm('Tepat di bawahnya ada baris "Biaya Transfer Keluar" 2.500 untuk transfer ini.\n\nHapus juga? (OK = hapus juga, Batal = biarkan)') ? '1' : '0';

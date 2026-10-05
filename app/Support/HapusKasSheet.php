@@ -85,14 +85,14 @@ class HapusKasSheet
             }
             foreach ($t->bon as $b) {
                 if (BacaLembarKas::rupiah($sel($b->baris, 10)) !== $b->nominal) {
-                    throw $berubah("bon di baris {$b->baris} tidak sama");
+                    throw $berubah("transaksi detail di baris {$b->baris} tidak sama");
                 }
             }
         }
         // Baris sesudah blok tidak boleh berupa bon lanjutan (bon tanpa Debet/Kredit) — artinya blok di sheet lebih panjang.
         $sesudah = $sampai + 1;
         if (BacaLembarKas::rupiah($sel($sesudah, 10)) && ! BacaLembarKas::rupiah($sel($sesudah, 6)) && ! BacaLembarKas::rupiah($sel($sesudah, 7))) {
-            throw $berubah("baris {$sesudah} masih berisi bon milik transfer ini");
+            throw $berubah("baris {$sesudah} masih berisi transaksi detail milik transfer ini");
         }
     }
 }

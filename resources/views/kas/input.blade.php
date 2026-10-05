@@ -116,24 +116,24 @@
 
         <div class="kartu" data-keluar>
             <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px;">
-                <h3 style="margin: 0 0 4px;">Rincian bon</h3>
-                <span class="redup">Jumlah bon <span class="total-bon" id="total-bon">0</span> dari transfer <b id="nilai-transfer">0</b></span>
+                <h3 style="margin: 0 0 4px;">Transaksi detail</h3>
+                <span class="redup">Jumlah detail <span class="total-bon" id="total-bon">0</span> dari transfer <b id="nilai-transfer">0</b></span>
             </div>
             <div id="status-cocok" class="pesan" style="margin: 8px 0 10px; padding: 8px 12px;"></div>
-            <p class="redup" style="margin: 0 0 10px;">Satu transfer bisa berisi beberapa bon (mis. reimburse). Kode GL ditulis seperti di sheet, mis. <i>Biaya BBM ASG</i> atau <i>Gaji Karyawan ASG T116</i>.</p>
+            <p class="redup" style="margin: 0 0 10px;">Satu transaksi master (biasanya 1 bon/nota) berisi satu atau beberapa transaksi detail di bawahnya. Kode GL ditulis seperti di sheet, mis. <i>Biaya BBM ASG</i> atau <i>Gaji Karyawan ASG T116</i>.</p>
             <table class="bon">
                 <thead>
                     <tr>
                         <th style="width: 150px;" class="angka">Nominal</th>
                         <th style="width: 130px;">PIC</th>
-                        <th>Keterangan bon</th>
+                        <th>Keterangan</th>
                         <th style="width: 270px;">Kode GL</th>
                         <th style="width: 30px;"></th>
                     </tr>
                 </thead>
                 <tbody id="daftar-bon"></tbody>
             </table>
-            <button type="button" class="tombol polos" id="tambah-bon" style="margin-top: 6px;">+ Tambah bon</button>
+            <button type="button" class="tombol polos" id="tambah-bon" style="margin-top: 6px;">+ Tambah detail</button>
             <datalist id="daftar-pic">
                 @foreach ($pic as $p)
                     <option value="{{ $p }}">
@@ -181,7 +181,7 @@
             <td><input type="text" data-nama="pic" list="daftar-pic" autocomplete="off"></td>
             <td><input type="text" data-nama="keterangan" autocomplete="off" required></td>
             <td><input type="text" data-nama="kode_gl" list="daftar-kode" autocomplete="off" required></td>
-            <td><button type="button" class="hapus" title="Hapus bon">×</button></td>
+            <td><button type="button" class="hapus" title="Hapus baris detail">×</button></td>
         </tr>
     </template>
 
@@ -209,11 +209,11 @@
                 const cocok = transfer > 0 && selisih === 0;
                 statusCocok.className = 'pesan ' + (cocok ? 'sukses' : 'galat');
                 statusCocok.textContent = !transfer ? 'Isi nominal transfer dulu.'
-                    : cocok ? '✓ Jumlah bon sama dengan nominal transfer.'
-                    : selisih > 0 ? `Bon kurang ${fmt(selisih)} — tambah bon atau perbaiki nominalnya.`
-                    : `Bon lebih ${fmt(-selisih)} dari nominal transfer — perbaiki nominalnya.`;
+                    : cocok ? '✓ Jumlah detail sama dengan nominal transfer.'
+                    : selisih > 0 ? `Detail kurang ${fmt(selisih)} — tambah detail atau perbaiki nominalnya.`
+                    : `Detail lebih ${fmt(-selisih)} dari nominal transfer — perbaiki nominalnya.`;
                 tombolSimpan.disabled = !arahMasuk() && !cocok;
-                tombolSimpan.title = tombolSimpan.disabled ? 'Jumlah bon harus sama dengan nominal transfer' : '';
+                tombolSimpan.title = tombolSimpan.disabled ? 'Jumlah detail harus sama dengan nominal transfer' : '';
                 return cocok;
             };
             nominalTransfer.addEventListener('input', hitung);

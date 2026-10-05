@@ -9,7 +9,7 @@
             Setiap Kode GL yang pernah ditulis di sheet diurai menjadi akun baku, cost center, dan nomor T.
             {{ $kode->count() }} tulisan berbeda → {{ $kode->pluck('akun_gl_id')->filter()->unique()->count() }} akun.
             @if ($tanpaKode->jumlah)
-                <br><span class="label merah">{{ $tanpaKode->jumlah }} bon tanpa Kode GL, total {{ rp($tanpaKode->total) }}</span>
+                <br><span class="label merah">{{ $tanpaKode->jumlah }} transaksi detail tanpa Kode GL, total {{ rp($tanpaKode->total) }}</span>
             @endif
         </p>
         <a href="{{ route('kas.kode-gl') }}" @class(['chip', 'aktif' => ! $saring])>Semua</a>
@@ -25,7 +25,7 @@
                     <th>Cost center</th>
                     <th>Tahap</th>
                     <th>Tulisan di sheet</th>
-                    <th class="angka">Bon</th>
+                    <th class="angka">Detail</th>
                     <th class="angka" style="padding-right: 14px;">Total</th>
                 </tr>
             </thead>

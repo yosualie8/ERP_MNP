@@ -5,7 +5,7 @@
 @section('isi')
     <div class="kartu">
         <h3 style="margin: 0 0 4px;">Rekap pengeluaran per akun</h3>
-        <p class="redup" style="margin: 0 0 12px;">Jumlah bon per akun baku dan bulan. Kode GL di sheet sudah dirapikan (salah ketik digabung), lihat menu Kode GL.</p>
+        <p class="redup" style="margin: 0 0 12px;">Jumlah transaksi detail per akun baku dan bulan. Kode GL di sheet sudah dirapikan (salah ketik digabung), lihat menu Kode GL.</p>
         <div>
             <span class="redup" style="margin-right: 6px;">Cost center:</span>
             <a href="{{ route('kas.rekap') }}" @class(['chip', 'aktif' => ! $ccDipilih])>Semua</a>

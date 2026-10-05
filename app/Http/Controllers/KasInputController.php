@@ -99,10 +99,10 @@ class KasInputController extends Controller
             'foto.*' => KasFotoController::ATURAN['foto.*'],
         ], [
             ...KasFotoController::PESAN,
-            'bon.required_if' => 'Isi minimal satu bon untuk transfer keluar.',
-            'bon.*.keterangan.required' => 'Keterangan setiap bon wajib diisi.',
-            'bon.*.kode_gl.required' => 'Kode GL setiap bon wajib diisi.',
-            'bon.*.nominal.required' => 'Nominal setiap bon wajib diisi.',
+            'bon.required_if' => 'Isi minimal satu transaksi detail untuk transfer keluar.',
+            'bon.*.keterangan.required' => 'Keterangan setiap transaksi detail wajib diisi.',
+            'bon.*.kode_gl.required' => 'Kode GL setiap transaksi detail wajib diisi.',
+            'bon.*.nominal.required' => 'Nominal setiap transaksi detail wajib diisi.',
             'nominal_transfer.required_if' => 'Nominal transfer wajib diisi.',
         ]);
 
@@ -111,7 +111,7 @@ class KasInputController extends Controller
             $jumlahBon = array_sum(array_map(fn ($b) => (int) $b['nominal'], $data['bon']));
             $nominal = (int) $data['nominal_transfer'];
             if ($jumlahBon !== $nominal) {
-                return back()->withInput()->withErrors(['nominal_transfer' => 'Ditolak: jumlah bon '.rp($jumlahBon).' tidak sama dengan nominal transfer '.rp($nominal)
+                return back()->withInput()->withErrors(['nominal_transfer' => 'Ditolak: jumlah transaksi detail '.rp($jumlahBon).' tidak sama dengan nominal transfer '.rp($nominal)
                     .' (selisih '.rp(abs($nominal - $jumlahBon)).'). Transaksi tidak ditulis ke sheet.']);
             }
         }
@@ -149,7 +149,7 @@ class KasInputController extends Controller
         KasRiwayat::create([
             'aksi' => 'tambah', 'lembar' => $hasil['lembar'], 'baris_awal' => $hasil['baris_awal'], 'baris_akhir' => $hasil['baris_akhir'],
             'ringkasan' => ($input['arah'] === 'masuk' ? 'Uang masuk ' : 'Transfer ').rp($nilai).' '.$tanggal->translatedFormat('j M Y').' '
-                .trim($input['nama_tujuan'].' — '.$input['keterangan'], ' —').' ('.count($input['bon']).' bon)',
+                .trim($input['nama_tujuan'].' — '.$input['keterangan'], ' —').' ('.count($input['bon']).' detail)',
             'isi' => ['input' => [...$input, 'tanggal' => $tanggal->toDateString()], 'no_id' => $hasil['no_id']],
             'user_id' => $request->user()->id,
         ]);
@@ -177,7 +177,7 @@ class KasInputController extends Controller
         $lembar = $transfer->kasBulan->lembar;
         $ringkasan = ($transfer->debet ? 'Uang masuk ' : 'Transfer ').rp($transfer->debet ?: $transfer->kredit)
             .' '.$transfer->tanggal->translatedFormat('j M Y').' '.trim($transfer->nama_tujuan.' — '.$transfer->keterangan, ' —')
-            .' ('.$transfer->bon->count().' bon)';
+            .' ('.$transfer->bon->count().' detail)';
 
         try {
             $hasil = (new HapusKasSheet(GoogleSheets::wajib()))->hapus($transfer, $request->boolean('dengan_biaya'));
@@ -232,6 +232,6 @@ class KasInputController extends Controller
         }
         $h = reset($hasil);
 
-        return back()->with('success', "Lembar {$lembar} disinkronkan dari sheet: ".count($h['transfer']).' transfer, '.$h['jumlah_bon'].' bon, saldo akhir '.rp($h['saldo_akhir']).'.');
+        return back()->with('success', "Lembar {$lembar} disinkronkan dari sheet: ".count($h['transfer']).' transfer, '.$h['jumlah_bon'].' transaksi detail, saldo akhir '.rp($h['saldo_akhir']).'.');
     }
 }

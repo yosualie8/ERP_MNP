@@ -144,7 +144,7 @@ class TulisKasSheet
         $bon = array_values($input['bon']);
         $jumlahBon = array_sum(array_column($bon, 'nominal'));
         if (! $bon || (isset($input['nominal_transfer']) && (int) $input['nominal_transfer'] !== $jumlahBon)) {
-            throw new RuntimeException('Jumlah bon '.rp($jumlahBon).' tidak sama dengan nominal transfer '.rp((int) ($input['nominal_transfer'] ?? 0)).'; tidak ditulis.');
+            throw new RuntimeException('Jumlah transaksi detail '.rp($jumlahBon).' tidak sama dengan nominal transfer '.rp((int) ($input['nominal_transfer'] ?? 0)).'; tidak ditulis.');
         }
         $kodeBon = $this->kodeBon($input['tanggal'], $bon, $nilai, $judul, $total);
         $baris = [];

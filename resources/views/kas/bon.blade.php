@@ -22,7 +22,7 @@
         @endif
         @if ($transfer->bon->isNotEmpty())
             <table style="font-size: 13px; margin-top: 10px;">
-                <thead><tr><th>PIC</th><th>Keterangan bon</th><th class="angka">Nominal</th></tr></thead>
+                <thead><tr><th>PIC</th><th>Keterangan detail</th><th class="angka">Nominal</th></tr></thead>
                 <tbody>
                     @foreach ($transfer->bon as $b)
                         <tr><td class="redup">{{ $b->pic }}</td><td>{{ $b->keterangan }}</td><td class="angka">{{ rp($b->nominal) }}</td></tr>

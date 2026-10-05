@@ -82,7 +82,7 @@ class BacaLembarKas
 
             if ($bon !== null && $bon !== 0) {
                 if (! $transfer) {
-                    $catatan[] = "Baris {$no}: bon ".number_format($bon, 0, ',', '.').' muncul sebelum ada transfer, diabaikan.';
+                    $catatan[] = "Baris {$no}: transaksi detail ".number_format($bon, 0, ',', '.').' muncul sebelum ada transfer, diabaikan.';
 
                     continue;
                 }
@@ -115,10 +115,10 @@ class BacaLembarKas
             $jumlahBon = array_sum(array_column($t['bon'], 'nominal'));
             if ($t['kredit'] && $jumlahBon !== $t['kredit']) {
                 $catatan[] = "Baris {$t['baris']} ".mb_strimwidth((string) $t['keterangan'], 0, 60, '…').': transfer '
-                    .number_format($t['kredit'], 0, ',', '.').' ≠ jumlah bon '.number_format($jumlahBon, 0, ',', '.').'.';
+                    .number_format($t['kredit'], 0, ',', '.').' ≠ jumlah detail '.number_format($jumlahBon, 0, ',', '.').'.';
             }
             if ($t['debet'] && $t['bon']) {
-                $catatan[] = "Baris {$t['baris']}: uang masuk tetapi punya rincian bon.";
+                $catatan[] = "Baris {$t['baris']}: uang masuk tetapi punya transaksi detail.";
             }
         }
 
