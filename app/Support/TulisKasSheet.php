@@ -120,14 +120,29 @@ class TulisKasSheet
     private function noIdBerikut(): int
     {
         $lembar = collect($this->sheets->info($this->spreadsheetId)['sheets'])->pluck('properties.title')
-            ->filter(fn ($t) => preg_match('/^\d{4}$/', $t))->map(fn ($t) => "{$t}!Q:Q")->values()->all();
-        $maks = collect($this->sheets->nilai($this->spreadsheetId, $lembar))->flatten()
-            ->map(fn ($v) => (int) preg_replace('/\D/', '', (string) $v))->max();
+            ->filter(fn ($t) => preg_match('/^\d{4}$/', $t))
+            ->sortBy(fn ($t) => substr($t, 2).substr($t, 0, 2))->values();
+        $nilai = $this->sheets->nilai($this->spreadsheetId, $lembar->map(fn ($t) => "{$t}!Q:Q")->all());
+        $maks = collect($nilai)->flatten()->map(fn ($v) => self::angkaNoId($v))->filter()->max();
         if (! $maks) {
             throw new RuntimeException('NO ID terakhir tidak ditemukan di lembar bulanan mana pun.');
         }
 
+        // Pengaman: NO ID terbesar harus menyambung urutan di lembar terbaru, bukan angka yang melonjak (salah ketik).
+        $terbaru = $lembar->last();
+        $urutan = collect($nilai["{$terbaru}!Q:Q"] ?? [])->flatten()->map(fn ($v) => self::angkaNoId($v))->filter()->values();
+        $median = $urutan->isEmpty() ? $maks : $urutan->sort()->values()[intdiv($urutan->count(), 2)];
+        if ($maks - $median > 5000) {
+            throw new RuntimeException("NO ID terbesar di sheet ({$maks}) jauh melompat dari urutan lembar {$terbaru}. Periksa kolom NO ID yang salah ketik, lalu simpan lagi.");
+        }
+
         return $maks + 1;
+    }
+
+    /** "30959" / "30.959" → 30959; "27293-1" (satu NO ID dipecah jadi beberapa baris) → 27293; kosong/teks → null. */
+    public static function angkaNoId(mixed $v): ?int
+    {
+        return preg_match('/^\s*(\d{1,3}(?:[.,]\d{3})+|\d+)/', (string) $v, $m) ? (int) str_replace(['.', ','], '', $m[1]) : null;
     }
 
     /** @return array<int, array<int, mixed>> per baris: indeks kolom (B=1 … R=17) => isi */

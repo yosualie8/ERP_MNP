@@ -75,7 +75,7 @@ class BacaLembarKas
                     'debet' => $debet,
                     'kredit' => $kredit,
                     'saldo' => self::rupiah($sel($r, 'saldo')),
-                    'no_id' => ($n = (int) preg_replace('/\D/', '', $sel($r, 'no_id'))) ?: null,
+                    'no_id' => TulisKasSheet::angkaNoId($sel($r, 'no_id')),
                     'bon' => [],
                 ];
             }
