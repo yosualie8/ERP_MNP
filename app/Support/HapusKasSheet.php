@@ -58,12 +58,18 @@ class HapusKasSheet
             }
             $total += 1;
 
+            // Baris saldo terakhir di atas blok (baris detail buatan admin kolom Saldo-nya kosong).
+            $judul = collect($semua)->search(fn ($r) => strtoupper(trim((string) ($r[0] ?? ''))) === 'TANGGAL') + 1;
+            $kolomI = $this->sheets->nilai($this->spreadsheetId, ["{$lembar}!I1:I".($dari - 1)])["{$lembar}!I1:I".($dari - 1)];
+            $acuan = TulisKasSheet::barisSaldoSebelum(array_map(fn ($r) => [8 => $r[0] ?? ''], $kolomI), $dari, $judul);
+
             $this->sheets->hapusBaris($this->spreadsheetId, $sheetId, $dari, $sampai);
 
             // Baris yang naik ke posisi $dari: rumus saldonya merujuk baris yang terhapus, sambungkan ulang.
             $totalBaru = $total - ($sampai - $dari + 1);
-            if ($dari < $totalBaru) {
-                $this->sheets->tulis($this->spreadsheetId, ["{$lembar}!I{$dari}" => [["=I".($dari - 1)."+G{$dari}-H{$dari}"]]]);
+            $saldoSesudah = trim((string) ($isi[$sampai + 1 - $dari][8] ?? ''));
+            if ($dari < $totalBaru && $saldoSesudah !== '') {
+                $this->sheets->tulis($this->spreadsheetId, ["{$lembar}!I{$dari}" => [["=I{$acuan}+G{$dari}-H{$dari}"]]]);
             }
 
             return ['lembar' => $lembar, 'baris_awal' => $dari, 'baris_akhir' => $sampai, 'isi' => array_slice($isi, 0, $sampai - $dari + 1)];

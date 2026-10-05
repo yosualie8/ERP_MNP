@@ -62,7 +62,7 @@ class TulisKasSheet
 
         $noId = $this->noIdBerikut();
         $daftarNoId = range($noId, $noId + $butuh - 1);
-        $this->sheets->tulis($this->spreadsheetId, $this->dataBlok($lembar, $baris, $mulai, $daftarNoId, $total));
+        $this->sheets->tulis($this->spreadsheetId, $this->dataBlok($lembar, $baris, $mulai, $daftarNoId, $total, self::barisSaldoSebelum($nilai, $mulai, $judul)));
 
         return ['lembar' => $lembar, 'baris_awal' => $mulai, 'baris_akhir' => $mulai + $butuh - 1, 'no_id' => $daftarNoId];
     }
@@ -131,31 +131,53 @@ class TulisKasSheet
             }
             $total += $n - $m;
 
-            $this->sheets->tulis($this->spreadsheetId, $this->dataBlok($lembar, $baris, $dari, $ids, $total));
+            $this->sheets->tulis($this->spreadsheetId, $this->dataBlok($lembar, $baris, $dari, $ids, $total, self::barisSaldoSebelum($nilai, $dari, $judul)));
 
             return ['lembar' => $lembar, 'lembar_lama' => $lembarLama, 'baris_awal' => $dari, 'baris_akhir' => $dari + $n - 1, 'no_id' => $ids,
                 'sebelum' => array_slice($sebelum, 0, $m)];
         });
     }
 
-    /** Isi sel B..R untuk blok baris mulai $mulai (rumus Saldo & ID TRANSAKSI) + sambungan saldo baris sesudahnya. */
-    private function dataBlok(string $lembar, array $baris, int $mulai, array $noId, int $total): array
+    /**
+     * Isi sel B..R untuk blok baris mulai $mulai + sambungan saldo baris sesudahnya. Mengikuti cara admin: rumus Saldo (I)
+     * hanya di baris yang punya Debet/Kredit (transfer & biaya transfer), merujuk baris saldo terakhir di atasnya;
+     * baris transaksi detail dibiarkan kosong.
+     *
+     * @param  int  $saldoSebelum  nomor baris terakhir di atas blok yang kolom Saldo-nya terisi
+     */
+    private function dataBlok(string $lembar, array $baris, int $mulai, array $noId, int $total, int $saldoSebelum): array
     {
         $data = [];
+        $acuan = $saldoSebelum;
         foreach ($baris as $i => $sel) {
             $n = $mulai + $i;
-            $sel[8] = "=I".($n - 1)."+G{$n}-H{$n}";
+            if (! empty($sel[6]) || ! empty($sel[7])) {
+                $sel[8] = "=I{$acuan}+G{$n}-H{$n}";
+                $acuan = $n;
+            }
             $sel[16] = $noId[$i];
             $sel[17] = '=CONCATENATE(TEXT(B'.$n.';"yymmdd");"-Jago-";Q'.$n.')';
             $data["{$lembar}!B{$n}:R{$n}"] = [array_values(array_slice(array_replace(array_fill(1, 17, ''), $sel), 0, 17))];
         }
-        // Baris pertama setelah blok: rumus saldonya harus menyambung ke baris terakhir yang ditulis.
+        // Baris pertama setelah blok (transfer berikutnya atau baris kosong siap isi): saldonya menyambung ke saldo terakhir blok.
         $setelah = $mulai + count($baris);
         if ($setelah < $total) {
-            $data["{$lembar}!I{$setelah}"] = [["=I".($setelah - 1)."+G{$setelah}-H{$setelah}"]];
+            $data["{$lembar}!I{$setelah}"] = [["=I{$acuan}+G{$setelah}-H{$setelah}"]];
         }
 
         return $data;
+    }
+
+    /** Nomor baris terakhir di atas $baris yang kolom Saldo (I) terisi — baris detail buatan admin dikosongkan. */
+    public static function barisSaldoSebelum(array $nilai, int $baris, int $judul): int
+    {
+        for ($r = $baris - 1; $r > $judul; $r--) {
+            if (trim((string) ($nilai[$r - 1][8] ?? '')) !== '') {
+                return $r;
+            }
+        }
+
+        return $judul + 1;
     }
 
     /** @return array{0: int, 1: int, 2: int} nomor baris judul, baris TOTAL, baris terakhir yang terisi */
