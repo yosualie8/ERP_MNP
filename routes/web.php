@@ -3,6 +3,7 @@
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\KasController;
+use App\Http\Controllers\KasFotoController;
 use App\Http\Controllers\KasInputController;
 use App\Http\Controllers\PenggunaController;
 use Illuminate\Support\Facades\Route;
@@ -25,6 +26,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/kas/input', [KasInputController::class, 'create'])->name('kas.input');
     Route::post('/kas/input', [KasInputController::class, 'store'])->name('kas.input.store');
     Route::delete('/kas/transfer/{transfer}', [KasInputController::class, 'hapus'])->name('kas.hapus');
+    Route::get('/kas/bon/{noId}', [KasFotoController::class, 'index'])->whereNumber('noId')->name('kas.bon');
+    Route::post('/kas/bon/{noId}', [KasFotoController::class, 'store'])->whereNumber('noId')->name('kas.bon.store');
+    Route::get('/kas/foto/{foto}', [KasFotoController::class, 'tampil'])->name('kas.foto');
+    Route::delete('/kas/foto/{foto}', [KasFotoController::class, 'destroy'])->name('kas.foto.destroy');
     Route::post('/kas/sinkron', [KasInputController::class, 'sinkron'])->name('kas.sinkron');
     Route::get('/kas/rekap', [KasController::class, 'rekap'])->name('kas.rekap');
     Route::get('/kas/kode-gl', [KasController::class, 'kodeGl'])->name('kas.kode-gl');

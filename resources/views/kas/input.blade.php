@@ -1,6 +1,6 @@
 @extends('layouts.app', ['judul' => 'Input Kas'])
 
-@section('lebar', '1100px')
+@section('lebar', '1440px')
 
 @section('isi')
     <style>
@@ -31,10 +31,23 @@
         .saran .rek b { color: var(--teks); font-weight: 600; font-variant-numeric: tabular-nums; }
         .saran .pakai { font-size: 11px; color: var(--redup); white-space: nowrap; }
         .saran mark { background: #fff3bf; color: inherit; padding: 0; }
+        /* Form di kiri, foto bon di kanan (tetap terlihat saat menggulir); di layar sempit foto pindah ke atas. */
+        .tata-foto { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 16px; align-items: start; }
+        .panel-foto { position: sticky; top: 12px; }
+        .panel-foto .kartu { margin-bottom: 0; }
+        #pratinjau-foto figure { margin: 12px 0 0; position: relative; }
+        #pratinjau-foto img { width: 100%; max-height: 70vh; object-fit: contain; border: 1px solid var(--garis); border-radius: 8px; background: var(--latar); display: block; }
+        #pratinjau-foto figcaption { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--redup); margin-top: 4px; }
+        @media (max-width: 960px) {
+            .tata-foto { grid-template-columns: minmax(0, 1fr); }
+            .panel-foto { position: static; order: -1; }
+            #pratinjau-foto img { max-height: 45vh; }
+        }
     </style>
 
-    <form method="POST" action="{{ route('kas.input.store') }}" class="form-kas" id="form-kas">
+    <form method="POST" action="{{ route('kas.input.store') }}" class="form-kas tata-foto" id="form-kas" enctype="multipart/form-data">
         @csrf
+        <div class="kolom-utama">
         @if ($errors->any())
             <div class="pesan galat">
                 <b>Periksa lagi isian berikut:</b>
@@ -144,6 +157,22 @@
             <button type="submit" class="tombol" id="simpan">Simpan ke sheet</button>
             <span class="redup">Data ditulis ke lembar bulan sesuai tanggal di sheet <i>Kas Harian MNP</i>, lalu langsung muncul di Kas Harian.</span>
         </div>
+        </div>
+
+        <aside class="panel-foto">
+            <div class="kartu">
+                <h3 style="margin: 0 0 4px;">Foto bon</h3>
+                <p class="redup" style="margin: 0 0 10px;">Lampirkan foto nota/struk sebagai referensi saat mengetik rincian. Ikut tersimpan bersama transfer ini.</p>
+                <label class="tombol polos" style="display: inline-block; cursor: pointer; color: var(--teks); font-size: 14px; padding: 8px 14px;">
+                    📷 Pilih / ambil foto
+                    <input type="file" name="foto[]" id="foto-bon" accept="image/*" multiple hidden>
+                </label>
+                @if ($errors->has('foto') || $errors->has('foto.*'))
+                    <p class="galat-isian">Pilih ulang fotonya — foto tidak bisa dipertahankan setelah form ditolak.</p>
+                @endif
+                <div id="pratinjau-foto"></div>
+            </div>
+        </aside>
     </form>
 
     <template id="templat-bon">
@@ -360,6 +389,33 @@
             };
             document.querySelectorAll('[name=arah]').forEach(r => r.addEventListener('change', aturArah));
             aturArah();
+
+            // Foto bon: tampilkan pratinjau besar; pilihan berikutnya ditambahkan (maks. 6), tiap foto bisa dibuang.
+            const inputFoto = document.getElementById('foto-bon');
+            const pratinjau = document.getElementById('pratinjau-foto');
+            let daftarFoto = [];
+            const ukuran = b => b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.round(b / 1024) + ' KB';
+            const tampilFoto = () => {
+                const dt = new DataTransfer();
+                daftarFoto.forEach(f => dt.items.add(f));
+                inputFoto.files = dt.files;
+                pratinjau.querySelectorAll('img').forEach(img => URL.revokeObjectURL(img.src));
+                pratinjau.innerHTML = '';
+                daftarFoto.forEach((f, i) => {
+                    const fig = document.createElement('figure');
+                    const url = URL.createObjectURL(f);
+                    fig.innerHTML = `<img alt="Foto bon ${i + 1}" data-perbesar><figcaption><span></span><button type="button" class="tombol-hapus">Buang</button></figcaption>`;
+                    fig.querySelector('img').src = url;
+                    fig.querySelector('span').textContent = `${i + 1}. ${f.name} · ${ukuran(f.size)}`;
+                    fig.querySelector('button').addEventListener('click', () => { daftarFoto.splice(i, 1); tampilFoto(); });
+                    pratinjau.appendChild(fig);
+                });
+            };
+            inputFoto.addEventListener('change', () => {
+                const baru = [...inputFoto.files].filter(f => f.type.startsWith('image/'));
+                daftarFoto = [...daftarFoto, ...baru].slice(0, 6);
+                tampilFoto();
+            });
 
             document.getElementById('form-kas').addEventListener('submit', e => {
                 if (!arahMasuk() && !hitung()) {

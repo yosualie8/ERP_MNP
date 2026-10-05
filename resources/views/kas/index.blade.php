@@ -104,7 +104,15 @@
                             <td class="angka">{{ rp($t->debet, true) }}</td>
                             <td class="angka"><b>{{ rp($t->kredit, true) }}</b></td>
                             <td class="angka">{{ rp($t->saldo) }}</td>
-                            <td><button type="button" class="tombol-hapus" data-hapus="{{ route('kas.hapus', $t) }}" data-baris="{{ $t->baris }}"
+                            <td style="white-space: nowrap;">
+                                @if ($t->no_id)
+                                    @if ($n = $jumlahFoto[$t->no_id] ?? 0)
+                                        <a href="{{ route('kas.bon', $t->no_id) }}" class="lampiran ada" title="Lihat {{ $n }} foto bon">📎 {{ $n }}</a>
+                                    @else
+                                        <a href="{{ route('kas.bon', $t->no_id) }}" class="lampiran kosong" title="Lampirkan foto bon">📎+</a>
+                                    @endif
+                                @endif
+                                <button type="button" class="tombol-hapus" data-hapus="{{ route('kas.hapus', $t) }}" data-baris="{{ $t->baris }}"
                                     data-ringkasan="{{ ($t->debet ? 'Uang masuk ' : 'Transfer ').rp($t->debet ?: $t->kredit).' · '.$t->tanggal->translatedFormat('j M').' · '.($t->nama_tujuan ?? '').' · '.($t->keterangan ?? '') }}"
                                     data-bon="{{ $t->bon->count() }}" @if (isset($punyaBiaya[$t->id])) data-biaya="1" @endif>Hapus</button></td>
                         </tr>

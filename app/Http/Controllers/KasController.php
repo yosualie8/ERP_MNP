@@ -6,6 +6,7 @@ use App\Models\AkunGl;
 use App\Models\CostCenter;
 use App\Models\KasBulan;
 use App\Models\KasTransfer;
+use App\Models\KasFoto;
 use App\Models\KodeGl;
 use App\Support\TulisKasSheet;
 use Illuminate\Http\Request;
@@ -59,7 +60,10 @@ class KasController extends Controller
             }
         }
 
-        return view('kas.index', compact('daftarBulan', 'bulan', 'transfer', 'q', 'tanggal', 'daftarTanggal', 'punyaBiaya'));
+        $jumlahFoto = KasFoto::whereIn('no_id', $transfer->pluck('no_id')->filter())
+            ->selectRaw('no_id, COUNT(*) as n')->groupBy('no_id')->pluck('n', 'no_id');
+
+        return view('kas.index', compact('daftarBulan', 'bulan', 'transfer', 'q', 'tanggal', 'daftarTanggal', 'punyaBiaya', 'jumlahFoto'));
     }
 
     /** Pengeluaran (jumlah bon) per akun × bulan, bisa disaring per cost center. */

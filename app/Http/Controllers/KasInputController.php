@@ -7,6 +7,7 @@ use App\Models\KasBon;
 use App\Models\KasRiwayat;
 use App\Models\KasTransfer;
 use App\Models\KodeGl;
+use App\Support\FotoBon;
 use App\Support\GoogleSheets;
 use App\Support\HapusKasSheet;
 use App\Support\ImporKas;
@@ -94,7 +95,10 @@ class KasInputController extends Controller
             'bon.*.pic' => ['nullable', 'string', 'max:60'],
             'bon.*.keterangan' => ['required', 'string', 'max:300'],
             'bon.*.kode_gl' => ['required', 'string', 'max:120'],
+            'foto' => ['nullable', 'array', 'max:6'],
+            'foto.*' => KasFotoController::ATURAN['foto.*'],
         ], [
+            ...KasFotoController::PESAN,
             'bon.required_if' => 'Isi minimal satu bon untuk transfer keluar.',
             'bon.*.keterangan.required' => 'Keterangan setiap bon wajib diisi.',
             'bon.*.kode_gl.required' => 'Kode GL setiap bon wajib diisi.',
@@ -134,6 +138,13 @@ class KasInputController extends Controller
             return back()->withInput()->with('error', 'Gagal menulis ke sheet: '.$e->getMessage());
         }
 
+        // Foto bon ditautkan ke NO ID baris transfer (baris pertama yang ditulis).
+        $jumlahFoto = 0;
+        foreach ($request->file('foto', []) as $file) {
+            FotoBon::simpan($file, $hasil['no_id'][0], $hasil['lembar'], $request->user()->id);
+            $jumlahFoto++;
+        }
+
         $nilai = $input['arah'] === 'masuk' ? $input['nominal_masuk'] : array_sum(array_column($input['bon'], 'nominal'));
         KasRiwayat::create([
             'aksi' => 'tambah', 'lembar' => $hasil['lembar'], 'baris_awal' => $hasil['baris_awal'], 'baris_akhir' => $hasil['baris_akhir'],
@@ -154,6 +165,7 @@ class KasInputController extends Controller
             .' baris '.$hasil['baris_awal'].($hasil['baris_akhir'] > $hasil['baris_awal'] ? '–'.$hasil['baris_akhir'] : '')
             .' (NO ID '.reset($hasil['no_id']).(count($hasil['no_id']) > 1 ?'–'.end($hasil['no_id']) : '').').'
             .($akunBaru->isNotEmpty() ? ' Akun baru: '.$akunBaru->implode(', ').'.' : '')
+            .($jumlahFoto ? " {$jumlahFoto} foto bon terlampir." : '')
             .$pesanImpor
         );
     }
@@ -179,6 +191,10 @@ class KasInputController extends Controller
             'aksi' => 'hapus', 'lembar' => $lembar, 'baris_awal' => $hasil['baris_awal'], 'baris_akhir' => $hasil['baris_akhir'],
             'ringkasan' => $ringkasan, 'isi' => $hasil['isi'], 'user_id' => $request->user()->id,
         ]);
+        $fotoDihapus = $transfer->no_id ? FotoBon::hapusMilik($transfer->no_id) : 0;
+        if ($fotoDihapus) {
+            $ringkasan .= ", {$fotoDihapus} foto bon ikut dihapus";
+        }
         $pesanImpor = $this->imporUlang($lembar);
 
         return redirect()->route('kas.index', ['lembar' => $lembar, 'tgl' => $request->integer('tgl') ?: null, 'q' => $request->input('q') ?: null])->with(

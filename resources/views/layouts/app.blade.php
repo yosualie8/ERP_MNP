@@ -56,6 +56,17 @@
         table.kas i { font-style: normal; display: inline-block; font-size: 11px; padding: 0 5px; border-radius: 4px; background: var(--latar); color: var(--redup); }
         table.kas i.x { background: var(--merah-muda); color: var(--merah); }
         input[type=search] { padding: 8px 10px; border: 1px solid var(--garis); border-radius: 8px; font-size: 14px; min-width: 260px; }
+        /* Foto bon: klik untuk layar penuh, klik lagi untuk ukuran asli (geser untuk melihat bagian lain). */
+        img[data-perbesar] { cursor: zoom-in; }
+        #lihat-foto { position: fixed; inset: 0; z-index: 100; background: rgba(16, 24, 32, .92); display: flex; align-items: center; justify-content: center; overflow: auto; }
+        #lihat-foto img { max-width: 96vw; max-height: 92vh; cursor: zoom-in; }
+        #lihat-foto.asli { align-items: flex-start; justify-content: flex-start; }
+        #lihat-foto.asli img { max-width: none; max-height: none; cursor: zoom-out; }
+        #lihat-foto button { position: fixed; top: 12px; right: 16px; background: #fff; border: 0; border-radius: 8px; padding: 8px 14px; font-size: 15px; cursor: pointer; }
+        .lampiran { text-decoration: none; font-size: 12px; white-space: nowrap; padding: 2px 6px; border-radius: 6px; }
+        .lampiran.ada { background: var(--hijau-muda); color: var(--aksen); }
+        .lampiran.kosong { color: var(--redup); opacity: .55; }
+        .lampiran:hover { opacity: 1; background: var(--latar); }
         .kartu { background: var(--kartu); border: 1px solid var(--garis); border-radius: 10px; padding: 20px; margin-bottom: 16px; }
         .pesan { padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; }
         .pesan.sukses { background: var(--hijau-muda); color: var(--aksen); }
@@ -99,5 +110,20 @@
         @endif
         @yield('isi')
     </main>
+    <script>
+        // Penampil foto bon (dipakai Input Kas & halaman Bon).
+        document.addEventListener('click', e => {
+            const img = e.target.closest('img[data-perbesar]');
+            if (!img) return;
+            const lapis = document.createElement('div');
+            lapis.id = 'lihat-foto';
+            lapis.innerHTML = '<button type="button">Tutup ✕</button><img alt="Foto bon">';
+            lapis.querySelector('img').src = img.dataset.perbesar || img.src;
+            lapis.querySelector('img').addEventListener('click', ev => { ev.stopPropagation(); lapis.classList.toggle('asli'); });
+            lapis.addEventListener('click', () => lapis.remove());
+            document.addEventListener('keydown', function tutup(ev) { if (ev.key === 'Escape') { lapis.remove(); document.removeEventListener('keydown', tutup); } });
+            document.body.appendChild(lapis);
+        });
+    </script>
 </body>
 </html>

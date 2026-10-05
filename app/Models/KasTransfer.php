@@ -10,7 +10,7 @@ class KasTransfer extends Model
 {
     protected $table = 'kas_transfer';
 
-    protected $fillable = ['kas_bulan_id', 'tanggal', 'baris', 'nama_tujuan', 'no_rek_tujuan', 'bank_tujuan', 'keterangan', 'debet', 'kredit', 'saldo'];
+    protected $fillable = ['kas_bulan_id', 'tanggal', 'baris', 'no_id','nama_tujuan', 'no_rek_tujuan', 'bank_tujuan', 'keterangan', 'debet', 'kredit', 'saldo'];
 
     protected $casts = ['tanggal' => 'date'];
 
