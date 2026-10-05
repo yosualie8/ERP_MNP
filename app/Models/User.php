@@ -23,6 +23,12 @@ class User extends Authenticatable
         'password',
         'google_id',
         'avatar',
+        'role',
+    ];
+
+    public const ROLE = [
+        'super_admin' => 'Super Admin',
+        'admin' => 'Admin',
     ];
 
     /**
@@ -44,6 +50,12 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
     ];
+
+    /** Super admin = email di SUPER_ADMIN_EMAILS (.env) atau peran super_admin di menu Pengguna. */
+    public function isSuperAdmin(): bool
+    {
+        return $this->role === 'super_admin' || in_array(strtolower($this->email), self::emailSuperAdminEnv(), true);
+    }
 
     /** @return string[] */
     public static function emailSuperAdminEnv(): array

@@ -27,7 +27,13 @@
         @if ($emailGoogle)
             <p style="margin-bottom: 0;">Terhubung ke <strong>{{ $emailGoogle }}</strong>. Data kas diambil dari spreadsheet <em>Kas Harian MNP - 2026</em>.</p>
         @else
-            <p class="redup" style="margin-bottom: 0;">Belum terhubung. Keluar lalu masuk lagi dengan Google dan centang semua izin.</p>
+            <p class="redup" style="margin-bottom: 0;">Belum terhubung. Super admin perlu menghubungkan akun Google pemilik sheet.</p>
         @endif
+        @can('super-admin')
+            <p style="margin-bottom: 0;">
+                <a href="{{ route('google.hubungkan-sheets') }}" class="tombol polos">{{ $emailGoogle ? 'Hubungkan ulang Google Sheets' : 'Hubungkan Google Sheets' }}</a>
+                <span class="redup">Pilih akun pemilik sheet Kas Harian MNP dan centang semua izin.</span>
+            </p>
+        @endcan
     </div>
 @endsection

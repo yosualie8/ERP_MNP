@@ -7,11 +7,13 @@ use App\Models\KasBon;
 use App\Models\KasRiwayat;
 use App\Models\KasTransfer;
 use App\Models\KodeGl;
+use App\Support\BacaBon;
 use App\Support\GoogleSheets;
 use App\Support\HapusKasSheet;
 use App\Support\ImporKas;
 use App\Support\TulisKasSheet;
 use App\Support\UraiKodeGl;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -156,6 +158,56 @@ class KasInputController extends Controller
             .($akunBaru->isNotEmpty() ? ' Akun baru: '.$akunBaru->implode(', ').'.' : '')
             .$pesanImpor
         );
+    }
+
+    /** Baca foto nota dengan Claude → baris bon siap diperiksa di form (tidak menyimpan apa pun). */
+    public function scanBon(Request $request): JsonResponse
+    {
+        $request->validate(['foto' => ['required', 'file', 'image', 'max:15360']], [
+            'foto.image' => 'File harus berupa foto (JPG/PNG).',
+            'foto.max' => 'Foto maksimal 15 MB.',
+        ]);
+        $foto = $request->file('foto');
+
+        try {
+            $h = (new BacaBon)->baca($foto->getRealPath(), (string) $foto->getMimeType());
+        } catch (\Anthropic\Core\Exceptions\AuthenticationException|\Anthropic\Core\Exceptions\PermissionDeniedException $e) {
+            report($e);
+
+            return response()->json(['pesan' => 'API key Claude salah, sudah dicabut, atau saldonya habis. Super admin perlu memeriksanya di menu Pengguna.'], 502);
+        } catch (\Anthropic\Core\Exceptions\RateLimitException $e) {
+            return response()->json(['pesan' => 'Terlalu banyak scan dalam waktu singkat. Tunggu sebentar lalu coba lagi.'], 429);
+        } catch (\Anthropic\Core\Exceptions\APIConnectionException|\Anthropic\Core\Exceptions\APIStatusException $e) {
+            report($e);
+
+            return response()->json(['pesan' => 'Layanan pembaca nota sedang bermasalah. Coba lagi sebentar, atau isi manual.'], 502);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return response()->json(['pesan' => $e->getMessage()], 422);
+        }
+
+        $angka = fn ($q) => rtrim(rtrim(number_format((float) $q, 2, ',', ''), '0'), ',');
+        $baris = [];
+        foreach ($h['items'] ?? [] as $i) {
+            $ket = trim(($i['qty'] > 0 ? $angka($i['qty']).' ' : '').($i['qty'] > 0 ? $i['satuan'].' ' : '').$i['nama']);
+            $baris[] = ['nominal' => (int) $i['jumlah'], 'keterangan' => preg_replace('/\s+/', ' ', $ket), 'ragu' => (bool) $i['ragu']];
+        }
+        foreach ($h['biaya_lain'] ?? [] as $b) {
+            $baris[] = ['nominal' => (int) $b['jumlah'], 'keterangan' => $b['nama'], 'ragu' => false];
+        }
+        $baris = array_values(array_filter($baris, fn ($b) => $b['nominal'] > 0));
+        $jumlah = array_sum(array_column($baris, 'nominal'));
+
+        return response()->json([
+            'toko' => $h['toko'] ?? '',
+            'tanggal' => preg_match('/^\d{4}-\d{2}-\d{2}$/', $h['tanggal'] ?? '') ? $h['tanggal'] : '',
+            'baris' => $baris,
+            'jumlah_baris' => $jumlah,
+            'diskon' => (int) ($h['diskon'] ?? 0),
+            'total_nota' => (int) ($h['total'] ?? 0),
+            'catatan' => $h['catatan'] ?? '',
+        ]);
     }
 
     /** Hapus transfer + seluruh bonnya dari sheet (opsional beserta baris biaya transfernya), lalu impor ulang lembarnya. */

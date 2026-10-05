@@ -18,6 +18,10 @@
         .hapus { background: none; border: 0; color: var(--merah); cursor: pointer; font-size: 18px; line-height: 1; padding: 8px 6px; }
         .total-bon { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
         .galat-isian { color: var(--merah); font-size: 13px; margin: 4px 0 0; }
+        /* Baris hasil scan: biru muda; tulisan meragukan: kuning. Hilang setelah baris itu disentuh admin. */
+        table.bon tr.hasil-scan input { background: #eef5ff; }
+        table.bon tr.ragu input { background: #fff4cc; }
+        .pesan.info { background: #eef5ff; color: #1f4e79; }
         .isian-saran { position: relative; }
         .saran { position: absolute; left: 0; right: 0; top: 100%; z-index: 20; margin-top: 2px; background: #fff; border: 1px solid var(--garis);
             border-radius: 8px; box-shadow: 0 8px 24px rgba(16, 42, 67, .12); max-height: 340px; overflow-y: auto; }
@@ -106,6 +110,12 @@
                 <h3 style="margin: 0 0 4px;">Rincian bon</h3>
                 <span class="redup">Jumlah bon <span class="total-bon" id="total-bon">0</span> dari transfer <b id="nilai-transfer">0</b></span>
             </div>
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 8px 0;">
+                <button type="button" class="tombol" id="scan-tombol" style="padding: 8px 14px;">📷 Scan foto bon</button>
+                <input type="file" id="scan-foto" accept="image/*" hidden>
+                <span class="redup">Foto nota/struk → rincian barang & nominal terisi otomatis. Periksa lagi sebelum simpan.</span>
+            </div>
+            <div id="scan-status" class="pesan" hidden style="padding: 8px 12px; margin-bottom: 8px;"></div>
             <div id="status-cocok" class="pesan" style="margin: 8px 0 10px; padding: 8px 12px;"></div>
             <p class="redup" style="margin: 0 0 10px;">Satu transfer bisa berisi beberapa bon (mis. reimburse). Kode GL ditulis seperti di sheet, mis. <i>Biaya BBM ASG</i> atau <i>Gaji Karyawan ASG T116</i>.</p>
             <table class="bon">
@@ -199,7 +209,73 @@
                 hitung();
                 return tr;
             };
-            daftar.addEventListener('input', hitung);
+            daftar.addEventListener('input', e => {
+                e.target.closest('tr')?.classList.remove('hasil-scan', 'ragu');
+                hitung();
+            });
+
+            // Scan foto bon: kirim foto ke server (dibaca Claude), isi rincian bon dari hasilnya.
+            const scanTombol = document.getElementById('scan-tombol');
+            const scanFoto = document.getElementById('scan-foto');
+            const scanStatus = document.getElementById('scan-status');
+            const tampilScan = (kelas, teks) => { scanStatus.hidden = false; scanStatus.className = 'pesan ' + kelas; scanStatus.textContent = teks; };
+            scanTombol.addEventListener('click', () => scanFoto.click());
+            scanFoto.addEventListener('change', async () => {
+                const file = scanFoto.files[0];
+                scanFoto.value = '';
+                if (!file) return;
+                const isian = [...daftar.querySelectorAll('tr')].filter(tr => tr.querySelector('[data-nama=nominal]').value || tr.querySelector('[data-nama=keterangan]').value);
+                let ganti = true;
+                if (isian.length) {
+                    ganti = confirm('Rincian bon sudah ada isinya.\n\nOK = ganti dengan hasil scan\nBatal = tambahkan di bawahnya');
+                }
+                const pertama = daftar.querySelector('tr');
+                const pic = pertama?.querySelector('[data-nama=pic]').value ?? '';
+                const kodeGl = pertama?.querySelector('[data-nama=kode_gl]').value ?? '';
+
+                scanTombol.disabled = true;
+                scanTombol.textContent = 'Membaca bon…';
+                tampilScan('info', 'Membaca foto nota, biasanya 10–30 detik…');
+                try {
+                    const form = new FormData();
+                    form.append('foto', file);
+                    const res = await fetch(@json(route('kas.scan-bon')), {
+                        method: 'POST', body: form,
+                        headers: {'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content, 'Accept': 'application/json'},
+                    });
+                    const data = await res.json().catch(() => ({}));
+                    if (!res.ok) throw new Error(data.pesan || data.message || ('Gagal (' + res.status + ')'));
+                    if (!data.baris.length) {
+                        tampilScan('galat', 'Tidak ada baris barang yang terbaca. ' + (data.catatan || 'Coba foto ulang lebih dekat dan terang, atau isi manual.'));
+                        return;
+                    }
+                    if (ganti) daftar.innerHTML = '';
+                    data.baris.forEach(b => {
+                        const tr = tambah({nominal: b.nominal, keterangan: b.keterangan, pic, kode_gl: kodeGl});
+                        tr.classList.add(b.ragu ? 'ragu' : 'hasil-scan');
+                        if (b.ragu) tr.title = 'Tulisan di nota meragukan — periksa nama & nominalnya';
+                    });
+                    if (!nominalTransfer.value) nominalTransfer.value = data.total_nota || data.jumlah_baris;
+                    hitung();
+
+                    const info = [`Terbaca ${data.baris.length} baris${data.toko ? ' dari ' + data.toko : ''}${data.tanggal ? ' (nota ' + data.tanggal + ')' : ''}: jumlah ${fmt(data.jumlah_baris)}.`];
+                    if (data.total_nota) {
+                        const beda = data.total_nota - data.jumlah_baris;
+                        info.push(beda === 0 ? `Total di nota ${fmt(data.total_nota)} — cocok.` : `Total di nota ${fmt(data.total_nota)}, selisih ${fmt(Math.abs(beda))} — periksa.`);
+                    }
+                    if (data.diskon) info.push(`Ada diskon ${fmt(data.diskon)} — kurangi dari baris yang sesuai.`);
+                    if (data.baris.some(b => b.ragu)) info.push('Baris kuning = tulisan meragukan.');
+                    if (!kodeGl) info.push('Isi PIC & Kode GL tiap baris.');
+                    if (data.catatan) info.push('Catatan: ' + data.catatan);
+                    tampilScan(data.baris.some(b => b.ragu) || (data.total_nota && data.total_nota !== data.jumlah_baris) ? 'galat' : 'sukses', info.join(' '));
+                } catch (err) {
+                    tampilScan('galat', 'Scan gagal: ' + err.message);
+                } finally {
+                    scanTombol.disabled = false;
+                    scanTombol.textContent = '📷 Scan foto bon';
+                }
+            });
+
             document.getElementById('tambah-bon').addEventListener('click', () => {
                 const sebelumnya = daftar.lastElementChild;
                 // Bon berikutnya biasanya PIC & Kode GL yang sama (mis. reimburse satu orang).

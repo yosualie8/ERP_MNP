@@ -78,6 +78,9 @@
                     @foreach (['dashboard' => 'Beranda', 'kas.input' => 'Input Kas', 'kas.index' => 'Kas Harian','kas.rekap' => 'Rekap Biaya', 'kas.kode-gl' => 'Kode GL'] as $rute => $nama)
                         <a href="{{ route($rute) }}" @class(['aktif' => request()->routeIs($rute)])>{{ $nama }}</a>
                     @endforeach
+                    @can('super-admin')
+                        <a href="{{ route('pengguna.index') }}" @class(['aktif' => request()->routeIs('pengguna.*')])>Pengguna</a>
+                    @endcan
                 </nav>
             </div>
             <form method="POST" action="{{ route('logout') }}">
