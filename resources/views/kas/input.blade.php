@@ -1,6 +1,6 @@
 @extends('layouts.app', ['judul' => 'Input Kas'])
 
-@section('lebar', '1440px')
+@section('lebar', '1280px')
 
 @section('isi')
     <style>
@@ -31,11 +31,11 @@
         .saran .rek b { color: var(--teks); font-weight: 600; font-variant-numeric: tabular-nums; }
         .saran .pakai { font-size: 11px; color: var(--redup); white-space: nowrap; }
         .saran mark { background: #fff3bf; color: inherit; padding: 0; }
-        /* Form di kiri, foto bon di kanan (tetap terlihat saat menggulir); di layar sempit foto pindah ke atas. */
-        .tata-foto { display: grid; grid-template-columns: minmax(0, 1fr) 460px; gap: 16px; align-items: start; }
-        .panel-foto { position: sticky; top: 12px; }
-        .panel-foto .kartu { margin-bottom: 0; padding: 16px; }
-        .panel-foto .penampil { height: calc(100vh - 230px); margin-top: 10px; }
+        /* Foto bon di antara transaksi master & detail, lebar penuh supaya leluasa di-zoom. */
+        .kartu-foto .penampil { height: 62vh; margin-top: 10px; }
+        /* Belum ada foto: ringkas supaya Transaksi detail tidak terdorong jauh ke bawah. */
+        .kartu-foto .penampil.kosong { height: 120px; min-height: 0; }
+        .kartu-foto .penampil.kosong .penampil-alat, .kartu-foto .penampil.kosong .penampil-petunjuk { display: none; }
         /* Kode GL tebakan otomatis (ungu muda) + saran yang bisa diklik. */
         .form-kas input.tebakan { background: #f3efff; border-color: #c9bdf2; }
         .saran-kode { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
@@ -43,21 +43,16 @@
         .saran-kode button:hover { border-color: #9a87e0; color: var(--teks); }
         .saran-kode button.dipilih { background: #ece6ff; border-color: #9a87e0; color: #3f2f8a; }
         .info-foto { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; color: var(--redup); margin-top: 6px; }
-        @media (max-width: 1100px) {
-            .tata-foto { grid-template-columns: minmax(0, 1fr); }
-            .panel-foto { position: static; order: -1; }
-            .panel-foto .penampil { height: 55vh; }
-        }
+        @media (max-width: 760px) { .kartu-foto .penampil { height: 50vh; } }
     </style>
 
     @php($edit ??= null)
-    <form method="POST" action="{{ $edit ? route('kas.update', $edit['no_id']) : route('kas.input.store') }}" class="form-kas tata-foto" id="form-kas" enctype="multipart/form-data">
+    <form method="POST" action="{{ $edit ? route('kas.update', $edit['no_id']) : route('kas.input.store') }}" class="form-kas" id="form-kas" enctype="multipart/form-data">
         @if ($edit)
             @method('PUT')
             <input type="hidden" name="versi" value="{{ $edit['versi'] }}">
         @endif
         @csrf
-        <div class="kolom-utama">
         @if ($errors->any())
             <div class="pesan galat">
                 <b>Periksa lagi isian berikut:</b>
@@ -73,9 +68,9 @@
             <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px;">
                 <h3 style="margin: 0;">
                     @if ($edit)
-                        Edit transaksi <span class="redup" style="font-size: 13px; font-weight: normal;">NO ID {{ $edit['no_id'] }} · lembar {{ $edit['lembar'] }} baris {{ $edit['baris'] }}</span>
+                        Edit Transaksi Master <span class="redup" style="font-size: 13px; font-weight: normal;">NO ID {{ $edit['no_id'] }} · lembar {{ $edit['lembar'] }} baris {{ $edit['baris'] }}</span>
                     @else
-                        Input kas Bank Jago
+                        Input Transaksi Master
                     @endif
                 </h3>
                 <div class="pilihan">
@@ -122,12 +117,29 @@
 
             <div data-masuk hidden style="margin-top: 12px; max-width: 260px;">
                 <label for="nominal_masuk">Nominal masuk</label>
-                <input type="number" name="nominal_masuk" id="nominal_masuk" class="angka-input" min="1" value="{{ old('nominal_masuk', $edit['nominal_masuk'] ?? '') }}">
+                <input type="text" name="nominal_masuk" id="nominal_masuk" class="angka-input rupiah" inputmode="numeric" autocomplete="off" value="{{ old('nominal_masuk', $edit['nominal_masuk'] ?? '') }}">
             </div>
             <div data-keluar style="margin-top: 12px; max-width: 260px;">
                 <label for="nominal_transfer">Nominal transfer <span class="redup">(sesuai mutasi bank)</span></label>
-                <input type="number" name="nominal_transfer" id="nominal_transfer" class="angka-input" min="1" value="{{ old('nominal_transfer', $edit['nominal_transfer'] ?? '') }}" required>
+                <input type="text" name="nominal_transfer" id="nominal_transfer" class="angka-input rupiah" inputmode="numeric" autocomplete="off" value="{{ old('nominal_transfer', $edit['nominal_transfer'] ?? '') }}" required>
             </div>
+        </div>
+
+        <div class="kartu kartu-foto">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                <h3 style="margin: 0;">Foto bon</h3>
+                <label class="tombol polos" style="display: inline-block; cursor: pointer; color: var(--teks); font-size: 14px; padding: 6px 12px;">
+                    📷 Pilih / ambil foto
+                    <input type="file" name="foto[]" id="foto-bon" accept="image/*" multiple hidden>
+                </label>
+            </div>
+            <p class="redup" style="margin: 4px 0 0; font-size: 13px;">Referensi saat mengetik detail. Diperkecil otomatis sebelum diunggah, lalu disimpan di Google Drive perusahaan.</p>
+            @if ($errors->has('foto') || $errors->has('foto.*'))
+                <p class="galat-isian">Pilih ulang fotonya — foto tidak bisa dipertahankan setelah form ditolak.</p>
+            @endif
+            <div class="penampil" id="penampil-input"></div>
+            <div class="info-foto"><span id="info-foto">Belum ada foto.</span><button type="button" class="tombol-hapus" id="buang-foto" hidden>Buang foto ini</button></div>
+            <div class="gambar-kecil" id="daftar-gambar"></div>
         </div>
 
         <div class="kartu" data-keluar>
@@ -176,31 +188,11 @@
             @endif
             <span class="redup">Data ditulis ke lembar bulan sesuai tanggal di sheet <i>Kas Harian MNP</i>, lalu langsung muncul di Kas Harian.</span>
         </div>
-        </div>
-
-        <aside class="panel-foto">
-            <div class="kartu">
-                <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-                    <h3 style="margin: 0;">Foto bon</h3>
-                    <label class="tombol polos" style="display: inline-block; cursor: pointer; color: var(--teks); font-size: 14px; padding: 6px 12px;">
-                        📷 Pilih / ambil foto
-                        <input type="file" name="foto[]" id="foto-bon" accept="image/*" multiple hidden>
-                    </label>
-                </div>
-                <p class="redup" style="margin: 4px 0 0; font-size: 13px;">Referensi saat mengetik detail. Diperkecil otomatis sebelum diunggah, lalu disimpan di Google Drive perusahaan.</p>
-                @if ($errors->has('foto') || $errors->has('foto.*'))
-                    <p class="galat-isian">Pilih ulang fotonya — foto tidak bisa dipertahankan setelah form ditolak.</p>
-                @endif
-                <div class="penampil" id="penampil-input"></div>
-                <div class="info-foto"><span id="info-foto">Belum ada foto.</span><button type="button" class="tombol-hapus" id="buang-foto" hidden>Buang foto ini</button></div>
-                <div class="gambar-kecil" id="daftar-gambar"></div>
-            </div>
-        </aside>
     </form>
 
     <template id="templat-bon">
         <tr>
-            <td><input type="number" class="angka-input" data-nama="nominal" min="1" required></td>
+            <td><input type="text" class="angka-input rupiah" data-nama="nominal" inputmode="numeric" autocomplete="off" required></td>
             <td><input type="text" data-nama="pic" list="daftar-pic" autocomplete="off"></td>
             <td><input type="text" data-nama="keterangan" autocomplete="off" required></td>
             <td><input type="text" data-nama="kode_gl" list="daftar-kode" autocomplete="off" required><div class="saran-kode"></div></td>
@@ -215,6 +207,25 @@
             const daftar = document.getElementById('daftar-bon');
             const templat = document.getElementById('templat-bon');
             const fmt = n => new Intl.NumberFormat('id-ID').format(n || 0);
+            // Nominal ditampilkan bertitik ribuan saat diketik (50000 → 50.000); server membuang titiknya lagi.
+            const angka = v => parseInt(String(v ?? '').replace(/\D/g, ''), 10) || 0;
+            const rapikanRupiah = el => {
+                const digitSebelumKursor = el.value.slice(0, el.selectionStart ?? el.value.length).replace(/\D/g, '').length;
+                const digit = el.value.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+                el.value = digit ? fmt(+digit) : '';
+                if (document.activeElement === el) {
+                    let pos = 0, hitungDigit = 0;
+                    while (pos < el.value.length && hitungDigit < digitSebelumKursor) {
+                        if (/\d/.test(el.value[pos])) hitungDigit++;
+                        pos++;
+                    }
+                    el.setSelectionRange(pos, pos);
+                }
+            };
+            document.getElementById('form-kas').addEventListener('input', e => {
+                if (e.target.classList.contains('rupiah')) rapikanRupiah(e.target);
+            }, true);
+            document.querySelectorAll('input.rupiah').forEach(rapikanRupiah);
 
             const urutkanNama = () => daftar.querySelectorAll('tr').forEach((tr, i) =>
                 tr.querySelectorAll('[data-nama]').forEach(el => el.name = `bon[${i}][${el.dataset.nama}]`));
@@ -224,8 +235,8 @@
             const tombolSimpan = document.getElementById('simpan');
             const arahMasuk = () => document.getElementById('arah-masuk').checked;
             const hitung = () => {
-                const total = [...daftar.querySelectorAll('[data-nama=nominal]')].reduce((s, el) => s + (parseInt(el.value) || 0), 0);
-                const transfer = parseInt(nominalTransfer.value) || 0;
+                const total = [...daftar.querySelectorAll('[data-nama=nominal]')].reduce((s, el) => s + angka(el.value), 0);
+                const transfer = angka(nominalTransfer.value);
                 const selisih = transfer - total;
                 document.getElementById('total-bon').textContent = fmt(total);
                 document.getElementById('nilai-transfer').textContent = fmt(transfer);
@@ -243,6 +254,7 @@
             const tambah = (isi = {}) => {
                 const tr = templat.content.firstElementChild.cloneNode(true);
                 tr.querySelectorAll('[data-nama]').forEach(el => el.value = isi[el.dataset.nama] ?? '');
+                tr.querySelectorAll('input.rupiah').forEach(rapikanRupiah);
                 tr.querySelector('.hapus').addEventListener('click', () => {
                     if (daftar.children.length > 1) { tr.remove(); urutkanNama(); hitung(); }
                 });
@@ -268,7 +280,9 @@
                     kode.classList.toggle('tebakan', !!hasil.length);
                     kode.title = hasil.length ? `Tebakan otomatis (${Math.round(hasil[0][1] * 100)}%) — periksa, atau pilih saran di bawah` : '';
                 }
+                // Saran hanya tampil selama Kode GL masih tebakan; begitu admin menentukan pilihan, saran hilang.
                 saran.innerHTML = '';
+                if (!otomatis) return;
                 hasil.forEach(([k, p]) => {
                     const b = document.createElement('button');
                     b.type = 'button';
@@ -279,7 +293,7 @@
                         kode.dataset.otomatis = '0';
                         kode.classList.remove('tebakan');
                         kode.title = '';
-                        saran.querySelectorAll('button').forEach(x => x.classList.toggle('dipilih', x === b));
+                        saran.innerHTML = '';
                     });
                     saran.appendChild(b);
                 });
@@ -288,10 +302,11 @@
                 const tr = e.target.closest('tr');
                 const nama = e.target.dataset.nama;
                 if (nama === 'kode_gl') {
-                    e.target.dataset.otomatis = '0';
+                    // Diketik sendiri = pilihan admin (saran hilang); dikosongkan = boleh ditebak lagi.
+                    e.target.dataset.otomatis = e.target.value ? '0' : '1';
                     e.target.classList.remove('tebakan');
                     e.target.title = '';
-                    tr.querySelectorAll('.saran-kode button').forEach(b => b.classList.toggle('dipilih', b.textContent.startsWith(e.target.value + ' ')));
+                    tr.querySelector('.saran-kode').innerHTML = '';
                 } else if (nama === 'keterangan' || nama === 'pic') {
                     tebakBaris(tr);
                 }

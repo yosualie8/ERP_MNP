@@ -65,7 +65,8 @@
         /* Penampil foto bon (public/js/penampil-foto.js): zoom & geser seperti Photoshop. */
         .penampil { display: flex; flex-direction: column; border: 1px solid var(--garis); border-radius: 10px; overflow: hidden; background: #2a3440; height: 70vh; min-height: 320px; }
         .penampil:fullscreen { height: 100vh; border-radius: 0; }
-        .penampil.kosong .penampil-kanvas::after { content: 'Belum ada foto'; color: #9aa5b1; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; }
+        .penampil.kosong img { display: none; }
+        .penampil.kosong .penampil-kanvas::after { content: 'Belum ada foto — klik "📷 Pilih / ambil foto"'; color: #9aa5b1; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; }
         .penampil-alat { display: flex; align-items: center; gap: 4px; padding: 6px 8px; background: #1f2933; }
         .penampil-alat button { background: #3e4c59; color: #fff; border: 0; border-radius: 6px; min-width: 32px; padding: 5px 9px; font-size: 14px; cursor: pointer; }
         .penampil-alat button:hover { background: #52606d; }

@@ -92,6 +92,14 @@ class KasInputController extends Controller
      */
     private function bacaInput(Request $request): array|RedirectResponse
     {
+        // Nominal tampil bertitik ribuan di form ("50.000"); simpan sebagai angka bulat.
+        $polos = fn ($v) => is_string($v) ? preg_replace('/\D/', '', $v) : $v;
+        $request->merge([
+            'nominal_masuk' => $polos($request->input('nominal_masuk')),
+            'nominal_transfer' => $polos($request->input('nominal_transfer')),
+            'bon' => array_map(fn ($b) => is_array($b) ? [...$b, 'nominal' => $polos($b['nominal'] ?? null)] : $b, (array) $request->input('bon', [])),
+        ]);
+
         $data = $request->validate([
             'tanggal' => ['required', 'date'],
             'arah' => ['required', 'in:keluar,masuk'],
