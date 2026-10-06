@@ -6,6 +6,7 @@ use App\Models\KasFoto;
 use App\Models\KasTransfer;
 use App\Support\DriveFoto;
 use App\Support\FotoBon;
+use App\Support\TautanBon;
 use Illuminate\Http\Response;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -60,6 +61,7 @@ class KasFotoController extends Controller
             FotoBon::simpan($file, $noId, $transfer->kasBulan->lembar, $request->user()->id);
         }
 
+        TautanBon::pastikanSegera($noId);
         FotoBon::unggahSegera();
 
         return back()->with('success', count($request->file('foto')).' foto bon ditambahkan.');

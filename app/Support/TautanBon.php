@@ -10,24 +10,26 @@ use Illuminate\Support\Str;
 
 /**
  * Kolom Kode Bon (P) di sheet berisi link folder Google Drive tempat foto bon transaksi itu disimpan.
- * Saat Input/Edit: folder dibuat lebih dulu dan link-nya ikut ditulis bersama baris transaksi (langsung, tanpa menunggu).
- * Foto yang ditambah belakangan (halaman 📎) atau gagal dibuatkan folder saat simpan: link ditulis oleh pastikan().
+ * Membuat folder di Drive butuh ±3 detik, jadi tidak dilakukan selagi admin menunggu: baris ditulis dulu dengan Kode Bon biasa,
+ * lalu sesaat setelah halaman terkirim pastikanSegera() membuat folder & menimpa Kode Bon dengan link-nya (±5 detik kemudian).
  */
 class TautanBon
 {
     /**
-     * Pembuat link untuk TulisKasSheet::tulis/ubah: NO ID transfer → link folder, atau null bila Drive belum
-     * terhubung / gagal (Kode Bon lalu diisi kode biasa dan link menyusul lewat pastikan()).
+     * Untuk TulisKasSheet::tulis/ubah: link folder yang sudah dikenal (tanpa memanggil Drive), supaya Edit
+     * tidak menimpa link yang sudah ada dengan kode biasa. Transaksi baru: null → link menyusul lewat pastikanSegera().
      *
      * @return callable(int): ?string
      */
-    public static function pembuat(CarbonInterface $tanggal, ?string $nama, ?string $keterangan): callable
+    public static function pembuat(): callable
     {
-        return function (int $noId) use ($tanggal, $nama, $keterangan): ?string {
-            $drive = DriveFoto::terhubung();
+        return fn (int $noId): ?string => Cache::get("drive-foto-transaksi-{$noId}")['link'] ?? null;
+    }
 
-            return $drive ? rescue(fn () => $drive->folderTransaksi($noId, $tanggal->format('my'), self::namaFolder($noId, $tanggal, $nama, $keterangan))['link']) : null;
-        };
+    /** Buat folder & tulis link-nya di Kode Bon sesaat setelah halaman terkirim ke admin. */
+    public static function pastikanSegera(int $noId): void
+    {
+        dispatch(fn () => rescue(fn () => self::pastikan($noId)))->afterResponse();
     }
 
     public static function namaFolder(int $noId, CarbonInterface $tanggal, ?string $nama, ?string $keterangan): string

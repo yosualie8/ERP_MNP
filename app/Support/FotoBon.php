@@ -52,7 +52,8 @@ class FotoBon
         $judul = trim("{$foto->no_id} - ".($t?->tanggal?->format('Y-m-d') ?? $foto->lembar).' - '
             .Str::limit(preg_replace('/[\\\\\/:*?"<>|]+/', ' ', (string) ($t?->keterangan ?: $t?->nama_tujuan)), 60, '')).' - '.$foto->id.'.jpg';
 
-        [$id, $link] = $drive->unggah($foto, $judul);
+        $folder = $drive->folderTransaksi($foto->no_id, $foto->lembar, $t ? TautanBon::namaFolder($foto->no_id, $t->tanggal, $t->nama_tujuan, $t->keterangan) : null);
+        [$id, $link] = $drive->unggah($foto, $judul, $folder['id']);
         $lama = $foto->path;
         $foto->fill(['drive_file_id' => $id, 'drive_link' => $link, 'status_drive' => 'terunggah', 'pesan_drive' => null, 'path' => null])->save();
         Storage::delete($lama);

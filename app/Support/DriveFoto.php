@@ -34,12 +34,12 @@ class DriveFoto
         return $i ? new self(new GoogleSheets($i)) : null;
     }
 
-    /** Unggah file penuh foto ini ke Drive; kembalikan [id, link]. */
-    public function unggah(KasFoto $foto, string $judul): array
+    /** Unggah file penuh foto ini ke folder Drive $folderId; kembalikan [id, link]. */
+    public function unggah(KasFoto $foto, string $judul, string $folderId): array
     {
         $isi = Storage::get($foto->path) ?? throw new RuntimeException("File sementara {$foto->path} tidak ada.");
         $batas = 'mnp-'.Str::random(16);
-        $meta = json_encode(['name' => $judul, 'parents' => [$this->folderTransaksi($foto->no_id, $foto->lembar)['id']]]);
+        $meta = json_encode(['name' => $judul, 'parents' => [$folderId]]);
         $body = "--{$batas}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n{$meta}\r\n"
             ."--{$batas}\r\nContent-Type: image/jpeg\r\n\r\n{$isi}\r\n--{$batas}--";
 
