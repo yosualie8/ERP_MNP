@@ -11,7 +11,8 @@ use Illuminate\Support\Str;
 use RuntimeException;
 
 /**
- * Foto bon di Google Drive perusahaan (folder "Foto Bon MNP", subfolder per lembar mis. "1026").
+ * Foto bon di Google Drive perusahaan: folder "Foto Bon MNP" → subfolder per lembar (mis. "1026") → folder per transaksi
+ * (NO ID transfer). Link folder transaksi itulah yang ditulis di kolom Kode Bon sheet.
  * Memakai koneksi Google "foto" (akun perusahaan, izin Drive) — terpisah dari koneksi sheet kas.
  */
 class DriveFoto
@@ -38,7 +39,7 @@ class DriveFoto
     {
         $isi = Storage::get($foto->path) ?? throw new RuntimeException("File sementara {$foto->path} tidak ada.");
         $batas = 'mnp-'.Str::random(16);
-        $meta = json_encode(['name' => $judul, 'parents' => [$this->folderLembar($foto->lembar)]]);
+        $meta = json_encode(['name' => $judul, 'parents' => [$this->folderTransaksi($foto->no_id, $foto->lembar)['id']]]);
         $body = "--{$batas}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n{$meta}\r\n"
             ."--{$batas}\r\nContent-Type: image/jpeg\r\n\r\n{$isi}\r\n--{$batas}--";
 
@@ -65,6 +66,68 @@ class DriveFoto
         if ($res->status() !== 404) {
             $this->pastikan($res, 'menghapus foto');
         }
+    }
+
+    /**
+     * Folder Drive milik satu transaksi (ditandai appProperties mnp_no_id), dibuat bila belum ada.
+     *
+     * @return array{id: string, link: string}
+     */
+    public function folderTransaksi(int $noId, string $lembar, ?string $nama = null): array
+    {
+        if ($ada = $this->cariFolderTransaksi($noId)) {
+            return $ada;
+        }
+        $baru = $this->google->http(30)->post(self::API.'?supportsAllDrives=true&fields=id,webViewLink', [
+            'name' => $nama ?? (string) $noId, 'mimeType' => self::FOLDER, 'parents' => [$this->folderLembar($lembar)],
+            'appProperties' => ['mnp_no_id' => (string) $noId],
+        ]);
+        $this->pastikan($baru, "membuat folder transaksi {$noId}");
+        $folder = ['id' => $baru->json('id'), 'link' => $baru->json('webViewLink')];
+        Cache::forever("drive-foto-transaksi-{$noId}", $folder);
+
+        return $folder;
+    }
+
+    /** @return array{id: string, link: string}|null */
+    public function cariFolderTransaksi(int $noId): ?array
+    {
+        if ($simpan = Cache::get("drive-foto-transaksi-{$noId}")) {
+            return $simpan;
+        }
+        $q = sprintf("appProperties has { key='mnp_no_id' and value='%d' } and mimeType = '%s' and trashed = false", $noId, self::FOLDER);
+        $res = $this->google->http(30)->get(self::API, ['q' => $q, 'fields' => 'files(id,webViewLink)', 'pageSize' => 1, 'supportsAllDrives' => 'true', 'includeItemsFromAllDrives' => 'true']);
+        $this->pastikan($res, "mencari folder transaksi {$noId}");
+        if (! $res->json('files.0.id')) {
+            return null;
+        }
+        $folder = ['id' => $res->json('files.0.id'), 'link' => $res->json('files.0.webViewLink')];
+        Cache::forever("drive-foto-transaksi-{$noId}", $folder);
+
+        return $folder;
+    }
+
+    /** Folder transaksi ke sampah (saat transaksinya dihapus dari sheet). */
+    public function hapusFolderTransaksi(int $noId): void
+    {
+        if ($folder = $this->cariFolderTransaksi($noId)) {
+            $this->hapus($folder['id']);
+        }
+        Cache::forget("drive-foto-transaksi-{$noId}");
+    }
+
+    /** Pindahkan file ke folder lain (mis. foto lama ke folder transaksinya). */
+    public function pindahkan(string $fileId, string $folderId): void
+    {
+        $lama = $this->google->http(30)->get(self::API."/{$fileId}", ['fields' => 'parents', 'supportsAllDrives' => 'true']);
+        $this->pastikan($lama, 'membaca folder foto');
+        $dari = implode(',', array_diff((array) $lama->json('parents'), [$folderId]));
+        if ($dari === '') {
+            return;
+        }
+        $res = $this->google->http(30)->withBody('{}', 'application/json')
+            ->patch(self::API."/{$fileId}?".http_build_query(['addParents' => $folderId, 'removeParents' => $dari, 'supportsAllDrives' => 'true']));
+        $this->pastikan($res, 'memindahkan foto');
     }
 
     /** Pastikan folder utama bisa ditulis; kembalikan namanya. */

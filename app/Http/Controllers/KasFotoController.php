@@ -60,6 +60,8 @@ class KasFotoController extends Controller
             FotoBon::simpan($file, $noId, $transfer->kasBulan->lembar, $request->user()->id);
         }
 
+        FotoBon::unggahSegera();
+
         return back()->with('success', count($request->file('foto')).' foto bon ditambahkan.');
     }
 

@@ -11,7 +11,7 @@ use RuntimeException;
  * - baris transfer: Tanggal, Nama/No Rek/Bank, Keterangan, Debet atau Kredit; bon pertama di baris yang sama
  * - bon berikutnya di baris di bawahnya (Tanggal + kolom K..Q)
  * - Saldo (I) dan ID TRANSAKSI (R) berupa rumus, NO ID (Q) melanjutkan nomor terakhir
- * - Kode Bon: TTTTBBHH-PIC-NN, ditambah -k bila satu transfer berisi beberapa bon PIC yang sama
+ * - Kode Bon: link folder foto bon di Drive bila transaksinya berfoto; selain itu TTTTBBHH-PIC-NN (+ -k bila satu transfer berisi beberapa bon PIC yang sama)
  * Baris diisi di baris kosong pertama sebelum TOTAL; bila kurang, baris disisipkan di dalam jangkauan TOTAL.
  */
 class TulisKasSheet
@@ -26,14 +26,15 @@ class TulisKasSheet
     /**
      * @param  array{tanggal: CarbonInterface, arah: string, nama_tujuan: ?string, no_rek: ?string, bank: ?string, keterangan: ?string,
      *               nominal_masuk?: int, bon?: array<int, array{nominal: int, pic: ?string, keterangan: ?string, kode_gl: ?string}>, biaya_transfer?: bool}  $input
+     * @param  (callable(int): ?string)|null  $linkBon  NO ID transfer → link folder foto bon di Drive; bila ada, ditulis di kolom Kode Bon
      * @return array{lembar: string, baris_awal: int, baris_akhir: int, no_id: int[]}
      */
-    public function tulis(array $input): array
+    public function tulis(array $input, ?callable $linkBon = null): array
     {
-        return Cache::lock('tulis-kas-sheet', 60)->block(30, fn () => $this->tulisTerkunci($input));
+        return Cache::lock('tulis-kas-sheet', 60)->block(30, fn () => $this->tulisTerkunci($input, $linkBon));
     }
 
-    private function tulisTerkunci(array $input): array
+    private function tulisTerkunci(array $input, ?callable $linkBon): array
     {
         $tanggal = $input['tanggal'];
         $lembar = $tanggal->format('my');
@@ -46,6 +47,8 @@ class TulisKasSheet
         $nilai = $this->sheets->nilai($this->spreadsheetId, [$lembar])[$lembar];
         [$judul, $total, $terakhir] = $this->posisi($nilai, $lembar);
 
+        $noId = $this->noIdBerikut();
+        $input['link_bon'] = $linkBon && $input['arah'] !== 'masuk' ? $linkBon($noId) : null;
         $baris = $this->susunBaris($input, $nilai, $judul, $total);
         $butuh = count($baris);
         $mulai = $terakhir + 1;
@@ -60,7 +63,6 @@ class TulisKasSheet
             $total += $butuh;
         }
 
-        $noId = $this->noIdBerikut();
         $daftarNoId = range($noId, $noId + $butuh - 1);
         $this->sheets->tulis($this->spreadsheetId, $this->dataBlok($lembar, $baris, $mulai, $daftarNoId, $total, self::barisSaldoSebelum($nilai, $mulai, $judul)));
 
@@ -82,12 +84,12 @@ class TulisKasSheet
 
         if ($input['tanggal']->format('my') !== $lembarLama) {
             $hapus = (new HapusKasSheet($this->sheets, $this->spreadsheetId))->hapus($t, (bool) $biaya);
-            $tulis = $this->tulis($input);
+            $tulis = $this->tulis($input, $linkBon);
 
             return [...$tulis, 'lembar_lama' => $lembarLama, 'sebelum' => $hapus['isi']];
         }
 
-        return Cache::lock('tulis-kas-sheet', 60)->block(30, function () use ($t, $input, $lembarLama, $biaya) {
+        return Cache::lock('tulis-kas-sheet', 60)->block(30, function () use ($t, $input, $lembarLama, $biaya, $linkBon) {
             $lembar = $lembarLama;
             $sheetId = collect($this->sheets->info($this->spreadsheetId)['sheets'])->firstWhere('properties.title', $lembar)['properties']['sheetId']
                 ?? throw new RuntimeException("Lembar {$lembar} tidak ditemukan di sheet.");
@@ -110,6 +112,7 @@ class TulisKasSheet
                     $nnTetap[strtolower($m[1])] ??= (int) $m[2];
                 }
             }
+            $input['link_bon'] = $linkBon && $input['arah'] !== 'masuk' ? $linkBon($t->no_id) : null;
             $baris = $this->susunBaris($input, $nilai, $judul, $total, range($dari, $sampai), $nnTetap);
             $n = count($baris);
             $m = $sampai - $dari + 1;
@@ -263,7 +266,7 @@ class TulisKasSheet
         $baris = [];
         foreach ($bon as $i => $b) {
             $sel = $i === 0 ? $kepala + [7 => array_sum(array_column($bon, 'nominal'))] : [1 => $tgl];
-            $baris[] = $sel + [10 => (int) $b['nominal'], 11 => $teks($b['pic']), 12 => $teks($b['keterangan']), 14 => $teks($b['kode_gl']), 15 => $kodeBon[$i]];
+            $baris[] = $sel + [10 => (int) $b['nominal'], 11 => $teks($b['pic']), 12 => $teks($b['keterangan']), 14 => $teks($b['kode_gl']), 15 => $input['link_bon'] ?? $kodeBon[$i]];
         }
 
         if (! empty($input['biaya_transfer'])) {

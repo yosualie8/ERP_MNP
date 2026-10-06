@@ -5,12 +5,13 @@ namespace App\Support;
 use App\Models\KasFoto;
 use App\Models\KasTransfer;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 /**
  * Foto bon: file penuh disimpan sementara di server lalu dipindah ke Google Drive perusahaan
- * (mnp:unggah-foto-drive, tiap menit). Server hanya menyimpan pratinjau kecil untuk tampilan cepat.
+ * (mnp:unggah-foto-drive: langsung setelah disimpan, dan tiap menit sebagai cadangan). Server hanya menyimpan pratinjau kecil untuk tampilan cepat.
  * Foto biasanya sudah diperkecil di browser sebelum diunggah (sisi terpanjang 2000 px).
  */
 class FotoBon
@@ -71,8 +72,31 @@ class FotoBon
     {
         $foto = KasFoto::where('no_id', $noId)->get();
         $foto->each(fn ($f) => self::hapus($f));
+        if ($drive = DriveFoto::terhubung()) {
+            rescue(fn () => $drive->hapusFolderTransaksi($noId));
+        }
 
         return $foto->count();
+    }
+
+    /** Unggah ke Drive sesaat setelah halaman selesai dikirim ke admin — tidak menambah waktu tunggu simpan. */
+    public static function unggahSegera(): void
+    {
+        dispatch(fn () => Artisan::call('mnp:unggah-foto-drive'))->afterResponse();
+    }
+
+    /** Transaksi pindah bulan (NO ID baru): foto yang sudah di Drive dipindah ke folder transaksi barunya. */
+    public static function pindahFolderSegera(int $noIdLama, int $noIdBaru): void
+    {
+        dispatch(function () use ($noIdLama, $noIdBaru) {
+            if (! ($drive = DriveFoto::terhubung())) {
+                return;
+            }
+            foreach (KasFoto::where('no_id', $noIdBaru)->whereNotNull('drive_file_id')->get() as $f) {
+                rescue(fn () => $drive->pindahkan($f->drive_file_id, $drive->folderTransaksi($noIdBaru, $f->lembar)['id']));
+            }
+            rescue(fn () => $drive->hapusFolderTransaksi($noIdLama));
+        })->afterResponse();
     }
 
     /**

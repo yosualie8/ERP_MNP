@@ -15,6 +15,7 @@ use Illuminate\Support\Facades\Cache;
 use App\Support\GoogleSheets;
 use App\Support\HapusKasSheet;
 use App\Support\ImporKas;
+use App\Support\TautanBon;
 use App\Support\TulisKasSheet;
 use App\Support\UraiKodeGl;
 use Illuminate\Http\RedirectResponse;
@@ -162,7 +163,9 @@ class KasInputController extends Controller
         $tanggal = $input['tanggal'];
 
         try {
-            $hasil = (new TulisKasSheet(GoogleSheets::wajib()))->tulis($input);
+            // Ada foto: folder Drive transaksi dibuat dulu, link-nya langsung ditulis di kolom Kode Bon.
+            $linkBon = $request->file('foto') ? TautanBon::pembuat($tanggal, $input['nama_tujuan'], $input['keterangan']) : null;
+            $hasil = (new TulisKasSheet(GoogleSheets::wajib()))->tulis($input, $linkBon);
         } catch (\Throwable $e) {
             report($e);
 
@@ -174,6 +177,10 @@ class KasInputController extends Controller
         foreach ($request->file('foto', []) as $file) {
             FotoBon::simpan($file, $hasil['no_id'][0], $hasil['lembar'], $request->user()->id);
             $jumlahFoto++;
+        }
+
+        if ($jumlahFoto) {
+            FotoBon::unggahSegera();
         }
 
         $nilai = $input['arah'] === 'masuk' ? $input['nominal_masuk'] : array_sum(array_column($input['bon'], 'nominal'));
@@ -279,7 +286,9 @@ class KasInputController extends Controller
         $ringkasLama = $this->ringkasan($t);
 
         try {
-            $hasil = (new TulisKasSheet(GoogleSheets::wajib()))->ubah($t, $input);
+            $adaFoto = $request->file('foto') || KasFoto::where('no_id', $noId)->exists();
+            $linkBon = $adaFoto ? TautanBon::pembuat($input['tanggal'], $input['nama_tujuan'], $input['keterangan']) : null;
+            $hasil = (new TulisKasSheet(GoogleSheets::wajib()))->ubah($t, $input, $linkBon);
         } catch (\Throwable $e) {
             report($e);
 
@@ -289,11 +298,15 @@ class KasInputController extends Controller
         // Foto lama ikut pindah bila NO ID baris transfer berubah (pindah bulan); foto baru ditautkan ke NO ID transfer.
         if ($hasil['no_id'][0] !== $noId) {
             KasFoto::where('no_id', $noId)->update(['no_id' => $hasil['no_id'][0], 'lembar' => $hasil['lembar']]);
+            FotoBon::pindahFolderSegera($noId, $hasil['no_id'][0]);
         }
         $jumlahFoto = 0;
         foreach ($request->file('foto', []) as $file) {
             FotoBon::simpan($file, $hasil['no_id'][0], $hasil['lembar'], $request->user()->id);
             $jumlahFoto++;
+        }
+        if ($jumlahFoto) {
+            FotoBon::unggahSegera();
         }
 
         KasRiwayat::create([
