@@ -113,6 +113,9 @@ class TulisKasSheet
                 }
             }
             $input['link_bon'] = $linkBon && $input['arah'] !== 'masuk' ? $linkBon($t->no_id) : null;
+            // Link hanya di detail pertama (detail berikutnya tetap kode biasa) → pertahankan cara itu.
+            $input['link_hanya_pertama'] = TautanBon::adalahLink($sebelum[0][15] ?? '')
+                && trim((string) ($sebelum[1][15] ?? '')) !== '' && ! TautanBon::adalahLink($sebelum[1][15] ?? '');
             $baris = $this->susunBaris($input, $nilai, $judul, $total, range($dari, $sampai), $nnTetap);
             $n = count($baris);
             $m = $sampai - $dari + 1;
@@ -266,7 +269,7 @@ class TulisKasSheet
         $baris = [];
         foreach ($bon as $i => $b) {
             $sel = $i === 0 ? $kepala + [7 => array_sum(array_column($bon, 'nominal'))] : [1 => $tgl];
-            $baris[] = $sel + [10 => (int) $b['nominal'], 11 => $teks($b['pic']), 12 => $teks($b['keterangan']), 14 => $teks($b['kode_gl']), 15 => $input['link_bon'] ?? $kodeBon[$i]];
+            $baris[] = $sel + [10 => (int) $b['nominal'], 11 => $teks($b['pic']), 12 => $teks($b['keterangan']), 14 => $teks($b['kode_gl']), 15 => ($i === 0 || empty($input['link_hanya_pertama']) ? $input['link_bon'] ?? null : null) ?? $kodeBon[$i]];
         }
 
         if (! empty($input['biaya_transfer'])) {

@@ -15,7 +15,7 @@ use Illuminate\Support\Facades\Cache;
  */
 class UnggahFotoDrive extends Command
 {
-    protected $signature = 'mnp:unggah-foto-drive {--batas=20 : Jumlah foto per jalan} {--no-id=* : Hanya tulis link Kode Bon untuk NO ID ini (mis. foto lama)}';
+    protected $signature = 'mnp:unggah-foto-drive {--batas=20 : Jumlah foto per jalan} {--no-id=* : Tulis juga link Kode Bon untuk NO ID ini (mis. foto lama)} {--hanya-pertama=* : NO ID yang link-nya cukup di detail pertama}';
 
     protected $description = 'Unggah foto bon yang menunggu ke Google Drive perusahaan, hapus file penuhnya dari server, dan tulis link folder di Kode Bon';
 
@@ -52,7 +52,7 @@ class UnggahFotoDrive extends Command
             $noIds = $foto->where('status_drive', 'terunggah')->pluck('no_id')->merge($this->option('no-id'))->map(fn ($n) => (int) $n)->unique();
             foreach ($noIds as $noId) {
                 try {
-                    if ($n = TautanBon::pastikan($noId)) {
+                    if ($n = TautanBon::pastikan($noId, in_array($noId, array_map('intval', $this->option('hanya-pertama')), true))) {
                         $this->info("NO ID {$noId}: link folder ditulis di {$n} sel Kode Bon");
                     }
                     $this->tautkanFotoLama($drive, $noId);

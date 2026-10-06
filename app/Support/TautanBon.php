@@ -47,17 +47,23 @@ class TautanBon
     /**
      * Pastikan semua baris detail transaksi NO ID ini berisi link folder fotonya di kolom Kode Bon.
      * Baris di sheet dicocokkan lewat NO ID (Q) supaya tidak menimpa baris lain bila sheet bergeser sejak impor terakhir.
+     * $hanyaPertama: link hanya di detail pertama, Kode Bon detail lainnya dibiarkan (mis. NO ID 30956 dengan 91 detail).
+     * Transaksi yang detail pertamanya sudah ber-link sementara detail lain masih kode biasa dianggap memilih cara itu.
      *
      * @return int jumlah sel yang ditulis
      */
-    public static function pastikan(int $noId): int
+    public static function pastikan(int $noId, bool $hanyaPertama = false): int
     {
         $t = KasTransfer::where('no_id', $noId)->with('bon', 'kasBulan')->first();
         if (! $t || $t->bon->isEmpty() || ! ($drive = DriveFoto::terhubung())) {
             return 0;
         }
         $folder = $drive->folderTransaksi($noId, $t->kasBulan->lembar, self::namaFolder($noId, $t->tanggal, $t->nama_tujuan, $t->keterangan));
-        $perlu = $t->bon->filter(fn (KasBon $b) => trim((string) $b->kode_bon) !== $folder['link']);
+        $bon = $t->bon->sortBy('baris')->values();
+        if ($hanyaPertama || trim((string) $bon[0]->kode_bon) === $folder['link']) {
+            $bon = $bon->take(1);
+        }
+        $perlu = $bon->filter(fn (KasBon $b) => trim((string) $b->kode_bon) !== $folder['link']);
         if ($perlu->isEmpty()) {
             return 0;
         }
