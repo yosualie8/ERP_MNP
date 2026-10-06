@@ -15,6 +15,10 @@
         .pilihan input:checked + label { background: var(--aksen); color: #fff; }
         table.bon td { padding: 4px; vertical-align: top; border-bottom: 0; }
         table.bon th { padding: 4px; }
+        .tambah-detail { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 6px; }
+        .tambah-detail label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--teks); }
+        .tambah-detail #jumlah-detail { width: 56px; text-align: center; padding: 6px; border: 1px solid var(--garis); border-radius: 6px; font-size: 14px; }
+        .tambah-detail .redup { font-size: 12px; }
         .hapus { background: none; border: 0; color: var(--merah); cursor: pointer; font-size: 18px; line-height: 1; padding: 8px 6px; }
         .total-bon { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
         .galat-isian { color: var(--merah); font-size: 13px; margin: 4px 0 0; }
@@ -163,7 +167,13 @@
                 </thead>
                 <tbody id="daftar-bon"></tbody>
             </table>
-            <button type="button" class="tombol polos" id="tambah-bon" style="margin-top: 6px;">+ Tambah detail</button>
+            <div class="tambah-detail">
+                <button type="button" class="tombol polos" id="tambah-bon">+ Tambah detail</button>
+                <label>Jumlah Transaksi Detail
+                    <input type="text" id="jumlah-detail" value="1" inputmode="numeric" autocomplete="off" maxlength="3" title="Berapa baris detail yang ditambahkan sekali klik">
+                </label>
+                <span class="redup">Enter / ↓ pindah ke baris bawah, ↑ ke baris atas (kolom sama), seperti Excel.</span>
+            </div>
             <datalist id="daftar-pic">
                 @foreach ($pic as $p)
                     <option value="{{ $p }}">
@@ -314,20 +324,50 @@
                 }
             });
 
+            // "Jumlah Transaksi Detail": hanya angka (1–100); sekali klik Tambah detail menambah sebanyak itu, lalu kembali ke 1.
+            const jumlahDetail = document.getElementById('jumlah-detail');
+            jumlahDetail.addEventListener('input', () => { jumlahDetail.value = jumlahDetail.value.replace(/\D/g, ''); });
+            jumlahDetail.addEventListener('focus', () => jumlahDetail.select());
+            jumlahDetail.addEventListener('keydown', e => {
+                if (e.key === 'Enter') { e.preventDefault(); document.getElementById('tambah-bon').click(); }
+            });
             document.getElementById('tambah-bon').addEventListener('click', () => {
-                const sebelumnya = daftar.lastElementChild;
-                // Baris berikutnya biasanya PIC & Kode GL yang sama (mis. reimburse satu orang);
-                // Kode GL salinan ditandai otomatis supaya diganti tebakan bila keterangannya beda jenis.
-                const tr = tambah(sebelumnya ? {
-                    pic: sebelumnya.querySelector('[data-nama=pic]').value,
-                    kode_gl: sebelumnya.querySelector('[data-nama=kode_gl]').value,
-                } : {});
-                const kode = tr.querySelector('[data-nama=kode_gl]');
-                if (kode.value) {
-                    kode.dataset.otomatis = '1';
-                    kode.classList.add('tebakan');
+                const n = Math.min(100, Math.max(1, parseInt(jumlahDetail.value, 10) || 1));
+                let pertama = null;
+                for (let k = 0; k < n; k++) {
+                    const sebelumnya = daftar.lastElementChild;
+                    // Baris berikutnya biasanya PIC & Kode GL yang sama (mis. reimburse satu orang);
+                    // Kode GL salinan ditandai otomatis supaya diganti tebakan bila keterangannya beda jenis.
+                    const tr = tambah(sebelumnya ? {
+                        pic: sebelumnya.querySelector('[data-nama=pic]').value,
+                        kode_gl: sebelumnya.querySelector('[data-nama=kode_gl]').value,
+                    } : {});
+                    const kode = tr.querySelector('[data-nama=kode_gl]');
+                    if (kode.value) {
+                        kode.dataset.otomatis = '1';
+                        kode.classList.add('tebakan');
+                    }
+                    pertama ??= tr;
                 }
-                tr.querySelector('[data-nama=nominal]').focus();
+                jumlahDetail.value = '1';
+                pertama.querySelector('[data-nama=nominal]').focus();
+            });
+
+            // Seperti Excel: Enter / ↓ ke baris bawah, Shift+Enter / ↑ ke baris atas, di kolom yang sama (isi sel terpilih,
+            // jadi langsung mengetik = menimpa). Enter di tabel detail tidak menyimpan form. Alt+↓ tetap membuka daftar PIC/Kode GL.
+            daftar.addEventListener('keydown', e => {
+                const el = e.target;
+                if (!el.dataset?.nama || e.altKey || e.ctrlKey || e.metaKey || e.isComposing) return;
+                const turun = e.key === 'ArrowDown' || (e.key === 'Enter' && !e.shiftKey);
+                const naik = e.key === 'ArrowUp' || (e.key === 'Enter' && e.shiftKey);
+                if (!turun && !naik) return;
+                e.preventDefault();
+                const tujuan = (turun ? el.closest('tr').nextElementSibling : el.closest('tr').previousElementSibling)
+                    ?.querySelector(`[data-nama="${el.dataset.nama}"]`);
+                if (tujuan) {
+                    tujuan.focus();
+                    tujuan.select();
+                }
             });
             (awal.length ? awal : [{}]).forEach(b => tambah(b));
 
