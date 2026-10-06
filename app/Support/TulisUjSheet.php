@@ -35,13 +35,22 @@ class TulisUjSheet
      */
     public function tulis(array $input): array
     {
-        // Dua panggilan Google saja: baca A..H (cari ID UJ terbesar & baris terakhir), lalu tulis nilai + format sekaligus.
+        // ID UJ & letak baris dari database MNP (bukan dari sheet). Sheet hanya dicek beberapa baris tujuannya masih kosong,
+        // supaya ketikan admin langsung di sheet tidak tertimpa; bila tidak kosong, baru seluruh kolom dibaca.
         return Cache::lock('tulis-uj-sheet', 120)->block(60, function () use ($input) {
-            [$akhir, $max] = $this->ujung();
+            $max = self::idTerbesar();
+            $akhir = self::barisTerakhir();
+            $jumlah = count($input['detail']) + ($input['biaya_transfer'] ? 1 : 0);
+            if ($akhir === null || ! $this->kosong($akhir + 1, $akhir + $jumlah + 2)) {
+                [$akhir, $maxSheet] = $this->ujung();
+                $max = max($max, $maxSheet);
+            }
             $ids = range($max + 1, $max + count($input['detail']));
             $mulai = $akhir + 1;
             $baris = $this->susun($input, $ids, $mulai);
             $sampai = $mulai + count($baris) - 1;
+            Cache::forever('uj-akhir', $sampai);
+            Cache::forever('uj-max', end($ids));
 
             $g = $this->grid();
             $requests = [];
@@ -70,10 +79,11 @@ class TulisUjSheet
             $idLama = $t->detail->reject->biaya_transfer->map(fn (UjDetail $d) => KasSeabank::noUj($d->id_uj))->filter()->values()->all();
             $ids = array_slice($idLama, 0, count($input['detail']));
             if (count($ids) < count($input['detail'])) {
-                [, $max] = $this->ujung();
+                $max = self::idTerbesar();
                 while (count($ids) < count($input['detail'])) {
                     $ids[] = ++$max;
                 }
+                Cache::forever('uj-max', $max);
             }
             $baris = $this->susun($input, $ids, $dari);
             $n = count($baris);
@@ -88,6 +98,7 @@ class TulisUjSheet
             // Satu panggilan: susun ulang baris + isi + format; kolom Bon dikosongkan (chip ditulis ulang bila berfoto).
             $this->sheets->permintaan($this->id, [...$requests, ...$this->isiSel($sheetId, $dari, $baris, true)], 'mengubah Kas Seabank');
             Cache::forget("uj-grid-{$this->id}");
+            self::geserAkhir($sampai, $n - $m);
 
             return ['baris_awal' => $dari, 'baris_akhir' => $dari + $n - 1, 'no_uj' => $ids[0], 'ids' => $ids, 'geser' => $n - $m,
                 'sampai_lama' => $sampai, 'sebelum' => $sebelum, 'mentah' => self::keMentah($baris)];
@@ -101,6 +112,7 @@ class TulisUjSheet
             [$dari, $sampai, $sebelum] = $this->periksaBlok($t);
             $this->sheets->hapusBaris($this->id, $this->grid()['sheetId'], $dari, $sampai);
             Cache::forget("uj-grid-{$this->id}");
+            self::geserAkhir($sampai, -($sampai - $dari + 1));
 
             return ['baris_awal' => $dari, 'baris_akhir' => $sampai, 'sebelum' => $sebelum];
         });
@@ -171,8 +183,47 @@ class TulisUjSheet
         return $baris;
     }
 
+    /** Nomor ID UJ terbesar menurut database MNP (termasuk ID yang dicatat saat impor terakhir dari sheet). */
+    public static function idTerbesar(): int
+    {
+        $db = (int) UjDetail::where('id_uj', 'like', 'UJ%')->selectRaw("MAX(CAST(REGEXP_REPLACE(id_uj, '[^0-9]', '') AS UNSIGNED)) as m")->value('m');
+
+        return max($db, (int) Cache::get('uj-max', 0));
+    }
+
+    /** Baris data terakhir di lembar menurut catatan aplikasi (impor terakhir & tulisan aplikasi sesudahnya). */
+    public static function barisTerakhir(): ?int
+    {
+        $db = UjTransaksi::max('baris_akhir');
+        $catat = Cache::get('uj-akhir');
+
+        return $db === null && $catat === null ? null : max((int) $db, (int) $catat);
+    }
+
+    /** Catatan baris terakhir ikut bergeser bila baris disisip/dihapus di atasnya. */
+    private static function geserAkhir(int $sampaiLama, int $geser): void
+    {
+        $akhir = Cache::get('uj-akhir');
+        if ($geser !== 0 && $akhir !== null && $akhir >= $sampaiLama) {
+            Cache::forever('uj-akhir', $akhir + $geser);
+        }
+    }
+
+    /** Baris $dari..$sampai di kolom A..H masih kosong (satu bacaan kecil). */
+    private function kosong(int $dari, int $sampai): bool
+    {
+        $l = KasSeabank::LEMBAR;
+        foreach ($this->sheets->nilaiMentah($this->id, ["{$l}!A{$dari}:H{$sampai}"])["{$l}!A{$dari}:H{$sampai}"] as $r) {
+            if (KasSeabank::adaData($r)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /**
-     * Satu kali baca kolom A..H: baris data terakhir dan nomor ID UJ terbesar.
+     * Cadangan: baca kolom A..H seluruhnya untuk baris data terakhir dan nomor ID UJ terbesar.
      *
      * @return array{0: int, 1: int}
      */

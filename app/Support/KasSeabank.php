@@ -145,6 +145,10 @@ class KasSeabank
         $mentah = $sheets->nilaiMentah(self::id(), ["{$l}!A2:N"])["{$l}!A2:N"];
         $bon = $sheets->nilai(self::id(), ["{$l}!Q2:Q"])["{$l}!Q2:Q"];
         $transaksi = self::urai($mentah, $bon, 2);
+        // Catat baris terakhir & ID UJ terbesar seluruh lembar (juga baris sesudah batas tanggal yang tidak diimpor),
+        // supaya Input UJ tidak perlu membaca sheet untuk menentukan nomor & letak baris berikutnya.
+        Cache::forever('uj-akhir', max(array_map(fn ($t) => $t['master']['baris_akhir'], $transaksi) ?: [1]));
+        Cache::forever('uj-max', max(array_map(fn ($d) => self::noUj($d['id_uj']) ?? 0, array_merge(...array_map(fn ($t) => $t['detail'], $transaksi))) ?: [0]));
 
         // Data dari sheet hanya sampai tanggal batas (data admin sesudahnya belum dipakai), kecuali yang ditulis lewat aplikasi.
         $batas = config('mnp.uj_impor_sampai');
