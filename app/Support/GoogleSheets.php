@@ -83,6 +83,28 @@ class GoogleSheets
     }
 
     /**
+     * Isi mentah: angka sebagai angka, tanggal sebagai nomor seri (hari sejak 30-12-1899), rumus sebagai hasilnya.
+     *
+     * @return array<string, array<int, array<int, mixed>>>
+     */
+    public function nilaiMentah(string $id, array $ranges): array
+    {
+        $query = http_build_query(['valueRenderOption' => 'UNFORMATTED_VALUE', 'dateTimeRenderOption' => 'SERIAL_NUMBER']);
+        foreach ($ranges as $r) {
+            $query .= '&ranges='.rawurlencode(self::kutip($r));
+        }
+        $res = $this->api()->get(self::API."/{$id}/values:batchGet?{$query}");
+        $this->pastikan($res, 'membaca isi sheet');
+
+        $hasil = [];
+        foreach ($res->json('valueRanges', []) as $i => $vr) {
+            $hasil[$ranges[$i]] = $vr['values'] ?? [];
+        }
+
+        return $hasil;
+    }
+
+    /**
      * Tulis beberapa range sekaligus, diisi seperti diketik di sheet (USER_ENTERED: rumus & tanggal dikenali).
      *
      * @param  array<string, array<int, array<int, mixed>>>  $data  range A1 => baris

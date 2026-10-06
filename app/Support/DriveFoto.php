@@ -68,52 +68,62 @@ class DriveFoto
         }
     }
 
+    /** Kunci appProperties & cache folder per transaksi: Kas Harian (NO ID) dan Kas UJ (nomor ID UJ) terpisah. */
+    public static function kunciFolder(int $noId, string $sumber = 'kas'): array
+    {
+        return $sumber === 'uj'
+            ? ['mnp_uj', "drive-foto-uj-{$noId}"]
+            : ['mnp_no_id', "drive-foto-transaksi-{$noId}"];
+    }
+
     /**
-     * Folder Drive milik satu transaksi (ditandai appProperties mnp_no_id), dibuat bila belum ada.
+     * Folder Drive milik satu transaksi (ditandai appProperties), dibuat bila belum ada.
      *
      * @return array{id: string, link: string, nama: string}
      */
-    public function folderTransaksi(int $noId, string $lembar, ?string $nama = null): array
+    public function folderTransaksi(int $noId, string $lembar, ?string $nama = null, string $sumber = 'kas'): array
     {
-        if ($ada = $this->cariFolderTransaksi($noId)) {
+        if ($ada = $this->cariFolderTransaksi($noId, $sumber)) {
             return $ada;
         }
+        [$prop, $cache] = self::kunciFolder($noId, $sumber);
         $baru = $this->google->http(30)->post(self::API.'?supportsAllDrives=true&fields=id,webViewLink,name', [
             'name' => $nama ?? (string) $noId, 'mimeType' => self::FOLDER, 'parents' => [$this->folderLembar($lembar)],
-            'appProperties' => ['mnp_no_id' => (string) $noId],
+            'appProperties' => [$prop => (string) $noId],
         ]);
         $this->pastikan($baru, "membuat folder transaksi {$noId}");
         $folder = ['id' => $baru->json('id'), 'link' => $baru->json('webViewLink'), 'nama' => $baru->json('name')];
-        Cache::forever("drive-foto-transaksi-{$noId}", $folder);
+        Cache::forever($cache, $folder);
 
         return $folder;
     }
 
     /** @return array{id: string, link: string, nama: string}|null */
-    public function cariFolderTransaksi(int $noId): ?array
+    public function cariFolderTransaksi(int $noId, string $sumber = 'kas'): ?array
     {
-        if (($simpan = Cache::get("drive-foto-transaksi-{$noId}")) && isset($simpan['nama'])) {
+        [$prop, $cache] = self::kunciFolder($noId, $sumber);
+        if (($simpan = Cache::get($cache)) && isset($simpan['nama'])) {
             return $simpan;
         }
-        $q = sprintf("appProperties has { key='mnp_no_id' and value='%d' } and mimeType = '%s' and trashed = false", $noId, self::FOLDER);
+        $q = sprintf("appProperties has { key='%s' and value='%d' } and mimeType = '%s' and trashed = false", $prop, $noId, self::FOLDER);
         $res = $this->google->http(30)->get(self::API, ['q' => $q, 'fields' => 'files(id,webViewLink,name)', 'pageSize' => 1, 'supportsAllDrives' => 'true', 'includeItemsFromAllDrives' => 'true']);
         $this->pastikan($res, "mencari folder transaksi {$noId}");
         if (! $res->json('files.0.id')) {
             return null;
         }
         $folder = ['id' => $res->json('files.0.id'), 'link' => $res->json('files.0.webViewLink'), 'nama' => $res->json('files.0.name')];
-        Cache::forever("drive-foto-transaksi-{$noId}", $folder);
+        Cache::forever($cache, $folder);
 
         return $folder;
     }
 
     /** Folder transaksi ke sampah (saat transaksinya dihapus dari sheet). */
-    public function hapusFolderTransaksi(int $noId): void
+    public function hapusFolderTransaksi(int $noId, string $sumber = 'kas'): void
     {
-        if ($folder = $this->cariFolderTransaksi($noId)) {
+        if ($folder = $this->cariFolderTransaksi($noId, $sumber)) {
             $this->hapus($folder['id']);
         }
-        Cache::forget("drive-foto-transaksi-{$noId}");
+        Cache::forget(self::kunciFolder($noId, $sumber)[1]);
     }
 
     /** Pindahkan file ke folder lain (mis. foto lama ke folder transaksinya). */

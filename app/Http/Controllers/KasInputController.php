@@ -282,7 +282,7 @@ class KasInputController extends Controller
             'biaya_transfer' => $biaya ? '1' : '0',
             'nominal_biaya' => $biaya?->kredit ?: TulisKasSheet::BIAYA_TRANSFER,
             'bon' => $t->bon->map(fn ($b) => ['nominal' => $b->nominal, 'pic' => $b->pic, 'keterangan' => $b->keterangan, 'kode_gl' => $b->kodeGl?->kode_asli])->all(),
-            'foto' => KasFoto::where('no_id', $noId)->orderBy('id')->get()
+            'foto' => KasFoto::kas()->where('no_id', $noId)->orderBy('id')->get()
                 ->map(fn ($f) => ['penuh' => route('kas.foto', $f), 'kecil' => route('kas.foto', ['foto' => $f, 'ukuran' => 'kecil'])])->all(),
         ];
 
@@ -308,7 +308,7 @@ class KasInputController extends Controller
         }
 
         try {
-            $adaFoto = $request->file('foto') || KasFoto::where('no_id', $noId)->exists();
+            $adaFoto = $request->file('foto') || KasFoto::kas()->where('no_id', $noId)->exists();
             // Link folder yang sudah ada tetap di Kode Bon (tidak ditimpa kode biasa).
             $hasil = (new TulisKasSheet(GoogleSheets::wajib()))->ubah($t, $input, $adaFoto ? TautanBon::pembuat() : null);
         } catch (\Throwable $e) {
@@ -322,7 +322,7 @@ class KasInputController extends Controller
         // Foto lama ikut pindah bila NO ID baris transfer berubah (pindah bulan); foto baru ditautkan ke NO ID transfer.
         $noIdBaru = $hasil['no_id'][0];
         if ($noIdBaru !== $noId) {
-            KasFoto::where('no_id', $noId)->update(['no_id' => $noIdBaru, 'lembar' => $hasil['lembar']]);
+            KasFoto::kas()->where('no_id', $noId)->update(['no_id' => $noIdBaru, 'lembar' => $hasil['lembar']]);
         }
         $jumlahFoto = 0;
         foreach ($request->file('foto', []) as $file) {

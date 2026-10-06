@@ -49,7 +49,7 @@ class KasFotoController extends Controller
 
         return view('kas.bon', [
             'transfer' => $transfer,
-            'foto' => KasFoto::where('no_id', $noId)->with('user')->orderBy('id')->get(),
+            'foto' => KasFoto::kas()->where('no_id', $noId)->with('user')->orderBy('id')->get(),
         ]);
     }
 

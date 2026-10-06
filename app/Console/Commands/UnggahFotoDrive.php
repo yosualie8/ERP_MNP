@@ -6,6 +6,7 @@ use App\Models\KasFoto;
 use App\Support\DriveFoto;
 use App\Support\FotoBon;
 use App\Support\TautanBon;
+use App\Support\TautanUj;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 
@@ -49,7 +50,17 @@ class UnggahFotoDrive extends Command
             }
 
             // Foto yang ditambah lewat halaman 📎, atau folder yang gagal dibuat saat simpan: link menyusul di sini.
-            $noIds = $foto->where('status_drive', 'terunggah')->pluck('no_id')->merge($this->option('no-id'))->map(fn ($n) => (int) $n)->unique();
+            $terunggah = $foto->where('status_drive', 'terunggah');
+            foreach ($terunggah->where('sumber', 'uj')->pluck('no_id')->unique() as $noUj) {
+                try {
+                    if ($n = TautanUj::pastikan((int) $noUj)) {
+                        $this->info("UJ-{$noUj}: chip folder ditulis di {$n} sel Bon");
+                    }
+                } catch (\Throwable $e) {
+                    $this->warn("UJ-{$noUj}: chip Bon gagal ditulis: {$e->getMessage()}");
+                }
+            }
+            $noIds = $terunggah->where('sumber', 'kas')->pluck('no_id')->merge($this->option('no-id'))->map(fn ($n) => (int) $n)->unique();
             foreach ($noIds as $noId) {
                 try {
                     if ($n = TautanBon::pastikan($noId, in_array($noId, array_map('intval', $this->option('hanya-pertama')), true))) {
@@ -70,7 +81,7 @@ class UnggahFotoDrive extends Command
     /** Foto yang diunggah sebelum ada folder per transaksi (langsung di folder lembar) dipindah ke folder transaksinya. */
     private function tautkanFotoLama(DriveFoto $drive, int $noId): void
     {
-        foreach (KasFoto::where('no_id', $noId)->whereNotNull('drive_file_id')->get() as $f) {
+        foreach (KasFoto::kas()->where('no_id', $noId)->whereNotNull('drive_file_id')->get() as $f) {
             $drive->pindahkan($f->drive_file_id, $drive->folderTransaksi($noId, $f->lembar)['id']);
         }
     }

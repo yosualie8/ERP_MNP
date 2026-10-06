@@ -13,4 +13,6 @@ return [
     'drive_foto_email' => env('MNP_DRIVE_FOTO_EMAIL', 'ptmultiniagaputra@gmail.com'),
     // Spreadsheet "(0) Transaksi Belum Reimburse V3": lembar "Mutasi Reimburse" = cermin baris Kas Harian (satu baris per detail).
     'sheet_reimburse' => env('MNP_SHEET_REIMBURSE', '1FZJqYd241-sz1XGsybeYH-jXfiMqGoE6wRY1lXiBTxk'),
+    // Spreadsheet "KAS MMP Uang Jalan dan UM": lembar "Kas Seabank" = kas uang jalan dump truck (rekening Seabank).
+    'sheet_uj' => env('MNP_SHEET_UJ', '10Gode9eGhAKWCzUzjV_shkj1GZwZDo5uN7qe237nTUY'),
 ];

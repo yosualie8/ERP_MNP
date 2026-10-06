@@ -20,7 +20,7 @@ class FotoBon
 
     public const SISI_KECIL = 480;
 
-    public static function simpan(UploadedFile $file, int $noId, string $lembar, ?int $userId): KasFoto
+    public static function simpan(UploadedFile $file, int $noId, string $lembar, ?int $userId, string $sumber = 'kas'): KasFoto
     {
         $dasar = "{$lembar}/{$noId}-".Str::lower(Str::random(8));
         [$penuh, $ext] = self::ubah((string) file_get_contents($file->getRealPath()), self::MAKS_SISI, 82, $file);
@@ -29,6 +29,7 @@ class FotoBon
         Storage::put("bon-kecil/{$dasar}.jpg", $kecil);
 
         return KasFoto::create([
+            'sumber' => $sumber,
             'no_id' => $noId,
             'lembar' => $lembar,
             'path' => "bon-sementara/{$dasar}.{$ext}",
@@ -48,15 +49,25 @@ class FotoBon
             $foto->path_kecil = preg_replace('#^bon(-sementara)?/#', 'bon-kecil/', preg_replace('/\.\w+$/', '.jpg', $foto->path));
             Storage::put($foto->path_kecil, $kecil);
         }
-        $t = KasTransfer::where('no_id', $foto->no_id)->first();
-        $judul = trim("{$foto->no_id} - ".($t?->tanggal?->format('Y-m-d') ?? $foto->lembar).' - '
-            .Str::limit(preg_replace('/[\\\\\/:*?"<>|]+/', ' ', (string) ($t?->keterangan ?: $t?->nama_tujuan)), 60, '')).' - '.$foto->id.'.jpg';
-
-        $folder = $drive->folderTransaksi($foto->no_id, $foto->lembar, $t ? TautanBon::namaFolder($foto->no_id, $t->tanggal, $t->nama_tujuan, $t->keterangan) : null);
+        [$judul, $folder] = $foto->sumber === 'uj' ? TautanUj::tujuanFoto($foto, $drive) : self::tujuanKas($foto, $drive);
         [$id, $link] = $drive->unggah($foto, $judul, $folder['id']);
         $lama = $foto->path;
         $foto->fill(['drive_file_id' => $id, 'drive_link' => $link, 'status_drive' => 'terunggah', 'pesan_drive' => null, 'path' => null])->save();
         Storage::delete($lama);
+    }
+
+    /**
+     * Nama file & folder Drive foto Kas Harian (folder per NO ID transfer).
+     *
+     * @return array{0: string, 1: array{id: string, link: string, nama: string}}
+     */
+    private static function tujuanKas(KasFoto $foto, DriveFoto $drive): array
+    {
+        $t = KasTransfer::where('no_id', $foto->no_id)->first();
+        $judul = trim("{$foto->no_id} - ".($t?->tanggal?->format('Y-m-d') ?? $foto->lembar).' - '
+            .Str::limit(preg_replace('/[\\\\\/:*?"<>|]+/', ' ', (string) ($t?->keterangan ?: $t?->nama_tujuan)), 60, '')).' - '.$foto->id.'.jpg';
+
+        return [$judul, $drive->folderTransaksi($foto->no_id, $foto->lembar, $t ? TautanBon::namaFolder($foto->no_id, $t->tanggal, $t->nama_tujuan, $t->keterangan) : null)];
     }
 
     public static function hapus(KasFoto $foto): void
@@ -68,13 +79,13 @@ class FotoBon
         $foto->delete();
     }
 
-    /** Hapus semua foto milik NO ID (dipakai saat transfernya dihapus dari sheet). */
-    public static function hapusMilik(int $noId): int
+    /** Hapus semua foto milik NO ID (sumber kas) atau nomor ID UJ (sumber uj), dipakai saat transaksinya dihapus dari sheet. */
+    public static function hapusMilik(int $noId, string $sumber = 'kas'): int
     {
-        $foto = KasFoto::where('no_id', $noId)->get();
+        $foto = KasFoto::where('sumber', $sumber)->where('no_id', $noId)->get();
         $foto->each(fn ($f) => self::hapus($f));
         if ($drive = DriveFoto::terhubung()) {
-            rescue(fn () => $drive->hapusFolderTransaksi($noId));
+            rescue(fn () => $drive->hapusFolderTransaksi($noId, $sumber));
         }
 
         return $foto->count();
@@ -93,7 +104,7 @@ class FotoBon
             if (! ($drive = DriveFoto::terhubung())) {
                 return;
             }
-            foreach (KasFoto::where('no_id', $noIdBaru)->whereNotNull('drive_file_id')->get() as $f) {
+            foreach (KasFoto::kas()->where('no_id', $noIdBaru)->whereNotNull('drive_file_id')->get() as $f) {
                 rescue(fn () => $drive->pindahkan($f->drive_file_id, $drive->folderTransaksi($noIdBaru, $f->lembar)['id']));
             }
             rescue(fn () => $drive->hapusFolderTransaksi($noIdLama));

@@ -60,7 +60,7 @@ class KasController extends Controller
             }
         }
 
-        $jumlahFoto = KasFoto::whereIn('no_id', $transfer->pluck('no_id')->filter())
+        $jumlahFoto = KasFoto::kas()->whereIn('no_id', $transfer->pluck('no_id')->filter())
             ->selectRaw('no_id, COUNT(*) as n')->groupBy('no_id')->pluck('n', 'no_id');
 
         return view('kas.index', compact('daftarBulan', 'bulan', 'transfer', 'q', 'tanggal', 'daftarTanggal', 'punyaBiaya', 'jumlahFoto'));

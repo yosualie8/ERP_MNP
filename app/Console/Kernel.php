@@ -18,6 +18,8 @@ class Kernel extends ConsoleKernel
         $schedule->command('mnp:unggah-foto-drive')->everyMinute()->withoutOverlapping(10);
         // Cadangan: transaksi dari aplikasi yang belum tercermin di Mutasi Reimburse ditambahkan.
         $schedule->command('mnp:sinkron-reimburse')->hourlyAt(10)->withoutOverlapping();
+        // Ketikan admin langsung di lembar Kas Seabank (uang jalan) ikut masuk ke aplikasi.
+        $schedule->command('mnp:impor-uj')->hourlyAt(20)->withoutOverlapping();
     }
 
     /**
