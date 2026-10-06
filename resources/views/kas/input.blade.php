@@ -8,6 +8,10 @@
         .form-kas input[type=text], .form-kas input[type=date], .form-kas input[type=number] {
             width: 100%; padding: 8px 10px; border: 1px solid var(--garis); border-radius: 7px; font-size: 14px; background: #fff; }
         .form-kas input.angka-input { text-align: right; font-variant-numeric: tabular-nums; }
+        /* Sel transaksi detail: garis lebih gelap, dan sel yang sedang aktif ditandai tegas (garis hijau tebal + latar terang) seperti Excel. */
+        table.bon input[data-nama] { border-color: #9aa5b1; }
+        .form-kas input[type=text]:focus, .form-kas input[type=date]:focus { outline: none; border-color: var(--aksen); box-shadow: 0 0 0 2px var(--aksen); }
+        table.bon input[data-nama]:focus { background: #f1faf5; }
         .baris2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px; }
         .pilihan { display: inline-flex; border: 1px solid var(--garis); border-radius: 8px; overflow: hidden; }
         .pilihan input { display: none; }
