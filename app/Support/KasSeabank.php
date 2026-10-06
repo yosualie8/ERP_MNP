@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\KasRiwayat;
 use App\Models\UjDetail;
 use App\Models\UjTransaksi;
 use Carbon\Carbon;
@@ -145,6 +146,14 @@ class KasSeabank
         $bon = $sheets->nilai(self::id(), ["{$l}!Q2:Q"])["{$l}!Q2:Q"];
         $transaksi = self::urai($mentah, $bon, 2);
 
+        // Data dari sheet hanya sampai tanggal batas (data admin sesudahnya belum dipakai), kecuali yang ditulis lewat aplikasi.
+        $batas = config('mnp.uj_impor_sampai');
+        if ($batas) {
+            $dariAplikasi = KasRiwayat::whereIn('aksi', ['uj-tambah', 'uj-ubah'])->get()->flatMap(fn ($r) => (array) ($r->isi['id_uj'] ?? []))->map(fn ($n) => (int) $n)->flip();
+            $transaksi = array_values(array_filter($transaksi, fn ($t) => ($t['master']['tanggal'] !== null && $t['master']['tanggal'] <= $batas)
+                || collect($t['detail'])->contains(fn ($d) => isset($dariAplikasi[self::noUj($d['id_uj']) ?? -1]))));
+        }
+
         DB::transaction(function () use ($transaksi) {
             UjDetail::query()->delete();
             UjTransaksi::query()->delete();
@@ -159,15 +168,10 @@ class KasSeabank
      * Setelah aplikasi menulis/menghapus satu blok: perbarui DB tanpa impor ulang seluruh lembar.
      * Baris di bawah blok bergeser $geser baris; blok baru (bila ada) dibaca ulang dari sheet.
      */
-    public static function perbaruiBlok(GoogleSheets $sheets, ?UjTransaksi $lama, int $geserDari, int $geser, ?int $dari = null, ?int $sampai = null): void
+    public static function perbaruiBlok(?UjTransaksi $lama, int $geserDari, int $geser, ?array $mentah = null, ?int $dari = null): void
     {
-        $l = self::LEMBAR;
-        $baru = [];
-        if ($dari !== null) {
-            $isi = $sheets->nilaiMentah(self::id(), ["{$l}!A{$dari}:N{$sampai}"])["{$l}!A{$dari}:N{$sampai}"];
-            $bon = $sheets->nilai(self::id(), ["{$l}!Q{$dari}:Q{$sampai}"])["{$l}!Q{$dari}:Q{$sampai}"];
-            $baru = self::urai($isi, $bon, $dari);
-        }
+        // Blok baru diambil dari baris yang barusan ditulis aplikasi (tanpa membaca ulang sheet).
+        $baru = $mentah !== null ? self::urai($mentah, [], $dari) : [];
         DB::transaction(function () use ($lama, $geserDari, $geser, $baru) {
             $lama?->delete();
             if ($geser !== 0) {

@@ -35,31 +35,23 @@ class TulisUjSheet
      */
     public function tulis(array $input): array
     {
+        // Dua panggilan Google saja: baca A..H (cari ID UJ terbesar & baris terakhir), lalu tulis nilai + format sekaligus.
         return Cache::lock('tulis-uj-sheet', 120)->block(60, function () use ($input) {
-            $l = KasSeabank::LEMBAR;
-            $isi = $this->sheets->nilaiMentah($this->id, ["{$l}!A1:L"])["{$l}!A1:L"];
-            [$akhir, $max, $acuan] = $this->posisi($isi);
-
+            [$akhir, $max] = $this->ujung();
             $ids = range($max + 1, $max + count($input['detail']));
             $mulai = $akhir + 1;
             $baris = $this->susun($input, $ids, $mulai);
             $sampai = $mulai + count($baris) - 1;
 
-            $p = $this->properti();
+            $g = $this->grid();
             $requests = [];
-            if ($sampai > $p['gridProperties']['rowCount']) {
-                $requests[] = ['appendDimension' => ['sheetId' => $p['sheetId'], 'dimension' => 'ROWS', 'length' => $sampai - $p['gridProperties']['rowCount'] + 200]];
+            if ($sampai > $g['rowCount']) {
+                $requests[] = ['appendDimension' => ['sheetId' => $g['sheetId'], 'dimension' => 'ROWS', 'length' => $sampai - $g['rowCount'] + 200]];
+                Cache::forget("uj-grid-{$this->id}");
             }
-            // Format (tanggal, Rp, #,##0) mengikuti baris master terakhir.
-            $requests[] = ['copyPaste' => [
-                'source' => ['sheetId' => $p['sheetId'], 'startRowIndex' => $acuan - 1, 'endRowIndex' => $acuan, 'startColumnIndex' => 0, 'endColumnIndex' => 14],
-                'destination' => ['sheetId' => $p['sheetId'], 'startRowIndex' => $mulai - 1, 'endRowIndex' => $sampai, 'startColumnIndex' => 0, 'endColumnIndex' => 14],
-                'pasteType' => 'PASTE_FORMAT',
-            ]];
-            $this->sheets->permintaan($this->id, $requests, 'menyiapkan baris Kas Seabank');
-            $this->sheets->tulis($this->id, ["{$l}!A{$mulai}:M{$sampai}" => $baris]);
+            $this->sheets->permintaan($this->id, [...$requests, ...$this->isiSel($g['sheetId'], $mulai, $baris, false)], 'menulis Kas Seabank');
 
-            return ['baris_awal' => $mulai, 'baris_akhir' => $sampai, 'no_uj' => $ids[0], 'ids' => $ids];
+            return ['baris_awal' => $mulai, 'baris_akhir' => $sampai, 'no_uj' => $ids[0], 'ids' => $ids, 'mentah' => self::keMentah($baris)];
         });
     }
 
@@ -78,7 +70,7 @@ class TulisUjSheet
             $idLama = $t->detail->reject->biaya_transfer->map(fn (UjDetail $d) => KasSeabank::noUj($d->id_uj))->filter()->values()->all();
             $ids = array_slice($idLama, 0, count($input['detail']));
             if (count($ids) < count($input['detail'])) {
-                [, $max] = $this->posisi($this->sheets->nilaiMentah($this->id, ["{$l}!A1:L"])["{$l}!A1:L"]);
+                [, $max] = $this->ujung();
                 while (count($ids) < count($input['detail'])) {
                     $ids[] = ++$max;
                 }
@@ -86,17 +78,19 @@ class TulisUjSheet
             $baris = $this->susun($input, $ids, $dari);
             $n = count($baris);
             $m = $sampai - $dari + 1;
-            $sheetId = $this->properti()['sheetId'];
+            $sheetId = $this->grid()['sheetId'];
+            $requests = [];
             if ($n > $m) {
-                $this->sheets->permintaan($this->id, [['insertDimension' => ['range' => ['sheetId' => $sheetId, 'dimension' => 'ROWS', 'startIndex' => $sampai, 'endIndex' => $sampai + $n - $m], 'inheritFromBefore' => true]]], 'menyisipkan baris Kas Seabank');
+                $requests[] = ['insertDimension' => ['range' => ['sheetId' => $sheetId, 'dimension' => 'ROWS', 'startIndex' => $sampai, 'endIndex' => $sampai + $n - $m], 'inheritFromBefore' => true]];
             } elseif ($n < $m) {
-                $this->sheets->hapusBaris($this->id, $sheetId, $dari + $n, $sampai);
+                $requests[] = ['deleteDimension' => ['range' => ['sheetId' => $sheetId, 'dimension' => 'ROWS', 'startIndex' => $dari + $n - 1, 'endIndex' => $sampai]]];
             }
-            $akhir = $dari + $n - 1;
-            // Kolom Bon dikosongkan; chip folder ditulis ulang setelah simpan bila transaksinya berfoto.
-            $this->sheets->tulis($this->id, ["{$l}!A{$dari}:M{$akhir}" => $baris, "{$l}!Q{$dari}:Q{$akhir}" => array_fill(0, $n, [''])]);
+            // Satu panggilan: susun ulang baris + isi + format; kolom Bon dikosongkan (chip ditulis ulang bila berfoto).
+            $this->sheets->permintaan($this->id, [...$requests, ...$this->isiSel($sheetId, $dari, $baris, true)], 'mengubah Kas Seabank');
+            Cache::forget("uj-grid-{$this->id}");
 
-            return ['baris_awal' => $dari, 'baris_akhir' => $akhir, 'no_uj' => $ids[0], 'ids' => $ids, 'geser' => $n - $m, 'sampai_lama' => $sampai, 'sebelum' => $sebelum];
+            return ['baris_awal' => $dari, 'baris_akhir' => $dari + $n - 1, 'no_uj' => $ids[0], 'ids' => $ids, 'geser' => $n - $m,
+                'sampai_lama' => $sampai, 'sebelum' => $sebelum, 'mentah' => self::keMentah($baris)];
         });
     }
 
@@ -105,7 +99,8 @@ class TulisUjSheet
     {
         return Cache::lock('tulis-uj-sheet', 120)->block(60, function () use ($t) {
             [$dari, $sampai, $sebelum] = $this->periksaBlok($t);
-            $this->sheets->hapusBaris($this->id, $this->properti()['sheetId'], $dari, $sampai);
+            $this->sheets->hapusBaris($this->id, $this->grid()['sheetId'], $dari, $sampai);
+            Cache::forget("uj-grid-{$this->id}");
 
             return ['baris_awal' => $dari, 'baris_akhir' => $sampai, 'sebelum' => $sebelum];
         });
@@ -177,33 +172,86 @@ class TulisUjSheet
     }
 
     /**
-     * Baris data terakhir, nomor ID UJ terbesar, dan baris master terakhir (acuan format).
+     * Satu kali baca kolom A..H: baris data terakhir dan nomor ID UJ terbesar.
      *
-     * @return array{0: int, 1: int, 2: int}
+     * @return array{0: int, 1: int}
      */
-    private function posisi(array $isi): array
+    private function ujung(): array
     {
-        [$akhir, $max, $acuan] = [1, 0, 2];
-        foreach ($isi as $i => $r) {
-            if ($i === 0) {
-                continue;
-            }
+        $l = KasSeabank::LEMBAR;
+        [$akhir, $max] = [1, 0];
+        foreach ($this->sheets->nilaiMentah($this->id, ["{$l}!A2:H"])["{$l}!A2:H"] as $i => $r) {
             if (KasSeabank::adaData($r)) {
-                $akhir = $i + 1;
+                $akhir = $i + 2;
             }
             $max = max($max, KasSeabank::noUj((string) ($r[0] ?? '')) ?? 0);
-            if (trim((string) ($r[2] ?? '')) !== '' || trim((string) ($r[3] ?? '')) !== '') {
-                $acuan = $i + 1;
-            }
         }
 
-        return [$akhir, $max, $acuan];
+        return [$akhir, $max];
     }
 
-    private function properti(): array
+    /** sheetId & jumlah baris grid lembar Kas Seabank (disimpan, supaya tidak membaca info spreadsheet tiap simpan). */
+    private function grid(): array
     {
-        return collect($this->sheets->info($this->id)['sheets'])->firstWhere('properties.title', KasSeabank::LEMBAR)['properties']
-            ?? throw new RuntimeException('Lembar "'.KasSeabank::LEMBAR.'" tidak ditemukan.');
+        return Cache::rememberForever("uj-grid-{$this->id}", function () {
+            $p = collect($this->sheets->info($this->id)['sheets'])->firstWhere('properties.title', KasSeabank::LEMBAR)['properties']
+                ?? throw new RuntimeException('Lembar "'.KasSeabank::LEMBAR.'" tidak ditemukan.');
+
+            return ['sheetId' => $p['sheetId'], 'rowCount' => $p['gridProperties']['rowCount']];
+        });
+    }
+
+    /**
+     * Permintaan updateCells: nilai A..M, format angka B (tanggal), E (Rp), H (#,##0) seperti baris buatan admin,
+     * dan (saat edit) kolom Q Bon dikosongkan.
+     */
+    private function isiSel(int $sheetId, int $mulai, array $baris, bool $kosongkanBon): array
+    {
+        $range = fn (int $k1, int $k2) => ['sheetId' => $sheetId, 'startRowIndex' => $mulai - 1, 'endRowIndex' => $mulai - 1 + count($baris), 'startColumnIndex' => $k1, 'endColumnIndex' => $k2];
+        $format = [1 => ['type' => 'DATE', 'pattern' => '[$-409]d\-mmm\-yy'], 4 => ['type' => 'NUMBER', 'pattern' => '_-"Rp"* #,##0_-;\-"Rp"* #,##0_-;_-"Rp"* "-"??_-;_-@'], 7 => ['type' => 'NUMBER', 'pattern' => '#,##0']];
+        $requests = [
+            ['updateCells' => ['range' => $range(0, 13), 'fields' => 'userEnteredValue',
+                'rows' => array_map(fn ($r) => ['values' => array_map(fn ($k) => self::sel($r[$k] ?? '', $k), range(0, 12))], $baris)]],
+            ['updateCells' => ['range' => $range(1, 8), 'fields' => 'userEnteredFormat.numberFormat',
+                'rows' => array_fill(0, count($baris), ['values' => array_map(fn ($k) => isset($format[$k]) ? ['userEnteredFormat' => ['numberFormat' => $format[$k]]] : (object) [], range(1, 7))])]],
+        ];
+        if ($kosongkanBon) {
+            $requests[] = ['updateCells' => ['range' => $range(KasSeabank::KOLOM_BON, KasSeabank::KOLOM_BON + 1), 'fields' => 'userEnteredValue,chipRuns',
+                'rows' => array_fill(0, count($baris), ['values' => [(object) []]])]];
+        }
+
+        return $requests;
+    }
+
+    /** Satu sel seperti diketik admin: rumus, angka (tanggal = nomor seri), atau teks apa adanya. */
+    private static function sel(mixed $v, int $kolom): object|array
+    {
+        if ($v === '' || $v === null) {
+            return (object) [];
+        }
+        if ($kolom === 1) {
+            return ['userEnteredValue' => ['numberValue' => (int) \Carbon\Carbon::create(1899, 12, 30)->diffInDays(\Carbon\Carbon::parse($v))]];
+        }
+        if (is_int($v) || is_float($v)) {
+            return ['userEnteredValue' => ['numberValue' => $v]];
+        }
+        if (str_starts_with($v, '=')) {
+            return ['userEnteredValue' => ['formulaValue' => $v]];
+        }
+        if (str_starts_with($v, "'")) {
+            return ['userEnteredValue' => ['stringValue' => substr($v, 1)]];
+        }
+        if (ctype_digit($v) && strlen($v) <= 15) {
+            return ['userEnteredValue' => ['numberValue' => (int) $v]];
+        }
+
+        return ['userEnteredValue' => ['stringValue' => $v]];
+    }
+
+    /** Baris yang baru ditulis dalam bentuk seperti dibaca dari sheet, untuk memperbarui data aplikasi tanpa membaca ulang. */
+    private static function keMentah(array $baris): array
+    {
+        return array_map(fn ($r) => array_map(fn ($v) => is_string($v) ? (str_starts_with($v, '=') ? 'Belum Reimburse' : ltrim($v, "'")) : $v, $r), $baris);
     }
 
     /** Nomor rekening / No DO: angka biasa tetap angka (seperti diketik admin), nol di depan dipertahankan sebagai teks. */

@@ -165,7 +165,7 @@ class UjController extends Controller
 
             return back()->withInput()->with('error', 'Gagal menulis ke sheet: '.$e->getMessage());
         }
-        $pesanImpor = $this->perbarui(fn () => KasSeabank::perbaruiBlok($sheets, null, 0, 0, $hasil['baris_awal'], $hasil['baris_akhir']));
+        $pesanImpor = $this->perbarui(fn () => KasSeabank::perbaruiBlok(null, 0, 0, $hasil['mentah'], $hasil['baris_awal']));
         $jumlahFoto = $this->simpanFoto($request, $hasil['no_uj'], $input['tanggal']);
 
         KasRiwayat::create([
@@ -220,7 +220,7 @@ class UjController extends Controller
 
             return back()->withInput()->with('error', 'Gagal mengubah di sheet: '.$e->getMessage());
         }
-        $pesanImpor = $this->perbarui(fn () => KasSeabank::perbaruiBlok($sheets, $t, $hasil['sampai_lama'] + 1, $hasil['geser'], $hasil['baris_awal'], $hasil['baris_akhir']));
+        $pesanImpor = $this->perbarui(fn () => KasSeabank::perbaruiBlok($t, $hasil['sampai_lama'] + 1, $hasil['geser'], $hasil['mentah'], $hasil['baris_awal']));
         $jumlahFoto = $this->simpanFoto($request, $hasil['no_uj'], $input['tanggal']);
         if (! $jumlahFoto && KasFoto::uj()->where('no_id', $hasil['no_uj'])->exists()) {
             TautanUj::pastikanSegera($hasil['no_uj']); // kolom Bon dikosongkan saat ditulis ulang → chip ditulis lagi
@@ -251,7 +251,7 @@ class UjController extends Controller
             return back()->with('error', 'Gagal menghapus: '.$e->getMessage());
         }
         $jumlah = $hasil['baris_akhir'] - $hasil['baris_awal'] + 1;
-        $pesanImpor = $this->perbarui(fn () => KasSeabank::perbaruiBlok($sheets, $t, $hasil['baris_akhir'] + 1, -$jumlah));
+        $pesanImpor = $this->perbarui(fn () => KasSeabank::perbaruiBlok($t, $hasil['baris_akhir'] + 1, -$jumlah));
         $foto = FotoBon::hapusMilik($noUj, 'uj');
         KasRiwayat::create([
             'aksi' => 'uj-hapus', 'lembar' => 'Seabank', 'baris_awal' => $hasil['baris_awal'], 'baris_akhir' => $hasil['baris_akhir'],
