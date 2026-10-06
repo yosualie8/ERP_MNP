@@ -9,24 +9,25 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 /**
- * Kolom Kode Bon (P) di sheet berisi link folder Google Drive tempat foto bon transaksi itu disimpan.
+ * Kolom Kode Bon (P) di sheet berisi smart chip folder Google Drive tempat foto bon transaksi itu disimpan
+ * (tampil sebagai nama folder, mis. "31216 - 2026-10-06 - Erwin Gultom - …", bisa diklik).
  * Membuat folder di Drive butuh ±3 detik, jadi tidak dilakukan selagi admin menunggu: baris ditulis dulu dengan Kode Bon biasa,
- * lalu sesaat setelah halaman terkirim pastikanSegera() membuat folder & menimpa Kode Bon dengan link-nya (±5 detik kemudian).
+ * lalu sesaat setelah halaman terkirim pastikanSegera() membuat folder & menimpa Kode Bon dengan chip-nya (±5 detik kemudian).
  */
 class TautanBon
 {
     /**
-     * Untuk TulisKasSheet::tulis/ubah: link folder yang sudah dikenal (tanpa memanggil Drive), supaya Edit
-     * tidak menimpa link yang sudah ada dengan kode biasa. Transaksi baru: null → link menyusul lewat pastikanSegera().
+     * Untuk TulisKasSheet::ubah: folder yang sudah dikenal (tanpa memanggil Drive), supaya Edit tidak mengganti
+     * link dengan kode biasa. Edit menulis link polos; pastikanSegera() lalu menjadikannya chip lagi.
      *
-     * @return callable(int): ?string
+     * @return callable(int): ?array{id: string, link: string, nama: string}
      */
     public static function pembuat(): callable
     {
-        return fn (int $noId): ?string => Cache::get("drive-foto-transaksi-{$noId}")['link'] ?? null;
+        return fn (int $noId): ?array => Cache::get("drive-foto-transaksi-{$noId}");
     }
 
-    /** Buat folder & tulis link-nya di Kode Bon sesaat setelah halaman terkirim ke admin. */
+    /** Buat folder & tulis chip-nya di Kode Bon sesaat setelah halaman terkirim ke admin. */
     public static function pastikanSegera(int $noId): void
     {
         dispatch(fn () => rescue(fn () => self::pastikan($noId)))->afterResponse();
@@ -39,15 +40,19 @@ class TautanBon
         return trim("{$noId} - ".$tanggal->format('Y-m-d').' - '.Str::limit($isi, 80, ''), ' -');
     }
 
-    public static function adalahLink(?string $v): bool
+    /** Isi sel Kode Bon (seperti terbaca dari sheet) sudah menunjuk folder ini: chip (tampil nama folder) atau link polos. */
+    public static function menunjuk(?string $isi, ?array $folder): bool
     {
-        return str_starts_with(trim((string) $v), 'https://drive.google.com/');
+        $isi = trim((string) $isi);
+
+        return $folder && $isi !== '' && ($isi === $folder['nama'] || $isi === $folder['link'])
+            || str_starts_with($isi, 'https://drive.google.com/');
     }
 
     /**
-     * Pastikan semua baris detail transaksi NO ID ini berisi link folder fotonya di kolom Kode Bon.
+     * Pastikan baris detail transaksi NO ID ini berisi chip folder fotonya di kolom Kode Bon.
      * Baris di sheet dicocokkan lewat NO ID (Q) supaya tidak menimpa baris lain bila sheet bergeser sejak impor terakhir.
-     * $hanyaPertama: link hanya di detail pertama, Kode Bon detail lainnya dibiarkan (mis. NO ID 30956 dengan 91 detail).
+     * $hanyaPertama: chip hanya di detail pertama, Kode Bon detail lainnya dibiarkan (mis. NO ID 30956 dengan 91 detail).
      * Transaksi yang detail pertamanya sudah ber-link sementara detail lain masih kode biasa dianggap memilih cara itu.
      *
      * @return int jumlah sel yang ditulis
@@ -60,10 +65,11 @@ class TautanBon
         }
         $folder = $drive->folderTransaksi($noId, $t->kasBulan->lembar, self::namaFolder($noId, $t->tanggal, $t->nama_tujuan, $t->keterangan));
         $bon = $t->bon->sortBy('baris')->values();
-        if ($hanyaPertama || trim((string) $bon[0]->kode_bon) === $folder['link']) {
+        if ($hanyaPertama || ($bon->count() > 1 && self::menunjuk($bon[0]->kode_bon, $folder) && ! self::menunjuk($bon[1]->kode_bon, $folder) && trim((string) $bon[1]->kode_bon) !== '')) {
             $bon = $bon->take(1);
         }
-        $perlu = $bon->filter(fn (KasBon $b) => trim((string) $b->kode_bon) !== $folder['link']);
+        // Sudah chip = isi sel tampil sebagai nama folder.
+        $perlu = $bon->filter(fn (KasBon $b) => trim((string) $b->kode_bon) !== $folder['nama']);
         if ($perlu->isEmpty()) {
             return 0;
         }
@@ -75,20 +81,23 @@ class TautanBon
         return Cache::lock('tulis-kas-sheet', 60)->block(30, function () use ($sheets, $id, $lembar, $perlu, $folder) {
             [$dari, $sampai] = [$perlu->min('baris'), $perlu->max('baris')];
             $isi = $sheets->nilai($id, ["{$lembar}!P{$dari}:Q{$sampai}"])["{$lembar}!P{$dari}:Q{$sampai}"] ?? [];
-            $data = [];
+            $sel = [];
             foreach ($perlu as $b) {
-                $q = $isi[$b->baris - $dari][1] ?? '';
+                [$p, $q] = [$isi[$b->baris - $dari][0] ?? '', $isi[$b->baris - $dari][1] ?? ''];
                 if (TulisKasSheet::angkaNoId($q) !== TulisKasSheet::angkaNoId($b->no_id)) {
                     continue; // baris sudah bergeser; dicoba lagi setelah sinkron berikutnya
                 }
-                $data["{$lembar}!P{$b->baris}"] = [[$folder['link']]];
-                $b->update(['kode_bon' => $folder['link']]);
+                if (trim($p) !== $folder['nama']) {
+                    $sel[$b->baris] = $folder['link'];
+                }
+                $b->update(['kode_bon' => $folder['nama']]);
             }
-            if ($data) {
-                $sheets->tulis($id, $data);
+            if ($sel) {
+                $sheetId = collect($sheets->info($id)['sheets'])->firstWhere('properties.title', $lembar)['properties']['sheetId'];
+                $sheets->chipDrive($id, $sheetId, 15, $sel);
             }
 
-            return count($data);
+            return count($sel);
         });
     }
 }

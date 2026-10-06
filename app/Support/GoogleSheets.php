@@ -117,6 +117,27 @@ class GoogleSheets
         $this->pastikan($res, 'menghapus baris');
     }
 
+    /**
+     * Isi sel dengan smart chip link Google Drive (file atau folder): tampil sebagai nama file/folder yang bisa diklik.
+     *
+     * @param  array<int, string>  $sel  nomor baris sheet => link Drive
+     * @param  int  $kolom  indeks kolom 0-based (A = 0)
+     */
+    public function chipDrive(string $id, int $sheetId, int $kolom, array $sel): void
+    {
+        $requests = [];
+        foreach ($sel as $baris => $uri) {
+            $requests[] = ['updateCells' => [
+                'rows' => [['values' => [['userEnteredValue' => ['stringValue' => '@'], 'chipRuns' => [['chip' => ['richLinkProperties' => ['uri' => $uri]]]]]]]],
+                'fields' => 'userEnteredValue,chipRuns',
+                'range' => ['sheetId' => $sheetId, 'startRowIndex' => $baris - 1, 'endRowIndex' => $baris, 'startColumnIndex' => $kolom, 'endColumnIndex' => $kolom + 1],
+            ]];
+        }
+        if ($requests) {
+            $this->pastikan($this->api()->post(self::API."/{$id}:batchUpdate", ['requests' => $requests]), 'menulis chip link Drive');
+        }
+    }
+
     /** Buat spreadsheet baru (dipakai untuk uji coba tulis di salinan). */
     public function buat(string $judul): string
     {

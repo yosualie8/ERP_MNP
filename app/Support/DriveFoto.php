@@ -71,37 +71,37 @@ class DriveFoto
     /**
      * Folder Drive milik satu transaksi (ditandai appProperties mnp_no_id), dibuat bila belum ada.
      *
-     * @return array{id: string, link: string}
+     * @return array{id: string, link: string, nama: string}
      */
     public function folderTransaksi(int $noId, string $lembar, ?string $nama = null): array
     {
         if ($ada = $this->cariFolderTransaksi($noId)) {
             return $ada;
         }
-        $baru = $this->google->http(30)->post(self::API.'?supportsAllDrives=true&fields=id,webViewLink', [
+        $baru = $this->google->http(30)->post(self::API.'?supportsAllDrives=true&fields=id,webViewLink,name', [
             'name' => $nama ?? (string) $noId, 'mimeType' => self::FOLDER, 'parents' => [$this->folderLembar($lembar)],
             'appProperties' => ['mnp_no_id' => (string) $noId],
         ]);
         $this->pastikan($baru, "membuat folder transaksi {$noId}");
-        $folder = ['id' => $baru->json('id'), 'link' => $baru->json('webViewLink')];
+        $folder = ['id' => $baru->json('id'), 'link' => $baru->json('webViewLink'), 'nama' => $baru->json('name')];
         Cache::forever("drive-foto-transaksi-{$noId}", $folder);
 
         return $folder;
     }
 
-    /** @return array{id: string, link: string}|null */
+    /** @return array{id: string, link: string, nama: string}|null */
     public function cariFolderTransaksi(int $noId): ?array
     {
-        if ($simpan = Cache::get("drive-foto-transaksi-{$noId}")) {
+        if (($simpan = Cache::get("drive-foto-transaksi-{$noId}")) && isset($simpan['nama'])) {
             return $simpan;
         }
         $q = sprintf("appProperties has { key='mnp_no_id' and value='%d' } and mimeType = '%s' and trashed = false", $noId, self::FOLDER);
-        $res = $this->google->http(30)->get(self::API, ['q' => $q, 'fields' => 'files(id,webViewLink)', 'pageSize' => 1, 'supportsAllDrives' => 'true', 'includeItemsFromAllDrives' => 'true']);
+        $res = $this->google->http(30)->get(self::API, ['q' => $q, 'fields' => 'files(id,webViewLink,name)', 'pageSize' => 1, 'supportsAllDrives' => 'true', 'includeItemsFromAllDrives' => 'true']);
         $this->pastikan($res, "mencari folder transaksi {$noId}");
         if (! $res->json('files.0.id')) {
             return null;
         }
-        $folder = ['id' => $res->json('files.0.id'), 'link' => $res->json('files.0.webViewLink')];
+        $folder = ['id' => $res->json('files.0.id'), 'link' => $res->json('files.0.webViewLink'), 'nama' => $res->json('files.0.name')];
         Cache::forever("drive-foto-transaksi-{$noId}", $folder);
 
         return $folder;

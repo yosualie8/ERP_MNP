@@ -26,7 +26,7 @@ class TulisKasSheet
     /**
      * @param  array{tanggal: CarbonInterface, arah: string, nama_tujuan: ?string, no_rek: ?string, bank: ?string, keterangan: ?string,
      *               nominal_masuk?: int, bon?: array<int, array{nominal: int, pic: ?string, keterangan: ?string, kode_gl: ?string}>, biaya_transfer?: bool}  $input
-     * @param  (callable(int): ?string)|null  $linkBon  NO ID transfer → link folder foto bon di Drive; bila ada, ditulis di kolom Kode Bon
+     * @param  (callable(int): ?array)|null  $linkBon  NO ID transfer → folder foto bon di Drive yang sudah dikenal; bila ada, link-nya ditulis di kolom Kode Bon
      * @return array{lembar: string, baris_awal: int, baris_akhir: int, no_id: int[]}
      */
     public function tulis(array $input, ?callable $linkBon = null): array
@@ -48,7 +48,7 @@ class TulisKasSheet
         [$judul, $total, $terakhir] = $this->posisi($nilai, $lembar);
 
         $noId = $this->noIdBerikut();
-        $input['link_bon'] = $linkBon && $input['arah'] !== 'masuk' ? $linkBon($noId) : null;
+        $input['link_bon'] = $linkBon && $input['arah'] !== 'masuk' ? ($linkBon($noId)['link'] ?? null) : null;
         $baris = $this->susunBaris($input, $nilai, $judul, $total);
         $butuh = count($baris);
         $mulai = $terakhir + 1;
@@ -112,10 +112,11 @@ class TulisKasSheet
                     $nnTetap[strtolower($m[1])] ??= (int) $m[2];
                 }
             }
-            $input['link_bon'] = $linkBon && $input['arah'] !== 'masuk' ? $linkBon($t->no_id) : null;
+            $folder = $linkBon && $input['arah'] !== 'masuk' ? $linkBon($t->no_id) : null;
+            $input['link_bon'] = $folder['link'] ?? null;
             // Link hanya di detail pertama (detail berikutnya tetap kode biasa) → pertahankan cara itu.
-            $input['link_hanya_pertama'] = TautanBon::adalahLink($sebelum[0][15] ?? '')
-                && trim((string) ($sebelum[1][15] ?? '')) !== '' && ! TautanBon::adalahLink($sebelum[1][15] ?? '');
+            $input['link_hanya_pertama'] = TautanBon::menunjuk($sebelum[0][15] ?? '', $folder)
+                && trim((string) ($sebelum[1][15] ?? '')) !== '' && ! TautanBon::menunjuk($sebelum[1][15] ?? '', $folder);
             $baris = $this->susunBaris($input, $nilai, $judul, $total, range($dari, $sampai), $nnTetap);
             $n = count($baris);
             $m = $sampai - $dari + 1;
