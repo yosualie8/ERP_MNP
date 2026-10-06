@@ -9,6 +9,7 @@ use App\Models\KasTransfer;
 use App\Models\KodeGl;
 use App\Models\KasBulan;
 use App\Models\KasFoto;
+use App\Support\CerminReimburse;
 use App\Support\FotoBon;
 use App\Support\ModelKodeGl;
 use Illuminate\Support\Facades\Cache;
@@ -174,6 +175,8 @@ class KasInputController extends Controller
 
             return back()->withInput()->with('error', 'Gagal menulis ke sheet: '.$e->getMessage());
         }
+        // Sesudah halaman terkirim, sebelum chip Bon: baris-barisnya ikut ditulis di Mutasi Reimburse.
+        CerminReimburse::tambahSegera($hasil['no_id']);
 
         // Foto bon ditautkan ke NO ID baris transfer (baris pertama yang ditulis).
         $jumlahFoto = 0;
@@ -221,6 +224,13 @@ class KasInputController extends Controller
             .' '.$transfer->tanggal->translatedFormat('j M Y').' '.trim($transfer->nama_tujuan.' — '.$transfer->keterangan, ' —')
             .' ('.$transfer->bon->count().' detail)';
 
+        // Baris yang sudah direimburse tidak boleh hilang dari Mutasi Reimburse → hapus ditolak.
+        $biaya = $request->boolean('dengan_biaya') ? HapusKasSheet::biayaTransferMilik($transfer) : null;
+        $idReimburse = [...CerminReimburse::idMilik($transfer), ...($biaya ? CerminReimburse::idMilik($biaya) : [])];
+        if ($tolak = $this->cekReimburse($idReimburse)) {
+            return back()->with('error', $tolak);
+        }
+
         try {
             $hasil = (new HapusKasSheet(GoogleSheets::wajib()))->hapus($transfer, $request->boolean('dengan_biaya'));
         } catch (\Throwable $e) {
@@ -233,6 +243,7 @@ class KasInputController extends Controller
             'aksi' => 'hapus', 'lembar' => $lembar, 'baris_awal' => $hasil['baris_awal'], 'baris_akhir' => $hasil['baris_akhir'],
             'ringkasan' => $ringkasan, 'isi' => $hasil['isi'], 'user_id' => $request->user()->id,
         ]);
+        CerminReimburse::hapusSegera($idReimburse);
         $fotoDihapus = $transfer->no_id ? FotoBon::hapusMilik($transfer->no_id) : 0;
         if ($fotoDihapus) {
             $ringkasan .= ", {$fotoDihapus} foto bon ikut dihapus";
@@ -289,6 +300,12 @@ class KasInputController extends Controller
             return $input;
         }
         $ringkasLama = $this->ringkasan($t);
+        // Sudah direimburse → tidak boleh diubah (Mutasi Reimburse ikut berubah).
+        $biayaLama = HapusKasSheet::biayaTransferMilik($t);
+        $idReimburse = [...CerminReimburse::idMilik($t), ...($biayaLama ? CerminReimburse::idMilik($biayaLama) : [])];
+        if ($tolak = $this->cekReimburse($idReimburse)) {
+            return back()->withInput()->with('error', $tolak);
+        }
 
         try {
             $adaFoto = $request->file('foto') || KasFoto::where('no_id', $noId)->exists();
@@ -299,6 +316,8 @@ class KasInputController extends Controller
 
             return back()->withInput()->with('error', 'Gagal mengubah di sheet: '.$e->getMessage());
         }
+
+        CerminReimburse::gantiSegera($idReimburse, $hasil['no_id']);
 
         // Foto lama ikut pindah bila NO ID baris transfer berubah (pindah bulan); foto baru ditautkan ke NO ID transfer.
         $noIdBaru = $hasil['no_id'][0];
@@ -341,6 +360,18 @@ class KasInputController extends Controller
             .($jumlahFoto ? " {$jumlahFoto} foto bon ditambahkan." : '')
             .$pesanImpor
         );
+    }
+
+    /** Pesan penolakan bila baris transaksi ini sudah direimburse (atau Mutasi Reimburse tidak bisa diperiksa). */
+    private function cekReimburse(array $ids): ?string
+    {
+        try {
+            return CerminReimburse::wajib()->pesanTolak($ids);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return 'Gagal memeriksa status di Mutasi Reimburse: '.$e->getMessage().' Coba lagi sebentar.';
+        }
     }
 
     /** Sidik transaksi saat form dibuka; bila berbeda saat disimpan, berarti sheet sudah berubah di antaranya. */

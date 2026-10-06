@@ -108,6 +108,14 @@ class GoogleSheets
         $this->pastikan($res, 'menyisipkan baris');
     }
 
+    /** Kirim beberapa permintaan spreadsheets.batchUpdate sekaligus (sisip/hapus baris, dll.). */
+    public function permintaan(string $id, array $requests, string $kegiatan): void
+    {
+        if ($requests) {
+            $this->pastikan($this->api()->post(self::API."/{$id}:batchUpdate", ['requests' => $requests]), $kegiatan);
+        }
+    }
+
     /** Hapus baris $dari sampai $sampai (nomor baris sheet, inklusif). */
     public function hapusBaris(string $id, int $sheetId, int $dari, int $sampai): void
     {

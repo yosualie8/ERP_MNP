@@ -11,4 +11,6 @@ return [
     // Foto bon: folder Google Drive "Foto Bon MNP" milik akun perusahaan (subfolder per lembar dibuat otomatis).
     'drive_foto_folder' => env('MNP_DRIVE_FOTO_FOLDER', '1Rs3zaSYnOrnZTdQofyKID9qezYy8yEVw'),
     'drive_foto_email' => env('MNP_DRIVE_FOTO_EMAIL', 'ptmultiniagaputra@gmail.com'),
+    // Spreadsheet "(0) Transaksi Belum Reimburse V3": lembar "Mutasi Reimburse" = cermin baris Kas Harian (satu baris per detail).
+    'sheet_reimburse' => env('MNP_SHEET_REIMBURSE', '1FZJqYd241-sz1XGsybeYH-jXfiMqGoE6wRY1lXiBTxk'),
 ];

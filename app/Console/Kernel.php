@@ -16,6 +16,8 @@ class Kernel extends ConsoleKernel
         $schedule->command('mnp:impor-kas --bulan-berjalan --simpan')->hourly()->withoutOverlapping();
         // Foto bon yang baru diunggah dipindah ke Google Drive perusahaan; admin tidak perlu menunggu.
         $schedule->command('mnp:unggah-foto-drive')->everyMinute()->withoutOverlapping(10);
+        // Cadangan: transaksi dari aplikasi yang belum tercermin di Mutasi Reimburse ditambahkan.
+        $schedule->command('mnp:sinkron-reimburse')->hourlyAt(10)->withoutOverlapping();
     }
 
     /**

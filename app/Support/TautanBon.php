@@ -95,6 +95,10 @@ class TautanBon
             if ($sel) {
                 $sheetId = collect($sheets->info($id)['sheets'])->firstWhere('properties.title', $lembar)['properties']['sheetId'];
                 $sheets->chipDrive($id, $sheetId, 15, $sel);
+                // Kolom Bon di Mutasi Reimburse ikut menjadi chip.
+                $ids = $perlu->filter(fn (KasBon $b) => isset($sel[$b->baris]) && $b->id_transaksi)
+                    ->mapWithKeys(fn (KasBon $b) => [trim($b->id_transaksi) => $folder['link']])->all();
+                rescue(fn () => (new CerminReimburse($sheets))->chip($ids));
             }
 
             return count($sel);
