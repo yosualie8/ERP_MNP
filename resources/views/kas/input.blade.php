@@ -172,7 +172,7 @@
                 <label>Jumlah Transaksi Detail
                     <input type="text" id="jumlah-detail" value="1" inputmode="numeric" autocomplete="off" maxlength="3" title="Berapa baris detail yang ditambahkan sekali klik">
                 </label>
-                <span class="redup">Enter / ↓ pindah ke baris bawah, ↑ ke baris atas (kolom sama), seperti Excel.</span>
+                <span class="redup">Seperti Excel: Enter / ↓ baris bawah, ↑ baris atas, ← → pindah kolom (saat kursor di ujung teks).</span>
             </div>
             <datalist id="daftar-pic">
                 @foreach ($pic as $p)
@@ -358,6 +358,23 @@
             daftar.addEventListener('keydown', e => {
                 const el = e.target;
                 if (!el.dataset?.nama || e.altKey || e.ctrlKey || e.metaKey || e.isComposing) return;
+                // ← / →: pindah kolom bila kursor sudah di ujung teks (atau seluruh isi terpilih, mis. baru tiba di sel);
+                // selain itu tetap menggeser kursor di dalam teks supaya isi masih bisa diedit.
+                if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.shiftKey) {
+                    const semua = el.selectionStart === 0 && el.selectionEnd === el.value.length;
+                    const diUjung = e.key === 'ArrowLeft'
+                        ? el.selectionStart === 0 && el.selectionEnd === 0
+                        : el.selectionStart === el.value.length && el.selectionEnd === el.value.length;
+                    if (!semua && !diUjung) return;
+                    const kolom = [...el.closest('tr').querySelectorAll('[data-nama]')];
+                    const tujuan = kolom[kolom.indexOf(el) + (e.key === 'ArrowLeft' ? -1 : 1)];
+                    if (tujuan) {
+                        e.preventDefault();
+                        tujuan.focus();
+                        tujuan.select();
+                    }
+                    return;
+                }
                 const turun = e.key === 'ArrowDown' || (e.key === 'Enter' && !e.shiftKey);
                 const naik = e.key === 'ArrowUp' || (e.key === 'Enter' && e.shiftKey);
                 if (!turun && !naik) return;
