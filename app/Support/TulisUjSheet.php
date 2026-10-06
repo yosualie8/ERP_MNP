@@ -134,7 +134,7 @@ class TulisUjSheet
         }
         // Baris sesudah blok tidak boleh berupa detail lanjutan (bukan master) — artinya blok di sheet lebih panjang.
         $sesudah = $isi[$sampai + 1 - $dari] ?? [];
-        $adaIsi = array_filter(array_slice($sesudah, 0, 12), fn ($v) => $v !== null && $v !== '');
+        $adaIsi = KasSeabank::adaData($sesudah);
         $masterBerikut = trim((string) ($sesudah[2] ?? '')) !== '' || trim((string) ($sesudah[3] ?? '')) !== '';
         if ($adaIsi && ! $masterBerikut) {
             throw $berubah('baris '.($sampai + 1).' masih berisi detail milik transaksi ini');
@@ -188,7 +188,7 @@ class TulisUjSheet
             if ($i === 0) {
                 continue;
             }
-            if (array_filter(array_slice($r, 0, 12), fn ($v) => $v !== null && $v !== '')) {
+            if (KasSeabank::adaData($r)) {
                 $akhir = $i + 1;
             }
             $max = max($max, KasSeabank::noUj((string) ($r[0] ?? '')) ?? 0);

@@ -62,6 +62,21 @@ class KasSeabank
         return preg_match('/^\s*UJ-?\s*(\d+)/i', (string) $id, $m) ? (int) $m[1] : null;
     }
 
+    /**
+     * Baris berisi transaksi bila salah satu kolom A–H terisi. Baris yang hanya berisi No DO / rumus status
+     * (mis. sisa isian di baris paling bawah lembar) tidak dihitung sebagai data.
+     */
+    public static function adaData(array $r): bool
+    {
+        foreach (array_slice($r, 0, 8) as $v) {
+            if ($v !== null && trim((string) $v) !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static function biayaTransfer(?string $kategori, ?string $keterangan): bool
     {
         return (bool) preg_match('/biaya\s*transfer/i', (string) $kategori.' '.(string) $keterangan);
@@ -82,7 +97,7 @@ class KasSeabank
             $n = $mulai + $i;
             $sel = fn (int $k) => is_string($r[$k] ?? null) ? trim($r[$k]) : ($r[$k] ?? null);
             $teks = fn (int $k) => ($v = $sel($k)) === null || $v === '' ? null : (string) $v;
-            if (! array_filter(array_slice($r, 0, 12), fn ($v) => $v !== null && $v !== '')) {
+            if (! self::adaData($r)) {
                 continue;
             }
             $master = $teks(2) !== null || $teks(3) !== null || ($teks(4) !== null && $teks(5) !== null);
