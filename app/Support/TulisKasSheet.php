@@ -18,6 +18,9 @@ class TulisKasSheet
 {
     public const BIAYA_TRANSFER = 2500;
 
+    /** Batas atas nominal baris "Biaya Transfer Keluar" (default 2.500, bisa diganti admin). */
+    public const BIAYA_TRANSFER_MAKS = 100000;
+
     public function __construct(private GoogleSheets $sheets, private ?string $spreadsheetId = null)
     {
         $this->spreadsheetId ??= config('mnp.sheet_kas_harian');
@@ -25,7 +28,7 @@ class TulisKasSheet
 
     /**
      * @param  array{tanggal: CarbonInterface, arah: string, nama_tujuan: ?string, no_rek: ?string, bank: ?string, keterangan: ?string,
-     *               nominal_masuk?: int, bon?: array<int, array{nominal: int, pic: ?string, keterangan: ?string, kode_gl: ?string}>, biaya_transfer?: bool}  $input
+     *               nominal_masuk?: int, bon?: array<int, array{nominal: int, pic: ?string, keterangan: ?string, kode_gl: ?string}>, biaya_transfer?: bool, nominal_biaya?: int}  $input
      * @param  (callable(int): ?array)|null  $linkBon  NO ID transfer → folder foto bon di Drive yang sudah dikenal; bila ada, link-nya ditulis di kolom Kode Bon
      * @return array{lembar: string, baris_awal: int, baris_akhir: int, no_id: int[]}
      */
@@ -274,7 +277,8 @@ class TulisKasSheet
         }
 
         if (! empty($input['biaya_transfer'])) {
-            $baris[] = [1 => $tgl, 5 => 'Biaya Transfer Keluar', 7 => self::BIAYA_TRANSFER, 10 => self::BIAYA_TRANSFER,
+                    $biaya = (int) ($input['nominal_biaya'] ?? self::BIAYA_TRANSFER);
+            $baris[] = [1 => $tgl, 5 => 'Biaya Transfer Keluar', 7 => $biaya, 10 => $biaya,
                 12 => 'Biaya Transfer Keluar', 13 => 'Adm', 14 => 'Biaya Transfer Antar Bank'];
         }
 

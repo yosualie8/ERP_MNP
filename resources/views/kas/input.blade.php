@@ -23,6 +23,10 @@
         .tambah-detail label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--teks); }
         .tambah-detail #jumlah-detail { width: 56px; text-align: center; padding: 6px; border: 1px solid var(--garis); border-radius: 6px; font-size: 14px; }
         .tambah-detail .redup { font-size: 12px; }
+        .biaya-transfer { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 16px; font-size: 14px; }
+        .biaya-transfer label { display: flex; align-items: center; gap: 8px; color: var(--teks); }
+        .form-kas .biaya-transfer #nominal_biaya { width: 110px; }
+        .biaya-transfer.mati #nominal_biaya { opacity: .45; }
         .hapus { background: none; border: 0; color: var(--merah); cursor: pointer; font-size: 18px; line-height: 1; padding: 8px 6px; }
         .total-bon { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
         .galat-isian { color: var(--merah); font-size: 13px; margin: 4px 0 0; }
@@ -189,11 +193,14 @@
                 @endforeach
             </datalist>
 
-            <label style="display: flex; align-items: center; gap: 8px; margin-top: 16px; color: var(--teks); font-size: 14px;">
+            <div class="biaya-transfer" id="baris-biaya">
                 <input type="hidden" name="biaya_transfer" value="0">
-                <input type="checkbox" name="biaya_transfer" id="biaya_transfer" value="1" @checked(old('biaya_transfer', $edit['biaya_transfer'] ?? '1') === '1')>
-                Catat biaya transfer {{ rp(\App\Support\TulisKasSheet::BIAYA_TRANSFER) }} (baris "Biaya Transfer Keluar", Kode GL Biaya Transfer Antar Bank)
-            </label>
+                <label><input type="checkbox" name="biaya_transfer" id="biaya_transfer" value="1" @checked(old('biaya_transfer', $edit['biaya_transfer'] ?? '1') === '1')> Catat biaya transfer</label>
+                <input type="text" name="nominal_biaya" id="nominal_biaya" class="angka-input rupiah" inputmode="numeric" autocomplete="off"
+                    value="{{ old('nominal_biaya', $edit['nominal_biaya'] ?? \App\Support\TulisKasSheet::BIAYA_TRANSFER) }}" title="Nominal biaya transfer (default {{ rp(\App\Support\TulisKasSheet::BIAYA_TRANSFER) }})">
+                <span class="redup">baris "Biaya Transfer Keluar", Kode GL Biaya Transfer Antar Bank</span>
+            </div>
+            @error('nominal_biaya')<p class="galat-isian">{{ $message }}</p>@enderror
             <p class="redup" id="catatan-biaya" style="margin: 4px 0 0 24px;"></p>
         </div>
 
@@ -519,10 +526,21 @@
             const catatanBiaya = document.getElementById('catatan-biaya');
             // Saat edit, centang biaya transfer mengikuti data yang ada (tidak diatur ulang otomatis dari bank).
             let biayaDiubahManual = {{ old('biaya_transfer') !== null || $edit ? 'true' : 'false' }};
-            biaya.addEventListener('change', () => biayaDiubahManual = true);
+            // Nominal biaya default 2.500, bisa diganti; mengetik nominal = berarti ada biaya (centang otomatis).
+            const nominalBiaya = document.getElementById('nominal_biaya');
+            const barisBiaya = document.getElementById('baris-biaya');
+            const tandaiBiaya = () => barisBiaya.classList.toggle('mati', !biaya.checked);
+            biaya.addEventListener('change', () => { biayaDiubahManual = true; tandaiBiaya(); });
+            nominalBiaya.addEventListener('input', () => {
+                biayaDiubahManual = true;
+                biaya.checked = angka(nominalBiaya.value) > 0;
+                tandaiBiaya();
+            });
+            nominalBiaya.addEventListener('focus', () => nominalBiaya.select());
             const aturBiaya = () => {
                 const jago = bank.value.trim().toLowerCase() === 'jago' || bank.value.trim() === '';
                 if (!biayaDiubahManual) biaya.checked = !jago;
+                tandaiBiaya();
                 catatanBiaya.textContent = jago ? 'Sesama Bank Jago biasanya tanpa biaya transfer.' : 'Transfer ke ' + bank.value + ' biasanya kena biaya transfer.';
             };
             bank.addEventListener('input', aturBiaya);

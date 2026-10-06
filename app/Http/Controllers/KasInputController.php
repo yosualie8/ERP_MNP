@@ -98,6 +98,7 @@ class KasInputController extends Controller
         $request->merge([
             'nominal_masuk' => $polos($request->input('nominal_masuk')),
             'nominal_transfer' => $polos($request->input('nominal_transfer')),
+            'nominal_biaya' => $polos($request->input('nominal_biaya')),
             'bon' => array_map(fn ($b) => is_array($b) ? [...$b, 'nominal' => $polos($b['nominal'] ?? null)] : $b, (array) $request->input('bon', [])),
         ]);
 
@@ -111,6 +112,7 @@ class KasInputController extends Controller
             'nominal_masuk' => ['required_if:arah,masuk', 'nullable', 'integer', 'min:1'],
             'nominal_transfer' => ['required_if:arah,keluar', 'nullable', 'integer', 'min:1'],
             'biaya_transfer' => ['nullable', 'boolean'],
+            'nominal_biaya' => ['exclude_unless:biaya_transfer,1', 'required', 'integer', 'min:1', 'max:'.TulisKasSheet::BIAYA_TRANSFER_MAKS],
             'bon' => ['required_if:arah,keluar', 'array'],
             'bon.*.nominal' => ['required', 'integer', 'min:1'],
             'bon.*.pic' => ['nullable', 'string', 'max:60'],
@@ -125,6 +127,8 @@ class KasInputController extends Controller
             'bon.*.kode_gl.required' => 'Kode GL setiap transaksi detail wajib diisi.',
             'bon.*.nominal.required' => 'Nominal setiap transaksi detail wajib diisi.',
             'nominal_transfer.required_if' => 'Nominal transfer wajib diisi.',
+            'nominal_biaya.required' => 'Isi nominal biaya transfer, atau hilangkan centangnya.',
+            'nominal_biaya.max' => 'Biaya transfer maksimal '.rp(TulisKasSheet::BIAYA_TRANSFER_MAKS).'.',
         ]);
 
         // Jumlah bon wajib sama persis dengan nominal transfer; bila tidak, transaksi ditolak dan tidak ditulis ke sheet.
@@ -149,6 +153,7 @@ class KasInputController extends Controller
             'nominal_transfer' => $data['arah'] === 'keluar' ? (int) $data['nominal_transfer'] : null,
             'bon' => $data['arah'] === 'keluar' ? array_values($data['bon']) : [],
             'biaya_transfer' => $data['arah'] === 'keluar' && $request->boolean('biaya_transfer'),
+            'nominal_biaya' => (int) ($data['nominal_biaya'] ?? TulisKasSheet::BIAYA_TRANSFER),
         ];
 
         return $input;
@@ -264,6 +269,7 @@ class KasInputController extends Controller
             'nominal_masuk' => $t->debet ?: null,
             'nominal_transfer' => $t->kredit ?: null,
             'biaya_transfer' => $biaya ? '1' : '0',
+            'nominal_biaya' => $biaya?->kredit ?: TulisKasSheet::BIAYA_TRANSFER,
             'bon' => $t->bon->map(fn ($b) => ['nominal' => $b->nominal, 'pic' => $b->pic, 'keterangan' => $b->keterangan, 'kode_gl' => $b->kodeGl?->kode_asli])->all(),
             'foto' => KasFoto::where('no_id', $noId)->orderBy('id')->get()
                 ->map(fn ($f) => ['penuh' => route('kas.foto', $f), 'kecil' => route('kas.foto', ['foto' => $f, 'ukuran' => 'kecil'])])->all(),

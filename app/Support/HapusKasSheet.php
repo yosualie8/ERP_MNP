@@ -24,7 +24,7 @@ class HapusKasSheet
         $akhir = max($t->baris, (int) $t->bon->max('baris'));
         $berikut = KasTransfer::where('kas_bulan_id', $t->kas_bulan_id)->where('baris', '>', $akhir)->orderBy('baris')->with('bon')->first();
 
-        return $berikut && $berikut->kredit === TulisKasSheet::BIAYA_TRANSFER && $berikut->bon->count() <= 1
+        return $berikut && $berikut->kredit > 0 && $berikut->kredit <= TulisKasSheet::BIAYA_TRANSFER_MAKS &&$berikut->bon->count() <= 1
             && stripos((string) $berikut->keterangan, 'biaya transfer') !== false && $berikut->baris === $akhir + 1
             ? $berikut : null;
     }

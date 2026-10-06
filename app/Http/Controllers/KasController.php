@@ -51,7 +51,7 @@ class KasController extends Controller
                 ->orderBy('baris')->get(['id', 'baris', 'kredit', 'keterangan'])->values();
             foreach ($semua as $i => $t) {
                 $berikut = $semua[$i + 1] ?? null;
-                if ($berikut && $berikut->kredit === TulisKasSheet::BIAYA_TRANSFER && $berikut->bon_count <= 1
+                if ($berikut && $berikut->kredit > 0 && $berikut->kredit <= TulisKasSheet::BIAYA_TRANSFER_MAKS &&$berikut->bon_count <= 1
                     && stripos((string) $berikut->keterangan, 'biaya transfer') !== false
                     && stripos((string) $t->keterangan, 'biaya transfer') === false
                     && $berikut->baris === max($t->baris, (int) $t->bon_max_baris) + 1) {

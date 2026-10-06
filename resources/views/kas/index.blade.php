@@ -157,7 +157,7 @@
                 const bon = +d.bon ? ` beserta ${d.bon} transaksi detail di bawahnya` : '';
                 if (!confirm(`Hapus dari sheet (lembar {{ $bulan->lembar }}, baris ${d.baris})${bon}?\n\n${d.ringkasan}\n\nBaris di sheet akan dihapus. Isinya tetap tersimpan di riwayat aplikasi.`)) return;
                 const form = document.getElementById('form-hapus');
-                form.dengan_biaya.value = d.biaya && confirm('Tepat di bawahnya ada baris "Biaya Transfer Keluar" 2.500 untuk transfer ini.\n\nHapus juga? (OK = hapus juga, Batal = biarkan)') ? '1' : '0';
+                form.dengan_biaya.value = d.biaya && confirm('Tepat di bawahnya ada baris "Biaya Transfer Keluar" untuk transfer ini.\n\nHapus juga? (OK = hapus juga, Batal = biarkan)') ? '1' : '0';
                 form.action = d.hapus;
                 tombol.disabled = true;
                 tombol.textContent = 'Menghapus…';
