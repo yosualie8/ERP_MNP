@@ -7,6 +7,8 @@
         .menu-akun { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
         .menu-akun label { display: inline-flex; align-items: center; gap: 5px; font-size: 13px; color: var(--teks); cursor: pointer; }
         .menu-akun .simpan { padding: 4px 10px; font-size: 12px; }
+        .menu-akun .grup { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; flex-basis: 100%; }
+        .menu-akun .grup b { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--redup); min-width: 110px; }
         .menu-akun.berubah .simpan { border-color: var(--aksen); color: var(--aksen-terang); }
     </style>
     <div class="kartu">
@@ -50,9 +52,14 @@
                             @else
                                 <form method="POST" action="{{ route('pengguna.menu', $u) }}" class="menu-akun">
                                     @csrf @method('PATCH')
-                                    <label title="Selalu tampil"><input type="checkbox" checked disabled> Beranda</label>
-                                    @foreach (\App\Support\MenuAkses::DAFTAR as $kunci => [$nama, , , $ket])
-                                        <label title="{{ $ket }}"><input type="checkbox" name="menu[]" value="{{ $kunci }}" @checked($u->bolehMenu($kunci))> {{ $nama }}</label>
+                                    <div class="grup"><b>Umum</b><label title="Selalu tampil"><input type="checkbox" checked disabled> Beranda</label></div>
+                                    @foreach (\App\Support\MenuAkses::KATEGORI as [$judul, $ikon, $isi])
+                                        <div class="grup"><b>{{ $ikon }} {{ $judul }}</b>
+                                            @foreach ($isi as $kunci)
+                                                @php([$nama, , , $ket] = \App\Support\MenuAkses::DAFTAR[$kunci])
+                                                <label title="{{ $ket }}"><input type="checkbox" name="menu[]" value="{{ $kunci }}" @checked($u->bolehMenu($kunci))> {{ $nama }}</label>
+                                            @endforeach
+                                        </div>
                                     @endforeach
                                     <button type="submit" class="tombol polos simpan">Simpan menu</button>
                                     @if ($u->menu === null)<span class="redup" style="font-size: 12px;">belum diatur — semua menu</span>@endif

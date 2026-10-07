@@ -23,6 +23,13 @@ class MenuAkses
         'kode-gl' => ['Kode GL', 'kas.kode-gl', ['kas.kode-gl'], 'Daftar Kode GL'],
     ];
 
+    /** Kelompok menu di sidebar: kunci => [judul, ikon, menu di dalamnya]. */
+    public const KATEGORI = [
+        'kas' => ['Kas Harian', '🏦', ['input-kas', 'kas-harian', 'rekap', 'kode-gl']],
+        'uj' => ['Uang Jalan', '🚚', ['input-uj', 'kas-uj', 'reimburse-uj']],
+        'ritasi' => ['Ritasi', '⛰️', ['input-ritasi', 'ritasi']],
+    ];
+
     /** Foto bon dipakai Input Kas dan Input UJ: boleh bila salah satunya boleh. */
     private const BERSAMA = ['kas.foto' => ['input-kas', 'kas-harian', 'input-uj', 'kas-uj'], 'kas.foto.destroy' => ['input-kas', 'input-uj']];
 
@@ -69,5 +76,24 @@ class MenuAkses
     public static function navigasi(?User $user): array
     {
         return array_filter(self::DAFTAR, fn ($m, $kunci) => self::boleh($user, $kunci), ARRAY_FILTER_USE_BOTH);
+    }
+
+    /**
+     * Menu navigasi per kategori untuk akun ini (kategori tanpa menu yang boleh tidak ditampilkan).
+     *
+     * @return array<string, array{judul: string, ikon: string, menu: array<string, array>}>
+     */
+    public static function kelompok(?User $user): array
+    {
+        $boleh = self::navigasi($user);
+        $hasil = [];
+        foreach (self::KATEGORI as $kunci => [$judul, $ikon, $isi]) {
+            $menu = array_filter(array_map(fn ($k) => $boleh[$k] ?? null, array_combine($isi, $isi)));
+            if ($menu) {
+                $hasil[$kunci] = ['judul' => $judul, 'ikon' => $ikon, 'menu' => $menu];
+            }
+        }
+
+        return $hasil;
     }
 }

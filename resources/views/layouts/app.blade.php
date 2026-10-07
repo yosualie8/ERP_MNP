@@ -31,13 +31,34 @@
         input::placeholder { color: #6b717c; }
         input[type=checkbox], input[type=radio] { accent-color: var(--aksen); }
         ::selection { background: rgba(229, 72, 77, .45); }
-        header { background: #121317; border-bottom: 2px solid var(--aksen); padding: 12px 24px; display: flex; align-items: center; justify-content: space-between; }
+        header { background: #121317; border-bottom: 2px solid var(--aksen); padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; position: sticky; top: 0; z-index: 30; }
         header strong { color: var(--aksen-terang); }
         main { max-width: @yield('lebar', '960px'); margin: 24px auto; padding: 0 16px; }
-        header nav { display: flex; gap: 4px; flex-wrap: wrap; }
-        header nav a { color: var(--redup); text-decoration: none; padding: 6px 10px; border-radius: 6px; font-size: 14px; }
-        header nav a:hover { background: var(--kartu-2); color: var(--teks); }
-        header nav a.aktif { background: var(--aksen-muda); color: var(--aksen-terang); }
+        /* Sidebar: menu per kategori, tiap kategori bisa dibuka/ditutup; sidebar sendiri bisa disembunyikan (☰). */
+        .tata { display: flex; align-items: flex-start; }
+        .isi-utama { flex: 1; min-width: 0; }
+        aside.samping { width: 228px; flex: none; position: sticky; top: 52px; height: calc(100vh - 52px); overflow-y: auto; background: #101114; border-right: 1px solid var(--garis); padding: 12px 10px 24px; }
+        body.samping-tutup aside.samping { display: none; }
+        .tombol-samping { background: none; border: 1px solid var(--garis); color: var(--teks); border-radius: 7px; font-size: 17px; line-height: 1; padding: 6px 9px; cursor: pointer; }
+        .tombol-samping:hover { border-color: var(--aksen); color: var(--aksen-terang); }
+        aside.samping a.menu { display: block; color: var(--redup); text-decoration: none; padding: 7px 10px 7px 34px; border-radius: 7px; font-size: 14px; margin: 1px 0; }
+        aside.samping a.menu.atas { padding-left: 10px; color: var(--teks); }
+        aside.samping a.menu:hover { background: var(--kartu-2); color: var(--teks); }
+        aside.samping a.menu.aktif { background: var(--aksen-muda); color: var(--aksen-terang); font-weight: 600; box-shadow: inset 3px 0 0 var(--aksen); }
+        aside.samping details { margin-top: 6px; }
+        aside.samping summary { list-style: none; cursor: pointer; display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: 7px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #aeb4bf; user-select: none; }
+        aside.samping summary::-webkit-details-marker { display: none; }
+        aside.samping summary:hover { background: var(--kartu-2); color: var(--teks); }
+        aside.samping summary .panah { margin-left: auto; transition: transform .15s; font-size: 10px; color: var(--redup); }
+        aside.samping details[open] > summary .panah { transform: rotate(90deg); }
+        aside.samping details.ada-aktif > summary { color: var(--aksen-terang); }
+        aside.samping .jumlah { font-size: 10px; color: var(--redup); font-weight: 400; letter-spacing: 0; text-transform: none; }
+        @media (max-width: 900px) {
+            aside.samping { position: fixed; left: 0; top: 52px; z-index: 25; box-shadow: 6px 0 24px rgba(0, 0, 0, .5); }
+            body:not(.samping-buka) aside.samping { display: none; }
+            body.samping-buka.samping-tutup aside.samping { display: block; }
+            header .surel { display: none; }
+        }
         .chip { display: inline-block; padding: 4px 10px; border: 1px solid var(--garis); border-radius: 999px; font-size: 13px; color: var(--teks); text-decoration: none; margin: 0 4px 6px 0; background: var(--kartu); }
         .chip.aktif { background: var(--aksen); border-color: var(--aksen); color: #fff; }
         .angka { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -133,35 +154,74 @@
 </head>
 <body>
     @auth
+        <script>
+            // Sidebar disembunyikan? (diingat per browser; dipasang sebelum halaman tampil supaya tidak berkedip)
+            try { if (localStorage.getItem('mnp-samping') === 'tutup') document.body.classList.add('samping-tutup'); } catch (e) {}
+        </script>
         <header>
-            <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+            <div style="display: flex; align-items: center; gap: 12px;">
+                <button type="button" class="tombol-samping" id="tombol-samping" title="Tampilkan / sembunyikan menu" aria-label="Menu">☰</button>
                 <div><strong>MNP</strong> · PT Multi Niaga Putra</div>
-                <nav>
-                    <a href="{{ route('dashboard') }}" @class(['aktif' => request()->routeIs('dashboard')])>Beranda</a>
-                    {{-- Hanya menu yang diberikan ke akun ini (halaman Pengguna). --}}
-                    @foreach (\App\Support\MenuAkses::navigasi(auth()->user()) as [$nama, $rute])
-                        <a href="{{ route($rute) }}" @class(['aktif' => request()->routeIs($rute)])>{{ $nama }}</a>
-                    @endforeach
-                    @can('super-admin')
-                        <a href="{{ route('pengguna.index') }}" @class(['aktif' => request()->routeIs('pengguna.*')])>Pengguna</a>
-                    @endcan
-                </nav>
             </div>
             <form method="POST" action="{{ route('logout') }}">
                 @csrf
-                <span class="redup">{{ auth()->user()->email }}</span>
+                <span class="redup surel">{{ auth()->user()->email }}</span>
                 <button class="tombol polos" type="submit">Keluar</button>
             </form>
         </header>
     @endauth
-    <main>
-        @if (session('success'))
-            <div class="pesan sukses">{{ session('success') }}</div>
-        @endif
-        @if (session('error'))
-            <div class="pesan galat">{{ session('error') }}</div>
-        @endif
-        @yield('isi')
-    </main>
+    <div class="tata">
+        @auth
+            <aside class="samping" id="samping">
+                <a href="{{ route('dashboard') }}" @class(['menu atas', 'aktif' => request()->routeIs('dashboard')])>🏠 Beranda</a>
+                {{-- Hanya menu yang diberikan ke akun ini (halaman Pengguna), dikelompokkan per kategori. --}}
+                @foreach (\App\Support\MenuAkses::kelompok(auth()->user()) as $kunci => $k)
+                    @php($adaAktif = collect($k['menu'])->contains(fn ($m) => request()->routeIs(...$m[2])))
+                    <details data-kategori="{{ $kunci }}" @class(['ada-aktif' => $adaAktif]) @if ($adaAktif) data-aktif open @endif>
+                        <summary><span>{{ $k['ikon'] }}</span> {{ $k['judul'] }} <span class="jumlah">{{ count($k['menu']) }}</span><span class="panah">▶</span></summary>
+                        @foreach ($k['menu'] as [$nama, $rute, $pola])
+                            <a href="{{ route($rute) }}" @class(['menu', 'aktif' => request()->routeIs(...$pola)])>{{ $nama }}</a>
+                        @endforeach
+                    </details>
+                @endforeach
+                @can('super-admin')
+                    @php($adaAktif = request()->routeIs('pengguna.*'))
+                    <details data-kategori="pengaturan" @class(['ada-aktif' => $adaAktif]) @if ($adaAktif) data-aktif open @endif>
+                        <summary><span>⚙️</span> Pengaturan <span class="jumlah">1</span><span class="panah">▶</span></summary>
+                        <a href="{{ route('pengguna.index') }}" @class(['menu', 'aktif' => $adaAktif])>Pengguna</a>
+                    </details>
+                @endcan
+            </aside>
+            <script>
+                (() => {
+                    // Buka/tutup tiap kategori diingat per browser; kategori halaman yang sedang dibuka selalu terbuka.
+                    const KUNCI = 'mnp-kategori';
+                    let simpan = {};
+                    try { simpan = JSON.parse(localStorage.getItem(KUNCI) || '{}'); } catch (e) {}
+                    document.querySelectorAll('#samping details').forEach(d => {
+                        if (!d.hasAttribute('data-aktif')) d.open = simpan[d.dataset.kategori] ?? true; // belum pernah diatur = terbuka
+                        d.addEventListener('toggle', () => { simpan[d.dataset.kategori] = d.open; try { localStorage.setItem(KUNCI, JSON.stringify(simpan)); } catch (e) {} });
+                    });
+                    document.getElementById('tombol-samping').addEventListener('click', () => {
+                        const kecil = matchMedia('(max-width: 900px)').matches;
+                        if (kecil) { document.body.classList.toggle('samping-buka'); return; }
+                        const tutup = document.body.classList.toggle('samping-tutup');
+                        try { localStorage.setItem('mnp-samping', tutup ? 'tutup' : 'buka'); } catch (e) {}
+                    });
+                })();
+            </script>
+        @endauth
+        <div class="isi-utama">
+            <main>
+                @if (session('success'))
+                    <div class="pesan sukses">{{ session('success') }}</div>
+                @endif
+                @if (session('error'))
+                    <div class="pesan galat">{{ session('error') }}</div>
+                @endif
+                @yield('isi')
+            </main>
+        </div>
+    </div>
 </body>
 </html>
