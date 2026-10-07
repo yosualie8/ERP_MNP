@@ -47,7 +47,8 @@ class ValidasiUj
 
         $temuan = [];
         $sebelumnya = collect();
-        foreach (array_values($input['detail']) as $i => $d) {
+        // Indeks dipertahankan (bisa berlubang bila baris yang belum lengkap tidak ikut diperiksa).
+        foreach ($input['detail'] as $i => $d) {
             $nama = $i === 0 ? ($d['nama'] ?: $input['nama']) : $d['nama'];
             $r = self::baris('baris '.($i + 1).' input ini', $tgl, $nama, $d['keterangan'], (int) $d['nominal'], $d['kategori'], $d['jenis_kendaraan'], $d['no_mobil'], $d['no_do']);
             $pembanding = $histori->concat($sebelumnya);

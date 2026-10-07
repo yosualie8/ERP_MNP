@@ -168,11 +168,28 @@ class UjController extends Controller
      */
     public function periksa(Request $request): JsonResponse
     {
-        $input = $this->bacaInput($request);
-        if ($input instanceof RedirectResponse) {
-            return response()->json(['galat' => session()->pull('errors')?->all() ?? ['Periksa lagi isian form.']], 422);
+        // Longgar: baris yang sudah lengkap (nominal, keterangan, kategori) langsung diperiksa walaupun baris lain belum,
+        // supaya form bisa menandai hijau baris yang sudah valid satu per satu. Indeks baris dipertahankan.
+        try {
+            $tanggal = Carbon::parse((string) $request->input('tanggal'));
+        } catch (\Throwable) {
+            return response()->json(['galat' => ['Tanggal belum diisi dengan benar.']], 422);
+        }
+        $rapi = fn ($v) => ($v = trim((string) $v)) === '' ? null : $v;
+        $detail = [];
+        foreach ((array) $request->input('detail', []) as $i => $d) {
+            $nominal = (int) preg_replace('/\D/', '', (string) ($d['nominal'] ?? ''));
+            if (! $nominal || ! $rapi($d['keterangan'] ?? null) || ! $rapi($d['kategori'] ?? null)) {
+                continue;
+            }
+            $detail[(int) $i] = [
+                'nama' => $rapi($d['nama'] ?? null), 'keterangan' => trim($d['keterangan']), 'nominal' => $nominal, 'kategori' => $rapi($d['kategori']),
+                'jenis_kendaraan' => NomorMobil::rapikanJenis($d['jenis_kendaraan'] ?? null), 'no_mobil' => NomorMobil::rapikan($d['no_mobil'] ?? null),
+                'no_do' => $rapi($d['no_do'] ?? null), 'konfirmasi' => null,
+            ];
         }
         $kecuali = $request->filled('no_uj') ? UjTransaksi::where('no_uj', $request->integer('no_uj'))->value('id') : null;
+        $input = ['tanggal' => $tanggal, 'nama' => trim((string) $request->input('nama')), 'detail' => $detail];
 
         return response()->json(['temuan' => (object) ValidasiUj::periksa($input, $kecuali)]);
     }

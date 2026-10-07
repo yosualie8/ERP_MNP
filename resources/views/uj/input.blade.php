@@ -29,6 +29,13 @@
         /* Hasil validasi (Standar Aturan Validasi Kas Uang Jalan) di bawah baris detail yang kena FLAG. */
         table.bon tr.ber-flag input[data-nama] { border-color: #b8860b; }
         table.bon tr.temuan-baris td, table.bon tr.kurang-baris td { padding: 0 4px 10px; }
+        /* Baris detail yang sudah valid: hijau. */
+        table.bon tr.baris-detail.valid td { background: rgba(76, 195, 138, .24); }
+        table.bon tr.baris-detail.valid td:first-child { box-shadow: inset 4px 0 0 var(--sukses); }
+        table.bon tr.baris-detail.valid input[data-nama] { background: #143523; border-color: #3fa06f; color: #eafff2; }
+        table.bon tr.baris-detail.valid + tr.temuan-baris .temuan { border-color: #2f7a55; border-left-color: var(--sukses); background: #10241a; }
+        table.bon tr.baris-detail.valid + tr.temuan-baris .judul-temuan { color: var(--sukses); }
+        table.bon tr.baris-detail.valid .hapus { color: var(--redup); }
         .kurang { border: 1px solid rgba(255, 92, 97, .35); border-left: 4px solid var(--aksen); background: var(--merah-muda); color: var(--merah);
             border-radius: 8px; padding: 6px 12px; font-size: 13px; }
         .temuan .status-konf { margin-top: 4px; font-size: 12px; color: var(--merah); }
@@ -632,6 +639,7 @@
             };
             // Pesan "belum diisi" satu baris detail, diletakkan persis di bawah baris itu (di atas pesan FLAG-nya bila ada).
             const aturKurang = (tr, i, kurang, tampil) => {
+                tr.kurang = kurang;
                 if (!kurang.length || !tampil) { tr.kurangEl?.remove(); tr.kurangEl = null; return; }
                 if (!tr.kurangEl) {
                     tr.kurangEl = document.createElement('tr');
@@ -733,29 +741,38 @@
                     evaluasi(false);
                 }
             };
+            // Baris detail yang sudah valid (lengkap + lolos pemeriksaan server untuk isi form saat ini + FLAG-nya, bila ada,
+            // sudah dikonfirmasi) berlatar hijau.
+            const warnaiBaris = sudahDiperiksa => barisDetail().forEach(tr => {
+                const k = tr.temuan?.querySelector('[data-konfirmasi]');
+                const konfOk = !k || k.value.trim().length >= MIN_KONFIRMASI;
+                tr.classList.toggle('valid', sudahDiperiksa && !tr.kurang?.length && konfOk);
+            });
             const evaluasi = (bolehPeriksa = true) => {
                 const isian = cekIsian();
-                if (isian.masalah.length) {
+                const kunci = kunciIsi();
+                const sudahDiperiksa = diperiksa === kunci;
+                // Pemeriksaan aturan berjalan begitu ada baris lengkap (baris lain boleh belum), supaya baris valid bisa langsung hijau.
+                const adaBarisLengkap = barisDetail().some(tr => !tr.kurang?.length);
+                if (!sudahDiperiksa && adaBarisLengkap && bolehPeriksa && memeriksa !== kunci) {
                     clearTimeout(jedaPeriksa);
-                    memeriksa = null;
+                    jedaPeriksa = setTimeout(() => periksaServer(kunciIsi()), 600);
+                }
+                const konf = cekKonfirmasi();
+                warnaiBaris(sudahDiperiksa);
+                if (isian.masalah.length) {
                     aturTombol(false, 'Lengkapi isian dulu');
-                    tampilMasalah('Simpan belum aktif — lengkapi dulu:', isian.masalah);
+                    tampilMasalah('Simpan belum aktif — lengkapi dulu:', [...isian.masalah, ...(sudahDiperiksa ? konf.masalah : [])]);
                     return;
                 }
-                const kunci = kunciIsi();
-                if (diperiksa !== kunci) {
+                if (!sudahDiperiksa) {
                     aturTombol(false, 'Menunggu pemeriksaan validasi');
                     if (galatServer.length && !bolehPeriksa) { tampilMasalah('Simpan belum aktif — perbaiki dulu:', galatServer); return; }
                     kotakValidasi.className = 'pesan';
                     kotakValidasi.hidden = false;
                     kotakValidasi.textContent = 'Memeriksa validasi transaksi…';
-                    if (bolehPeriksa && memeriksa !== kunci) {
-                        clearTimeout(jedaPeriksa);
-                        jedaPeriksa = setTimeout(() => periksaServer(kunciIsi()), 600);
-                    }
                     return;
                 }
-                const konf = cekKonfirmasi();
                 if (konf.masalah.length) {
                     aturTombol(false, 'Ada transaksi ber-FLAG yang belum dikonfirmasi');
                     tampilMasalah('Simpan belum aktif:', konf.masalah);
