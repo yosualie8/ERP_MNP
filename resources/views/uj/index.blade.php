@@ -88,6 +88,9 @@
                                 @endif
                             </td>
                         </tr>
+                        @if ($detail->isNotEmpty())
+                            <tr class="bh"><td>Transaksi detail</td><td>Nama</td><td>Keterangan</td><td>Kategori</td><td>Mobil · DO</td><td class="angka">Nominal</td><td>ID UJ · reimburse</td><td></td></tr>
+                        @endif
                         @foreach ($detail as $d)
                             <tr @class(['b', 'fee' => $d->biaya_transfer])>
                                 <td></td>

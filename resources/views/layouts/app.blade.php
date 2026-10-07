@@ -62,7 +62,11 @@
         table.kas tr.t.m:hover { background: #172a21; }
         table.kas tr.b i { background: var(--kartu-2); }
         /* Bon tertutup kecuali grupnya dibuka; saat tertutup, kolom Kode GL transfer berisi ringkasan akun bon. */
-        table.kas tbody.grup:not(.buka) tr.b { display: none; }
+        table.kas tbody.grup:not(.buka) tr.b, table.kas tbody.grup:not(.buka) tr.bh { display: none; }
+        /* Judul kolom transaksi detail (muncul saat grup dibuka). */
+        table.kas tr.bh td { background: #2a1416; color: var(--aksen-terang); font-size: 11px; font-weight: 600; text-transform: uppercase;
+            letter-spacing: .04em; padding-top: 5px; padding-bottom: 5px; border-bottom: 1px solid #4a2023; }
+        table.kas tr.bh td:first-child { border-left: 3px solid var(--aksen); }
         table.kas tbody.grup.buka .ringkas-gl { visibility: hidden; }
         table.kas .ringkas-gl { color: var(--redup); font-size: 12px; }
         table.kas tr.t.ada-bon { cursor: pointer; }
