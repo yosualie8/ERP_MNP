@@ -6,6 +6,7 @@ use App\Http\Controllers\KasController;
 use App\Http\Controllers\KasFotoController;
 use App\Http\Controllers\KasInputController;
 use App\Http\Controllers\PenggunaController;
+use App\Http\Controllers\ReimburseUjController;
 use App\Http\Controllers\UjController;
 use Illuminate\Support\Facades\Route;
 
@@ -45,6 +46,9 @@ Route::middleware('auth')->group(function () {
     Route::put('/uj/{noUj}', [UjController::class, 'update'])->whereNumber('noUj')->name('uj.update');
     Route::delete('/uj/{noUj}', [UjController::class, 'hapus'])->whereNumber('noUj')->name('uj.hapus');
     Route::post('/uj/sinkron', [UjController::class, 'sinkron'])->name('uj.sinkron');
+    Route::get('/uj/reimburse', [ReimburseUjController::class, 'index'])->name('reimburse.index');
+    Route::post('/uj/reimburse', [ReimburseUjController::class, 'simpan'])->name('reimburse.simpan');
+    Route::get('/uj/reimburse/{reimburse}/excel', [ReimburseUjController::class, 'unduh'])->name('reimburse.unduh');
     Route::post('/logout', [GoogleController::class, 'logout'])->name('logout');
 
     // Khusus super admin.
