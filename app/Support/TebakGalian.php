@@ -30,7 +30,8 @@ class TebakGalian
         if (preg_match('/uang tanah ([a-z ]+?)(?:[,.;(]|$| tgl| tanggal| kekurangan)/', $t, $m)) {
             return [self::bersih($m[1]), 2];
         }
-        if (preg_match('/rit ([a-z ]+?) ke ([a-z ]+?)(?:[,.;(]|$| tgl| tanggal| kekurangan)/', $t, $m)) {
+        // "Rit Sajira ke PIK", "Rit PIK ke Gunung Guruh", "Rit Cilegon untuk INFRA Pantai Mutiara" → ujung yang bukan PIK.
+        if (preg_match('/rit ([a-z ]+?) (?:ke|untuk) ([a-z ]+?)(?:[,.;(]|$| tgl| tanggal| kekurangan)/', $t, $m)) {
             $a = self::bersih($m[1]);
 
             return [str_contains($a, 'pik') ? self::bersih($m[2]) : $a, 1];
