@@ -351,6 +351,15 @@
             });
             (awal.length ? awal : [{}]).forEach(b => tambah(b));
             barisDetail().forEach(tr => { if (!tr.querySelector('[data-nama=jenis_kendaraan]').value) aturJenis(tr); });
+            // Tempel blok sel dari Excel (Ctrl+V): isi mulai sel aktif, baris kurang ditambah otomatis.
+            TempelTabel.pasang(daftar, {
+                baris: barisDetail,
+                tambah: () => tambah({}),
+                setelah: rows => rows.forEach(tr => {
+                    const mobil = tr.querySelector('[data-nama=no_mobil]');
+                    if (mobil.value) { mobil.value = kunciMobil(mobil.value); if (!tr.querySelector('[data-nama=jenis_kendaraan]').value) aturJenis(tr); }
+                }),
+            });
             if (!awal.length) aturNamaPertama();
             nama.addEventListener('input', aturNamaPertama);
 

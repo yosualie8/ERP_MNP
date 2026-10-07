@@ -9,6 +9,7 @@
     <script src="{{ asset('js/tebak-kode-gl.js') }}?v={{ filemtime(public_path('js/tebak-kode-gl.js')) }}"></script>
     <script src="{{ asset('js/kecilkan-foto.js') }}?v={{ filemtime(public_path('js/kecilkan-foto.js')) }}"></script>
     <script src="{{ asset('js/pilih-bank.js') }}?v={{ filemtime(public_path('js/pilih-bank.js')) }}"></script>
+    <script src="{{ asset('js/tempel-tabel.js') }}?v={{ filemtime(public_path('js/tempel-tabel.js')) }}"></script>
     <title>{{ $judul ?? 'MNP' }} · PT Multi Niaga Putra</title>
     <style>
         /* Tema gelap dengan aksen merah. --hijau-muda tetap ada (dipakai halaman lama) = latar aksen tipis. */

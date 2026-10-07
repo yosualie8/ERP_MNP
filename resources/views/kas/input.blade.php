@@ -393,6 +393,8 @@
                 }
             });
             (awal.length ? awal : [{}]).forEach(b => tambah(b));
+            // Tempel blok sel dari Excel (Ctrl+V): isi mulai sel aktif, baris kurang ditambah otomatis.
+            TempelTabel.pasang(daftar, {baris: () => [...daftar.children], tambah: () => tambah({})});
 
             // Rekening tujuan yang pernah dipakai, dua arah: ketik nama → pilih bank & nomor; ketik nomor → nama & bank.
             const nama = document.getElementById('nama_tujuan');
