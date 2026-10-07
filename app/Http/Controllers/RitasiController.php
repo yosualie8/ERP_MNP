@@ -7,6 +7,7 @@ use App\Models\Ritasi;
 use App\Models\RitasiTemuan;
 use App\Models\UjDetail;
 use App\Support\GoogleSheets;
+use App\Support\KasSeabank;
 use App\Support\LembarRitasi;
 use App\Support\NomorMobil;
 use App\Support\TulisRitasiSheet;
@@ -82,17 +83,32 @@ class RitasiController extends Controller
         ]);
     }
 
-    /** @return array{0: array, 1: array<int, array>} kepala & rit yang sudah dirapikan (indeks dipertahankan) */
+    /** "8/10/2026", "08-10-26", "2026-10-08", "8 Okt 2026" → tanggal. */
+    public static function tanggal(?string $v): ?\Carbon\Carbon
+    {
+        $v = trim((string) $v);
+        if ($v === '') {
+            return null;
+        }
+        if (preg_match('/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2}|\d{4})$/', $v, $m)) {
+            $th = strlen($m[3]) === 2 ? 2000 + (int) $m[3] : (int) $m[3];
+
+            return checkdate((int) $m[2], (int) $m[1], $th) ? Carbon::create($th, (int) $m[2], (int) $m[1]) : null;
+        }
+        $t = KasSeabank::tanggal($v) ?? KasSeabank::tanggal(str_replace(' ', '-', $v));
+
+        return $t && $t->year >= 2020 && $t->year <= 2100 ? $t : null;
+    }
+
+    /** @return array<int, array> rit yang sudah dirapikan, masing-masing berdiri sendiri (indeks dipertahankan) */
     private function rapikan(Request $request, bool $longgar): array
     {
         $rapi = fn ($v) => ($v = trim(preg_replace('/\s+/', ' ', (string) $v))) === '' ? null : $v;
-        $kepala = [
-            'tahap' => $rapi($request->input('tahap')), 'tanggal' => rescue(fn () => Carbon::parse((string) $request->input('tanggal')), null, false),
-            'galian' => $rapi($request->input('galian')), 'jenis_buangan' => $rapi($request->input('jenis_buangan')), 'jenis_tanah' => $rapi($request->input('jenis_tanah')),
-        ];
         $rit = [];
         foreach ((array) $request->input('rit', []) as $i => $r) {
             $baris = [
+                'tahap' => $rapi($r['tahap'] ?? null), 'tanggal' => self::tanggal($r['tanggal'] ?? null), 'galian' => $rapi($r['galian'] ?? null),
+                'jenis_buangan' => $rapi($r['jenis_buangan'] ?? null), 'jenis_tanah' => $rapi($r['jenis_tanah'] ?? null),
                 'no_seri' => $rapi($r['no_seri'] ?? null), 'jam' => LembarRitasi::jam($rapi($r['jam'] ?? null)), 'no_lambung' => NomorMobil::rapikan($r['no_lambung'] ?? null),
                 'plat' => $rapi(strtoupper((string) ($r['plat'] ?? ''))), 'driver' => $rapi($r['driver'] ?? null), 'jenis_kendaraan' => NomorMobil::rapikanJenis($r['jenis_kendaraan'] ?? null),
                 'pemilik' => $rapi($r['pemilik'] ?? null), 'no_do' => $rapi($r['no_do'] ?? null),
@@ -100,21 +116,26 @@ class RitasiController extends Controller
                 'konfirmasi' => $rapi($r['konfirmasi'] ?? null),
             ];
             // Baris yang belum lengkap tidak ikut diperiksa saat pemeriksaan longgar (form menandai hijau baris per baris).
-            if ($longgar && (! $baris['no_seri'] || ! ($baris['no_lambung'] || $baris['plat']))) {
+            if ($longgar && (! $baris['tahap'] || ! $baris['no_seri'] || ! ($baris['no_lambung'] || $baris['plat']))) {
                 continue;
             }
             $rit[(int) $i] = $baris;
         }
 
-        return [$kepala, $rit];
+        return $rit;
     }
 
     private function aturan(): array
     {
         return [
-            'tahap' => ['required', 'string', 'max:120'], 'tanggal' => ['required', 'date'], 'galian' => ['required', 'string', 'max:80'],
-            'jenis_buangan' => ['required', 'string', 'max:40'], 'jenis_tanah' => ['required', 'string', 'max:60'],
             'rit' => ['required', 'array', 'min:1'],
+            'rit.*.tanggal' => ['required', 'string', 'max:20', function ($a, $v, $gagal) {
+                if (! self::tanggal($v)) {
+                    $gagal('Rit baris '.((int) explode('.', $a)[1] + 1).': tanggal "'.$v.'" tidak dikenali (contoh 8/10/2026).');
+                }
+            }],
+            'rit.*.tahap' => ['required', 'string', 'max:120'], 'rit.*.galian' => ['required', 'string', 'max:80'],
+            'rit.*.jenis_buangan' => ['required', 'string', 'max:40'], 'rit.*.jenis_tanah' => ['required', 'string', 'max:60'],
             'rit.*.no_seri' => ['required', 'string', 'max:30'], 'rit.*.jam' => ['nullable', 'string', 'max:10'],
             'rit.*.no_lambung' => ['nullable', 'string', 'max:20', 'required_without:rit.*.plat'], 'rit.*.plat' => ['nullable', 'string', 'max:30'],
             'rit.*.driver' => ['nullable', 'string', 'max:50'], 'rit.*.jenis_kendaraan' => ['required', 'string', 'max:40'], 'rit.*.pemilik' => ['required', 'string', 'max:60'],
@@ -125,6 +146,11 @@ class RitasiController extends Controller
 
     private const PESAN = [
         'rit.required' => 'Isi minimal satu rit.',
+        'rit.*.tanggal.required' => 'Rit baris :position: Tanggal belum diisi.',
+        'rit.*.tahap.required' => 'Rit baris :position: Tahap belum diisi.',
+        'rit.*.galian.required' => 'Rit baris :position: Galian belum diisi.',
+        'rit.*.jenis_buangan.required' => 'Rit baris :position: Jenis Buangan belum diisi.',
+        'rit.*.jenis_tanah.required' => 'Rit baris :position: Jenis Tanah belum diisi.',
         'rit.*.no_seri.required' => 'Rit baris :position: No Seri belum diisi.',
         'rit.*.no_lambung.required_without' => 'Rit baris :position: isi No Lambung (DT) atau Plat.',
         'rit.*.jenis_kendaraan.required' => 'Rit baris :position: Jenis Kendaraan belum diisi.',
@@ -134,18 +160,15 @@ class RitasiController extends Controller
     /** Pemeriksaan saat admin mengisi (longgar: rit yang sudah lengkap saja). */
     public function periksa(Request $request): JsonResponse
     {
-        [$kepala, $rit] = $this->rapikan($request, true);
-        if (! $kepala['tahap']) {
-            return response()->json(['temuan' => (object) []]);
-        }
+        $rit = $this->rapikan($request, true);
 
-        return response()->json(['temuan' => (object) ValidasiRitasi::periksa($kepala, $rit, $request->integer('baris_edit') ?: null)]);
+        return response()->json(['temuan' => (object) ($rit ? ValidasiRitasi::periksa($rit, $request->integer('baris_edit') ?: null) : [])]);
     }
 
     /** Penentu akhir di server: rit ber-FLAG wajib dikonfirmasi (min. 10 karakter). */
-    private function wajibKonfirmasi(array $kepala, array $rit, ?int $kecuali): array|RedirectResponse
+    private function wajibKonfirmasi(array $rit, ?int $kecuali): array|RedirectResponse
     {
-        $temuan = ValidasiRitasi::periksa($kepala, $rit, $kecuali);
+        $temuan = ValidasiRitasi::periksa($rit, $kecuali);
         $pesan = [];
         foreach ($temuan as $i => $daftar) {
             if (mb_strlen((string) $rit[$i]['konfirmasi']) < self::MIN_KONFIRMASI) {
@@ -156,12 +179,12 @@ class RitasiController extends Controller
         return $pesan ? back()->withInput()->withErrors($pesan) : $temuan;
     }
 
-    private function catatTemuan(array $temuan, array $kepala, array $rit, int $userId): void
+    private function catatTemuan(array $temuan, array $rit, int $userId): void
     {
         foreach ($temuan as $i => $daftar) {
-            RitasiTemuan::where('tahap', $kepala['tahap'])->where('no_seri', $rit[$i]['no_seri'])->delete();
+            RitasiTemuan::where('tahap', $rit[$i]['tahap'])->where('no_seri', $rit[$i]['no_seri'])->delete();
             foreach ($daftar as $t) {
-                RitasiTemuan::create(['tahap' => $kepala['tahap'], 'no_seri' => $rit[$i]['no_seri'], 'no_do' => $rit[$i]['no_do'], 'aturan' => $t['kode'],
+                RitasiTemuan::create(['tahap' => $rit[$i]['tahap'], 'no_seri' => $rit[$i]['no_seri'], 'no_do' => $rit[$i]['no_do'], 'aturan' => $t['kode'],
                     'prioritas' => $t['prioritas'], 'pesan' => mb_strimwidth($t['pesan'], 0, 1000, '…'), 'konfirmasi' => $rit[$i]['konfirmasi'], 'user_id' => $userId]);
             }
         }
@@ -170,25 +193,26 @@ class RitasiController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $request->validate($this->aturan(), self::PESAN);
-        [$kepala, $rit] = $this->rapikan($request, false);
-        $rit = array_values($rit);
-        $temuan = $this->wajibKonfirmasi($kepala, $rit, null);
+        $rit = array_values($this->rapikan($request, false));
+        $temuan = $this->wajibKonfirmasi($rit, null);
         if ($temuan instanceof RedirectResponse) {
             return $temuan;
         }
         try {
-            $hasil = (new TulisRitasiSheet(GoogleSheets::wajib()))->tulis($kepala, $rit);
+            $hasil = (new TulisRitasiSheet(GoogleSheets::wajib()))->tulis($rit);
         } catch (\Throwable $e) {
             report($e);
 
             return back()->withInput()->with('error', 'Gagal menulis ke sheet: '.$e->getMessage());
         }
-        $this->catatTemuan($temuan, $kepala, $rit, $request->user()->id);
-        $ringkas = count($rit).' rit '.$kepala['tahap'].' · '.$kepala['galian'].' · '.$kepala['tanggal']->translatedFormat('j M Y');
+        $this->catatTemuan($temuan, $rit, $request->user()->id);
+        $tgl = collect($rit)->pluck('tanggal')->sort()->values();
+        $ringkas = count($rit).' rit · '.collect($rit)->pluck('tahap')->unique()->implode(', ').' · '.$tgl->first()->translatedFormat('j M Y')
+            .($tgl->last()->ne($tgl->first()) ? ' – '.$tgl->last()->translatedFormat('j M Y') : '');
         KasRiwayat::create(['aksi' => 'rit-tambah', 'lembar' => 'Ritasi', 'baris_awal' => $hasil['baris_awal'], 'baris_akhir' => $hasil['baris_akhir'],
-            'ringkasan' => mb_strimwidth($ringkas, 0, 490, '…'), 'isi' => ['kepala' => [...$kepala, 'tanggal' => $kepala['tanggal']->toDateString()], 'rit' => $rit], 'user_id' => $request->user()->id]);
+            'ringkasan' => mb_strimwidth($ringkas, 0, 490, '…'), 'isi' => ['rit' => self::untukRiwayat($rit)], 'user_id' => $request->user()->id]);
 
-        return redirect()->route('ritasi.index', ['bulan' => $kepala['tanggal']->format('Y-m')])
+        return redirect()->route('ritasi.index', ['bulan' => $tgl->last()->format('Y-m')])
             ->with('success', "Tersimpan di sheet Ritasi baris {$hasil['baris_awal']}–{$hasil['baris_akhir']}: {$ringkas}.");
     }
 
@@ -199,9 +223,9 @@ class RitasiController extends Controller
             return redirect()->route('ritasi.index')->with('error', "Rit di baris {$baris} tidak ditemukan — mungkin sheet berubah. Klik \"Sinkron dari sheet\".");
         }
         $edit = [
-            'baris' => $r->baris, 'versi' => $this->versi($r), 'tahap' => $r->tahap, 'tanggal' => $r->tanggal?->toDateString(), 'galian' => $r->galian,
-            'jenis_buangan' => $r->jenis_buangan, 'jenis_tanah' => $r->jenis_tanah,
-            'rit' => [['no_seri' => $r->no_seri, 'jam' => $r->jam, 'no_lambung' => $r->no_lambung, 'plat' => $r->plat, 'driver' => $r->driver,
+            'baris' => $r->baris, 'versi' => $this->versi($r),
+            'rit' => [['tanggal' => $r->tanggal?->format('d/m/Y'), 'tahap' => $r->tahap, 'galian' => $r->galian, 'jenis_buangan' => $r->jenis_buangan, 'jenis_tanah' => $r->jenis_tanah,
+                'no_seri' => $r->no_seri, 'jam' => $r->jam, 'no_lambung' => $r->no_lambung, 'plat' => $r->plat, 'driver' => $r->driver,
                 'jenis_kendaraan' => $r->jenis_kendaraan, 'pemilik' => $r->pemilik, 'no_do' => $r->no_do, 'harga_jual' => $r->harga_jual, 'keterangan' => $r->keterangan]],
         ];
 
@@ -215,26 +239,25 @@ class RitasiController extends Controller
             return back()->withInput()->with('error', 'Rit ini sudah berubah di sheet sejak form dibuka (atau baru disinkron). Buka Edit lagi.');
         }
         $request->validate([...$this->aturan(), 'rit' => ['required', 'array', 'size:1']], self::PESAN);
-        [$kepala, $rit] = $this->rapikan($request, false);
-        $rit = array_values($rit);
-        $temuan = $this->wajibKonfirmasi($kepala, $rit, $baris);
+        $rit = array_values($this->rapikan($request, false));
+        $temuan = $this->wajibKonfirmasi($rit, $baris);
         if ($temuan instanceof RedirectResponse) {
             return $temuan;
         }
         $lama = "No Seri {$r->no_seri} {$r->tanggal?->translatedFormat('j M Y')} {$r->no_lambung}";
         try {
-            (new TulisRitasiSheet(GoogleSheets::wajib()))->ubah($r, $kepala, $rit[0]);
+            (new TulisRitasiSheet(GoogleSheets::wajib()))->ubah($r, $rit[0]);
         } catch (\Throwable $e) {
             report($e);
 
             return back()->withInput()->with('error', 'Gagal mengubah di sheet: '.$e->getMessage());
         }
-        $this->catatTemuan($temuan, $kepala, $rit, $request->user()->id);
+        $this->catatTemuan($temuan, $rit, $request->user()->id);
         KasRiwayat::create(['aksi' => 'rit-ubah', 'lembar' => 'Ritasi', 'baris_awal' => $baris, 'baris_akhir' => $baris,
-            'ringkasan' => mb_strimwidth("{$lama} → No Seri {$rit[0]['no_seri']} {$kepala['tanggal']->translatedFormat('j M Y')} {$rit[0]['no_lambung']}", 0, 490, '…'),
-            'isi' => ['kepala' => [...$kepala, 'tanggal' => $kepala['tanggal']->toDateString()], 'rit' => $rit], 'user_id' => $request->user()->id]);
+            'ringkasan' => mb_strimwidth("{$lama} → No Seri {$rit[0]['no_seri']} {$rit[0]['tanggal']->translatedFormat('j M Y')} {$rit[0]['no_lambung']}", 0, 490, '…'),
+            'isi' => ['rit' => self::untukRiwayat($rit)], 'user_id' => $request->user()->id]);
 
-        return redirect()->route('ritasi.index', ['bulan' => $kepala['tanggal']->format('Y-m')])->with('success', "Rit baris {$baris} diperbarui di sheet Ritasi.");
+        return redirect()->route('ritasi.index', ['bulan' => $rit[0]['tanggal']->format('Y-m')])->with('success', "Rit baris {$baris} diperbarui di sheet Ritasi.");
     }
 
     public function hapus(Request $request, int $baris): RedirectResponse
@@ -266,6 +289,11 @@ class RitasiController extends Controller
         }
 
         return back()->with('success', "Ritasi disinkron dari sheet: {$n} rit.");
+    }
+
+    private static function untukRiwayat(array $rit): array
+    {
+        return array_map(fn ($r) => [...$r, 'tanggal' => $r['tanggal']->toDateString()], $rit);
     }
 
     private function versi(Ritasi $r): string

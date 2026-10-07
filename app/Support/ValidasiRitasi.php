@@ -14,23 +14,25 @@ use Illuminate\Support\Collection;
 class ValidasiRitasi
 {
     /**
-     * @param  array  $kepala  tahap, tanggal, …
-     * @param  array<int, array>  $rit  indeks dipertahankan
+     * @param  array<int, array>  $rit  tiap rit lengkap (tahap, tanggal, no_seri, …); indeks dipertahankan
      * @param  int|null  $kecualiBaris  baris yang sedang diedit (tidak dihitung sebagai pembanding)
      * @return array<int, array<int, array{kode: string, prioritas: string, pesan: string}>>
      */
-    public static function periksa(array $kepala, array $rit, ?int $kecualiBaris = null): array
+    public static function periksa(array $rit, ?int $kecualiBaris = null): array
     {
         $doInput = collect($rit)->pluck('no_do')->map(fn ($d) => LembarRitasi::kunciAngka($d))->filter()->unique();
         $ritDo = Ritasi::query()->whereNotNull('no_do')->when($kecualiBaris, fn ($q) => $q->where('baris', '!=', $kecualiBaris))
             ->get(['baris', 'no_seri', 'tanggal', 'no_lambung', 'no_do', 'tahap'])
             ->filter(fn ($r) => $doInput->contains(LembarRitasi::kunciAngka($r->no_do)))
             ->groupBy(fn ($r) => LembarRitasi::kunciAngka($r->no_do));
-        $seriInput = collect($rit)->pluck('no_seri')->map(fn ($s) => LembarRitasi::kunciAngka($s))->filter()->unique();
-        $ritSeri = Ritasi::query()->where('tahap', $kepala['tahap'])->when($kecualiBaris, fn ($q) => $q->where('baris', '!=', $kecualiBaris))
-            ->get(['baris', 'no_seri', 'tanggal', 'no_lambung'])
-            ->filter(fn ($r) => $seriInput->contains(LembarRitasi::kunciAngka($r->no_seri)))
-            ->groupBy(fn ($r) => LembarRitasi::kunciAngka($r->no_seri));
+        // No Seri unik per tahap; tiap rit membawa tahapnya sendiri.
+        $kunciSeri = fn ($tahap, $seri) => ($s = LembarRitasi::kunciAngka($seri)) ? mb_strtolower(preg_replace('/\s+/', ' ', trim((string) $tahap))).'|'.$s : null;
+        $seriInput = collect($rit)->map(fn ($r) => $kunciSeri($r['tahap'], $r['no_seri']))->filter()->unique();
+        $ritSeri = Ritasi::query()->whereIn('tahap', collect($rit)->pluck('tahap')->filter()->unique()->all())
+            ->when($kecualiBaris, fn ($q) => $q->where('baris', '!=', $kecualiBaris))
+            ->get(['baris', 'tahap', 'no_seri', 'tanggal', 'no_lambung'])
+            ->filter(fn ($r) => $seriInput->contains($kunciSeri($r->tahap, $r->no_seri)))
+            ->groupBy(fn ($r) => $kunciSeri($r->tahap, $r->no_seri));
         $ujDo = UjDetail::query()->whereNotNull('no_do')->where('biaya_transfer', false)
             ->get(['id_uj', 'tanggal', 'nama', 'no_mobil', 'no_do', 'kategori'])
             ->filter(fn ($d) => $doInput->contains(LembarRitasi::kunciAngka($d->no_do)))
@@ -48,7 +50,7 @@ class ValidasiRitasi
                 $t[] = ['kode' => $kode, 'prioritas' => $prioritas, 'pesan' => $pesan];
             };
             $do = LembarRitasi::kunciAngka($r['no_do']);
-            $seri = LembarRitasi::kunciAngka($r['no_seri']);
+            $seri = $kunciSeri($r['tahap'], $r['no_seri']);
             $sebut = fn ($x) => 'baris '.$x->baris.' (No Seri '.$x->no_seri.', '.$x->tanggal?->translatedFormat('j M Y').($x->no_lambung ? ', '.$x->no_lambung : '').')';
 
             if ($do) {
@@ -76,7 +78,7 @@ class ValidasiRitasi
             if ($seri) {
                 $lain = $ritSeri->get($seri, collect());
                 if ($lain->isNotEmpty() || $seriSebelum->has($seri)) {
-                    $flag('R2', 'tinggi', 'No Seri '.$r['no_seri'].' sudah dipakai di '.$kepala['tahap'].': '.collect([...$lain->take(3)->map($sebut)->all(), ...($seriSebelum->has($seri) ? ['baris '.($seriSebelum[$seri] + 1).' input ini'] : [])])->implode('; ').'.');
+                    $flag('R2', 'tinggi', 'No Seri '.$r['no_seri'].' sudah dipakai di '.$r['tahap'].': '.collect([...$lain->take(3)->map($sebut)->all(), ...($seriSebelum->has($seri) ? ['baris '.($seriSebelum[$seri] + 1).' input ini'] : [])])->implode('; ').'.');
                 }
                 $seriSebelum[$seri] = $i;
             }

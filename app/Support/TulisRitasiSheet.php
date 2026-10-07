@@ -22,13 +22,15 @@ class TulisRitasiSheet
     }
 
     /**
-     * @param  array  $kepala  tahap, tanggal (Carbon), galian, jenis_buangan, jenis_tanah
-     * @param  array<int, array>  $rit  no_seri, jam, no_lambung, plat, driver, jenis_kendaraan, pemilik, no_do, harga_jual, keterangan
+     * Setiap rit berdiri sendiri (tidak ada kepala bersama).
+     *
+     * @param  array<int, array>  $rit  tahap, tanggal (Carbon), galian, jenis_buangan, jenis_tanah, no_seri, jam, no_lambung, plat, driver,
+     *                                  jenis_kendaraan, pemilik, no_do, harga_jual, keterangan
      * @return array{baris_awal: int, baris_akhir: int}
      */
-    public function tulis(array $kepala, array $rit): array
+    public function tulis(array $rit): array
     {
-        return Cache::lock('tulis-ritasi-sheet', 120)->block(60, function () use ($kepala, $rit) {
+        return Cache::lock('tulis-ritasi-sheet', 120)->block(60, function () use ($rit) {
             $l = LembarRitasi::LEMBAR;
             $akhir = max((int) Ritasi::max('baris'), (int) Cache::get('ritasi-akhir', 1));
             if (! $this->kosong($akhir + 1, $akhir + count($rit) + 2)) {
@@ -44,7 +46,7 @@ class TulisRitasiSheet
             $data = [];
             foreach (array_values($rit) as $i => $r) {
                 $n = $mulai + $i;
-                $data["{$l}!B{$n}:O{$n}"] = [self::isiBO($kepala, $r)];
+                $data["{$l}!B{$n}:O{$n}"] = [self::isiBO($r)];
                 $data["{$l}!Q{$n}"] = [[self::angkaTeks($r['no_do'])]];
                 $data["{$l}!S{$n}"] = [["=COUNTIF(Q:Q;Q{$n})"]];
             }
@@ -58,9 +60,9 @@ class TulisRitasiSheet
             $this->sheets->tulis($this->id, $data);
             Cache::forever('ritasi-akhir', $sampai);
 
-            DB::transaction(function () use ($kepala, $rit, $mulai) {
+            DB::transaction(function () use ($rit, $mulai) {
                 foreach (array_values($rit) as $i => $r) {
-                    Ritasi::create(self::barisDb($kepala, $r, $mulai + $i));
+                    Ritasi::create(self::barisDb($r, $mulai + $i));
                 }
             });
 
@@ -69,14 +71,14 @@ class TulisRitasiSheet
     }
 
     /** Ubah satu rit di tempatnya (setelah memastikan baris sheet masih sama dengan data aplikasi). */
-    public function ubah(Ritasi $lama, array $kepala, array $r): void
+    public function ubah(Ritasi $lama, array $r): void
     {
-        Cache::lock('tulis-ritasi-sheet', 120)->block(60, function () use ($lama, $kepala, $r) {
+        Cache::lock('tulis-ritasi-sheet', 120)->block(60, function () use ($lama, $r) {
             $l = LembarRitasi::LEMBAR;
             $this->periksa($lama);
             $n = $lama->baris;
-            $this->sheets->tulis($this->id, ["{$l}!B{$n}:O{$n}" => [self::isiBO($kepala, $r)], "{$l}!Q{$n}" => [[self::angkaTeks($r['no_do'])]]]);
-            $lama->update(self::barisDb($kepala, $r, $n));
+            $this->sheets->tulis($this->id, ["{$l}!B{$n}:O{$n}" => [self::isiBO($r)], "{$l}!Q{$n}" => [[self::angkaTeks($r['no_do'])]]]);
+            $lama->update(self::barisDb($r, $n));
         });
     }
 
@@ -112,8 +114,9 @@ class TulisRitasiSheet
     }
 
     /** Kolom B..O satu rit. */
-    private static function isiBO(array $k, array $r): array
+    private static function isiBO(array $r): array
     {
+        $k = $r;
         $t = fn (?string $v) => self::teks($v);
         $polisi = trim(implode('/', array_filter([trim((string) $r['plat']), trim((string) $r['driver'])])));
 
@@ -124,8 +127,9 @@ class TulisRitasiSheet
         ];
     }
 
-    private static function barisDb(array $k, array $r, int $n): array
+    private static function barisDb(array $r, int $n): array
     {
+        $k = $r;
         $polisi = trim(implode('/', array_filter([trim((string) $r['plat']), trim((string) $r['driver'])])));
 
         return [

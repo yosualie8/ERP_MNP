@@ -1,6 +1,6 @@
 @extends('layouts.app', ['judul' => 'Input Ritasi'])
 
-@section('lebar', '1500px')
+@section('lebar', '1960px')
 
 @section('isi')
     <style>
@@ -9,7 +9,6 @@
         .form-kas input[type=text]:focus, .form-kas input[type=date]:focus { outline: none; border-color: var(--aksen); box-shadow: 0 0 0 2px var(--aksen); }
         .form-kas input.angka-input { text-align: right; font-variant-numeric: tabular-nums; }
         .form-kas input.otomatis { background: var(--otomatis-latar); border-color: var(--otomatis-garis); }
-        .kepala { display: grid; grid-template-columns: 2fr 160px 1.3fr 1.2fr 1fr; gap: 12px; }
         table.bon td { padding: 3px; vertical-align: top; border-bottom: 0; }
         table.bon th { padding: 4px 3px; font-size: 12px; }
         table.bon input[data-nama] { padding: 7px 7px; font-size: 13px; border-color: var(--isian-garis); }
@@ -42,7 +41,6 @@
         table.bon tr.baris-rit.valid input[data-nama] { background: #143523; border-color: #3fa06f; color: #eafff2; }
         table.bon tr.baris-rit.valid + tr.temuan-baris .temuan { border-color: #2f7a55; border-left-color: var(--sukses); background: #10241a; }
         table.bon tr.baris-rit.valid + tr.temuan-baris .judul-temuan { color: var(--sukses); }
-        @media (max-width: 900px) { .kepala { grid-template-columns: 1fr 1fr; } }
     </style>
 
     @php($edit ??= null)
@@ -59,31 +57,21 @@
         @endif
 
         <div class="kartu">
-            <h3 style="margin: 0 0 14px;">
-                @if ($edit) Edit Ritasi <span class="redup" style="font-size: 13px; font-weight: normal;">sheet Ritasi baris {{ $edit['baris'] }}</span>
-                @else Input Ritasi <span class="redup" style="font-size: 13px; font-weight: normal;">berlaku untuk semua rit di tabel bawah</span>@endif
-            </h3>
-            <div class="kepala">
-                <div><label for="tahap">Tahap / proyek</label><input type="text" name="tahap" id="tahap" list="daftar-tahap" autocomplete="off" value="{{ old('tahap', $edit['tahap'] ?? '') }}" placeholder="mis. ASG Tahap 116"></div>
-                <div><label for="tanggal">Tanggal</label><input type="date" name="tanggal" id="tanggal" value="{{ old('tanggal', $edit['tanggal'] ?? now()->toDateString()) }}"></div>
-                <div><label for="galian">Galian</label><input type="text" name="galian" id="galian" list="daftar-galian" autocomplete="off" value="{{ old('galian', $edit['galian'] ?? '') }}"></div>
-                <div><label for="jenis_tanah">Jenis tanah</label><input type="text" name="jenis_tanah" id="jenis_tanah" list="daftar-tanah" autocomplete="off" value="{{ old('jenis_tanah', $edit['jenis_tanah'] ?? '') }}"></div>
-                <div><label for="jenis_buangan">Jenis buangan</label><input type="text" name="jenis_buangan" id="jenis_buangan" list="daftar-buangan" autocomplete="off" value="{{ old('jenis_buangan', $edit['jenis_buangan'] ?? 'Ritasi') }}"></div>
-            </div>
-        </div>
-
-        <div class="kartu">
             <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px;">
-                <h3 style="margin: 0 0 4px;">Rit</h3>
+                <h3 style="margin: 0 0 4px;">
+                    @if ($edit) Edit Ritasi <span class="redup" style="font-size: 13px; font-weight: normal;">sheet Ritasi baris {{ $edit['baris'] }}</span>
+                    @else Input Ritasi @endif
+                </h3>
                 <span class="redup"><b id="jumlah-rit">0</b> rit · total harga jual <b id="total-harga">0</b></span>
             </div>
-            <p class="redup" style="margin: 0 0 10px;">Satu baris = satu rit. Ketik No Lambung (DT) → Plat, Driver, Jenis & Pemilik terisi otomatis; Harga Jual dari histori tahap + galian + kendaraan; No Seri berikutnya disarankan (ungu = otomatis, boleh diganti).</p>
+            <p class="redup" style="margin: 0 0 10px;">Satu baris = satu rit, masing-masing berdiri sendiri (tanggal, tahap, galian boleh berbeda per baris). Ketik No Lambung (DT) → Plat, Driver, Jenis & Pemilik terisi otomatis; Harga Jual dari histori tahap + galian + kendaraan; No Seri berikutnya disarankan per tahap (ungu = otomatis, boleh diganti).</p>
             <div class="gulir">
-            <table class="bon" style="min-width: 1350px;">
+            <table class="bon" style="min-width: 1880px;">
                 <thead><tr>
-                    <th style="width: 92px;">No Seri</th><th style="width: 70px;">Jam</th><th style="width: 86px;">No Lambung</th><th style="width: 120px;">Plat</th>
-                    <th style="width: 110px;">Driver</th><th style="width: 92px;">Jenis</th><th style="width: 100px;">Pemilik</th><th style="width: 90px;">No DO</th>
-                    <th style="width: 118px;" class="angka">Harga jual</th><th>Keterangan</th><th style="width: 26px;"></th>
+                    <th style="width: 100px;">Tanggal</th><th style="width: 190px;">Tahap</th><th style="width: 80px;">No Seri</th><th style="width: 62px;">Jam</th>
+                    <th style="width: 82px;">No Lambung</th><th style="width: 112px;">Plat</th><th style="width: 104px;">Driver</th><th style="width: 130px;">Galian</th>
+                    <th style="width: 120px;">Jenis tanah</th><th style="width: 92px;">Jenis buangan</th><th style="width: 84px;">Jenis</th><th style="width: 92px;">Pemilik</th>
+                    <th style="width: 84px;">No DO</th><th style="width: 108px;" class="angka">Harga jual</th><th>Keterangan</th><th style="width: 26px;"></th>
                 </tr></thead>
                 <tbody id="daftar-rit"></tbody>
             </table>
@@ -92,7 +80,7 @@
                 <div class="tambah-detail">
                     <button type="button" class="tombol polos" id="tambah-rit">+ Tambah rit</button>
                     <label>Jumlah rit <input type="text" id="jumlah-detail" value="1" inputmode="numeric" autocomplete="off" maxlength="3"></label>
-                    <span class="redup">Seperti Excel: Enter / ↓ ↑ pindah baris, ← → pindah kolom; bisa tempel blok sel dari Excel (Ctrl+V). Baris baru menyalin DT & harga baris di atasnya, No Seri +1.</span>
+                    <span class="redup">Seperti Excel: Enter / ↓ ↑ pindah baris, ← → pindah kolom; bisa tempel blok sel dari Excel (Ctrl+V). Baris baru menyalin isi baris di atasnya (kecuali Jam, No DO, Keterangan), No Seri +1.</span>
                 </div>
             @endunless
         </div>
@@ -115,11 +103,16 @@
 
     <template id="templat-rit">
         <tr class="baris-rit">
+            <td><input type="text" data-nama="tanggal" autocomplete="off" placeholder="dd/mm/yyyy"></td>
+            <td><input type="text" data-nama="tahap" list="daftar-tahap" autocomplete="off"></td>
             <td><input type="text" data-nama="no_seri" autocomplete="off"></td>
             <td><input type="text" data-nama="jam" autocomplete="off" placeholder="hh:mm"></td>
             <td><input type="text" data-nama="no_lambung" list="daftar-dt" autocomplete="off"></td>
             <td><input type="text" data-nama="plat" autocomplete="off"></td>
             <td><input type="text" data-nama="driver" autocomplete="off"></td>
+            <td><input type="text" data-nama="galian" list="daftar-galian" autocomplete="off"></td>
+            <td><input type="text" data-nama="jenis_tanah" list="daftar-tanah" autocomplete="off"></td>
+            <td><input type="text" data-nama="jenis_buangan" list="daftar-buangan" autocomplete="off"></td>
             <td><input type="text" data-nama="jenis_kendaraan" list="daftar-jenis" autocomplete="off"></td>
             <td><input type="text" data-nama="pemilik" list="daftar-pemilik" autocomplete="off"></td>
             <td><input type="text" data-nama="no_do" autocomplete="off"></td>
@@ -175,21 +168,37 @@
                 isiOtomatis(sel(tr, 'jenis_kendaraan'), d.jenis || '');
                 isiOtomatis(sel(tr, 'pemilik'), d.pemilik || '');
             };
+            // Tanggal: "8/10/26", "08-10-2026", "2026-10-08" → "08/10/2026"; selain itu dibiarkan (ditandai bila tidak dikenali).
+            const BULAN = {jan: 1, feb: 2, mar: 3, apr: 4, mei: 5, may: 5, jun: 6, jul: 7, agu: 8, agt: 8, aug: 8, sep: 9, okt: 10, oct: 10, nov: 11, des: 12, dec: 12};
+            const uraiTanggal = v => {
+                v = String(v || '').trim();
+                let m, d, b, t;
+                if ((m = v.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2}|\d{4})$/))) [d, b, t] = [+m[1], +m[2], +m[3]];
+                else if ((m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/))) [t, b, d] = [+m[1], +m[2], +m[3]];
+                else if ((m = v.match(/^(\d{1,2})[\s-]([a-z]{3})[a-z]*[\s-](\d{2}|\d{4})$/i)) && BULAN[m[2].toLowerCase()]) [d, b, t] = [+m[1], BULAN[m[2].toLowerCase()], +m[3]];
+                else return null;
+                if (t < 100) t += 2000;
+                const x = new Date(t, b - 1, d);
+                return x.getMonth() === b - 1 && x.getDate() === d && t >= 2020 ? `${String(d).padStart(2, '0')}/${String(b).padStart(2, '0')}/${t}` : null;
+            };
+            const hariIni = (() => { const x = new Date(); return `${String(x.getDate()).padStart(2, '0')}/${String(x.getMonth() + 1).padStart(2, '0')}/${x.getFullYear()}`; })();
             const aturHarga = tr => {
-                const k = [kecil($('tahap').value), kecil($('galian').value)];
+                const k = [kecil(sel(tr, 'tahap').value), kecil(sel(tr, 'galian').value)];
                 const h = HARGA[[...k, kecil(sel(tr, 'jenis_kendaraan').value), kecil(sel(tr, 'pemilik').value)].join('|')] ?? HARGA[k.join('|')];
                 if (h) isiOtomatis(sel(tr, 'harga_jual'), String(h));
             };
-            // No Seri: baris pertama = nomor terakhir tahap ini + 1, baris berikutnya +1 dari baris di atasnya.
+            // No Seri per tahap: rit pertama suatu tahap = nomor terakhir tahap itu + 1, rit berikutnya (tahap sama) +1 dari rit sebelumnya.
             const aturSeri = () => {
                 if (MODE_EDIT) return;
-                const s = SERI[$('tahap').value.trim()];
-                let berikut = s ? s.max + 1 : null, pad = s ? s.pad : 0;
+                const terakhir = {};
                 baris().forEach(tr => {
+                    const tahap = sel(tr, 'tahap').value.trim().replace(/\s+/g, ' ');
+                    if (!tahap) return;
+                    const s = terakhir[tahap] ?? (SERI[tahap] ? {berikut: SERI[tahap].max + 1, pad: SERI[tahap].pad} : null);
                     const el = sel(tr, 'no_seri');
-                    if (berikut !== null && (!el.value || el.classList.contains('otomatis'))) isiOtomatis(el, String(berikut).padStart(pad, '0'));
+                    if (s && (!el.value || el.classList.contains('otomatis'))) isiOtomatis(el, String(s.berikut).padStart(s.pad, '0'));
                     const n = parseInt(el.value.replace(/\D/g, ''), 10);
-                    if (!isNaN(n)) { berikut = n + 1; pad = el.value.length; }
+                    if (!isNaN(n)) terakhir[tahap] = {berikut: n + 1, pad: el.value.length};
                 });
             };
             const hitung = () => {
@@ -218,18 +227,18 @@
                 if (el.classList.contains('rupiah') && e.isTrusted) rapikanRupiah(el);
                 const f = el.dataset.nama;
                 if (f === 'no_lambung') { aturDariDt(tr); aturHarga(tr); }
-                if (f === 'jenis_kendaraan' || f === 'pemilik') aturHarga(tr);
-                if (f === 'no_seri') aturSeri();
+                if (['jenis_kendaraan', 'pemilik', 'galian', 'tahap'].includes(f)) aturHarga(tr);
+                if (f === 'no_seri' || f === 'tahap') aturSeri();
                 hitung();
             });
             daftar.addEventListener('focusout', e => {
                 const el = e.target;
                 if (el.dataset?.nama === 'no_lambung' && el.value) { el.value = kunciMobil(el.value); aturDariDt(el.closest('tr')); aturHarga(el.closest('tr')); }
                 if (el.dataset?.nama === 'plat' && el.value) el.value = el.value.toUpperCase().replace(/\s+/g, ' ').trim();
+                if (el.dataset?.nama === 'tanggal' && el.value) el.value = uraiTanggal(el.value) ?? el.value.trim();
             });
-            ['tahap', 'galian'].forEach(id => $(id).addEventListener('input', () => { if (id === 'tahap') aturSeri(); baris().forEach(aturHarga); hitung(); }));
 
-            // Tambah rit: salin DT, jenis, pemilik, harga dari baris di atasnya (No Seri +1 otomatis).
+            // Tambah rit: salin isi baris di atasnya kecuali Jam, No DO, Keterangan (No Seri +1 otomatis).
             const jumlahDetail = $('jumlah-detail');
             if (jumlahDetail) {
                 jumlahDetail.addEventListener('input', () => { jumlahDetail.value = jumlahDetail.value.replace(/\D/g, ''); });
@@ -240,7 +249,8 @@
                     let pertama = null;
                     for (let k = 0; k < n; k++) {
                         const atas = baris().at(-1);
-                        const salin = atas ? Object.fromEntries(['no_lambung', 'plat', 'driver', 'jenis_kendaraan', 'pemilik', 'harga_jual'].map(f => [f, sel(atas, f).value])) : {};
+                        const salin = atas ? Object.fromEntries(['tanggal', 'tahap', 'galian', 'jenis_tanah', 'jenis_buangan', 'no_lambung', 'plat', 'driver', 'jenis_kendaraan', 'pemilik', 'harga_jual']
+                            .map(f => [f, sel(atas, f).value])) : {tanggal: hariIni, jenis_buangan: 'Ritasi'};
                         const tr = tambah(salin);
                         tr.querySelectorAll('[data-nama]').forEach(el => { if (el.value) el.classList.add('otomatis'); });
                         pertama ??= tr;
@@ -274,14 +284,17 @@
                 if (tuju) { tuju.focus(); tuju.select(); }
             });
 
-            (awal.length ? awal : [{}]).forEach(r => tambah(r));
-            if (!MODE_EDIT) TempelTabel.pasang(daftar, {baris, tambah: () => tambah({}), setelah: rows => rows.forEach(tr => {
-                const dt = sel(tr, 'no_lambung'); if (dt.value) { dt.value = kunciMobil(dt.value); aturDariDt(tr); }
-                aturHarga(tr);
-            })});
+            (awal.length ? awal : [{tanggal: hariIni, jenis_buangan: 'Ritasi'}]).forEach(r => tambah(r));
+            if (!MODE_EDIT) TempelTabel.pasang(daftar, {baris, tambah: () => tambah({}), setelah: rows => {
+                rows.forEach(tr => {
+                    const tg = sel(tr, 'tanggal'); if (tg.value) tg.value = uraiTanggal(tg.value) ?? tg.value;
+                    const dt = sel(tr, 'no_lambung'); if (dt.value) { dt.value = kunciMobil(dt.value); aturDariDt(tr); }
+                    aturHarga(tr);
+                });
+                aturSeri();
+            }});
 
             // ===== Validasi: isian wajib (per baris), aturan di server (DO/No Seri dobel, cocok ke Kas UJ), konfirmasi FLAG =====
-            const kepala = [['tahap', 'Tahap'], ['tanggal', 'Tanggal'], ['galian', 'Galian'], ['jenis_tanah', 'Jenis tanah'], ['jenis_buangan', 'Jenis buangan']];
             let tandaiSemua = false;
             form.addEventListener('focusout', e => { if (e.target.matches('input')) { e.target.dataset.tersentuh = '1'; evaluasi(); } });
             const tampilMasalah = (judul, masalah) => {
@@ -291,21 +304,23 @@
             const aturKurang = (tr, i, kurang, tampil) => {
                 tr.kurang = kurang;
                 if (!kurang.length || !tampil) { tr.kurangEl?.remove(); tr.kurangEl = null; return; }
-                if (!tr.kurangEl) { tr.kurangEl = document.createElement('tr'); tr.kurangEl.className = 'kurang-baris'; tr.kurangEl.innerHTML = '<td colspan="11"><div class="kurang"></div></td>'; tr.after(tr.kurangEl); }
-                tr.kurangEl.querySelector('.kurang').textContent = `✎ Rit baris ${i + 1}: ${kurang.join(', ')} belum diisi.`;
+                if (!tr.kurangEl) { tr.kurangEl = document.createElement('tr'); tr.kurangEl.className = 'kurang-baris'; tr.kurangEl.innerHTML = '<td colspan="16"><div class="kurang"></div></td>'; tr.after(tr.kurangEl); }
+                tr.kurangEl.querySelector('.kurang').textContent = `✎ Rit baris ${i + 1}: ${kurang.join(', ')} belum diisi / belum benar.`;
             };
             const cekIsian = () => {
                 form.querySelectorAll('.wajib-kosong').forEach(el => el.classList.remove('wajib-kosong'));
                 const masalah = [];
                 const tandai = el => { if (tandaiSemua || el.dataset.tersentuh) el.classList.add('wajib-kosong'); };
-                const kurangKepala = kepala.filter(([id]) => !$(id).value.trim()).map(([id, label]) => { tandai($(id)); return label; });
-                if (kurangKepala.length) masalah.push('Kepala: ' + kurangKepala.join(', ') + ' belum diisi.');
                 const barisKurang = [];
                 baris().forEach((tr, i) => {
                     const kurang = [];
                     const cek = (f, label) => { if (!sel(tr, f).value.trim()) { tandai(sel(tr, f)); kurang.push(label); } };
+                    const tg = sel(tr, 'tanggal');
+                    if (!uraiTanggal(tg.value)) { tandai(tg); kurang.push(tg.value.trim() ? `Tanggal (format dd/mm/yyyy)` : 'Tanggal'); }
+                    cek('tahap', 'Tahap');
                     cek('no_seri', 'No Seri');
                     if (!sel(tr, 'no_lambung').value.trim() && !sel(tr, 'plat').value.trim()) { tandai(sel(tr, 'no_lambung')); kurang.push('No Lambung atau Plat'); }
+                    cek('galian', 'Galian'); cek('jenis_tanah', 'Jenis tanah'); cek('jenis_buangan', 'Jenis buangan');
                     cek('jenis_kendaraan', 'Jenis'); cek('pemilik', 'Pemilik');
                     aturKurang(tr, i, kurang, tandaiSemua || [...tr.querySelectorAll('[data-nama]')].some(el => el.dataset.tersentuh || (el.value.trim() && !el.classList.contains('otomatis'))));
                     if (kurang.length) barisKurang.push(i + 1);
@@ -322,7 +337,7 @@
                 tr.aturan = [...new Set(t.map(x => x.kode))];
                 const el = document.createElement('tr');
                 el.className = 'temuan-baris';
-                el.innerHTML = `<td colspan="11"><div class="temuan"><div class="judul-temuan">⚠ Rit baris ${i + 1} kena FLAG validasi (${t.length}) — perbaiki bila salah, atau tulis konfirmasi bila memang valid</div>
+                el.innerHTML = `<td colspan="16"><div class="temuan"><div class="judul-temuan">⚠ Rit baris ${i + 1} kena FLAG validasi (${t.length}) — perbaiki bila salah, atau tulis konfirmasi bila memang valid</div>
                     <ul>${t.map(x => `<li><span class="prioritas ${x.prioritas}">${x.prioritas}</span> <span class="aturan">${esc(x.kode)}</span> ${esc(x.pesan)}</li>`).join('')}</ul>
                     <label>Konfirmasi admin <span class="redup">(wajib, min. ${MIN_KONFIRMASI} karakter)</span><input type="text" data-konfirmasi maxlength="1000" autocomplete="off"></label>
                     <div class="status-konf"></div></div></td>`;
@@ -367,7 +382,7 @@
                 const isian = cekIsian();
                 const kunci = kunciIsi();
                 const sudah = diperiksa === kunci;
-                if (!sudah && bolehPeriksa && memeriksa !== kunci && $('tahap').value.trim() && baris().some(tr => !tr.kurang?.length)) {
+                if (!sudah && bolehPeriksa && memeriksa !== kunci && baris().some(tr => !tr.kurang?.length)) {
                     clearTimeout(jeda); jeda = setTimeout(() => periksaServer(kunciIsi()), 600);
                 }
                 const konf = cekKonfirmasi();
