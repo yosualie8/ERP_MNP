@@ -10,6 +10,7 @@ use App\Support\DaftarBank;
 use App\Support\FotoBon;
 use App\Support\GoogleSheets;
 use App\Support\KasSeabank;
+use App\Support\NomorMobil;
 use App\Support\TautanUj;
 use App\Support\TulisUjSheet;
 use Illuminate\Http\RedirectResponse;
@@ -63,7 +64,7 @@ class UjController extends Controller
 
         // No mobil → jenis kendaraan terakhir yang dipakai (DT 062 → Faw).
         $mobil = UjDetail::whereNotNull('no_mobil')->where('no_mobil', '!=', '')->orderBy('baris')->get(['no_mobil', 'jenis_kendaraan'])
-            ->mapWithKeys(fn ($d) => [strtoupper(preg_replace('/\s+/', ' ', trim($d->no_mobil))) => $d->jenis_kendaraan])
+            ->mapWithKeys(fn ($d) => [NomorMobil::rapikan($d->no_mobil) => $d->jenis_kendaraan])
             ->filter()->sortKeys();
 
         $bank = UjTransaksi::whereNotNull('bank')->where('tanggal', '>=', $sejak)->select('bank', DB::raw('COUNT(*) as n'))->groupBy('bank')->orderByDesc('n')->limit(8)->pluck('bank')
@@ -144,8 +145,8 @@ class UjController extends Controller
             'nominal' => (int) $data['nominal'],
             'detail' => array_values(array_map(fn ($d) => [
                 'nama' => $rapi($d['nama'] ?? null), 'keterangan' => trim($d['keterangan']), 'nominal' => (int) $d['nominal'],
-                'kategori' => $rapi($d['kategori']), 'jenis_kendaraan' => $rapi($d['jenis_kendaraan'] ?? null),
-                'no_mobil' => ($m = $rapi($d['no_mobil'] ?? null)) ? strtoupper(preg_replace('/\s+/', ' ', $m)) : null, 'no_do' => $rapi($d['no_do'] ?? null),
+                'kategori' => $rapi($d['kategori']), 'jenis_kendaraan' => NomorMobil::rapikanJenis($d['jenis_kendaraan'] ?? null),
+                'no_mobil' => NomorMobil::rapikan($d['no_mobil'] ?? null), 'no_do' => $rapi($d['no_do'] ?? null),
             ], $data['detail'])),
             'biaya_transfer' => $request->boolean('biaya_transfer'),
             'nominal_biaya' => (int) ($data['nominal_biaya'] ?? TulisUjSheet::BIAYA_TRANSFER),

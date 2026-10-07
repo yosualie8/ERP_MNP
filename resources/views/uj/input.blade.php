@@ -247,7 +247,18 @@
                 el.value = v ?? '';
                 el.classList.toggle('otomatis', !!v);
             };
-            const kunciMobil = v => String(v || '').toUpperCase().replace(/\s+/g, ' ').trim();
+            // Sama dengan App\Support\NomorMobil: "dt  o42" / "DT042" → "DT 042".
+            const kunciMobil = v => {
+                const t = String(v || '').toUpperCase().replace(/\s+/g, ' ').trim();
+                const m = t.match(/^DT\s*([O0-9]{1,3})$/);
+                return m ? 'DT ' + m[1].replace(/O/g, '0').padStart(3, '0') : t;
+            };
+            daftar.addEventListener('focusout', e => {
+                if (e.target.dataset?.nama === 'no_mobil' && e.target.value) {
+                    e.target.value = kunciMobil(e.target.value);
+                    aturJenis(e.target.closest('tr'));
+                }
+            });
             const aturJenis = tr => isiOtomatis(tr.querySelector('[data-nama=jenis_kendaraan]'), jenisMobil[kunciMobil(tr.querySelector('[data-nama=no_mobil]').value)] || '');
             const nama = document.getElementById('nama_tujuan');
             const aturNamaPertama = () => { const tr = daftar.firstElementChild; if (tr) isiOtomatis(tr.querySelector('[data-nama=nama]'), nama.value.trim()); };

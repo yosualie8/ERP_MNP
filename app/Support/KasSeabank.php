@@ -126,7 +126,7 @@ class KasSeabank
             $kini['detail'][] = [
                 'baris' => $n, 'id_uj' => $teks(0), 'tanggal' => self::tanggal($sel(1))?->toDateString(), 'nama' => $teks(5),
                 'keterangan' => $teks(6) ? mb_substr($teks(6), 0, 500) : null, 'nominal' => self::angka($sel(7)), 'kategori' => $teks(8),
-                'jenis_kendaraan' => $teks(9), 'no_mobil' => $teks(10), 'no_do' => $teks(11), 'status' => $teks(12),
+                'jenis_kendaraan' => NomorMobil::rapikanJenis($teks(9)), 'no_mobil' => NomorMobil::rapikan($teks(10)), 'no_do' => $teks(11), 'status' => $teks(12),
                 'tanggal_reimburse' => self::tanggal($sel(13))?->toDateString(), 'bon' => trim((string) ($bon[$i][0] ?? '')) ?: null,
                 'biaya_transfer' => $biaya,
             ];
