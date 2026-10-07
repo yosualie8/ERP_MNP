@@ -13,13 +13,14 @@ class Kernel extends ConsoleKernel
     protected function schedule(Schedule $schedule): void
     {
         // Perubahan yang diketik admin langsung di sheet ikut masuk ke aplikasi.
-        $schedule->command('mnp:impor-kas --bulan-berjalan --simpan')->hourly()->withoutOverlapping();
+        // Tiap 5 menit: transaksi yang ditambah/diubah/dihapus langsung di sheet cepat terlihat di aplikasi.
+        $schedule->command('mnp:impor-kas --bulan-berjalan --simpan')->everyFiveMinutes()->withoutOverlapping();
         // Foto bon yang baru diunggah dipindah ke Google Drive perusahaan; admin tidak perlu menunggu.
         $schedule->command('mnp:unggah-foto-drive')->everyMinute()->withoutOverlapping(10);
         // Cadangan: transaksi dari aplikasi yang belum tercermin di Mutasi Reimburse ditambahkan.
         $schedule->command('mnp:sinkron-reimburse')->hourlyAt(10)->withoutOverlapping();
-        // Ketikan admin langsung di lembar Kas Seabank (uang jalan) ikut masuk ke aplikasi.
-        $schedule->command('mnp:impor-uj')->hourlyAt(20)->withoutOverlapping();
+        // Ketikan/penghapusan admin langsung di lembar Kas Seabank (uang jalan) ikut ke aplikasi.
+        $schedule->command('mnp:impor-uj')->everyFiveMinutes()->withoutOverlapping();
     }
 
     /**

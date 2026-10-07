@@ -325,6 +325,7 @@ class UjController extends Controller
         $jumlah = $hasil['baris_akhir'] - $hasil['baris_awal'] + 1;
         $pesanImpor = $this->perbarui(fn () => KasSeabank::perbaruiBlok($t, $hasil['baris_akhir'] + 1, -$jumlah));
         $foto = FotoBon::hapusMilik($noUj, 'uj');
+        UjTemuan::whereIn('id_uj', $t->detail->pluck('id_uj')->filter())->delete();
         KasRiwayat::create([
             'aksi' => 'uj-hapus', 'lembar' => 'Seabank', 'baris_awal' => $hasil['baris_awal'], 'baris_akhir' => $hasil['baris_akhir'],
             'ringkasan' => $ringkasan, 'isi' => ['sebelum' => $hasil['sebelum']], 'user_id' => $request->user()->id,

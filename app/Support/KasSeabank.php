@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\KasRiwayat;
 use App\Models\UjDetail;
+use App\Models\UjTemuan;
 use App\Models\UjTransaksi;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -138,8 +139,16 @@ class KasSeabank
         return $hasil;
     }
 
-    /** Impor ulang seluruh lembar ke tabel uj_transaksi/uj_detail. */
+    /**
+     * Impor ulang seluruh lembar ke tabel uj_transaksi/uj_detail: transaksi yang dihapus di sheet ikut hilang dari aplikasi.
+     * Memakai kunci yang sama dengan Input UJ supaya baca-ganti data tidak bertabrakan dengan penulisan dari aplikasi.
+     */
     public static function impor(GoogleSheets $sheets): array
+    {
+        return Cache::lock('tulis-uj-sheet', 120)->block(60, fn () => self::imporTerkunci($sheets));
+    }
+
+    private static function imporTerkunci(GoogleSheets $sheets): array
     {
         $l = self::LEMBAR;
         $mentah = $sheets->nilaiMentah(self::id(), ["{$l}!A2:N"])["{$l}!A2:N"];
@@ -166,6 +175,8 @@ class KasSeabank
             UjDetail::query()->delete();
             UjTransaksi::query()->delete();
             self::simpan($transaksi);
+            // Temuan validasi milik ID UJ yang sudah tidak ada di sheet (transaksinya dihapus) ikut dibersihkan.
+            UjTemuan::whereNotIn('id_uj', UjDetail::whereNotNull('id_uj')->select('id_uj'))->delete();
         });
         Cache::forever('uj-diimpor-pada', now()->toIso8601String());
 
