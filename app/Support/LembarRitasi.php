@@ -68,7 +68,8 @@ class LembarRitasi
                 continue;
             }
             $sel = fn (int $k) => is_string($r[$k] ?? null) ? trim($r[$k]) : ($r[$k] ?? null);
-            $teks = fn (int $k) => ($v = $sel($k)) === null || $v === '' ? null : (string) $v;
+            // Teks dipotong ke lebar kolom database (sel berisi catatan panjang tetap terbaca, tidak menggagalkan impor).
+            $teks = fn (int $k) => ($v = $sel($k)) === null || $v === '' ? null : self::potong((string) $v);
             $hasil[] = [
                 'baris' => $mulai + $i, 'tahap' => $teks(1) ? preg_replace('/\s+/', ' ', $teks(1)) : null, 'no_seri' => $teks(2),
                 'tanggal' => KasSeabank::tanggal($sel(3))?->toDateString(), 'jam' => self::jam($sel(4)),
@@ -100,6 +101,11 @@ class LembarRitasi
 
             return count($baris);
         });
+    }
+
+    public static function potong(?string $v, int $maks = 100): ?string
+    {
+        return $v === null ? null : mb_substr($v, 0, $maks);
     }
 
     /** Kunci No DO / No Seri untuk dibandingkan ("0039" = "39"). */

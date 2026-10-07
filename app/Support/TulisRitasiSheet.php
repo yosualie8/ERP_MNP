@@ -101,10 +101,11 @@ class TulisRitasiSheet
     {
         $l = LembarRitasi::LEMBAR;
         $isi = $this->sheets->nilaiMentah($this->id, ["{$l}!A{$r->baris}:Q{$r->baris}"])["{$l}!A{$r->baris}:Q{$r->baris}"][0] ?? [];
-        $sama = trim((string) ($isi[2] ?? '')) === (string) $r->no_seri
+        $teks = fn (int $k) => LembarRitasi::potong(trim((string) ($isi[$k] ?? ''))) ?: null;
+        $sama = $teks(2) === $r->no_seri
             && KasSeabank::tanggal($isi[3] ?? null)?->toDateString() === $r->tanggal?->toDateString()
-            && NomorMobil::rapikan((string) ($isi[6] ?? '')) === $r->no_lambung
-            && trim((string) ($isi[16] ?? '')) === (string) $r->no_do;
+            && NomorMobil::rapikan(LembarRitasi::potong((string) ($isi[6] ?? ''))) === $r->no_lambung
+            && $teks(16) === $r->no_do;
         if (! $sama) {
             throw new RuntimeException("Isi sheet Ritasi baris {$r->baris} sudah berubah sejak sinkron terakhir. Klik \"Sinkron dari sheet\", periksa lagi, lalu ulangi.");
         }
