@@ -580,20 +580,20 @@
                 const info = [v('nama') || (i === 0 ? nama.value.trim() : ''), v('nominal') ? 'Rp ' + v('nominal') : '', v('keterangan')].filter(Boolean).join(' · ');
                 return `Baris ${i + 1}${info ? ` (${info})` : ''}`;
             };
-            const tampilMasalah = (judul, masalah, fokus) => {
+            const tampilMasalah = (judul, masalah) => {
                 kotakValidasi.className = 'pesan galat';
                 kotakValidasi.innerHTML = `<b>${esc2(judul)}</b><ul style="margin: 6px 0 0; padding-left: 18px;">${masalah.map(m => `<li>${esc2(m)}</li>`).join('')}</ul>`;
                 kotakValidasi.hidden = false;
-                kotakValidasi.scrollIntoView({block: 'center'});
-                fokus?.focus({preventScroll: true});
             };
-            form.addEventListener('input', e => e.target.classList.remove('wajib-kosong'));
+            // Isian kosong baru ditandai merah setelah sempat disentuh (atau setelah tombol Simpan dicoba), supaya form baru tidak merah semua.
+            let tandaiSemua = false;
+            form.addEventListener('focusout', e => { if (e.target.matches('input')) { e.target.dataset.tersentuh = '1'; evaluasi(); } });
             // Lapis 1: kelengkapan isian master & setiap baris detail (semua masalah sekaligus, bukan satu per satu).
             const cekIsian = () => {
                 form.querySelectorAll('.wajib-kosong').forEach(el => el.classList.remove('wajib-kosong'));
                 const masalah = [];
                 let pertama = null;
-                const tandai = el => { el.classList.add('wajib-kosong'); pertama ??= el; };
+                const tandai = el => { if (tandaiSemua || el.dataset.tersentuh) el.classList.add('wajib-kosong'); pertama ??= el; };
                 const master = [];
                 [[document.getElementById('tanggal'), 'Tanggal'], [nama, 'Nama penerima'], [nominalTransfer, 'Nominal master']].forEach(([el, label]) => {
                     if (!el.value.trim() || (el === nominalTransfer && !angka(el.value))) { tandai(el); master.push(label + ' belum diisi'); }
@@ -633,7 +633,7 @@
                             <input type="text" data-konfirmasi maxlength="1000" autocomplete="off"></label></div></td>`;
                     const k = t.querySelector('[data-konfirmasi]');
                     k.value = tr.konfirmasi || '';
-                    k.addEventListener('input', () => { tr.konfirmasi = k.value; k.classList.toggle('kosong', k.value.trim().length < MIN_KONFIRMASI); });
+                    k.addEventListener('input', () => { tr.konfirmasi = k.value; k.classList.toggle('kosong', k.value.trim().length < MIN_KONFIRMASI); evaluasi(); });
                     k.classList.toggle('kosong', k.value.trim().length < MIN_KONFIRMASI);
                     tr.after(t);
                     tr.temuan = t;
@@ -657,51 +657,105 @@
                 });
                 return {masalah, pertama};
             };
-            let lolosValidasi = false;
-            form.addEventListener('submit', async e => {
-                if (lolosValidasi) { tombolSimpan.disabled = true; tombolSimpan.textContent = 'Menyimpan ke sheet…'; return; }
-                e.preventDefault();
+            // Status validasi dihitung terus saat admin mengisi. Tombol Simpan hanya menyala bila SEMUA transaksi valid:
+            // isian lengkap + jumlah cocok (lapis 1), aturan validasi sudah diperiksa server untuk isi form saat ini (lapis 2),
+            // dan setiap baris ber-FLAG sudah dikonfirmasi (lapis 3). Selama mati, daftar transaksi yang harus diperbaiki ditampilkan.
+            const teksSimpan = @json($edit ? 'Simpan perubahan ke sheet' : 'Simpan ke sheet');
+            const kunciIsi = () => {
+                const d = new FormData(form);
+                return JSON.stringify([...d.entries()].filter(([k, v]) => typeof v === 'string' && !/konfirmasi|_token|_method|versi/.test(k)));
+            };
+            let diperiksa = null;   // kunciIsi() yang terakhir lolos pemeriksaan server
+            let memeriksa = null;   // kunciIsi() yang sedang diperiksa
+            let jedaPeriksa = null;
+            let galatServer = [];
+            const aturTombol = (aktif, alasan) => {
+                tombolSimpan.disabled = !aktif;
+                tombolSimpan.textContent = teksSimpan;
+                tombolSimpan.title = aktif ? '' : alasan;
+            };
+            const periksaServer = async kunci => {
+                memeriksa = kunci;
+                const data = new FormData(form);
+                data.delete('foto[]');
+                data.delete('_method');
+                try {
+                    const res = await fetch(@json(route('uj.periksa')), {method: 'POST', body: data, headers: {Accept: 'application/json'}});
+                    const hasil = await res.json();
+                    if (memeriksa !== kunci) return; // isian sudah berubah lagi; hasil ini usang
+                    if (!res.ok) {
+                        galatServer = hasil.galat ?? Object.values(hasil.errors ?? {}).flat();
+                        diperiksa = null;
+                    } else {
+                        galatServer = [];
+                        tampilTemuan(hasil.temuan || {});
+                        diperiksa = kunci;
+                    }
+                } catch (err) {
+                    galatServer = ['Pemeriksaan validasi gagal (' + err.message + '). Ubah isian atau tunggu sebentar untuk mencoba lagi.'];
+                    diperiksa = null;
+                } finally {
+                    if (memeriksa === kunci) memeriksa = null;
+                    evaluasi(false);
+                }
+            };
+            const evaluasi = (bolehPeriksa = true) => {
                 const isian = cekIsian();
-                if (isian.masalah.length) { tampilMasalah('Belum bisa disimpan — perbaiki dulu:', isian.masalah, isian.pertama); return; }
+                if (isian.masalah.length) {
+                    clearTimeout(jedaPeriksa);
+                    memeriksa = null;
+                    aturTombol(false, 'Lengkapi isian dulu');
+                    tampilMasalah('Simpan belum aktif — lengkapi dulu:', isian.masalah);
+                    return;
+                }
+                const kunci = kunciIsi();
+                if (diperiksa !== kunci) {
+                    aturTombol(false, 'Menunggu pemeriksaan validasi');
+                    if (galatServer.length && !bolehPeriksa) { tampilMasalah('Simpan belum aktif — perbaiki dulu:', galatServer); return; }
+                    kotakValidasi.className = 'pesan';
+                    kotakValidasi.hidden = false;
+                    kotakValidasi.textContent = 'Memeriksa validasi transaksi…';
+                    if (bolehPeriksa && memeriksa !== kunci) {
+                        clearTimeout(jedaPeriksa);
+                        jedaPeriksa = setTimeout(() => periksaServer(kunciIsi()), 600);
+                    }
+                    return;
+                }
+                const konf = cekKonfirmasi();
+                if (konf.masalah.length) {
+                    aturTombol(false, 'Ada transaksi ber-FLAG yang belum dikonfirmasi');
+                    tampilMasalah(`Simpan belum aktif — ${konf.masalah.length} transaksi detail kena FLAG validasi dan harus diperbaiki atau dikonfirmasi (alasannya ada di bawah tiap baris):`, konf.masalah);
+                    return;
+                }
+                aturTombol(true);
+                const jumlahFlag = barisDetail().filter(tr => tr.temuan).length;
+                kotakValidasi.className = 'pesan sukses';
+                kotakValidasi.hidden = false;
+                kotakValidasi.textContent = '✓ Semua transaksi tervalidasi' + (jumlahFlag ? ` (${jumlahFlag} baris ber-FLAG sudah dikonfirmasi)` : '') + ' — siap disimpan.';
+            };
+            form.addEventListener('input', e => { if (!e.target.matches('[data-konfirmasi]')) evaluasi(); });
+            form.addEventListener('change', () => evaluasi());
+            daftar.addEventListener('click', e => { if (e.target.closest('.hapus')) setTimeout(evaluasi); });
+            document.getElementById('tambah-bon').addEventListener('click', () => setTimeout(evaluasi));
+            form.addEventListener('submit', e => {
+                const kunci = kunciIsi();
+                if (tombolSimpan.disabled || diperiksa !== kunci || cekKonfirmasi().masalah.length || cekIsian().masalah.length) {
+                    e.preventDefault(); // jaga-jaga (mis. Enter di isian): hanya tersimpan bila tombol Simpan menyala
+                    tandaiSemua = true;
+                    evaluasi();
+                    kotakValidasi.scrollIntoView({block: 'center'});
+                    return;
+                }
                 const totalFoto = daftarFoto.reduce((s, f) => s + f.file.size, 0);
                 if (totalFoto > BATAS.total - 512 * 1024) {
+                    e.preventDefault();
                     alert(`Total foto ${ukuran(totalFoto)} melebihi batas server ${ukuran(BATAS.total)}. Buang sebagian foto, simpan, lalu tambahkan sisanya lewat Edit.`);
                     return;
                 }
                 tombolSimpan.disabled = true;
-                tombolSimpan.textContent = 'Memeriksa validasi…';
-                const data = new FormData(form);
-                data.delete('foto[]');
-                data.delete('_method');
-                let hasil;
-                try {
-                    const res = await fetch(@json(route('uj.periksa')), {method: 'POST', body: data, headers: {Accept: 'application/json'}});
-                    hasil = await res.json();
-                    if (!res.ok) {
-                        tampilMasalah('Belum bisa disimpan — perbaiki dulu:', hasil.galat ?? Object.values(hasil.errors ?? {}).flat());
-                        return;
-                    }
-                } catch (err) {
-                    alert('Pemeriksaan validasi gagal (' + err.message + '). Coba lagi.');
-                    return;
-                } finally {
-                    tombolSimpan.textContent = @json($edit ? 'Simpan perubahan ke sheet' : 'Simpan ke sheet');
-                    tombolSimpan.disabled = false;
-                }
-                const jumlah = tampilTemuan(hasil.temuan || {});
-                const konf = cekKonfirmasi();
-                if (konf.masalah.length) {
-                    tampilMasalah(`Belum bisa disimpan — ${konf.masalah.length} transaksi detail kena FLAG validasi dan harus diperbaiki atau dikonfirmasi (alasannya ada di bawah tiap baris):`, konf.masalah, konf.pertama);
-                    return;
-                }
-                kotakValidasi.hidden = !jumlah;
-                kotakValidasi.className = 'pesan sukses';
-                kotakValidasi.textContent = jumlah ? `Semua transaksi tervalidasi (${jumlah} baris ber-FLAG sudah dikonfirmasi) — menyimpan…` : '';
-                lolosValidasi = true;
-                form.requestSubmit(tombolSimpan);
+                tombolSimpan.textContent = 'Menyimpan ke sheet…';
             });
-            // Isian berubah setelah diperiksa → periksa lagi saat Simpan berikutnya.
-            form.addEventListener('input', e => { if (!e.target.matches('[data-konfirmasi]')) lolosValidasi = false; });
+            evaluasi();
         })();
     </script>
 @endsection
