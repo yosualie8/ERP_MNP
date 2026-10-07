@@ -6,12 +6,12 @@
     <style>
         .form-kas label { display: block; font-size: 13px; color: var(--redup); margin-bottom: 4px; }
         .form-kas input[type=text], .form-kas input[type=date], .form-kas input[type=number] {
-            width: 100%; padding: 8px 10px; border: 1px solid var(--garis); border-radius: 7px; font-size: 14px; background: #fff; }
+            width: 100%; padding: 8px 10px; border: 1px solid var(--garis); border-radius: 7px; font-size: 14px; background: var(--isian); color: var(--teks); }
         .form-kas input.angka-input { text-align: right; font-variant-numeric: tabular-nums; }
         /* Sel transaksi detail: garis lebih gelap, dan sel yang sedang aktif ditandai tegas (garis hijau tebal + latar terang) seperti Excel. */
-        table.bon input[data-nama] { border-color: #9aa5b1; }
+        table.bon input[data-nama] { border-color: var(--isian-garis); }
         .form-kas input[type=text]:focus, .form-kas input[type=date]:focus { outline: none; border-color: var(--aksen); box-shadow: 0 0 0 2px var(--aksen); }
-        table.bon input[data-nama]:focus { background: #f1faf5; }
+        table.bon input[data-nama]:focus { background: var(--isian-fokus); }
         .baris2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px; }
         .pilihan { display: inline-flex; border: 1px solid var(--garis); border-radius: 8px; overflow: hidden; }
         .pilihan input { display: none; }
@@ -31,18 +31,18 @@
         .total-bon { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
         .galat-isian { color: var(--merah); font-size: 13px; margin: 4px 0 0; }
         .isian-saran { position: relative; }
-        .saran { position: absolute; left: 0; right: 0; top: 100%; z-index: 20; margin-top: 2px; background: #fff; border: 1px solid var(--garis);
-            border-radius: 8px; box-shadow: 0 8px 24px rgba(16, 42, 67, .12); max-height: 340px; overflow-y: auto; }
+        .saran { position: absolute; left: 0; right: 0; top: 100%; z-index: 20; margin-top: 2px; background: var(--kartu-2); border: 1px solid var(--garis-kuat);
+            border-radius: 8px; box-shadow: 0 10px 28px rgba(0, 0, 0, .55); max-height: 340px; overflow-y: auto; }
         .saran.menetap { position: static; box-shadow: none; margin-top: 6px; border-color: var(--aksen); }
         .saran .judul-saran { padding: 6px 12px; font-size: 12px; color: var(--redup); background: var(--latar); border-bottom: 1px solid var(--garis); }
         .saran button { display: flex; width: 100%; justify-content: space-between; gap: 12px; align-items: baseline; text-align: left;
-            padding: 8px 12px; border: 0; border-bottom: 1px solid #f1f3f5; background: none; cursor: pointer; font: inherit; color: var(--teks); }
+            padding: 8px 12px; border: 0; border-bottom: 1px solid var(--garis); background: none; cursor: pointer; font: inherit; color: var(--teks); }
         .saran button:last-child { border-bottom: 0; }
         .saran button.sorot, .saran button:hover { background: var(--hijau-muda); }
         .saran .rek { font-size: 13px; color: var(--redup); }
         .saran .rek b { color: var(--teks); font-weight: 600; font-variant-numeric: tabular-nums; }
         .saran .pakai { font-size: 11px; color: var(--redup); white-space: nowrap; }
-        .saran mark { background: #fff3bf; color: inherit; padding: 0; }
+        .saran mark { background: var(--tanda); color: inherit; padding: 0; }
         /* Foto bon di antara transaksi master & detail, lebar penuh supaya leluasa di-zoom. */
         .kartu-foto .penampil { height: 62vh; margin-top: 10px; }
         .gambar-kecil .tambah-foto { width: 68px; height: 68px; border: 2px dashed var(--garis); color: var(--redup); font-size: 26px; }
@@ -51,11 +51,11 @@
         .kartu-foto .penampil.kosong { height: 120px; min-height: 0; }
         .kartu-foto .penampil.kosong .penampil-alat, .kartu-foto .penampil.kosong .penampil-petunjuk { display: none; }
         /* Kode GL tebakan otomatis (ungu muda) + saran yang bisa diklik. */
-        .form-kas input.tebakan { background: #f3efff; border-color: #c9bdf2; }
+        .form-kas input.tebakan { background: var(--otomatis-latar); border-color: var(--otomatis-garis); }
         .saran-kode { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
-        .saran-kode button { border: 1px solid var(--garis); background: #fff; border-radius: 999px; padding: 1px 8px; font-size: 11px; color: var(--redup); cursor: pointer; }
-        .saran-kode button:hover { border-color: #9a87e0; color: var(--teks); }
-        .saran-kode button.dipilih { background: #ece6ff; border-color: #9a87e0; color: #3f2f8a; }
+        .saran-kode button { border: 1px solid var(--garis-kuat); background: var(--kartu-2); border-radius: 999px; padding: 1px 8px; font-size: 11px; color: var(--redup); cursor: pointer; }
+        .saran-kode button:hover { border-color: var(--aksen); color: var(--teks); }
+        .saran-kode button.dipilih { background: var(--aksen-muda); border-color: var(--aksen); color: var(--aksen-terang); }
         .info-foto { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px; color: var(--redup); margin-top: 6px; }
         @media (max-width: 760px) { .kartu-foto .penampil { height: 50vh; } }
     </style>

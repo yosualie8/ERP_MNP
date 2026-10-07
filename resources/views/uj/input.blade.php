@@ -6,12 +6,12 @@
     <style>
         .form-kas label { display: block; font-size: 13px; color: var(--redup); margin-bottom: 4px; }
         .form-kas input[type=text], .form-kas input[type=date] {
-            width: 100%; padding: 8px 10px; border: 1px solid var(--garis); border-radius: 7px; font-size: 14px; background: #fff; }
+            width: 100%; padding: 8px 10px; border: 1px solid var(--garis); border-radius: 7px; font-size: 14px; background: var(--isian); color: var(--teks); }
         .form-kas input.angka-input { text-align: right; font-variant-numeric: tabular-nums; }
-        table.bon input[data-nama] { border-color: #9aa5b1; }
+        table.bon input[data-nama] { border-color: var(--isian-garis); }
         .form-kas input[type=text]:focus, .form-kas input[type=date]:focus { outline: none; border-color: var(--aksen); box-shadow: 0 0 0 2px var(--aksen); }
-        table.bon input[data-nama]:focus { background: #f1faf5; }
-        .form-kas input.otomatis { background: #f3efff; border-color: #c9bdf2; }
+        table.bon input[data-nama]:focus { background: var(--isian-fokus); }
+        .form-kas input.otomatis { background: var(--otomatis-latar); border-color: var(--otomatis-garis); }
         .baris2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px; }
         table.bon td { padding: 4px; vertical-align: top; border-bottom: 0; }
         table.bon th { padding: 4px; }
@@ -27,18 +27,18 @@
         .total-bon { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
         .galat-isian { color: var(--merah); font-size: 13px; margin: 4px 0 0; }
         .isian-saran { position: relative; }
-        .saran { position: absolute; left: 0; right: 0; top: 100%; z-index: 20; margin-top: 2px; background: #fff; border: 1px solid var(--garis);
-            border-radius: 8px; box-shadow: 0 8px 24px rgba(16, 42, 67, .12); max-height: 340px; overflow-y: auto; }
+        .saran { position: absolute; left: 0; right: 0; top: 100%; z-index: 20; margin-top: 2px; background: var(--kartu-2); border: 1px solid var(--garis-kuat);
+            border-radius: 8px; box-shadow: 0 10px 28px rgba(0, 0, 0, .55); max-height: 340px; overflow-y: auto; }
         .saran.menetap { position: static; box-shadow: none; margin-top: 6px; border-color: var(--aksen); }
         .saran .judul-saran { padding: 6px 12px; font-size: 12px; color: var(--redup); background: var(--latar); border-bottom: 1px solid var(--garis); }
         .saran button { display: flex; width: 100%; justify-content: space-between; gap: 12px; align-items: baseline; text-align: left;
-            padding: 8px 12px; border: 0; border-bottom: 1px solid #f1f3f5; background: none; cursor: pointer; font: inherit; color: var(--teks); }
+            padding: 8px 12px; border: 0; border-bottom: 1px solid var(--garis); background: none; cursor: pointer; font: inherit; color: var(--teks); }
         .saran button:last-child { border-bottom: 0; }
         .saran button.sorot, .saran button:hover { background: var(--hijau-muda); }
         .saran .rek { font-size: 13px; color: var(--redup); }
         .saran .rek b { color: var(--teks); font-weight: 600; font-variant-numeric: tabular-nums; }
         .saran .pakai { font-size: 11px; color: var(--redup); white-space: nowrap; }
-        .saran mark { background: #fff3bf; color: inherit; padding: 0; }
+        .saran mark { background: var(--tanda); color: inherit; padding: 0; }
         .kartu-foto .penampil { height: 62vh; margin-top: 10px; }
         .gambar-kecil .tambah-foto { width: 68px; height: 68px; border: 2px dashed var(--garis); color: var(--redup); font-size: 26px; }
         .gambar-kecil .tambah-foto:hover { border-color: var(--aksen); color: var(--aksen); }
