@@ -93,7 +93,7 @@
                 </div>
                 <div style="grid-column: span 2;">
                     <label for="bank">Bank / e-wallet</label>
-                    <input type="text" name="bank" id="bank" value="{{ old('bank', $edit['bank'] ?? '') }}" autocomplete="off" style="max-width: 200px; margin-bottom: 6px;">
+                    <div class="isian-saran" style="max-width: 360px; margin-bottom: 6px;"><input type="text" name="bank" id="bank" value="{{ old('bank', $edit['bank'] ?? '') }}" autocomplete="off" placeholder="Ketik singkatan / nama bank / e-wallet, mis. BCA, GoPay"></div>
                     <div>
                         @foreach ($bank as $b)
                             <a href="#" class="chip" data-bank="{{ $b }}">{{ $b }}</a>
@@ -328,6 +328,8 @@
             // Rekening tujuan yang pernah dipakai, dua arah: ketik nama → pilih bank & nomor; ketik nomor → nama & bank.
             const noRek = document.getElementById('no_rek');
             const bank = document.getElementById('bank');
+            // Bank/e-wallet dari daftar baku (BCA, Mandiri, GoPay, …), dengan saran singkatan & nama lengkap.
+            PilihBank.pasang(bank, @json(\App\Support\DaftarBank::untukForm()), {sering: @json($bank), ubah: () => aturBiaya()});
             const saranNama = document.getElementById('saran-nama');
             const saranNorek = document.getElementById('saran-norek');
             const kecil = s => (s || '').toLowerCase().trim();
@@ -370,7 +372,7 @@
                 panel.querySelectorAll('button').forEach(b => b.addEventListener('mousedown', e => { e.preventDefault(); pilih(tampilkan[+b.dataset.i]); }));
             };
             const pilih = r => {
-                nama.value = r.nama; noRek.value = r.no_rek; bank.value = r.bank || '';
+                nama.value = r.nama; noRek.value = r.no_rek; bank.value = r.bank || ''; bank.rapikan();
                 [nama, noRek, bank].forEach(el => otomatis.delete(el));
                 tutup(saranNama); tutup(saranNorek);
                 aturBiaya(); aturNamaPertama();
@@ -390,7 +392,7 @@
                 const norekBebas = !noRek.value || otomatis.has(noRek);
                 if (persis.length === 1 && norekBebas) {
                     isi(noRek, persis[0].no_rek);
-                    if (!bank.value || otomatis.has(bank)) isi(bank, persis[0].bank);
+                    if (!bank.value || otomatis.has(bank)) { isi(bank, persis[0].bank); bank.rapikan(); }
                     aturBiaya();
                 } else if (persis.length > 1 && norekBebas) {
                     tampil(saranNama, persis, `${persis[0].nama} punya ${persis.length} rekening, pilih salah satu:`, '', '', true);
@@ -409,7 +411,7 @@
                 const persis = rekening.filter(r => r.kunci === kunciRek(noRek.value));
                 if (persis.length === 1) {
                     if (!nama.value || otomatis.has(nama)) { isi(nama, persis[0].nama); aturNamaPertama(); }
-                    if (!bank.value || otomatis.has(bank)) isi(bank, persis[0].bank);
+                    if (!bank.value || otomatis.has(bank)) { isi(bank, persis[0].bank); bank.rapikan(); }
                     aturBiaya();
                 } else if (persis.length > 1 && (!nama.value || otomatis.has(nama))) {
                     tampil(saranNorek, persis, `Nomor ini tercatat dengan ${persis.length} nama/bank, pilih salah satu:`, '', '', true);

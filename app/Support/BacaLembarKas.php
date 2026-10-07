@@ -70,7 +70,7 @@ class BacaLembarKas
                     'tanggal' => $tanggal,
                     'nama_tujuan' => $sel($r, 'nama') ?: null,
                     'no_rek_tujuan' => $sel($r, 'norek') ?: null,
-                    'bank_tujuan' => $sel($r, 'bank') ?: null,
+                    'bank_tujuan' => DaftarBank::rapikan($sel($r, 'bank')),
                     'keterangan' => $sel($r, 'keterangan') ?: null,
                     'debet' => $debet,
                     'kredit' => $kredit,

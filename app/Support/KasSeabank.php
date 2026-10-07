@@ -108,7 +108,7 @@ class KasSeabank
                 }
                 $kini = ['master' => [
                     'baris' => $n, 'baris_akhir' => $n, 'tanggal' => self::tanggal($sel(1))?->toDateString(),
-                    'bank' => $teks(2), 'rekening' => $teks(3), 'nama' => $teks(5), 'nominal' => self::angka($sel(4)),
+                    'bank' => DaftarBank::rapikan($teks(2)), 'rekening' => $teks(3), 'nama' => $teks(5), 'nominal' => self::angka($sel(4)),
                     'no_uj' => self::noUj($teks(0)), 'biaya' => null,
                 ], 'detail' => []];
             }

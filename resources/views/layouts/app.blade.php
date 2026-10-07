@@ -8,6 +8,7 @@
     <script src="{{ asset('js/penampil-foto.js') }}?v={{ filemtime(public_path('js/penampil-foto.js')) }}"></script>
     <script src="{{ asset('js/tebak-kode-gl.js') }}?v={{ filemtime(public_path('js/tebak-kode-gl.js')) }}"></script>
     <script src="{{ asset('js/kecilkan-foto.js') }}?v={{ filemtime(public_path('js/kecilkan-foto.js')) }}"></script>
+    <script src="{{ asset('js/pilih-bank.js') }}?v={{ filemtime(public_path('js/pilih-bank.js')) }}"></script>
     <title>{{ $judul ?? 'MNP' }} · PT Multi Niaga Putra</title>
     <style>
         :root { --latar: #f5f6f8; --kartu: #fff; --teks: #1f2933; --redup: #616e7c; --garis: #e4e7eb; --aksen: #0b6e4f; --merah: #b42318; --hijau-muda: #e6f4ee; --merah-muda: #fdecea; }

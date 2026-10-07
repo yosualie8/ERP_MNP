@@ -10,6 +10,7 @@ use App\Models\KodeGl;
 use App\Models\KasBulan;
 use App\Models\KasFoto;
 use App\Support\CerminReimburse;
+use App\Support\DaftarBank;
 use App\Support\FotoBon;
 use App\Support\ModelKodeGl;
 use Illuminate\Support\Facades\Cache;
@@ -44,7 +45,8 @@ class KasInputController extends Controller
         $rekening = $this->daftarRekening();
 
         $bank = KasTransfer::whereNotNull('bank_tujuan')->where('tanggal', '>=', $sejak)
-            ->select('bank_tujuan', DB::raw('COUNT(*) as n'))->groupBy('bank_tujuan')->orderByDesc('n')->limit(8)->pluck('bank_tujuan');
+            ->select('bank_tujuan', DB::raw('COUNT(*) as n'))->groupBy('bank_tujuan')->orderByDesc('n')->limit(8)->pluck('bank_tujuan')
+            ->map(fn ($b) => DaftarBank::kode($b))->filter()->unique()->values();
 
         // Model tebak Kode GL dari semua transaksi detail; dibuat ulang tiap kali ada impor baru.
         $versi = (string) KasBulan::max('diimpor_pada');
@@ -108,7 +110,7 @@ class KasInputController extends Controller
             'arah' => ['required', 'in:keluar,masuk'],
             'nama_tujuan' => ['required', 'string', 'max:200'],
             'no_rek' => ['nullable', 'string', 'max:40'],
-            'bank' => ['nullable', 'string', 'max:40'],
+            'bank' => ['nullable', 'string', 'max:60', DaftarBank::aturan()],
             'keterangan' => ['nullable', 'string', 'max:300'],
             'nominal_masuk' => ['required_if:arah,masuk', 'nullable', 'integer', 'min:1'],
             'nominal_transfer' => ['required_if:arah,keluar', 'nullable', 'integer', 'min:1'],
@@ -148,7 +150,7 @@ class KasInputController extends Controller
             'arah' => $data['arah'],
             'nama_tujuan' => $data['nama_tujuan'],
             'no_rek' => $data['no_rek'] ?? null,
-            'bank' => $data['bank'] ?? null,
+            'bank' => DaftarBank::kode($data['bank'] ?? null),
             'keterangan' => $data['keterangan'] ?? null,
             'nominal_masuk' => (int) ($data['nominal_masuk'] ?? 0),
             'nominal_transfer' => $data['arah'] === 'keluar' ? (int) $data['nominal_transfer'] : null,

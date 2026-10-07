@@ -6,6 +6,7 @@ use App\Models\KasFoto;
 use App\Models\KasRiwayat;
 use App\Models\UjDetail;
 use App\Models\UjTransaksi;
+use App\Support\DaftarBank;
 use App\Support\FotoBon;
 use App\Support\GoogleSheets;
 use App\Support\KasSeabank;
@@ -66,7 +67,7 @@ class UjController extends Controller
             ->filter()->sortKeys();
 
         $bank = UjTransaksi::whereNotNull('bank')->where('tanggal', '>=', $sejak)->select('bank', DB::raw('COUNT(*) as n'))->groupBy('bank')->orderByDesc('n')->limit(8)->pluck('bank')
-            ->map(fn ($b) => strlen(trim($b)) <= 3 ? strtoupper(trim($b)) : ucfirst(strtolower(trim($b))))->unique()->values();
+            ->map(fn ($b) => DaftarBank::kode($b))->filter()->unique()->values();
 
         return view('uj.input', [
             'rekening' => $this->daftarRekening(),
@@ -104,7 +105,7 @@ class UjController extends Controller
         $data = $request->validate([
             'tanggal' => ['required', 'date'],
             'nama' => ['required', 'string', 'max:150'],
-            'bank' => ['nullable', 'string', 'max:40'],
+            'bank' => ['nullable', 'string', 'max:60', DaftarBank::aturan()],
             'rekening' => ['nullable', 'string', 'max:40'],
             'nominal' => ['required', 'integer', 'min:1'],
             'biaya_transfer' => ['nullable', 'boolean'],
@@ -138,7 +139,7 @@ class UjController extends Controller
         return [
             'tanggal' => Carbon::parse($data['tanggal']),
             'nama' => trim($data['nama']),
-            'bank' => $rapi($data['bank'] ?? null),
+            'bank' => DaftarBank::kode($data['bank'] ?? null),
             'rekening' => $rapi($data['rekening'] ?? null),
             'nominal' => (int) $data['nominal'],
             'detail' => array_values(array_map(fn ($d) => [
