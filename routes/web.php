@@ -40,6 +40,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/uj', [UjController::class, 'index'])->name('uj.index');
     Route::get('/uj/input', [UjController::class, 'create'])->name('uj.input');
     Route::post('/uj/input', [UjController::class, 'store'])->name('uj.store');
+    Route::post('/uj/periksa', [UjController::class, 'periksa'])->name('uj.periksa');
     Route::get('/uj/{noUj}/edit', [UjController::class, 'edit'])->whereNumber('noUj')->name('uj.edit');
     Route::put('/uj/{noUj}', [UjController::class, 'update'])->whereNumber('noUj')->name('uj.update');
     Route::delete('/uj/{noUj}', [UjController::class, 'hapus'])->whereNumber('noUj')->name('uj.hapus');

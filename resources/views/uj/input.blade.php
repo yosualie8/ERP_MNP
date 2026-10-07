@@ -26,6 +26,21 @@
         .hapus { background: none; border: 0; color: var(--merah); cursor: pointer; font-size: 18px; line-height: 1; padding: 8px 6px; }
         .total-bon { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
         .galat-isian { color: var(--merah); font-size: 13px; margin: 4px 0 0; }
+        /* Hasil validasi (Standar Aturan Validasi Kas Uang Jalan) di bawah baris detail yang kena FLAG. */
+        table.bon tr.ber-flag input[data-nama] { border-color: #b8860b; }
+        table.bon tr.temuan-baris td { padding: 0 4px 10px; }
+        .temuan { border: 1px solid #6b4f10; border-left: 4px solid #e0a526; background: #1d1810; border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+        .temuan .judul-temuan { color: #f0c05a; font-weight: 600; margin-bottom: 4px; }
+        .temuan ul { margin: 0 0 8px; padding-left: 18px; }
+        .temuan li { margin: 3px 0; line-height: 1.45; }
+        .temuan .prioritas { display: inline-block; font-size: 10px; font-weight: 700; text-transform: uppercase; padding: 0 6px; border-radius: 4px; }
+        .temuan .prioritas.tinggi { background: var(--aksen); color: #fff; }
+        .temuan .prioritas.sedang { background: #b8860b; color: #fff; }
+        .temuan .prioritas.rendah { background: #3b404b; color: #dfe2e7; }
+        .temuan .aturan { color: var(--redup); font-size: 11px; }
+        .temuan label { display: block; color: var(--teks); font-size: 12px; margin: 0; }
+        .temuan input[data-konfirmasi] { margin-top: 4px; }
+        .temuan input[data-konfirmasi].kosong { border-color: var(--aksen); box-shadow: 0 0 0 2px var(--aksen-muda); }
         .isian-saran { position: relative; }
         .saran { position: absolute; left: 0; right: 0; top: 100%; z-index: 20; margin-top: 2px; background: var(--kartu-2); border: 1px solid var(--garis-kuat);
             border-radius: 8px; box-shadow: 0 10px 28px rgba(0, 0, 0, .55); max-height: 340px; overflow-y: auto; }
@@ -53,6 +68,7 @@
         @if ($edit)
             @method('PUT')
             <input type="hidden" name="versi" value="{{ $edit['versi'] }}">
+            <input type="hidden" name="no_uj" value="{{ $edit['no_uj'] }}">
         @endif
         @csrf
         @if ($errors->any())
@@ -166,6 +182,7 @@
             <p class="redup" id="catatan-biaya" style="margin: 4px 0 0 24px;"></p>
         </div>
 
+        <div id="hasil-validasi" hidden></div>
         <div style="display: flex; gap: 12px; align-items: center;">
             <button type="submit" class="tombol" id="simpan">{{ $edit ? 'Simpan perubahan ke sheet' : 'Simpan ke sheet' }}</button>
             @if ($edit)
@@ -179,7 +196,7 @@
     @endforeach
 
     <template id="templat-bon">
-        <tr>
+        <tr class="baris-detail">
             <td><input type="text" class="angka-input rupiah" data-nama="nominal" inputmode="numeric" autocomplete="off" required></td>
             <td><input type="text" data-nama="nama" list="daftar-nama" autocomplete="off"></td>
             <td><input type="text" data-nama="keterangan" autocomplete="off" required></td>
@@ -218,8 +235,14 @@
             }, true);
             document.querySelectorAll('input.rupiah').forEach(rapikanRupiah);
 
-            const urutkanNama = () => daftar.querySelectorAll('tr').forEach((tr, i) =>
-                tr.querySelectorAll('[data-nama]').forEach(el => el.name = `detail[${i}][${el.dataset.nama}]`));
+            // Baris detail (bisa diselingi baris temuan validasi di bawahnya).
+            const barisDetail = () => [...daftar.querySelectorAll(':scope > tr.baris-detail')];
+            const tetangga = (tr, arah) => { let x = tr; do { x = arah > 0 ? x.nextElementSibling : x.previousElementSibling; } while (x && !x.classList.contains('baris-detail')); return x; };
+            const urutkanNama = () => barisDetail().forEach((tr, i) => {
+                tr.querySelectorAll('[data-nama]').forEach(el => el.name = `detail[${i}][${el.dataset.nama}]`);
+                const k = tr.temuan?.querySelector('[data-konfirmasi]');
+                if (k) k.name = `detail[${i}][konfirmasi]`;
+            });
             const nominalTransfer = document.getElementById('nominal_transfer');
             const statusCocok = document.getElementById('status-cocok');
             const tombolSimpan = document.getElementById('simpan');
@@ -261,14 +284,15 @@
             });
             const aturJenis = tr => isiOtomatis(tr.querySelector('[data-nama=jenis_kendaraan]'), jenisMobil[kunciMobil(tr.querySelector('[data-nama=no_mobil]').value)] || '');
             const nama = document.getElementById('nama_tujuan');
-            const aturNamaPertama = () => { const tr = daftar.firstElementChild; if (tr) isiOtomatis(tr.querySelector('[data-nama=nama]'), nama.value.trim()); };
+            const aturNamaPertama = () => { const tr = barisDetail()[0]; if (tr) isiOtomatis(tr.querySelector('[data-nama=nama]'), nama.value.trim()); };
 
             const tambah = (isi = {}) => {
                 const tr = templat.content.firstElementChild.cloneNode(true);
                 tr.querySelectorAll('[data-nama]').forEach(el => el.value = isi[el.dataset.nama] ?? '');
                 tr.querySelectorAll('input.rupiah').forEach(rapikanRupiah);
+                tr.konfirmasi = isi.konfirmasi ?? '';
                 tr.querySelector('.hapus').addEventListener('click', () => {
-                    if (daftar.children.length > 1) { tr.remove(); urutkanNama(); hitung(); aturNamaPertama(); }
+                    if (barisDetail().length > 1) { tr.temuan?.remove(); tr.remove(); urutkanNama(); hitung(); aturNamaPertama(); }
                 });
                 daftar.appendChild(tr);
                 urutkanNama();
@@ -292,7 +316,7 @@
                 const n = Math.min(100, Math.max(1, parseInt(jumlahDetail.value, 10) || 1));
                 let pertama = null;
                 for (let k = 0; k < n; k++) {
-                    const sebelumnya = daftar.lastElementChild;
+                    const sebelumnya = barisDetail().at(-1);
                     // Baris berikutnya biasanya sejenis (mis. UM banyak sopir): Keterangan, Kategori & Nominal disalin.
                     const ambil = f => sebelumnya?.querySelector(`[data-nama=${f}]`).value ?? '';
                     const tr = tambah(sebelumnya ? {keterangan: ambil('keterangan'), kategori: ambil('kategori'), nominal: ambil('nominal')} : {});
@@ -322,12 +346,11 @@
                 const naik = e.key === 'ArrowUp' || (e.key === 'Enter' && e.shiftKey);
                 if (!turun && !naik) return;
                 e.preventDefault();
-                const tujuan = (turun ? el.closest('tr').nextElementSibling : el.closest('tr').previousElementSibling)
-                    ?.querySelector(`[data-nama="${el.dataset.nama}"]`);
+                const tujuan = tetangga(el.closest('tr'), turun ? 1 : -1)?.querySelector(`[data-nama="${el.dataset.nama}"]`);
                 if (tujuan) { tujuan.focus(); tujuan.select(); }
             });
             (awal.length ? awal : [{}]).forEach(b => tambah(b));
-            daftar.querySelectorAll('tr').forEach(tr => { if (!tr.querySelector('[data-nama=jenis_kendaraan]').value) aturJenis(tr); });
+            barisDetail().forEach(tr => { if (!tr.querySelector('[data-nama=jenis_kendaraan]').value) aturJenis(tr); });
             if (!awal.length) aturNamaPertama();
             nama.addEventListener('input', aturNamaPertama);
 
@@ -542,7 +565,42 @@
                 if (catatan) alert(catatan);
             });
 
-            document.getElementById('form-kas').addEventListener('submit', e => {
+            // Validasi "Standar Aturan Validasi Kas Uang Jalan" saat Simpan ditekan: setiap detail diperiksa di server (histori 30 hari).
+            // Baris ber-FLAG menampilkan alasannya tepat di bawah transaksinya + kotak konfirmasi admin; Simpan baru jalan bila semua
+            // baris ber-FLAG sudah dikonfirmasi. Foto yang sudah dipilih tidak hilang (halaman tidak dimuat ulang).
+            const form = document.getElementById('form-kas');
+            const esc2 = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+            const kotakValidasi = document.getElementById('hasil-validasi');
+            const tampilTemuan = temuan => {
+                let belum = null, jumlah = 0;
+                barisDetail().forEach((tr, i) => {
+                    if (tr.temuan) tr.konfirmasi = tr.temuan.querySelector('[data-konfirmasi]').value;
+                    tr.temuan?.remove();
+                    tr.temuan = null;
+                    tr.classList.remove('ber-flag');
+                    const daftarT = temuan[i];
+                    if (!daftarT?.length) return;
+                    jumlah++;
+                    const t = document.createElement('tr');
+                    t.className = 'temuan-baris';
+                    t.innerHTML = `<td colspan="8"><div class="temuan">
+                        <div class="judul-temuan">⚠ Baris ${i + 1} kena FLAG validasi (${daftarT.length}) — periksa, perbaiki bila salah, atau tulis konfirmasi bila memang valid</div>
+                        <ul>${daftarT.map(x => `<li><span class="prioritas ${x.prioritas}">${x.prioritas}</span> <span class="aturan">Aturan ${esc2(x.kode)}</span> ${esc2(x.pesan)}</li>`).join('')}</ul>
+                        <label>Konfirmasi admin <span class="redup">(wajib — mis. "Kekurangan UJ karena rute dialihkan", "Ganti driver, Sule sakit")</span>
+                            <input type="text" data-konfirmasi maxlength="1000" autocomplete="off"></label></div></td>`;
+                    const k = t.querySelector('[data-konfirmasi]');
+                    k.value = tr.konfirmasi || '';
+                    k.addEventListener('input', () => { tr.konfirmasi = k.value; k.classList.remove('kosong'); });
+                    tr.after(t);
+                    tr.temuan = t;
+                    tr.classList.add('ber-flag');
+                    if (!k.value.trim()) { k.classList.add('kosong'); belum ??= k; }
+                });
+                urutkanNama();
+                return {jumlah, belum};
+            };
+            let lolosValidasi = false;
+            form.addEventListener('submit', async e => {
                 if (!hitung()) { e.preventDefault(); statusCocok.scrollIntoView({block: 'center'}); return; }
                 const totalFoto = daftarFoto.reduce((s, f) => s + f.file.size, 0);
                 if (totalFoto > BATAS.total - 512 * 1024) {
@@ -550,9 +608,44 @@
                     alert(`Total foto ${ukuran(totalFoto)} melebihi batas server ${ukuran(BATAS.total)}. Buang sebagian foto, simpan, lalu tambahkan sisanya lewat Edit.`);
                     return;
                 }
+                if (lolosValidasi) { tombolSimpan.disabled = true; tombolSimpan.textContent = 'Menyimpan ke sheet…'; return; }
+                e.preventDefault();
                 tombolSimpan.disabled = true;
-                tombolSimpan.textContent = 'Menyimpan ke sheet…';
+                tombolSimpan.textContent = 'Memeriksa validasi…';
+                const data = new FormData(form);
+                data.delete('foto[]');
+                data.delete('_method');
+                let hasil;
+                try {
+                    const res = await fetch(@json(route('uj.periksa')), {method: 'POST', body: data, headers: {Accept: 'application/json'}});
+                    hasil = await res.json();
+                    if (!res.ok) {
+                        const galat = hasil.galat ?? Object.values(hasil.errors ?? {}).flat();
+                        kotakValidasi.className = 'pesan galat';
+                        kotakValidasi.innerHTML = '<b>Periksa lagi isian berikut:</b><ul style="margin: 6px 0 0; padding-left: 18px;">' + galat.map(g => `<li>${esc2(g)}</li>`).join('') + '</ul>';
+                        kotakValidasi.hidden = false;
+                        kotakValidasi.scrollIntoView({block: 'center'});
+                        return;
+                    }
+                } catch (err) {
+                    alert('Pemeriksaan validasi gagal (' + err.message + '). Coba lagi.');
+                    return;
+                } finally {
+                    tombolSimpan.textContent = @json($edit ? 'Simpan perubahan ke sheet' : 'Simpan ke sheet');
+                    hitung();
+                }
+                const {jumlah, belum} = tampilTemuan(hasil.temuan || {});
+                kotakValidasi.hidden = !jumlah;
+                kotakValidasi.className = 'pesan ' + (belum ? 'galat' : 'sukses');
+                kotakValidasi.textContent = !jumlah ? '' : belum
+                    ? `${jumlah} transaksi detail kena FLAG validasi. Baca alasannya di bawah tiap baris, perbaiki bila salah, atau isi konfirmasi admin — lalu klik Simpan lagi.`
+                    : `${jumlah} transaksi detail ber-FLAG sudah dikonfirmasi — menyimpan…`;
+                if (belum) { belum.scrollIntoView({block: 'center'}); belum.focus(); return; }
+                lolosValidasi = true;
+                form.requestSubmit(tombolSimpan);
             });
+            // Isian berubah setelah diperiksa → periksa lagi saat Simpan berikutnya.
+            form.addEventListener('input', e => { if (!e.target.matches('[data-konfirmasi]')) lolosValidasi = false; });
         })();
     </script>
 @endsection

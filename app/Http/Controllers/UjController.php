@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\KasFoto;
 use App\Models\KasRiwayat;
 use App\Models\UjDetail;
+use App\Models\UjTemuan;
 use App\Models\UjTransaksi;
 use App\Support\DaftarBank;
 use App\Support\FotoBon;
@@ -13,6 +14,8 @@ use App\Support\KasSeabank;
 use App\Support\NomorMobil;
 use App\Support\TautanUj;
 use App\Support\TulisUjSheet;
+use App\Support\ValidasiUj;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -119,6 +122,7 @@ class UjController extends Controller
             'detail.*.jenis_kendaraan' => ['nullable', 'string', 'max:40'],
             'detail.*.no_mobil' => ['nullable', 'string', 'max:40'],
             'detail.*.no_do' => ['nullable', 'string', 'max:40'],
+            'detail.*.konfirmasi' => ['nullable', 'string', 'max:1000'],
             'foto' => ['nullable', 'array', 'max:'.KasFotoController::MAKS_FOTO],
             'foto.*' => KasFotoController::ATURAN['foto.*'],
         ], [
@@ -147,10 +151,55 @@ class UjController extends Controller
                 'nama' => $rapi($d['nama'] ?? null), 'keterangan' => trim($d['keterangan']), 'nominal' => (int) $d['nominal'],
                 'kategori' => $rapi($d['kategori']), 'jenis_kendaraan' => NomorMobil::rapikanJenis($d['jenis_kendaraan'] ?? null),
                 'no_mobil' => NomorMobil::rapikan($d['no_mobil'] ?? null), 'no_do' => $rapi($d['no_do'] ?? null),
+                'konfirmasi' => $rapi($d['konfirmasi'] ?? null),
             ], $data['detail'])),
             'biaya_transfer' => $request->boolean('biaya_transfer'),
             'nominal_biaya' => (int) ($data['nominal_biaya'] ?? TulisUjSheet::BIAYA_TRANSFER),
         ];
+    }
+
+    /**
+     * Dipanggil form saat tombol Simpan ditekan (sebelum benar-benar dikirim): periksa setiap transaksi detail
+     * terhadap Standar Aturan Validasi Kas Uang Jalan; baris ber-FLAG ditampilkan alasannya + kotak konfirmasi.
+     */
+    public function periksa(Request $request): JsonResponse
+    {
+        $input = $this->bacaInput($request);
+        if ($input instanceof RedirectResponse) {
+            return response()->json(['galat' => session()->pull('errors')?->all() ?? ['Periksa lagi isian form.']], 422);
+        }
+        $kecuali = $request->filled('no_uj') ? UjTransaksi::where('no_uj', $request->integer('no_uj'))->value('id') : null;
+
+        return response()->json(['temuan' => (object) ValidasiUj::periksa($input, $kecuali)]);
+    }
+
+    /**
+     * Pemeriksaan ulang di server (penentu akhir): baris ber-FLAG wajib punya konfirmasi admin.
+     *
+     * @return array|RedirectResponse temuan per indeks detail, atau penolakan bila ada yang belum dikonfirmasi
+     */
+    private function wajibKonfirmasi(array $input, ?int $kecuali): array|RedirectResponse
+    {
+        $temuan = ValidasiUj::periksa($input, $kecuali);
+        $belum = array_keys(array_filter($temuan, fn ($t, $i) => ! $input['detail'][$i]['konfirmasi'], ARRAY_FILTER_USE_BOTH));
+        if ($belum) {
+            return back()->withInput()->withErrors(['konfirmasi' => 'Transaksi detail baris '.implode(', ', array_map(fn ($i) => $i + 1, $belum))
+                .' kena FLAG validasi dan belum dikonfirmasi. Klik Simpan lagi untuk melihat alasannya, lalu isi konfirmasinya.']);
+        }
+
+        return $temuan;
+    }
+
+    /** Catat temuan + konfirmasi admin per ID UJ (bahan Review Admin). */
+    private function catatTemuan(array $temuan, array $input, array $ids, int $userId): void
+    {
+        UjTemuan::whereIn('id_uj', array_map(fn ($n) => 'UJ-'.$n, $ids))->delete();
+        foreach ($temuan as $i => $daftar) {
+            foreach ($daftar as $t) {
+                UjTemuan::create(['id_uj' => 'UJ-'.$ids[$i], 'aturan' => $t['kode'], 'prioritas' => $t['prioritas'], 'pesan' => mb_strimwidth($t['pesan'], 0, 1000, '…'),
+                    'konfirmasi' => $input['detail'][$i]['konfirmasi'], 'user_id' => $userId]);
+            }
+        }
     }
 
     public function store(Request $request): RedirectResponse
@@ -158,6 +207,10 @@ class UjController extends Controller
         $input = $this->bacaInput($request);
         if ($input instanceof RedirectResponse) {
             return $input;
+        }
+        $temuan = $this->wajibKonfirmasi($input, null);
+        if ($temuan instanceof RedirectResponse) {
+            return $temuan;
         }
         try {
             $sheets = GoogleSheets::wajib();
@@ -168,6 +221,7 @@ class UjController extends Controller
             return back()->withInput()->with('error', 'Gagal menulis ke sheet: '.$e->getMessage());
         }
         $pesanImpor = $this->perbarui(fn () => KasSeabank::perbaruiBlok(null, 0, 0, $hasil['mentah'], $hasil['baris_awal']));
+        $this->catatTemuan($temuan, $input, $hasil['ids'], $request->user()->id);
         $jumlahFoto = $this->simpanFoto($request, $hasil['no_uj'], $input['tanggal']);
 
         KasRiwayat::create([
@@ -213,6 +267,10 @@ class UjController extends Controller
         if ($input instanceof RedirectResponse) {
             return $input;
         }
+        $temuan = $this->wajibKonfirmasi($input, $t->id);
+        if ($temuan instanceof RedirectResponse) {
+            return $temuan;
+        }
         $ringkasLama = $this->ringkasan($t);
         try {
             $sheets = GoogleSheets::wajib();
@@ -223,6 +281,7 @@ class UjController extends Controller
             return back()->withInput()->with('error', 'Gagal mengubah di sheet: '.$e->getMessage());
         }
         $pesanImpor = $this->perbarui(fn () => KasSeabank::perbaruiBlok($t, $hasil['sampai_lama'] + 1, $hasil['geser'], $hasil['mentah'], $hasil['baris_awal']));
+        $this->catatTemuan($temuan, $input, $hasil['ids'], $request->user()->id);
         $jumlahFoto = $this->simpanFoto($request, $hasil['no_uj'], $input['tanggal']);
         if (! $jumlahFoto && KasFoto::uj()->where('no_id', $hasil['no_uj'])->exists()) {
             TautanUj::pastikanSegera($hasil['no_uj']); // kolom Bon dikosongkan saat ditulis ulang → chip ditulis lagi
