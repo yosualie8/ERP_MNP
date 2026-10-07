@@ -94,11 +94,6 @@
                 <div style="grid-column: span 2;">
                     <label for="bank">Bank / e-wallet</label>
                     <div class="isian-saran" style="max-width: 360px; margin-bottom: 6px;"><input type="text" name="bank" id="bank" value="{{ old('bank', $edit['bank'] ?? '') }}" autocomplete="off" placeholder="Ketik singkatan / nama bank / e-wallet, mis. BCA, GoPay"></div>
-                    <div>
-                        @foreach ($bank as $b)
-                            <a href="#" class="chip" data-bank="{{ $b }}">{{ $b }}</a>
-                        @endforeach
-                    </div>
                 </div>
             </div>
             <div style="max-width: 260px;">
@@ -431,9 +426,6 @@
                 } else if (e.key === 'Escape') {
                     tutup(aktif.panel);
                 }
-            }));
-            document.querySelectorAll('[data-bank]').forEach(a => a.addEventListener('click', e => {
-                e.preventDefault(); bank.value = a.dataset.bank; otomatis.delete(bank); aturBiaya();
             }));
 
             // Dikirim dari rekening Seabank: sesama Seabank biasanya tanpa biaya, bank/e-wallet lain 2.500.
