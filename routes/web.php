@@ -7,6 +7,7 @@ use App\Http\Controllers\KasFotoController;
 use App\Http\Controllers\KasInputController;
 use App\Http\Controllers\PenggunaController;
 use App\Http\Controllers\ReimburseUjController;
+use App\Http\Controllers\RitasiController;
 use App\Http\Controllers\UjController;
 use Illuminate\Support\Facades\Route;
 
@@ -47,6 +48,15 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::put('/uj/{noUj}', [UjController::class, 'update'])->whereNumber('noUj')->name('uj.update');
     Route::delete('/uj/{noUj}', [UjController::class, 'hapus'])->whereNumber('noUj')->name('uj.hapus');
     Route::post('/uj/sinkron', [UjController::class, 'sinkron'])->name('uj.sinkron');
+    // Ritasi dump truck (lembar "Ritasi").
+    Route::get('/ritasi', [RitasiController::class, 'index'])->name('ritasi.index');
+    Route::get('/ritasi/input', [RitasiController::class, 'create'])->name('ritasi.input');
+    Route::post('/ritasi/input', [RitasiController::class, 'store'])->name('ritasi.store');
+    Route::post('/ritasi/periksa', [RitasiController::class, 'periksa'])->name('ritasi.periksa');
+    Route::get('/ritasi/{baris}/edit', [RitasiController::class, 'edit'])->whereNumber('baris')->name('ritasi.edit');
+    Route::put('/ritasi/{baris}', [RitasiController::class, 'update'])->whereNumber('baris')->name('ritasi.update');
+    Route::delete('/ritasi/{baris}', [RitasiController::class, 'hapus'])->whereNumber('baris')->name('ritasi.hapus');
+    Route::post('/ritasi/sinkron', [RitasiController::class, 'sinkron'])->name('ritasi.sinkron');
     Route::get('/uj/reimburse', [ReimburseUjController::class, 'index'])->name('reimburse.index');
     Route::post('/uj/reimburse', [ReimburseUjController::class, 'simpan'])->name('reimburse.simpan');
     Route::get('/uj/reimburse/{reimburse}/excel', [ReimburseUjController::class, 'unduh'])->name('reimburse.unduh');

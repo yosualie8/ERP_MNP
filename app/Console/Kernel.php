@@ -21,6 +21,8 @@ class Kernel extends ConsoleKernel
         $schedule->command('mnp:sinkron-reimburse')->hourlyAt(10)->withoutOverlapping();
         // Ketikan/penghapusan admin langsung di lembar Kas Seabank (uang jalan) ikut ke aplikasi.
         $schedule->command('mnp:impor-uj')->everyFiveMinutes()->withoutOverlapping();
+        // Lembar Ritasi (Proyek ASG - Gsheet) ikut ke aplikasi.
+        $schedule->command('mnp:impor-ritasi')->everyFiveMinutes()->withoutOverlapping();
     }
 
     /**

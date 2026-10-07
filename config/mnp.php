@@ -18,4 +18,6 @@ return [
     // Impor Kas Seabank dari sheet hanya sampai transaksi yang berisi ID UJ ini (permintaan user 7 Okt 2026);
     // transaksi dari aplikasi selalu ikut.
     'uj_impor_sampai_id' => env('MNP_UJ_IMPOR_SAMPAI_ID', 13034),
+    // Spreadsheet "Proyek ASG - Gsheet": lembar "Ritasi" = satu baris per rit dump truck.
+    'sheet_ritasi' => env('MNP_SHEET_RITASI', '15yDqd39eaY1hm4GuYxH0gOQWju-VQUGiv235OTvZfF0'),
 ];
