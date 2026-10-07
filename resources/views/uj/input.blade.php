@@ -28,7 +28,11 @@
         .galat-isian { color: var(--merah); font-size: 13px; margin: 4px 0 0; }
         /* Hasil validasi (Standar Aturan Validasi Kas Uang Jalan) di bawah baris detail yang kena FLAG. */
         table.bon tr.ber-flag input[data-nama] { border-color: #b8860b; }
-        table.bon tr.temuan-baris td { padding: 0 4px 10px; }
+        table.bon tr.temuan-baris td, table.bon tr.kurang-baris td { padding: 0 4px 10px; }
+        .kurang { border: 1px solid rgba(255, 92, 97, .35); border-left: 4px solid var(--aksen); background: var(--merah-muda); color: var(--merah);
+            border-radius: 8px; padding: 6px 12px; font-size: 13px; }
+        .temuan .status-konf { margin-top: 4px; font-size: 12px; color: var(--merah); }
+        .temuan .status-konf.ok { color: var(--sukses); }
         .temuan { border: 1px solid #6b4f10; border-left: 4px solid #e0a526; background: #1d1810; border-radius: 8px; padding: 8px 12px; font-size: 13px; }
         .temuan .judul-temuan { color: #f0c05a; font-weight: 600; margin-bottom: 4px; }
         .temuan ul { margin: 0 0 8px; padding-left: 18px; }
@@ -292,7 +296,7 @@
                 tr.querySelectorAll('input.rupiah').forEach(rapikanRupiah);
                 tr.konfirmasi = isi.konfirmasi ?? '';
                 tr.querySelector('.hapus').addEventListener('click', () => {
-                    if (barisDetail().length > 1) { tr.temuan?.remove(); tr.remove(); urutkanNama(); hitung(); aturNamaPertama(); }
+                    if (barisDetail().length > 1) { tr.temuan?.remove(); tr.kurangEl?.remove(); tr.remove(); urutkanNama(); hitung(); aturNamaPertama(); }
                 });
                 daftar.appendChild(tr);
                 urutkanNama();
@@ -609,6 +613,8 @@
                 });
                 if (bank.value.trim() && !kodeBank.has(bank.value.trim())) { tandai(bank); master.push(`Bank "${bank.value.trim()}" tidak ada di daftar`); }
                 if (master.length) masalah.push('Transaksi master: ' + master.join(', ') + '.');
+                // Kekurangan tiap transaksi detail ditulis tepat di bawah barisnya; kotak di atas tombol Simpan cukup ringkasannya.
+                const barisKurang = [];
                 barisDetail().forEach((tr, i) => {
                     const kurang = [['nominal', 'Nominal'], ['keterangan', 'Keterangan'], ['kategori', 'Kategori']].filter(([f]) => {
                         const el = tr.querySelector(`[data-nama=${f}]`);
@@ -616,10 +622,24 @@
                         if (kosong) tandai(el);
                         return kosong;
                     }).map(([, label]) => label);
-                    if (kurang.length) masalah.push(`${ringkasBaris(tr, i)}: ${kurang.join(', ')} belum diisi.`);
+                    const inputs = [...tr.querySelectorAll('[data-nama]')];
+                    aturKurang(tr, i, kurang, tandaiSemua || inputs.some(el => el.dataset.tersentuh || el.value.trim()));
+                    if (kurang.length) barisKurang.push(i + 1);
                 });
+                if (barisKurang.length) masalah.push(`${barisKurang.length} transaksi detail belum lengkap (baris ${barisKurang.join(', ')}) — lihat pesan tepat di bawah barisnya.`);
                 if (!hitung()) { masalah.push(statusCocok.textContent); pertama ??= nominalTransfer; }
                 return {masalah, pertama};
+            };
+            // Pesan "belum diisi" satu baris detail, diletakkan persis di bawah baris itu (di atas pesan FLAG-nya bila ada).
+            const aturKurang = (tr, i, kurang, tampil) => {
+                if (!kurang.length || !tampil) { tr.kurangEl?.remove(); tr.kurangEl = null; return; }
+                if (!tr.kurangEl) {
+                    tr.kurangEl = document.createElement('tr');
+                    tr.kurangEl.className = 'kurang-baris';
+                    tr.kurangEl.innerHTML = '<td colspan="8"><div class="kurang"></div></td>';
+                    tr.after(tr.kurangEl);
+                }
+                tr.kurangEl.querySelector('.kurang').textContent = `✎ Baris ${i + 1}: ${kurang.join(', ')} belum diisi.`;
             };
             const tampilTemuan = temuan => {
                 let jumlah = 0;
@@ -639,12 +659,13 @@
                         <div class="judul-temuan">⚠ Baris ${i + 1} kena FLAG validasi (${daftarT.length}) — periksa, perbaiki bila salah, atau tulis konfirmasi bila memang valid</div>
                         <ul>${daftarT.map(x => `<li><span class="prioritas ${x.prioritas}">${x.prioritas}</span> <span class="aturan">Aturan ${esc2(x.kode)}</span> ${esc2(x.pesan)}</li>`).join('')}</ul>
                         <label>Konfirmasi admin <span class="redup">(wajib, min. ${MIN_KONFIRMASI} karakter — mis. "Kekurangan UJ karena rute dialihkan", "Ganti driver, Sule sakit")</span>
-                            <input type="text" data-konfirmasi maxlength="1000" autocomplete="off"></label></div></td>`;
+                            <input type="text" data-konfirmasi maxlength="1000" autocomplete="off"></label>
+                        <div class="status-konf"></div></div></td>`;
                     const k = t.querySelector('[data-konfirmasi]');
                     k.value = tr.konfirmasi || '';
                     k.addEventListener('input', () => { tr.konfirmasi = k.value; k.classList.toggle('kosong', k.value.trim().length < MIN_KONFIRMASI); evaluasi(); });
                     k.classList.toggle('kosong', k.value.trim().length < MIN_KONFIRMASI);
-                    tr.after(t);
+                    (tr.kurangEl ?? tr).after(t);
                     tr.temuan = t;
                     tr.classList.add('ber-flag');
                 });
@@ -655,15 +676,19 @@
             const cekKonfirmasi = () => {
                 const masalah = [];
                 let pertama = null;
+                const baris = [];
                 barisDetail().forEach((tr, i) => {
                     const k = tr.temuan?.querySelector('[data-konfirmasi]');
                     if (!k) return;
                     const isi = k.value.trim();
-                    if (isi.length >= MIN_KONFIRMASI) return;
+                    const status = tr.temuan.querySelector('.status-konf');
+                    if (isi.length >= MIN_KONFIRMASI) { status.className = 'status-konf ok'; status.textContent = '✓ Sudah dikonfirmasi'; return; }
+                    status.className = 'status-konf';
+                    status.textContent = isi ? `✗ Konfirmasi terlalu singkat (${isi.length}/${MIN_KONFIRMASI} karakter).` : '✗ Belum dikonfirmasi — perbaiki isian baris ini atau tulis konfirmasi.';
                     pertama ??= k;
-                    masalah.push(`${ringkasBaris(tr, i)}: ${tr.aturan.length} FLAG (Aturan ${tr.aturan.join(', ')}) — `
-                        + (isi ? `konfirmasi terlalu singkat (min. ${MIN_KONFIRMASI} karakter).` : 'perbaiki isiannya atau isi konfirmasi admin.'));
+                    baris.push(i + 1);
                 });
+                if (baris.length) masalah.push(`${baris.length} transaksi detail kena FLAG validasi dan belum dikonfirmasi (baris ${baris.join(', ')}) — alasan & kotak konfirmasinya ada tepat di bawah barisnya.`);
                 return {masalah, pertama};
             };
             // Status validasi dihitung terus saat admin mengisi. Tombol Simpan hanya menyala bila SEMUA transaksi valid:
@@ -733,7 +758,7 @@
                 const konf = cekKonfirmasi();
                 if (konf.masalah.length) {
                     aturTombol(false, 'Ada transaksi ber-FLAG yang belum dikonfirmasi');
-                    tampilMasalah(`Simpan belum aktif — ${konf.masalah.length} transaksi detail kena FLAG validasi dan harus diperbaiki atau dikonfirmasi (alasannya ada di bawah tiap baris):`, konf.masalah);
+                    tampilMasalah('Simpan belum aktif:', konf.masalah);
                     return;
                 }
                 aturTombol(true);
