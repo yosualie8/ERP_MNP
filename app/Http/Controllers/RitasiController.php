@@ -100,7 +100,12 @@ class RitasiController extends Controller
         return $t && $t->year >= 2020 && $t->year <= 2100 ? $t : null;
     }
 
-    /** @return array<int, array> rit yang sudah dirapikan, masing-masing berdiri sendiri (indeks dipertahankan) */
+    /**
+     * Rit yang sudah dirapikan, masing-masing berdiri sendiri (indeks dipertahankan). DT, driver & jenis kendaraan SELALU diambil
+     * dari Kas UJ lewat No DO (isian dari browser diabaikan).
+     *
+     * @return array{0: array<int, array>, 1: array<string, array>} rit & data Kas UJ per kunci DO
+     */
     private function rapikan(Request $request, bool $longgar): array
     {
         $rapi = fn ($v) => ($v = trim(preg_replace('/\s+/', ' ', (string) $v))) === '' ? null : $v;
@@ -109,20 +114,26 @@ class RitasiController extends Controller
             $baris = [
                 'tahap' => $rapi($r['tahap'] ?? null), 'tanggal' => self::tanggal($r['tanggal'] ?? null), 'galian' => $rapi($r['galian'] ?? null),
                 'jenis_buangan' => $rapi($r['jenis_buangan'] ?? null), 'jenis_tanah' => $rapi($r['jenis_tanah'] ?? null),
-                'no_seri' => $rapi($r['no_seri'] ?? null), 'jam' => LembarRitasi::jam($rapi($r['jam'] ?? null)), 'no_lambung' => NomorMobil::rapikan($r['no_lambung'] ?? null),
-                'plat' => $rapi(strtoupper((string) ($r['plat'] ?? ''))), 'driver' => $rapi($r['driver'] ?? null), 'jenis_kendaraan' => NomorMobil::rapikanJenis($r['jenis_kendaraan'] ?? null),
-                'pemilik' => $rapi($r['pemilik'] ?? null), 'no_do' => $rapi($r['no_do'] ?? null),
+                'no_seri' => $rapi($r['no_seri'] ?? null), 'jam' => LembarRitasi::jam($rapi($r['jam'] ?? null)), 'no_lambung' => null,
+                'plat' => $rapi(strtoupper((string) ($r['plat'] ?? ''))), 'driver' => null, 'jenis_kendaraan' => null,
+                'pemilik' => $rapi($r['pemilik'] ?? null), 'no_do' => $rapi(preg_replace('/\s+/', '', (string) ($r['no_do'] ?? ''))),
                 'harga_jual' => (int) preg_replace('/\D/', '', (string) ($r['harga_jual'] ?? '')) ?: null, 'keterangan' => $rapi($r['keterangan'] ?? null),
                 'konfirmasi' => $rapi($r['konfirmasi'] ?? null),
             ];
-            // Baris yang belum lengkap tidak ikut diperiksa saat pemeriksaan longgar (form menandai hijau baris per baris).
-            if ($longgar && (! $baris['tahap'] || ! $baris['no_seri'] || ! ($baris['no_lambung'] || $baris['plat']))) {
+            // Baris kosong tidak ikut diperiksa saat pemeriksaan longgar (form menandai baris per baris).
+            if ($longgar && ! $baris['no_do'] && ! $baris['no_seri']) {
                 continue;
             }
             $rit[(int) $i] = $baris;
         }
+        $uj = ValidasiRitasi::dariUj(array_column($rit, 'no_do'));
+        foreach ($rit as $i => $r) {
+            if ($d = $uj[LembarRitasi::kunciAngka($r['no_do'])] ?? null) {
+                $rit[$i] = [...$r, 'no_lambung' => $d['no_lambung'], 'driver' => $d['driver'], 'jenis_kendaraan' => $d['jenis_kendaraan']];
+            }
+        }
 
-        return $rit;
+        return [$rit, $uj];
     }
 
     private function aturan(): array
@@ -137,9 +148,8 @@ class RitasiController extends Controller
             'rit.*.tahap' => ['required', 'string', 'max:120'], 'rit.*.galian' => ['required', 'string', 'max:80'],
             'rit.*.jenis_buangan' => ['required', 'string', 'max:40'], 'rit.*.jenis_tanah' => ['required', 'string', 'max:60'],
             'rit.*.no_seri' => ['required', 'string', 'max:30'], 'rit.*.jam' => ['nullable', 'string', 'max:10'],
-            'rit.*.no_lambung' => ['nullable', 'string', 'max:20', 'required_without:rit.*.plat'], 'rit.*.plat' => ['nullable', 'string', 'max:30'],
-            'rit.*.driver' => ['nullable', 'string', 'max:50'], 'rit.*.jenis_kendaraan' => ['required', 'string', 'max:40'], 'rit.*.pemilik' => ['required', 'string', 'max:60'],
-            'rit.*.no_do' => ['nullable', 'string', 'max:30'], 'rit.*.harga_jual' => ['nullable', 'string', 'max:20'], 'rit.*.keterangan' => ['nullable', 'string', 'max:300'],
+            'rit.*.plat' => ['nullable', 'string', 'max:30'], 'rit.*.pemilik' => ['required', 'string', 'max:60'],
+            'rit.*.no_do' => ['required', 'string', 'max:30'], 'rit.*.harga_jual' => ['nullable', 'string', 'max:20'], 'rit.*.keterangan' => ['nullable', 'string', 'max:300'],
             'rit.*.konfirmasi' => ['nullable', 'string', 'max:1000'],
         ];
     }
@@ -152,24 +162,37 @@ class RitasiController extends Controller
         'rit.*.jenis_buangan.required' => 'Rit baris :position: Jenis Buangan belum diisi.',
         'rit.*.jenis_tanah.required' => 'Rit baris :position: Jenis Tanah belum diisi.',
         'rit.*.no_seri.required' => 'Rit baris :position: No Seri belum diisi.',
-        'rit.*.no_lambung.required_without' => 'Rit baris :position: isi No Lambung (DT) atau Plat.',
-        'rit.*.jenis_kendaraan.required' => 'Rit baris :position: Jenis Kendaraan belum diisi.',
+        'rit.*.no_do.required' => 'Rit baris :position: No DO wajib diisi.',
         'rit.*.pemilik.required' => 'Rit baris :position: Pemilik belum diisi.',
     ];
 
-    /** Pemeriksaan saat admin mengisi (longgar: rit yang sudah lengkap saja). */
+    /** Pemeriksaan saat admin mengisi: data truk dari Kas UJ per baris, galat (memblokir) & FLAG. */
     public function periksa(Request $request): JsonResponse
     {
-        $rit = $this->rapikan($request, true);
+        [$rit, $uj] = $this->rapikan($request, true);
+        $truk = [];
+        foreach ($rit as $i => $r) {
+            $truk[$i] = ['no_lambung' => $r['no_lambung'], 'driver' => $r['driver'], 'jenis_kendaraan' => $r['jenis_kendaraan']];
+        }
 
-        return response()->json(['temuan' => (object) ($rit ? ValidasiRitasi::periksa($rit, $request->integer('baris_edit') ?: null) : [])]);
+        return response()->json([
+            'truk' => (object) $truk,
+            'galat' => (object) ValidasiRitasi::galat($rit, $uj, $request->integer('baris_edit') ?: null),
+            'temuan' => (object) ValidasiRitasi::periksa($rit),
+        ]);
     }
 
-    /** Penentu akhir di server: rit ber-FLAG wajib dikonfirmasi (min. 10 karakter). */
-    private function wajibKonfirmasi(array $rit, ?int $kecuali): array|RedirectResponse
+    /** Penentu akhir di server: galat memblokir; rit ber-FLAG wajib dikonfirmasi (min. 10 karakter). */
+    private function wajibKonfirmasi(array $rit, array $uj, ?int $kecuali): array|RedirectResponse
     {
-        $temuan = ValidasiRitasi::periksa($rit, $kecuali);
         $pesan = [];
+        foreach (ValidasiRitasi::galat($rit, $uj, $kecuali) as $i => $daftar) {
+            $pesan["galat.{$i}"] = 'Rit baris '.($i + 1).': '.implode(' ', $daftar);
+        }
+        if ($pesan) {
+            return back()->withInput()->withErrors($pesan);
+        }
+        $temuan = ValidasiRitasi::periksa($rit);
         foreach ($temuan as $i => $daftar) {
             if (mb_strlen((string) $rit[$i]['konfirmasi']) < self::MIN_KONFIRMASI) {
                 $pesan["konfirmasi.{$i}"] = 'Rit baris '.($i + 1).' (No Seri '.$rit[$i]['no_seri'].'): '.count($daftar).' FLAG ('.implode(', ', array_unique(array_column($daftar, 'kode'))).') belum dikonfirmasi.';
@@ -193,8 +216,9 @@ class RitasiController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $request->validate($this->aturan(), self::PESAN);
-        $rit = array_values($this->rapikan($request, false));
-        $temuan = $this->wajibKonfirmasi($rit, null);
+        [$rit, $uj] = $this->rapikan($request, false);
+        $rit = array_values($rit);
+        $temuan = $this->wajibKonfirmasi($rit, $uj, null);
         if ($temuan instanceof RedirectResponse) {
             return $temuan;
         }
@@ -239,8 +263,9 @@ class RitasiController extends Controller
             return back()->withInput()->with('error', 'Rit ini sudah berubah di sheet sejak form dibuka (atau baru disinkron). Buka Edit lagi.');
         }
         $request->validate([...$this->aturan(), 'rit' => ['required', 'array', 'size:1']], self::PESAN);
-        $rit = array_values($this->rapikan($request, false));
-        $temuan = $this->wajibKonfirmasi($rit, $baris);
+        [$rit, $uj] = $this->rapikan($request, false);
+        $rit = array_values($rit);
+        $temuan = $this->wajibKonfirmasi($rit, $uj, $baris);
         if ($temuan instanceof RedirectResponse) {
             return $temuan;
         }

@@ -55,7 +55,7 @@ window.TempelTabel = {
                 const kolom = [...tr.querySelectorAll('[data-nama]')];
                 sel.forEach((nilai, j) => {
                     const input = kolom[kolomAwal + j];
-                    if (!input) return; // kolom Excel lebih banyak dari kolom tabel → sisanya diabaikan
+                    if (!input || input.readOnly) return; // kolom Excel lebih banyak dari kolom tabel / kolom terkunci (diisi sistem) → diabaikan
                     input.value = input.classList.contains('rupiah') ? TempelTabel.angka(nilai) : nilai;
                     input.classList.remove('otomatis', 'tebakan');
                     if (input.dataset.nama === 'kode_gl') input.dataset.otomatis = nilai ? '0' : '1';

@@ -35,6 +35,13 @@
         .temuan input[data-konfirmasi].kosong { border-color: var(--aksen); box-shadow: 0 0 0 2px var(--aksen-muda); }
         .temuan .status-konf { margin-top: 4px; font-size: 12px; color: var(--merah); }
         .temuan .status-konf.ok { color: var(--sukses); }
+        table.bon input.terkunci { background: #1c1f26; border-style: dashed; color: #c9ced8; cursor: not-allowed; }
+        table.bon input.terkunci:focus { background: #1c1f26; }
+        .galat-rit { border: 1px solid rgba(255, 92, 97, .5); border-left: 4px solid var(--aksen); background: #2a1215; color: #ffb3b6; border-radius: 8px; padding: 6px 12px; font-size: 13px; }
+        .galat-rit b { color: #ff8a8e; }
+        .galat-rit ul { margin: 4px 0 0; padding-left: 18px; }
+        table.bon tr.galat-baris td { padding: 0 3px 10px; }
+        table.bon tr.baris-rit.ber-galat input[data-nama]:not(.terkunci) { border-color: var(--aksen); }
         table.bon tr.baris-rit.ber-flag input[data-nama] { border-color: #b8860b; }
         table.bon tr.baris-rit.valid td { background: rgba(76, 195, 138, .24); }
         table.bon tr.baris-rit.valid td:first-child { box-shadow: inset 4px 0 0 var(--sukses); }
@@ -69,9 +76,9 @@
             <table class="bon" style="min-width: 1880px;">
                 <thead><tr>
                     <th style="width: 100px;">Tanggal</th><th style="width: 190px;">Tahap</th><th style="width: 80px;">No Seri</th><th style="width: 62px;">Jam</th>
-                    <th style="width: 82px;">No Lambung</th><th style="width: 112px;">Plat</th><th style="width: 104px;">Driver</th><th style="width: 130px;">Galian</th>
-                    <th style="width: 120px;">Jenis tanah</th><th style="width: 92px;">Jenis buangan</th><th style="width: 84px;">Jenis</th><th style="width: 92px;">Pemilik</th>
-                    <th style="width: 84px;">No DO</th><th style="width: 108px;" class="angka">Harga jual</th><th>Keterangan</th><th style="width: 26px;"></th>
+                    <th style="width: 84px;">No DO</th><th style="width: 82px;" title="Diambil dari Kas UJ lewat No DO">No Lambung 🔒</th><th style="width: 104px;" title="Diambil dari Kas UJ lewat No DO">Driver 🔒</th>
+                    <th style="width: 84px;" title="Diambil dari Kas UJ lewat No DO">Jenis 🔒</th><th style="width: 112px;">Plat</th><th style="width: 92px;">Pemilik</th><th style="width: 130px;">Galian</th>
+                    <th style="width: 120px;">Jenis tanah</th><th style="width: 92px;">Jenis buangan</th><th style="width: 108px;" class="angka">Harga jual</th><th>Keterangan</th><th style="width: 26px;"></th>
                 </tr></thead>
                 <tbody id="daftar-rit"></tbody>
             </table>
@@ -80,7 +87,7 @@
                 <div class="tambah-detail">
                     <button type="button" class="tombol polos" id="tambah-rit">+ Tambah rit</button>
                     <label>Jumlah rit <input type="text" id="jumlah-detail" value="1" inputmode="numeric" autocomplete="off" maxlength="3"></label>
-                    <span class="redup">Seperti Excel: Enter / ↓ ↑ pindah baris, ← → pindah kolom; bisa tempel blok sel dari Excel (Ctrl+V). Baris baru menyalin isi baris di atasnya (kecuali Jam, No DO, Keterangan), No Seri +1.</span>
+                    <span class="redup">Seperti Excel: Enter / ↓ ↑ pindah baris, ← → pindah kolom; bisa tempel blok sel dari Excel (Ctrl+V). Baris baru menyalin Tanggal, Tahap, Galian, Jenis tanah & buangan dari baris di atasnya, No Seri +1.</span>
                 </div>
             @endunless
         </div>
@@ -89,9 +96,7 @@
         <datalist id="daftar-galian">@foreach ($galian as $x)<option value="{{ $x }}">@endforeach</datalist>
         <datalist id="daftar-tanah">@foreach ($jenisTanah as $x)<option value="{{ $x }}">@endforeach</datalist>
         <datalist id="daftar-buangan">@foreach ($jenisBuangan as $x)<option value="{{ $x }}">@endforeach</datalist>
-        <datalist id="daftar-jenis">@foreach ($jenisKendaraan as $x)<option value="{{ $x }}">@endforeach</datalist>
         <datalist id="daftar-pemilik">@foreach ($pemilik as $x)<option value="{{ $x }}">@endforeach</datalist>
-        <datalist id="daftar-dt">@foreach ($dt as $k => $d)<option value="{{ $k }}">{{ trim(($d['plat'] ?? '').' '.($d['driver'] ?? '')) }}</option>@endforeach</datalist>
 
         <div id="hasil-validasi" hidden></div>
         <div style="display: flex; gap: 12px; align-items: center;">
@@ -107,15 +112,15 @@
             <td><input type="text" data-nama="tahap" list="daftar-tahap" autocomplete="off"></td>
             <td><input type="text" data-nama="no_seri" autocomplete="off"></td>
             <td><input type="text" data-nama="jam" autocomplete="off" placeholder="hh:mm"></td>
-            <td><input type="text" data-nama="no_lambung" list="daftar-dt" autocomplete="off"></td>
+            <td><input type="text" data-nama="no_do" autocomplete="off" inputmode="numeric"></td>
+            <td><input type="text" data-nama="no_lambung" class="terkunci" readonly tabindex="-1" title="Diambil dari Kas UJ lewat No DO"></td>
+            <td><input type="text" data-nama="driver" class="terkunci" readonly tabindex="-1" title="Diambil dari Kas UJ lewat No DO"></td>
+            <td><input type="text" data-nama="jenis_kendaraan" class="terkunci" readonly tabindex="-1" title="Diambil dari Kas UJ lewat No DO"></td>
             <td><input type="text" data-nama="plat" autocomplete="off"></td>
-            <td><input type="text" data-nama="driver" autocomplete="off"></td>
+            <td><input type="text" data-nama="pemilik" list="daftar-pemilik" autocomplete="off"></td>
             <td><input type="text" data-nama="galian" list="daftar-galian" autocomplete="off"></td>
             <td><input type="text" data-nama="jenis_tanah" list="daftar-tanah" autocomplete="off"></td>
             <td><input type="text" data-nama="jenis_buangan" list="daftar-buangan" autocomplete="off"></td>
-            <td><input type="text" data-nama="jenis_kendaraan" list="daftar-jenis" autocomplete="off"></td>
-            <td><input type="text" data-nama="pemilik" list="daftar-pemilik" autocomplete="off"></td>
-            <td><input type="text" data-nama="no_do" autocomplete="off"></td>
             <td><input type="text" data-nama="harga_jual" class="angka-input rupiah" inputmode="numeric" autocomplete="off"></td>
             <td><input type="text" data-nama="keterangan" autocomplete="off"></td>
             <td><button type="button" class="hapus" title="Hapus baris rit">×</button></td>
@@ -159,14 +164,16 @@
                 el.classList.toggle('otomatis', !!v);
             };
 
-            // DT → plat, driver, jenis, pemilik; harga dari tahap|galian|jenis|pemilik.
+            // DT, driver & jenis TERKUNCI: diisi server dari Kas UJ lewat No DO. DT → saran plat & pemilik (boleh diganti).
             const aturDariDt = tr => {
                 const d = DT[kunciMobil(sel(tr, 'no_lambung').value)];
-                if (!d) return;
-                isiOtomatis(sel(tr, 'plat'), d.plat || '');
-                isiOtomatis(sel(tr, 'driver'), d.driver || '');
-                isiOtomatis(sel(tr, 'jenis_kendaraan'), d.jenis || '');
-                isiOtomatis(sel(tr, 'pemilik'), d.pemilik || '');
+                isiOtomatis(sel(tr, 'plat'), d?.plat || '');
+                isiOtomatis(sel(tr, 'pemilik'), d?.pemilik || '');
+            };
+            const isiTruk = (tr, t) => {
+                ['no_lambung', 'driver', 'jenis_kendaraan'].forEach(f => { sel(tr, f).value = t?.[f] || ''; });
+                aturDariDt(tr);
+                aturHarga(tr);
             };
             // Tanggal: "8/10/26", "08-10-2026", "2026-10-08" → "08/10/2026"; selain itu dibiarkan (ditandai bila tidak dikenali).
             const BULAN = {jan: 1, feb: 2, mar: 3, apr: 4, mei: 5, may: 5, jun: 6, jul: 7, agu: 8, agt: 8, aug: 8, sep: 9, okt: 10, oct: 10, nov: 11, des: 12, dec: 12};
@@ -212,7 +219,7 @@
                 tr.querySelectorAll('input.rupiah').forEach(rapikanRupiah);
                 tr.konfirmasi = isi.konfirmasi ?? '';
                 tr.querySelector('.hapus').addEventListener('click', () => {
-                    if (baris().length > 1) { tr.temuan?.remove(); tr.kurangEl?.remove(); tr.remove(); urutkanNama(); aturSeri(); hitung(); evaluasi(); }
+                    if (baris().length > 1) { tr.temuan?.remove(); tr.kurangEl?.remove(); tr.galatEl?.remove(); tr.remove(); urutkanNama(); aturSeri(); hitung(); evaluasi(); }
                 });
                 if (MODE_EDIT) tr.querySelector('.hapus').hidden = true;
                 daftar.appendChild(tr);
@@ -226,19 +233,19 @@
                 if (e.isTrusted) el.classList.remove('otomatis');
                 if (el.classList.contains('rupiah') && e.isTrusted) rapikanRupiah(el);
                 const f = el.dataset.nama;
-                if (f === 'no_lambung') { aturDariDt(tr); aturHarga(tr); }
-                if (['jenis_kendaraan', 'pemilik', 'galian', 'tahap'].includes(f)) aturHarga(tr);
+                // No DO berubah → data truk lama dikosongkan sampai server mengisinya lagi dari Kas UJ.
+                if (f === 'no_do') { el.value = el.value.replace(/\s+/g, ''); if (sel(tr, 'no_lambung').value) isiTruk(tr, null); }
+                if (['pemilik', 'galian', 'tahap'].includes(f)) aturHarga(tr);
                 if (f === 'no_seri' || f === 'tahap') aturSeri();
                 hitung();
             });
             daftar.addEventListener('focusout', e => {
                 const el = e.target;
-                if (el.dataset?.nama === 'no_lambung' && el.value) { el.value = kunciMobil(el.value); aturDariDt(el.closest('tr')); aturHarga(el.closest('tr')); }
                 if (el.dataset?.nama === 'plat' && el.value) el.value = el.value.toUpperCase().replace(/\s+/g, ' ').trim();
                 if (el.dataset?.nama === 'tanggal' && el.value) el.value = uraiTanggal(el.value) ?? el.value.trim();
             });
 
-            // Tambah rit: salin isi baris di atasnya kecuali Jam, No DO, Keterangan (No Seri +1 otomatis).
+            // Tambah rit: salin tanggal, tahap, galian, jenis tanah & buangan dari baris di atasnya (No Seri +1 otomatis).
             const jumlahDetail = $('jumlah-detail');
             if (jumlahDetail) {
                 jumlahDetail.addEventListener('input', () => { jumlahDetail.value = jumlahDetail.value.replace(/\D/g, ''); });
@@ -249,10 +256,10 @@
                     let pertama = null;
                     for (let k = 0; k < n; k++) {
                         const atas = baris().at(-1);
-                        const salin = atas ? Object.fromEntries(['tanggal', 'tahap', 'galian', 'jenis_tanah', 'jenis_buangan', 'no_lambung', 'plat', 'driver', 'jenis_kendaraan', 'pemilik', 'harga_jual']
+                        const salin = atas ? Object.fromEntries(['tanggal', 'tahap', 'galian', 'jenis_tanah', 'jenis_buangan']
                             .map(f => [f, sel(atas, f).value])) : {tanggal: hariIni, jenis_buangan: 'Ritasi'};
                         const tr = tambah(salin);
-                        tr.querySelectorAll('[data-nama]').forEach(el => { if (el.value) el.classList.add('otomatis'); });
+                        tr.querySelectorAll('[data-nama]:not(.terkunci)').forEach(el => { if (el.value) el.classList.add('otomatis'); });
                         pertama ??= tr;
                     }
                     aturSeri();
@@ -288,8 +295,8 @@
             if (!MODE_EDIT) TempelTabel.pasang(daftar, {baris, tambah: () => tambah({}), setelah: rows => {
                 rows.forEach(tr => {
                     const tg = sel(tr, 'tanggal'); if (tg.value) tg.value = uraiTanggal(tg.value) ?? tg.value;
-                    const dt = sel(tr, 'no_lambung'); if (dt.value) { dt.value = kunciMobil(dt.value); aturDariDt(tr); }
-                    aturHarga(tr);
+                    const d = sel(tr, 'no_do'); d.value = d.value.replace(/\s+/g, '');
+                    isiTruk(tr, null);
                 });
                 aturSeri();
             }});
@@ -319,16 +326,38 @@
                     if (!uraiTanggal(tg.value)) { tandai(tg); kurang.push(tg.value.trim() ? `Tanggal (format dd/mm/yyyy)` : 'Tanggal'); }
                     cek('tahap', 'Tahap');
                     cek('no_seri', 'No Seri');
-                    if (!sel(tr, 'no_lambung').value.trim() && !sel(tr, 'plat').value.trim()) { tandai(sel(tr, 'no_lambung')); kurang.push('No Lambung atau Plat'); }
+                    const d = sel(tr, 'no_do');
+                    if (!d.value.trim()) { tandai(d); kurang.push('No DO'); }
+                    else if (!/^\d+$/.test(d.value.trim())) { d.classList.add('wajib-kosong'); kurang.push('No DO (angka saja)'); }
                     cek('galian', 'Galian'); cek('jenis_tanah', 'Jenis tanah'); cek('jenis_buangan', 'Jenis buangan');
-                    cek('jenis_kendaraan', 'Jenis'); cek('pemilik', 'Pemilik');
-                    aturKurang(tr, i, kurang, tandaiSemua || [...tr.querySelectorAll('[data-nama]')].some(el => el.dataset.tersentuh || (el.value.trim() && !el.classList.contains('otomatis'))));
+                    cek('pemilik', 'Pemilik');
+                    aturKurang(tr, i, kurang, tandaiSemua || [...tr.querySelectorAll("[data-nama]:not(.terkunci)")].some(el => el.dataset.tersentuh || (el.value.trim() && !el.classList.contains('otomatis'))));
                     if (kurang.length) barisKurang.push(i + 1);
                 });
                 if (barisKurang.length) masalah.push(`${barisKurang.length} rit belum lengkap (baris ${barisKurang.join(', ')}) — lihat pesan tepat di bawah barisnya.`);
                 return masalah;
             };
-            const tampilTemuan = temuan => { pasangTemuan(temuan); urutkanNama(); };
+            const tampilHasil = hasil => {
+                baris().forEach((tr, i) => {
+                    if (sel(tr, 'no_do').value.trim()) isiTruk(tr, hasil.truk?.[i]);
+                    pasangGalat(tr, i, hasil.galat?.[i] || []);
+                });
+                pasangTemuan(hasil.temuan || {});
+                urutkanNama();
+            };
+            // Galat = kesalahan yang memblokir (DO/No Seri sudah pernah diinput, DO tidak ada di Kas UJ) — tidak bisa dikonfirmasi.
+            const pasangGalat = (tr, i, g) => {
+                tr.galat = g;
+                tr.classList.toggle('ber-galat', g.length > 0);
+                if (!g.length) { tr.galatEl?.remove(); tr.galatEl = null; return; }
+                if (!tr.galatEl) { tr.galatEl = document.createElement('tr'); tr.galatEl.className = 'galat-baris'; tr.galatEl.innerHTML = '<td colspan="16"><div class="galat-rit"></div></td>'; }
+                (tr.kurangEl ?? tr).after(tr.galatEl);
+                tr.galatEl.querySelector('.galat-rit').innerHTML = `<b>✗ Rit baris ${i + 1} tidak bisa disimpan — perbaiki dulu:</b><ul>${g.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`;
+            };
+            const cekGalat = () => {
+                const ada = baris().map((tr, i) => tr.galat?.length ? i + 1 : 0).filter(Boolean);
+                return ada.length ? [`${ada.length} rit punya kesalahan yang harus diperbaiki (baris ${ada.join(', ')}) — lihat pesan merah tepat di bawah barisnya.`] : [];
+            };
             const pasangTemuan = temuan => baris().forEach((tr, i) => {
                 if (tr.temuan) tr.konfirmasi = tr.temuan.querySelector('[data-konfirmasi]').value;
                 tr.temuan?.remove(); tr.temuan = null; tr.aturan = []; tr.classList.remove('ber-flag');
@@ -344,7 +373,7 @@
                 const k = el.querySelector('[data-konfirmasi]');
                 k.value = tr.konfirmasi || '';
                 k.addEventListener('input', () => { tr.konfirmasi = k.value; evaluasi(); });
-                (tr.kurangEl ?? tr).after(el);
+                (tr.galatEl ?? tr.kurangEl ?? tr).after(el);
                 tr.temuan = el;
                 tr.classList.add('ber-flag');
             });
@@ -362,7 +391,8 @@
                 });
                 return belum.length ? [`${belum.length} rit kena FLAG validasi dan belum dikonfirmasi (baris ${belum.join(', ')}) — alasan & kotak konfirmasinya ada tepat di bawah barisnya.`] : [];
             };
-            const kunciIsi = () => JSON.stringify([...new FormData(form).entries()].filter(([k, v]) => typeof v === 'string' && !/konfirmasi|_token|_method|versi/.test(k)));
+            // Pemeriksaan server hanya bergantung pada No Seri & No DO tiap baris.
+            const kunciIsi = () => JSON.stringify(baris().map(tr => [sel(tr, 'no_seri').value.trim(), sel(tr, 'no_do').value.trim()]));
             let diperiksa = null, memeriksa = null, jeda = null;
             const periksaServer = async kunci => {
                 memeriksa = kunci;
@@ -372,7 +402,7 @@
                     const res = await fetch(@json(route('ritasi.periksa')), {method: 'POST', body: data, headers: {Accept: 'application/json'}});
                     const hasil = await res.json();
                     if (memeriksa !== kunci) return;
-                    if (res.ok) { tampilTemuan(hasil.temuan || {}); diperiksa = kunci; }
+                    if (res.ok) { tampilHasil(hasil); diperiksa = kunci; }
                 } catch (err) { diperiksa = null; }
                 finally { if (memeriksa === kunci) memeriksa = null; evaluasi(false); }
             };
@@ -382,14 +412,15 @@
                 const isian = cekIsian();
                 const kunci = kunciIsi();
                 const sudah = diperiksa === kunci;
-                if (!sudah && bolehPeriksa && memeriksa !== kunci && baris().some(tr => !tr.kurang?.length)) {
-                    clearTimeout(jeda); jeda = setTimeout(() => periksaServer(kunciIsi()), 600);
+                if (!sudah && bolehPeriksa && memeriksa !== kunci && baris().some(tr => sel(tr, 'no_do').value.trim() || sel(tr, 'no_seri').value.trim())) {
+                    clearTimeout(jeda); jeda = setTimeout(() => periksaServer(kunciIsi()), 400);
                 }
                 const konf = cekKonfirmasi();
-                baris().forEach(tr => tr.classList.toggle('valid', sudah && !tr.kurang?.length && !(tr.temuan && tr.temuan.querySelector('[data-konfirmasi]').value.trim().length < MIN_KONFIRMASI)));
+                const galat = sudah ? cekGalat() : [];
+                baris().forEach(tr => tr.classList.toggle('valid', sudah && !tr.kurang?.length && !tr.galat?.length && !(tr.temuan && tr.temuan.querySelector('[data-konfirmasi]').value.trim().length < MIN_KONFIRMASI)));
                 tombolSimpan.textContent = teksSimpan;
-                if (isian.length) { tombolSimpan.disabled = true; tampilMasalah('Simpan belum aktif — lengkapi dulu:', [...isian, ...(sudah ? konf : [])]); return; }
-                if (!sudah) { tombolSimpan.disabled = true; kotak.className = 'pesan'; kotak.hidden = false; kotak.textContent = 'Memeriksa validasi rit…'; return; }
+                if (isian.length || galat.length) { tombolSimpan.disabled = true; tampilMasalah('Simpan belum aktif — perbaiki dulu:', [...isian, ...galat, ...(sudah ? konf : [])]); return; }
+                if (!sudah) { tombolSimpan.disabled = true; kotak.className = 'pesan'; kotak.hidden = false; kotak.textContent = 'Memeriksa No Seri & No DO, mengambil data truk dari Kas UJ…'; return; }
                 if (konf.length) { tombolSimpan.disabled = true; tampilMasalah('Simpan belum aktif:', konf); return; }
                 tombolSimpan.disabled = false;
                 const flag = baris().filter(tr => tr.temuan).length;
@@ -399,13 +430,12 @@
             form.addEventListener('input', e => { if (!e.target.matches('[data-konfirmasi]')) evaluasi(); });
             form.addEventListener('change', () => evaluasi());
             form.addEventListener('submit', e => {
-                if (tombolSimpan.disabled || diperiksa !== kunciIsi() || cekIsian().length || cekKonfirmasi().length) {
+                if (tombolSimpan.disabled || diperiksa !== kunciIsi() || cekIsian().length || cekGalat().length || cekKonfirmasi().length) {
                     e.preventDefault(); tandaiSemua = true; evaluasi(); kotak.scrollIntoView({block: 'center'}); return;
                 }
                 tombolSimpan.disabled = true; tombolSimpan.textContent = 'Menyimpan ke sheet…';
             });
             aturSeri();
-            baris().forEach(tr => { if (sel(tr, 'no_lambung').value && !sel(tr, 'plat').value) aturDariDt(tr); });
             evaluasi();
         })();
     </script>
