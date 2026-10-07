@@ -15,6 +15,7 @@ return [
     'sheet_reimburse' => env('MNP_SHEET_REIMBURSE', '1FZJqYd241-sz1XGsybeYH-jXfiMqGoE6wRY1lXiBTxk'),
     // Spreadsheet "KAS MMP Uang Jalan dan UM": lembar "Kas Seabank" = kas uang jalan dump truck (rekening Seabank).
     'sheet_uj' => env('MNP_SHEET_UJ', '10Gode9eGhAKWCzUzjV_shkj1GZwZDo5uN7qe237nTUY'),
-    // Impor Kas Seabank dari sheet hanya sampai tanggal ini (permintaan user 7 Okt 2026); transaksi dari aplikasi selalu ikut.
-    'uj_impor_sampai' => env('MNP_UJ_IMPOR_SAMPAI', '2026-10-05'),
+    // Impor Kas Seabank dari sheet hanya sampai transaksi yang berisi ID UJ ini (permintaan user 7 Okt 2026);
+    // transaksi dari aplikasi selalu ikut.
+    'uj_impor_sampai_id' => env('MNP_UJ_IMPOR_SAMPAI_ID', 13034),
 ];

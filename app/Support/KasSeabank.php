@@ -150,11 +150,15 @@ class KasSeabank
         Cache::forever('uj-akhir', max(array_map(fn ($t) => $t['master']['baris_akhir'], $transaksi) ?: [1]));
         Cache::forever('uj-max', max(array_map(fn ($d) => self::noUj($d['id_uj']) ?? 0, array_merge(...array_map(fn ($t) => $t['detail'], $transaksi))) ?: [0]));
 
-        // Data dari sheet hanya sampai tanggal batas (data admin sesudahnya belum dipakai), kecuali yang ditulis lewat aplikasi.
-        $batas = config('mnp.uj_impor_sampai');
-        if ($batas) {
+        // Data dari sheet hanya sampai transaksi yang berisi ID UJ batas (termasuk baris tanpa ID di atasnya);
+        // data admin sesudahnya belum dipakai, kecuali yang ditulis lewat aplikasi.
+        $batasId = (int) config('mnp.uj_impor_sampai_id');
+        if ($batasId) {
+            $barisBatas = collect($transaksi)->first(fn ($t) => collect($t['detail'])->contains(fn ($d) => self::noUj($d['id_uj']) === $batasId))['master']['baris_akhir'] ?? null;
             $dariAplikasi = KasRiwayat::whereIn('aksi', ['uj-tambah', 'uj-ubah'])->get()->flatMap(fn ($r) => (array) ($r->isi['id_uj'] ?? []))->map(fn ($n) => (int) $n)->flip();
-            $transaksi = array_values(array_filter($transaksi, fn ($t) => ($t['master']['tanggal'] !== null && $t['master']['tanggal'] <= $batas)
+            $transaksi = array_values(array_filter($transaksi, fn ($t) => ($barisBatas === null
+                    ? collect($t['detail'])->contains(fn ($d) => (self::noUj($d['id_uj']) ?? PHP_INT_MAX) <= $batasId)
+                    : $t['master']['baris_akhir'] <= $barisBatas)
                 || collect($t['detail'])->contains(fn ($d) => isset($dariAplikasi[self::noUj($d['id_uj']) ?? -1]))));
         }
 
