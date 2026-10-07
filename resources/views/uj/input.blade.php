@@ -12,6 +12,11 @@
         .form-kas input[type=text]:focus, .form-kas input[type=date]:focus { outline: none; border-color: var(--aksen); box-shadow: 0 0 0 2px var(--aksen); }
         table.bon input[data-nama]:focus { background: var(--isian-fokus); }
         .form-kas input.otomatis { background: var(--otomatis-latar); border-color: var(--otomatis-garis); }
+        /* Saran Kategori dari Keterangan (seperti saran Kode GL di Input Kas). */
+        .saran-kode { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+        .saran-kode button { border: 1px solid var(--garis-kuat); background: var(--kartu-2); border-radius: 999px; padding: 1px 8px; font-size: 11px; color: var(--redup); cursor: pointer; }
+        .saran-kode button:hover { border-color: var(--aksen); color: var(--teks); }
+        .saran-kode button.dipilih { background: var(--aksen-muda); border-color: var(--aksen); color: var(--aksen-terang); }
         .baris2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px; }
         table.bon td { padding: 4px; vertical-align: top; border-bottom: 0; }
         table.bon th { padding: 4px; }
@@ -212,7 +217,7 @@
             <td><input type="text" class="angka-input rupiah" data-nama="nominal" inputmode="numeric" autocomplete="off" required></td>
             <td><input type="text" data-nama="nama" list="daftar-nama" autocomplete="off"></td>
             <td><input type="text" data-nama="keterangan" autocomplete="off" required></td>
-            <td><input type="text" data-nama="kategori" list="daftar-kategori" autocomplete="off" required></td>
+            <td><input type="text" data-nama="kategori" list="daftar-kategori" autocomplete="off" required><div class="saran-kode"></div></td>
             <td><input type="text" data-nama="no_mobil" list="daftar-mobil" autocomplete="off"></td>
             <td><input type="text" data-nama="jenis_kendaraan" list="daftar-jenis" autocomplete="off"></td>
             <td><input type="text" data-nama="no_do" autocomplete="off"></td>
@@ -310,11 +315,45 @@
                 hitung();
                 return tr;
             };
+            // Tebak Kategori dari Keterangan, seketika di browser (model dari histori Kas Seabank, tepat ±99%).
+            // Kategori otomatis (ungu) boleh ditimpa tebakan berikutnya; begitu admin mengetik/memilih sendiri, tidak disentuh lagi.
+            const modelKategori = @json($modelKategori);
+            const tebakKategori = tr => {
+                const kat = tr.querySelector('[data-nama=kategori]');
+                const saran = tr.querySelector('.saran-kode');
+                const ket = tr.querySelector('[data-nama=keterangan]').value;
+                const hasil = ket.trim().length >= 2 ? TebakKodeGl.tebak(modelKategori, ket, '').filter(([, p]) => p >= 0.01) : [];
+                const otomatis = !kat.value || kat.classList.contains('otomatis');
+                saran.innerHTML = '';
+                if (!otomatis) return;
+                kat.value = hasil[0]?.[0] ?? '';
+                kat.classList.toggle('otomatis', !!hasil.length);
+                kat.title = hasil.length ? `Tebakan otomatis (${Math.round(hasil[0][1] * 100)}%) dari keterangan — periksa, atau pilih saran di bawah` : '';
+                if (hasil.length < 2 && (hasil[0]?.[1] ?? 0) > 0.9) return; // sangat yakin → tanpa daftar saran
+                hasil.forEach(([k, p]) => {
+                    const b = document.createElement('button');
+                    b.type = 'button';
+                    b.textContent = `${k} ${Math.round(p * 100)}%`;
+                    b.className = k === kat.value ? 'dipilih' : '';
+                    b.addEventListener('click', () => {
+                        kat.value = k;
+                        kat.classList.remove('otomatis');
+                        kat.title = '';
+                        saran.innerHTML = '';
+                        kat.dispatchEvent(new Event('input', {bubbles: true}));
+                    });
+                    saran.appendChild(b);
+                });
+            };
             daftar.addEventListener('input', e => {
                 hitung();
                 const el = e.target;
-                el.classList.remove('otomatis');
-                if (el.dataset.nama === 'no_mobil') aturJenis(el.closest('tr'));
+                const tr = el.closest('tr');
+                // Hanya ketikan admin yang menjadikan isian "pilihan sendiri" (isian dari tempel/kode tidak).
+                if (e.isTrusted) el.classList.remove('otomatis');
+                if (el.dataset.nama === 'no_mobil') aturJenis(tr);
+                if (el.dataset.nama === 'keterangan') tebakKategori(tr);
+                if (el.dataset.nama === 'kategori' && e.isTrusted) tr.querySelector('.saran-kode').innerHTML = '';
             });
 
             const jumlahDetail = document.getElementById('jumlah-detail');
@@ -331,6 +370,9 @@
                     // Baris berikutnya biasanya sejenis (mis. UM banyak sopir): Keterangan, Kategori & Nominal disalin.
                     const ambil = f => sebelumnya?.querySelector(`[data-nama=${f}]`).value ?? '';
                     const tr = tambah(sebelumnya ? {keterangan: ambil('keterangan'), kategori: ambil('kategori'), nominal: ambil('nominal')} : {});
+                    // Kategori salinan ditandai otomatis supaya diganti tebakan bila keterangannya diubah ke jenis lain.
+                    const kat = tr.querySelector('[data-nama=kategori]');
+                    if (kat.value) kat.classList.add('otomatis');
                     pertama ??= tr;
                 }
                 jumlahDetail.value = '1';

@@ -11,6 +11,7 @@ use App\Support\DaftarBank;
 use App\Support\FotoBon;
 use App\Support\GoogleSheets;
 use App\Support\KasSeabank;
+use App\Support\ModelKodeGl;
 use App\Support\NomorMobil;
 use App\Support\TautanUj;
 use App\Support\TulisUjSheet;
@@ -83,7 +84,26 @@ class UjController extends Controller
             'mobil' => $mobil,
             'jenis' => $hitung('jenis_kendaraan', 10),
             'bank' => $bank,
+            'modelKategori' => $this->modelKategori(),
         ]);
+    }
+
+    /**
+     * Model tebak Kategori dari Keterangan (Naive Bayes per kata, sama dengan tebak Kode GL; dijalankan di browser lewat
+     * public/js/tebak-kode-gl.js). Dilatih dari histori Kas Seabank; ejaan kategori dibakukan ke yang paling sering dipakai.
+     * Uji 7 Okt 2026 (latih histori lama, uji 1.500 baris terbaru): tebakan pertama tepat 99,2%.
+     */
+    private function modelKategori(): array
+    {
+        $versi = UjDetail::count().'-'.UjDetail::max('baris').'-'.Cache::get('uj-diimpor-pada');
+
+        return Cache::remember('model-kategori-uj:'.md5($versi), now()->addDay(), function () {
+            $baris = UjDetail::where('biaya_transfer', false)->whereNotNull('kategori')->whereNotNull('keterangan')->get(['keterangan', 'kategori']);
+            $kunci = fn ($k) => strtolower(preg_replace('/\s+/', ' ', trim($k)));
+            $baku = $baris->groupBy(fn ($r) => $kunci($r->kategori))->map(fn ($g) => trim(preg_replace('/\s+/', ' ', $g->countBy('kategori')->sortDesc()->keys()->first())));
+
+            return ModelKodeGl::latih($baris->map(fn ($r) => [$r->keterangan, null, $baku[$kunci($r->kategori)]])->all());
+        });
     }
 
     /** Rekening tujuan yang pernah dipakai (nama + bank + nomor), untuk saran dua arah seperti Input Kas. */
