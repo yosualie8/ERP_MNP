@@ -41,6 +41,7 @@
         .temuan label { display: block; color: var(--teks); font-size: 12px; margin: 0; }
         .temuan input[data-konfirmasi] { margin-top: 4px; }
         .temuan input[data-konfirmasi].kosong { border-color: var(--aksen); box-shadow: 0 0 0 2px var(--aksen-muda); }
+        .form-kas input.wajib-kosong { border-color: var(--aksen) !important; box-shadow: 0 0 0 2px var(--aksen-muda); background: var(--isian-fokus); }
         .isian-saran { position: relative; }
         .saran { position: absolute; left: 0; right: 0; top: 100%; z-index: 20; margin-top: 2px; background: var(--kartu-2); border: 1px solid var(--garis-kuat);
             border-radius: 8px; box-shadow: 0 10px 28px rgba(0, 0, 0, .55); max-height: 340px; overflow-y: auto; }
@@ -258,8 +259,7 @@
                     : cocok ? '✓ Jumlah detail sama dengan nominal master.'
                     : selisih > 0 ? `Detail kurang ${fmt(selisih)} — tambah detail atau perbaiki nominalnya.`
                     : `Detail lebih ${fmt(-selisih)} dari nominal master — perbaiki nominalnya.`;
-                tombolSimpan.disabled = !cocok;
-                tombolSimpan.title = tombolSimpan.disabled ? 'Jumlah detail harus sama dengan nominal master' : '';
+                // Tombol Simpan tetap aktif: saat ditekan, semua kekurangan ditampilkan sekaligus (lihat pengecekan di bawah).
                 return cocok;
             };
             nominalTransfer.addEventListener('input', hitung);
@@ -358,7 +358,8 @@
             const noRek = document.getElementById('no_rek');
             const bank = document.getElementById('bank');
             // Bank/e-wallet dari daftar baku (BCA, Mandiri, GoPay, …), dengan saran singkatan & nama lengkap.
-            PilihBank.pasang(bank, @json(\App\Support\DaftarBank::untukForm()), {sering: @json($bank), ubah: () => aturBiaya()});
+            const DAFTAR_BANK = @json(\App\Support\DaftarBank::untukForm());
+            PilihBank.pasang(bank, DAFTAR_BANK, {sering: @json($bank), ubah: () => aturBiaya()});
             const saranNama = document.getElementById('saran-nama');
             const saranNorek = document.getElementById('saran-norek');
             const kecil = s => (s || '').toLowerCase().trim();
@@ -569,47 +570,104 @@
             // Baris ber-FLAG menampilkan alasannya tepat di bawah transaksinya + kotak konfirmasi admin; Simpan baru jalan bila semua
             // baris ber-FLAG sudah dikonfirmasi. Foto yang sudah dipilih tidak hilang (halaman tidak dimuat ulang).
             const form = document.getElementById('form-kas');
+            form.noValidate = true; // semua pengecekan ditangani di sini supaya pesannya lengkap per baris
             const esc2 = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
             const kotakValidasi = document.getElementById('hasil-validasi');
+            const MIN_KONFIRMASI = 10;
+            const kodeBank = new Set(DAFTAR_BANK.map(b => b.kode));
+            const ringkasBaris = (tr, i) => {
+                const v = f => tr.querySelector(`[data-nama=${f}]`).value.trim();
+                const info = [v('nama') || (i === 0 ? nama.value.trim() : ''), v('nominal') ? 'Rp ' + v('nominal') : '', v('keterangan')].filter(Boolean).join(' · ');
+                return `Baris ${i + 1}${info ? ` (${info})` : ''}`;
+            };
+            const tampilMasalah = (judul, masalah, fokus) => {
+                kotakValidasi.className = 'pesan galat';
+                kotakValidasi.innerHTML = `<b>${esc2(judul)}</b><ul style="margin: 6px 0 0; padding-left: 18px;">${masalah.map(m => `<li>${esc2(m)}</li>`).join('')}</ul>`;
+                kotakValidasi.hidden = false;
+                kotakValidasi.scrollIntoView({block: 'center'});
+                fokus?.focus({preventScroll: true});
+            };
+            form.addEventListener('input', e => e.target.classList.remove('wajib-kosong'));
+            // Lapis 1: kelengkapan isian master & setiap baris detail (semua masalah sekaligus, bukan satu per satu).
+            const cekIsian = () => {
+                form.querySelectorAll('.wajib-kosong').forEach(el => el.classList.remove('wajib-kosong'));
+                const masalah = [];
+                let pertama = null;
+                const tandai = el => { el.classList.add('wajib-kosong'); pertama ??= el; };
+                const master = [];
+                [[document.getElementById('tanggal'), 'Tanggal'], [nama, 'Nama penerima'], [nominalTransfer, 'Nominal master']].forEach(([el, label]) => {
+                    if (!el.value.trim() || (el === nominalTransfer && !angka(el.value))) { tandai(el); master.push(label + ' belum diisi'); }
+                });
+                if (bank.value.trim() && !kodeBank.has(bank.value.trim())) { tandai(bank); master.push(`Bank "${bank.value.trim()}" tidak ada di daftar`); }
+                if (master.length) masalah.push('Transaksi master: ' + master.join(', ') + '.');
+                barisDetail().forEach((tr, i) => {
+                    const kurang = [['nominal', 'Nominal'], ['keterangan', 'Keterangan'], ['kategori', 'Kategori']].filter(([f]) => {
+                        const el = tr.querySelector(`[data-nama=${f}]`);
+                        const kosong = f === 'nominal' ? !angka(el.value) : !el.value.trim();
+                        if (kosong) tandai(el);
+                        return kosong;
+                    }).map(([, label]) => label);
+                    if (kurang.length) masalah.push(`${ringkasBaris(tr, i)}: ${kurang.join(', ')} belum diisi.`);
+                });
+                if (!hitung()) { masalah.push(statusCocok.textContent); pertama ??= nominalTransfer; }
+                return {masalah, pertama};
+            };
             const tampilTemuan = temuan => {
-                let belum = null, jumlah = 0;
+                let jumlah = 0;
                 barisDetail().forEach((tr, i) => {
                     if (tr.temuan) tr.konfirmasi = tr.temuan.querySelector('[data-konfirmasi]').value;
                     tr.temuan?.remove();
                     tr.temuan = null;
+                    tr.aturan = [];
                     tr.classList.remove('ber-flag');
                     const daftarT = temuan[i];
                     if (!daftarT?.length) return;
                     jumlah++;
+                    tr.aturan = [...new Set(daftarT.map(x => x.kode))];
                     const t = document.createElement('tr');
                     t.className = 'temuan-baris';
                     t.innerHTML = `<td colspan="8"><div class="temuan">
                         <div class="judul-temuan">⚠ Baris ${i + 1} kena FLAG validasi (${daftarT.length}) — periksa, perbaiki bila salah, atau tulis konfirmasi bila memang valid</div>
                         <ul>${daftarT.map(x => `<li><span class="prioritas ${x.prioritas}">${x.prioritas}</span> <span class="aturan">Aturan ${esc2(x.kode)}</span> ${esc2(x.pesan)}</li>`).join('')}</ul>
-                        <label>Konfirmasi admin <span class="redup">(wajib — mis. "Kekurangan UJ karena rute dialihkan", "Ganti driver, Sule sakit")</span>
+                        <label>Konfirmasi admin <span class="redup">(wajib, min. ${MIN_KONFIRMASI} karakter — mis. "Kekurangan UJ karena rute dialihkan", "Ganti driver, Sule sakit")</span>
                             <input type="text" data-konfirmasi maxlength="1000" autocomplete="off"></label></div></td>`;
                     const k = t.querySelector('[data-konfirmasi]');
                     k.value = tr.konfirmasi || '';
-                    k.addEventListener('input', () => { tr.konfirmasi = k.value; k.classList.remove('kosong'); });
+                    k.addEventListener('input', () => { tr.konfirmasi = k.value; k.classList.toggle('kosong', k.value.trim().length < MIN_KONFIRMASI); });
+                    k.classList.toggle('kosong', k.value.trim().length < MIN_KONFIRMASI);
                     tr.after(t);
                     tr.temuan = t;
                     tr.classList.add('ber-flag');
-                    if (!k.value.trim()) { k.classList.add('kosong'); belum ??= k; }
                 });
                 urutkanNama();
-                return {jumlah, belum};
+                return jumlah;
+            };
+            // Lapis 3: setiap baris ber-FLAG wajib punya konfirmasi yang memadai.
+            const cekKonfirmasi = () => {
+                const masalah = [];
+                let pertama = null;
+                barisDetail().forEach((tr, i) => {
+                    const k = tr.temuan?.querySelector('[data-konfirmasi]');
+                    if (!k) return;
+                    const isi = k.value.trim();
+                    if (isi.length >= MIN_KONFIRMASI) return;
+                    pertama ??= k;
+                    masalah.push(`${ringkasBaris(tr, i)}: ${tr.aturan.length} FLAG (Aturan ${tr.aturan.join(', ')}) — `
+                        + (isi ? `konfirmasi terlalu singkat (min. ${MIN_KONFIRMASI} karakter).` : 'perbaiki isiannya atau isi konfirmasi admin.'));
+                });
+                return {masalah, pertama};
             };
             let lolosValidasi = false;
             form.addEventListener('submit', async e => {
-                if (!hitung()) { e.preventDefault(); statusCocok.scrollIntoView({block: 'center'}); return; }
+                if (lolosValidasi) { tombolSimpan.disabled = true; tombolSimpan.textContent = 'Menyimpan ke sheet…'; return; }
+                e.preventDefault();
+                const isian = cekIsian();
+                if (isian.masalah.length) { tampilMasalah('Belum bisa disimpan — perbaiki dulu:', isian.masalah, isian.pertama); return; }
                 const totalFoto = daftarFoto.reduce((s, f) => s + f.file.size, 0);
                 if (totalFoto > BATAS.total - 512 * 1024) {
-                    e.preventDefault();
                     alert(`Total foto ${ukuran(totalFoto)} melebihi batas server ${ukuran(BATAS.total)}. Buang sebagian foto, simpan, lalu tambahkan sisanya lewat Edit.`);
                     return;
                 }
-                if (lolosValidasi) { tombolSimpan.disabled = true; tombolSimpan.textContent = 'Menyimpan ke sheet…'; return; }
-                e.preventDefault();
                 tombolSimpan.disabled = true;
                 tombolSimpan.textContent = 'Memeriksa validasi…';
                 const data = new FormData(form);
@@ -620,11 +678,7 @@
                     const res = await fetch(@json(route('uj.periksa')), {method: 'POST', body: data, headers: {Accept: 'application/json'}});
                     hasil = await res.json();
                     if (!res.ok) {
-                        const galat = hasil.galat ?? Object.values(hasil.errors ?? {}).flat();
-                        kotakValidasi.className = 'pesan galat';
-                        kotakValidasi.innerHTML = '<b>Periksa lagi isian berikut:</b><ul style="margin: 6px 0 0; padding-left: 18px;">' + galat.map(g => `<li>${esc2(g)}</li>`).join('') + '</ul>';
-                        kotakValidasi.hidden = false;
-                        kotakValidasi.scrollIntoView({block: 'center'});
+                        tampilMasalah('Belum bisa disimpan — perbaiki dulu:', hasil.galat ?? Object.values(hasil.errors ?? {}).flat());
                         return;
                     }
                 } catch (err) {
@@ -632,15 +686,17 @@
                     return;
                 } finally {
                     tombolSimpan.textContent = @json($edit ? 'Simpan perubahan ke sheet' : 'Simpan ke sheet');
-                    hitung();
+                    tombolSimpan.disabled = false;
                 }
-                const {jumlah, belum} = tampilTemuan(hasil.temuan || {});
+                const jumlah = tampilTemuan(hasil.temuan || {});
+                const konf = cekKonfirmasi();
+                if (konf.masalah.length) {
+                    tampilMasalah(`Belum bisa disimpan — ${konf.masalah.length} transaksi detail kena FLAG validasi dan harus diperbaiki atau dikonfirmasi (alasannya ada di bawah tiap baris):`, konf.masalah, konf.pertama);
+                    return;
+                }
                 kotakValidasi.hidden = !jumlah;
-                kotakValidasi.className = 'pesan ' + (belum ? 'galat' : 'sukses');
-                kotakValidasi.textContent = !jumlah ? '' : belum
-                    ? `${jumlah} transaksi detail kena FLAG validasi. Baca alasannya di bawah tiap baris, perbaiki bila salah, atau isi konfirmasi admin — lalu klik Simpan lagi.`
-                    : `${jumlah} transaksi detail ber-FLAG sudah dikonfirmasi — menyimpan…`;
-                if (belum) { belum.scrollIntoView({block: 'center'}); belum.focus(); return; }
+                kotakValidasi.className = 'pesan sukses';
+                kotakValidasi.textContent = jumlah ? `Semua transaksi tervalidasi (${jumlah} baris ber-FLAG sudah dikonfirmasi) — menyimpan…` : '';
                 lolosValidasi = true;
                 form.requestSubmit(tombolSimpan);
             });

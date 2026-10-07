@@ -26,6 +26,9 @@ use Illuminate\View\View;
 /** Kas uang jalan dump truck (lembar "Kas Seabank"): daftar per bulan, input, edit, hapus — ditulis langsung ke sheet. */
 class UjController extends Controller
 {
+    /** Panjang minimal konfirmasi admin untuk baris ber-FLAG (sama dengan form). */
+    private const MIN_KONFIRMASI = 10;
+
     public function index(Request $request): View
     {
         $daftarBulan = UjTransaksi::whereNotNull('tanggal')->selectRaw("DATE_FORMAT(tanggal, '%Y-%m') as bulan")->distinct()->orderBy('bulan')->pluck('bulan');
@@ -128,9 +131,10 @@ class UjController extends Controller
         ], [
             ...KasFotoController::PESAN,
             'detail.required' => 'Isi minimal satu transaksi detail.',
-            'detail.*.keterangan.required' => 'Keterangan setiap detail wajib diisi.',
-            'detail.*.kategori.required' => 'Kategori setiap detail wajib diisi.',
-            'detail.*.nominal.required' => 'Nominal setiap detail wajib diisi.',
+            'detail.*.keterangan.required' => 'Transaksi detail baris :position: Keterangan belum diisi.',
+            'detail.*.kategori.required' => 'Transaksi detail baris :position: Kategori belum diisi.',
+            'detail.*.nominal.required' => 'Transaksi detail baris :position: Nominal belum diisi.',
+            'detail.*.nominal.min' => 'Transaksi detail baris :position: Nominal harus lebih dari 0.',
             'nominal_biaya.required' => 'Isi nominal biaya transfer, atau hilangkan centangnya.',
             'nominal_biaya.max' => 'Biaya transfer maksimal 100.000.',
         ]);
@@ -181,10 +185,17 @@ class UjController extends Controller
     private function wajibKonfirmasi(array $input, ?int $kecuali): array|RedirectResponse
     {
         $temuan = ValidasiUj::periksa($input, $kecuali);
-        $belum = array_keys(array_filter($temuan, fn ($t, $i) => ! $input['detail'][$i]['konfirmasi'], ARRAY_FILTER_USE_BOTH));
-        if ($belum) {
-            return back()->withInput()->withErrors(['konfirmasi' => 'Transaksi detail baris '.implode(', ', array_map(fn ($i) => $i + 1, $belum))
-                .' kena FLAG validasi dan belum dikonfirmasi. Klik Simpan lagi untuk melihat alasannya, lalu isi konfirmasinya.']);
+        $pesan = [];
+        foreach ($temuan as $i => $daftar) {
+            if (mb_strlen((string) $input['detail'][$i]['konfirmasi']) >= self::MIN_KONFIRMASI) {
+                continue;
+            }
+            $d = $input['detail'][$i];
+            $pesan["konfirmasi.{$i}"] = 'Transaksi detail baris '.($i + 1).' ('.trim(($d['nama'] ?: ($i === 0 ? $input['nama'] : '')).' · '.rp($d['nominal']).' · '.$d['keterangan'], ' ·').'): '
+                .count($daftar).' FLAG (Aturan '.implode(', ', array_unique(array_column($daftar, 'kode'))).') belum dikonfirmasi (min. '.self::MIN_KONFIRMASI.' karakter). Klik Simpan lagi untuk melihat alasannya.';
+        }
+        if ($pesan) {
+            return back()->withInput()->withErrors($pesan);
         }
 
         return $temuan;
