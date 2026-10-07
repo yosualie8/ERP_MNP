@@ -27,7 +27,7 @@ class ValidasiRitasi
      * nomor DO yang sama), yang dipakai baris "Uang Jalan" terbaru; tanpa itu, DT yang paling sering muncul.
      *
      * @param  array<int, string|null>  $daftarDo
-     * @return array<string, array{no_lambung: ?string, driver: ?string, jenis_kendaraan: ?string, id_uj: string}> kunci = kunciAngka(DO)
+     * @return array<string, array{tempat: ?string, no_lambung: ?string, driver: ?string, jenis_kendaraan: ?string, id_uj: string}> kunci = kunciAngka(DO)
      */
     public static function dariUj(array $daftarDo): array
     {
@@ -37,7 +37,7 @@ class ValidasiRitasi
         }
         $baris = UjDetail::query()->where('biaya_transfer', false)->whereNotNull('no_do')
             ->whereIn(DB::raw(self::sqlKunci('no_do')), $kunci->all())
-            ->orderBy('baris')->get(['id_uj', 'tanggal', 'nama', 'no_mobil', 'no_do', 'kategori', 'jenis_kendaraan'])
+            ->orderBy('baris')->get(['id_uj', 'tanggal', 'nama', 'no_mobil', 'no_do', 'kategori', 'keterangan', 'jenis_kendaraan'])
             ->groupBy(fn ($d) => LembarRitasi::kunciAngka($d->no_do));
 
         $hasil = [];
@@ -51,6 +51,7 @@ class ValidasiRitasi
             $pilih ??= $g->last();
             $sama = $g->where('no_mobil', $pilih->no_mobil);
             $hasil[$k] = [
+                'tempat' => TebakGalian::tempat($sama->whereIn('kategori', ['Uang Jalan', 'Uang Tanah'])->pluck('keterangan')),
                 'no_lambung' => $pilih->no_mobil ?: null,
                 'driver' => $pilih->nama ?: $sama->pluck('nama')->filter()->last(),
                 'jenis_kendaraan' => NomorMobil::rapikanJenis($pilih->jenis_kendaraan ?: $sama->pluck('jenis_kendaraan')->filter()->last()),

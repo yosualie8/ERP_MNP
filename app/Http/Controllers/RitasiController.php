@@ -10,6 +10,7 @@ use App\Support\GoogleSheets;
 use App\Support\KasSeabank;
 use App\Support\LembarRitasi;
 use App\Support\NomorMobil;
+use App\Support\TebakGalian;
 use App\Support\TulisRitasiSheet;
 use App\Support\ValidasiRitasi;
 use Illuminate\Http\JsonResponse;
@@ -64,12 +65,18 @@ class RitasiController extends Controller
         }
         ksort($dt);
 
-        // Harga jual terakhir per tahap|galian|jenis|pemilik (cadangan tahap|galian).
+        // Harga jual terakhir dari riwayat, dari yang paling spesifik: tahap|galian|jenis|pemilik → galian|jenis|pemilik →
+        // tahap|jenis|pemilik → jenis|pemilik → tahap|galian (harga terutama ditentukan kendaraan & pemiliknya, mis. Faw MNP 2,85 jt, Engkel RUDI 425 rb).
         $harga = [];
-        foreach (Ritasi::whereNotNull('harga_jual')->where('tanggal', '>=', $setahun)->orderBy('baris')->get(['tahap', 'galian', 'jenis_kendaraan', 'pemilik', 'harga_jual']) as $r) {
-            $harga[mb_strtolower("{$r->tahap}|{$r->galian}|{$r->jenis_kendaraan}|{$r->pemilik}")] = (int) $r->harga_jual;
-            $harga[mb_strtolower("{$r->tahap}|{$r->galian}")] = (int) $r->harga_jual;
+        foreach (Ritasi::whereNotNull('harga_jual')->where('harga_jual', '>', 0)->where('tanggal', '>=', $setahun)->orderBy('tanggal')->orderBy('baris')
+            ->get(['tahap', 'galian', 'jenis_kendaraan', 'pemilik', 'harga_jual']) as $r) {
+            foreach (["{$r->tahap}|{$r->galian}|{$r->jenis_kendaraan}|{$r->pemilik}", "*|{$r->galian}|{$r->jenis_kendaraan}|{$r->pemilik}",
+                "{$r->tahap}|*|{$r->jenis_kendaraan}|{$r->pemilik}", "*|*|{$r->jenis_kendaraan}|{$r->pemilik}", "{$r->tahap}|{$r->galian}"] as $k) {
+                $harga[mb_strtolower($k)] = (int) $r->harga_jual;
+            }
         }
+        $hargaSering = Ritasi::where('tanggal', '>=', now()->subMonths(3))->where('harga_jual', '>', 0)
+            ->select('harga_jual', DB::raw('COUNT(*) n'))->groupBy('harga_jual')->orderByDesc('n')->limit(8)->pluck('harga_jual');
 
         // No Seri berikutnya per tahap (angka terbesar + 1, panjang nol di depan mengikuti yang terakhir).
         $seri = Ritasi::whereNotNull('no_seri')->where('tanggal', '>=', $setahun)->orderBy('baris')->get(['tahap', 'no_seri'])
@@ -79,7 +86,7 @@ class RitasiController extends Controller
 
         return view('ritasi.input', [
             'tahap' => $tahap, 'galian' => $sering('galian'), 'jenisTanah' => $sering('jenis_tanah'), 'jenisBuangan' => $sering('jenis_buangan'),
-            'jenisKendaraan' => $sering('jenis_kendaraan'), 'pemilik' => $sering('pemilik'), 'dt' => $dt, 'harga' => $harga, 'seri' => $seri,
+            'jenisKendaraan' => $sering('jenis_kendaraan'), 'pemilik' => $sering('pemilik'), 'dt' => $dt, 'harga' => $harga, 'hargaSering' => $hargaSering, 'seri' => $seri,
         ]);
     }
 
@@ -172,7 +179,9 @@ class RitasiController extends Controller
         [$rit, $uj] = $this->rapikan($request, true);
         $truk = [];
         foreach ($rit as $i => $r) {
-            $truk[$i] = ['no_lambung' => $r['no_lambung'], 'driver' => $r['driver'], 'jenis_kendaraan' => $r['jenis_kendaraan']];
+            // Galian hanya saran dari keterangan Kas UJ (admin boleh mengganti).
+            $tempat = $uj[LembarRitasi::kunciAngka($r['no_do'])]['tempat'] ?? null;
+            $truk[$i] = ['no_lambung' => $r['no_lambung'], 'driver' => $r['driver'], 'jenis_kendaraan' => $r['jenis_kendaraan'], 'galian' => TebakGalian::galian($tempat, $r['tahap'])];
         }
 
         return response()->json([

@@ -71,7 +71,7 @@
                 </h3>
                 <span class="redup"><b id="jumlah-rit">0</b> rit · total harga jual <b id="total-harga">0</b></span>
             </div>
-            <p class="redup" style="margin: 0 0 10px;">Satu baris = satu rit, masing-masing berdiri sendiri (tanggal, tahap, galian boleh berbeda per baris). Ketik No Lambung (DT) → Plat, Driver, Jenis & Pemilik terisi otomatis; Harga Jual dari histori tahap + galian + kendaraan; No Seri berikutnya disarankan per tahap (ungu = otomatis, boleh diganti).</p>
+            <p class="redup" style="margin: 0 0 10px;">Satu baris = satu rit, masing-masing berdiri sendiri (tanggal, tahap, galian boleh berbeda per baris). Ketik No DO → No Lambung, Driver & Jenis diambil dari Kas UJ (terkunci); Galian disarankan dari keterangan Kas UJ; Plat, Pemilik & Harga Jual dari riwayat ritasi; No Seri berikutnya disarankan per tahap (ungu = saran otomatis, boleh diganti).</p>
             <div class="gulir">
             <table class="bon" style="min-width: 1880px;">
                 <thead><tr>
@@ -97,6 +97,7 @@
         <datalist id="daftar-tanah">@foreach ($jenisTanah as $x)<option value="{{ $x }}">@endforeach</datalist>
         <datalist id="daftar-buangan">@foreach ($jenisBuangan as $x)<option value="{{ $x }}">@endforeach</datalist>
         <datalist id="daftar-pemilik">@foreach ($pemilik as $x)<option value="{{ $x }}">@endforeach</datalist>
+        <datalist id="daftar-harga">@foreach ($hargaSering as $x)<option value="{{ number_format($x, 0, ',', '.') }}">@endforeach</datalist>
 
         <div id="hasil-validasi" hidden></div>
         <div style="display: flex; gap: 12px; align-items: center;">
@@ -121,7 +122,7 @@
             <td><input type="text" data-nama="galian" list="daftar-galian" autocomplete="off"></td>
             <td><input type="text" data-nama="jenis_tanah" list="daftar-tanah" autocomplete="off"></td>
             <td><input type="text" data-nama="jenis_buangan" list="daftar-buangan" autocomplete="off"></td>
-            <td><input type="text" data-nama="harga_jual" class="angka-input rupiah" inputmode="numeric" autocomplete="off"></td>
+            <td><input type="text" data-nama="harga_jual" list="daftar-harga" class="angka-input rupiah" inputmode="numeric" autocomplete="off"></td>
             <td><input type="text" data-nama="keterangan" autocomplete="off"></td>
             <td><button type="button" class="hapus" title="Hapus baris rit">×</button></td>
         </tr>
@@ -172,6 +173,7 @@
             };
             const isiTruk = (tr, t) => {
                 ['no_lambung', 'driver', 'jenis_kendaraan'].forEach(f => { sel(tr, f).value = t?.[f] || ''; });
+                if (t?.galian) isiOtomatis(sel(tr, 'galian'), t.galian); // saran dari keterangan Kas UJ; isian admin sendiri tidak ditimpa
                 aturDariDt(tr);
                 aturHarga(tr);
             };
@@ -189,9 +191,12 @@
                 return x.getMonth() === b - 1 && x.getDate() === d && t >= 2020 ? `${String(d).padStart(2, '0')}/${String(b).padStart(2, '0')}/${t}` : null;
             };
             const hariIni = (() => { const x = new Date(); return `${String(x.getDate()).padStart(2, '0')}/${String(x.getMonth() + 1).padStart(2, '0')}/${x.getFullYear()}`; })();
+            // Harga jual dari riwayat: paling spesifik dulu (tahap+galian+kendaraan+pemilik), lalu makin umum.
             const aturHarga = tr => {
-                const k = [kecil(sel(tr, 'tahap').value), kecil(sel(tr, 'galian').value)];
-                const h = HARGA[[...k, kecil(sel(tr, 'jenis_kendaraan').value), kecil(sel(tr, 'pemilik').value)].join('|')] ?? HARGA[k.join('|')];
+                const [t, g, j, p] = ['tahap', 'galian', 'jenis_kendaraan', 'pemilik'].map(f => kecil(sel(tr, f).value));
+                const h = j || p
+                    ? [[t, g, j, p], ['*', g, j, p], [t, '*', j, p], ['*', '*', j, p], [t, g]].map(k => HARGA[k.join('|')]).find(Boolean)
+                    : HARGA[[t, g].join('|')];
                 if (h) isiOtomatis(sel(tr, 'harga_jual'), String(h));
             };
             // No Seri per tahap: rit pertama suatu tahap = nomor terakhir tahap itu + 1, rit berikutnya (tahap sama) +1 dari rit sebelumnya.
