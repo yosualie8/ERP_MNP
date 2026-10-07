@@ -137,7 +137,9 @@
             <div style="display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
                 <div><strong>MNP</strong> · PT Multi Niaga Putra</div>
                 <nav>
-                    @foreach (['dashboard' => 'Beranda', 'kas.input' => 'Input Kas', 'kas.index' => 'Kas Harian', 'uj.input' => 'Input UJ', 'uj.index' => 'Kas UJ', 'reimburse.index' => 'Reimburse UJ','kas.rekap' => 'Rekap Biaya', 'kas.kode-gl' => 'Kode GL'] as $rute => $nama)
+                    <a href="{{ route('dashboard') }}" @class(['aktif' => request()->routeIs('dashboard')])>Beranda</a>
+                    {{-- Hanya menu yang diberikan ke akun ini (halaman Pengguna). --}}
+                    @foreach (\App\Support\MenuAkses::navigasi(auth()->user()) as [$nama, $rute])
                         <a href="{{ route($rute) }}" @class(['aktif' => request()->routeIs($rute)])>{{ $nama }}</a>
                     @endforeach
                     @can('super-admin')

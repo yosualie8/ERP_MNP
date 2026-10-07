@@ -1,0 +1,71 @@
+<?php
+
+namespace App\Support;
+
+use App\Models\User;
+
+/**
+ * Menu yang bisa diatur per akun (halaman Pengguna). Super Admin selalu boleh semua; Admin hanya menu yang dicentang
+ * (belum pernah diatur = semua menu). Setiap rute dipetakan ke menunya supaya halaman juga ditolak bila dibuka lewat URL.
+ */
+class MenuAkses
+{
+    /** kunci => [label di navigasi, rute tujuan, pola nama rute yang termasuk menu ini, keterangan] */
+    public const DAFTAR = [
+        'input-kas' => ['Input Kas', 'kas.input', ['kas.input', 'kas.input.*', 'kas.edit', 'kas.update', 'kas.hapus', 'kas.bon', 'kas.bon.*'], 'Input, edit & hapus transaksi Kas Harian (Bank Jago), foto bon'],
+        'kas-harian' => ['Kas Harian', 'kas.index', ['kas.index', 'kas.sinkron'], 'Melihat buku Kas Harian per bulan'],
+        'input-uj' => ['Input UJ', 'uj.input', ['uj.input', 'uj.store', 'uj.periksa', 'uj.edit', 'uj.update', 'uj.hapus'], 'Input, edit & hapus transaksi uang jalan (Kas Seabank)'],
+        'kas-uj' => ['Kas UJ', 'uj.index', ['uj.index', 'uj.sinkron'], 'Melihat daftar transaksi uang jalan'],
+        'reimburse-uj' => ['Reimburse UJ', 'reimburse.index', ['reimburse.*'], 'Memilih & mencatat reimburse uang jalan, unduh Excel'],
+        'rekap' => ['Rekap Biaya', 'kas.rekap', ['kas.rekap'], 'Rekap biaya per akun × bulan'],
+        'kode-gl' => ['Kode GL', 'kas.kode-gl', ['kas.kode-gl'], 'Daftar Kode GL'],
+    ];
+
+    /** Foto bon dipakai Input Kas dan Input UJ: boleh bila salah satunya boleh. */
+    private const BERSAMA = ['kas.foto' => ['input-kas', 'kas-harian', 'input-uj', 'kas-uj'], 'kas.foto.destroy' => ['input-kas', 'input-uj']];
+
+    public static function boleh(?User $user, string $menu): bool
+    {
+        if (! $user) {
+            return false;
+        }
+        if ($user->isSuperAdmin() || $user->menu === null) {
+            return true;
+        }
+
+        return in_array($menu, $user->menu, true);
+    }
+
+    /** Menu-menu yang mencakup rute ini (kosong = rute tidak dibatasi menu, mis. Beranda). */
+    public static function menuUntukRute(?string $rute): array
+    {
+        if (! $rute) {
+            return [];
+        }
+        if (isset(self::BERSAMA[$rute])) {
+            return self::BERSAMA[$rute];
+        }
+        foreach (self::DAFTAR as $kunci => [, , $pola]) {
+            foreach ($pola as $p) {
+                if (\Illuminate\Support\Str::is($p, $rute)) {
+                    return [$kunci];
+                }
+            }
+        }
+
+        return [];
+    }
+
+    public static function bolehRute(?User $user, ?string $rute): bool
+    {
+        $menu = self::menuUntukRute($rute);
+
+        return ! $menu || collect($menu)->contains(fn ($m) => self::boleh($user, $m));
+    }
+
+    /** Menu navigasi untuk akun ini: [kunci => [label, rute]]. */
+    public static function navigasi(?User $user): array
+    {
+        return array_filter(self::DAFTAR, fn ($m, $kunci) => self::boleh($user, $kunci), ARRAY_FILTER_USE_BOTH);
+    }
+}

@@ -24,6 +24,7 @@ class User extends Authenticatable
         'google_id',
         'avatar',
         'role',
+        'menu',
     ];
 
     public const ROLE = [
@@ -49,7 +50,14 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
+        'menu' => 'array',
     ];
+
+    /** Boleh melihat menu ini? (lihat App\Support\MenuAkses) */
+    public function bolehMenu(string $menu): bool
+    {
+        return \App\Support\MenuAkses::boleh($this, $menu);
+    }
 
     /** Super admin = email di SUPER_ADMIN_EMAILS (.env) atau peran super_admin di menu Pengguna. */
     public function isSuperAdmin(): bool

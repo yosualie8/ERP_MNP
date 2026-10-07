@@ -39,7 +39,7 @@
             <button type="button" class="tombol polos" id="buka-semua">Buka semua detail</button>
             <span class="redup" style="margin-left: auto;">@if ($diimpor)Disinkron {{ \Illuminate\Support\Carbon::parse($diimpor)->translatedFormat('j M Y H:i') }}@endif</span>
             <button type="submit" form="form-sinkron" class="tombol polos" title="Ambil ulang lembar Kas Seabank dari sheet (setelah sheet diubah langsung)">Sinkron dari sheet</button>
-            <a href="{{ route('uj.input') }}" class="tombol" style="padding: 8px 14px;">+ Input UJ</a>
+            @if ($bolehInput)<a href="{{ route('uj.input') }}" class="tombol" style="padding: 8px 14px;">+ Input UJ</a>@endif
         </form>
         <form method="POST" action="{{ route('uj.sinkron') }}" id="form-sinkron">@csrf</form>
 
@@ -76,13 +76,14 @@
                             <td class="i">@if ($t->no_uj)UJ-{{ $t->no_uj }}@else<i title="Baris master belum diberi ID UJ di sheet">tanpa ID</i>@endif
                                 @if ($sudah)<span class="label hijau">Sudah reimburse</span>@endif</td>
                             <td style="white-space: nowrap;">
-                                @if ($t->no_uj && ! $sudah)
+                                {{-- Edit, foto bon & Hapus hanya untuk akun yang punya menu Input UJ. --}}
+                                @if ($bolehInput && $t->no_uj && ! $sudah)
                                     <a href="{{ route('uj.edit', $t->no_uj) }}" class="tombol-edit" title="Edit transaksi ini (ditulis ulang di sheet)">Edit</a>
                                 @endif
-                                @if ($n = $jumlahFoto[$t->no_uj] ?? 0)
+                                @if ($bolehInput && ($n = $jumlahFoto[$t->no_uj] ?? 0))
                                     <a href="{{ route('uj.edit', $t->no_uj) }}" class="lampiran ada" title="{{ $n }} foto bon (buka Edit untuk melihat)">📎 {{ $n }}</a>
                                 @endif
-                                @if ($t->no_uj && ! $sudah)
+                                @if ($bolehInput && $t->no_uj && ! $sudah)
                                     <button type="button" class="tombol-hapus" data-hapus="{{ route('uj.hapus', $t->no_uj) }}" data-baris="{{ $t->baris }}–{{ $t->baris_akhir }}"
                                         data-ringkasan="{{ 'UJ-'.$t->no_uj.' · '.rp((int) $t->nominal).' · '.$t->tanggal?->translatedFormat('j M').' · '.$t->nama }}" data-bon="{{ $detail->count() }}">Hapus</button>
                                 @endif

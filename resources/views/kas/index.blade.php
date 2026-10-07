@@ -67,7 +67,7 @@
             <button type="button" class="tombol polos" id="buka-semua">Buka semua detail</button>
             <span class="redup" style="margin-left: auto;">Diimpor {{ $bulan->diimpor_pada->translatedFormat('j M Y H:i') }} dari lembar {{ $bulan->lembar }}</span>
             <button type="submit" form="form-sinkron" class="tombol polos" title="Ambil ulang lembar ini dari sheet (setelah sheet diubah langsung)">Sinkron dari sheet</button>
-            <a href="{{ route('kas.input') }}" class="tombol" style="padding: 8px 14px;">+ Input kas</a>
+            @if ($bolehInput)<a href="{{ route('kas.input') }}" class="tombol" style="padding: 8px 14px;">+ Input kas</a>@endif
         </form>
         <form method="POST" action="{{ route('kas.sinkron') }}" id="form-sinkron">
             @csrf
@@ -105,17 +105,20 @@
                             <td class="angka"><b>{{ rp($t->kredit, true) }}</b></td>
                             <td class="angka">{{ rp($t->saldo) }}</td>
                             <td style="white-space: nowrap;">
-                                @if ($t->no_id)
-                                    <a href="{{ route('kas.edit', $t->no_id) }}" class="tombol-edit" title="Edit transaksi ini (ditulis ulang di sheet)">Edit</a>
-                                    @if ($n = $jumlahFoto[$t->no_id] ?? 0)
-                                        <a href="{{ route('kas.bon', $t->no_id) }}" class="lampiran ada" title="Lihat {{ $n }} foto bon">📎 {{ $n }}</a>
-                                    @else
-                                        <a href="{{ route('kas.bon', $t->no_id) }}" class="lampiran kosong" title="Lampirkan foto bon">📎+</a>
+                                {{-- Edit, foto bon & Hapus hanya untuk akun yang punya menu Input Kas. --}}
+                                @if ($bolehInput)
+                                    @if ($t->no_id)
+                                        <a href="{{ route('kas.edit', $t->no_id) }}" class="tombol-edit" title="Edit transaksi ini (ditulis ulang di sheet)">Edit</a>
+                                        @if ($n = $jumlahFoto[$t->no_id] ?? 0)
+                                            <a href="{{ route('kas.bon', $t->no_id) }}" class="lampiran ada" title="Lihat {{ $n }} foto bon">📎 {{ $n }}</a>
+                                        @else
+                                            <a href="{{ route('kas.bon', $t->no_id) }}" class="lampiran kosong" title="Lampirkan foto bon">📎+</a>
+                                        @endif
                                     @endif
-                                @endif
-                                <button type="button" class="tombol-hapus" data-hapus="{{ route('kas.hapus', $t) }}" data-baris="{{ $t->baris }}"
-                                    data-ringkasan="{{ ($t->debet ? 'Uang masuk ' : 'Transfer ').rp($t->debet ?: $t->kredit).' · '.$t->tanggal->translatedFormat('j M').' · '.($t->nama_tujuan ?? '').' · '.($t->keterangan ?? '') }}"
-                                    data-bon="{{ $t->bon->count() }}" @if (isset($punyaBiaya[$t->id])) data-biaya="1" @endif>Hapus</button></td>
+                                    <button type="button" class="tombol-hapus" data-hapus="{{ route('kas.hapus', $t) }}" data-baris="{{ $t->baris }}"
+                                        data-ringkasan="{{ ($t->debet ? 'Uang masuk ' : 'Transfer ').rp($t->debet ?: $t->kredit).' · '.$t->tanggal->translatedFormat('j M').' · '.($t->nama_tujuan ?? '').' · '.($t->keterangan ?? '') }}"
+                                        data-bon="{{ $t->bon->count() }}" @if (isset($punyaBiaya[$t->id])) data-biaya="1" @endif>Hapus</button>
+                                @endif</td>
                         </tr>
                         @if ($t->bon->isNotEmpty())
                             <tr class="bh"><td>Transaksi detail</td><td>PIC</td><td>Keterangan</td><td>Kode GL</td><td></td><td class="angka">Nominal</td><td>ID transaksi</td><td></td></tr>

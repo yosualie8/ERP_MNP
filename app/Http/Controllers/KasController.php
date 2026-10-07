@@ -63,7 +63,7 @@ class KasController extends Controller
         $jumlahFoto = KasFoto::kas()->whereIn('no_id', $transfer->pluck('no_id')->filter())
             ->selectRaw('no_id, COUNT(*) as n')->groupBy('no_id')->pluck('n', 'no_id');
 
-        return view('kas.index', compact('daftarBulan', 'bulan', 'transfer', 'q', 'tanggal', 'daftarTanggal', 'punyaBiaya', 'jumlahFoto'));
+        return view('kas.index', compact('daftarBulan', 'bulan', 'transfer', 'q', 'tanggal', 'daftarTanggal', 'punyaBiaya', 'jumlahFoto') + ['bolehInput' => $request->user()->bolehMenu('input-kas')]);
     }
 
     /** Pengeluaran (jumlah bon) per akun × bulan, bisa disaring per cost center. */

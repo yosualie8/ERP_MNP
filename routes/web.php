@@ -22,7 +22,8 @@ Route::middleware('guest')->group(function () {
 // Di luar grup guest: juga dipakai super admin yang sudah login untuk menghubungkan Google Sheets.
 Route::get('/auth/google/callback', [GoogleController::class, 'callback'])->name('auth.google.callback');
 
-Route::middleware('auth')->group(function () {
+// "menu": tiap halaman/aksi hanya untuk akun yang diberi menunya (App\Support\MenuAkses, diatur di halaman Pengguna).
+Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/beranda', DashboardController::class)->name('dashboard');
     Route::get('/kas', [KasController::class, 'index'])->name('kas.index');
     Route::get('/kas/input', [KasInputController::class, 'create'])->name('kas.input');
@@ -58,6 +59,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/pengguna', [PenggunaController::class, 'index'])->name('pengguna.index');
         Route::post('/pengguna', [PenggunaController::class, 'store'])->name('pengguna.store');
         Route::patch('/pengguna/{user}', [PenggunaController::class, 'update'])->name('pengguna.update');
+        Route::patch('/pengguna/{user}/menu', [PenggunaController::class, 'menu'])->name('pengguna.menu');
         Route::delete('/pengguna/{user}', [PenggunaController::class, 'destroy'])->name('pengguna.destroy');
     });
 });

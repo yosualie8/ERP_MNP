@@ -54,7 +54,7 @@ class UjController extends Controller
             ->selectRaw('no_id, COUNT(*) as n')->groupBy('no_id')->pluck('n', 'no_id');
         $diimpor = Cache::get('uj-diimpor-pada');
 
-        return view('uj.index', compact('daftarBulan', 'bulan', 'q', 'transaksi', 'jumlahFoto', 'diimpor'));
+        return view('uj.index', compact('daftarBulan', 'bulan', 'q', 'transaksi', 'jumlahFoto', 'diimpor') + ['bolehInput' => $request->user()->bolehMenu('input-uj')]);
     }
 
     public function create(): View
