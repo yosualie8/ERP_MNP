@@ -135,7 +135,6 @@ class ReimburseKas
         $tanggalUj = $dasar()->setFormat('dd-mmm-yy')->setCellAlignment(CellAlignment::CENTER);
         $angka = $dasar()->setFormat('#,##0');
         $teks = $dasar();
-        $total = $dasar()->setFontBold()->setFormat('#,##0')->setBackgroundColor('F2F2F2');
 
         $w->addRow(Row::fromValues(['No', 'ID Transaksi Kas', 'Id Transaksi UJ', 'Tanggal Reimburse', 'Tanggal Transaksi Terjadi', 'PIC', 'Keterangan',
             'Jenis Mobil', 'No DO ', 'Galian', 'Kategori', 'Tanggal Reimburse UJ', 'Kode GL', 'Bon', 'Debit', 'Kredit', 'Saldo', 'Reimburse'], $kepala));
@@ -157,8 +156,7 @@ class ReimburseKas
                 Cell::fromValue($akumulasi, $angka), Cell::fromValue('Belum', $tengah),
             ]));
         }
-        $w->addRow(new Row([...array_map(fn ($v) => Cell::fromValue($v, $total), ['', '', '', '', '', '', 'TOTAL BELUM REIMBURSE · '.$baris->count().' transaksi', '', '', '', '', '', '', '', '']),
-            Cell::fromValue($akumulasi, $total), Cell::fromValue('', $total), Cell::fromValue('', $total)]));
+        // Tanpa baris ringkasan/total di bawah (permintaan owner): hanya header + baris transaksi.
         $w->close();
 
         return $path;
