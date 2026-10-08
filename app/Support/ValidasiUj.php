@@ -29,16 +29,24 @@ class ValidasiUj
      * @param  int|null  $kecualiTransaksi  id uj_transaksi yang sedang diedit (baris lamanya tidak dihitung)
      * @return array<int, array<int, array{kode: string, prioritas: string, pesan: string}>> indeks detail => temuan
      */
-    public static function periksa(array $input, ?int $kecualiTransaksi = null): array
+    public static function periksa(array $input, ?int $kecualiTransaksi = null, array $kecualiPengajuan = []): array
     {
         $tgl = $input['tanggal'];
+        $rentang = [$tgl->copy()->subDays(self::HARI)->toDateString(), $tgl->copy()->addDays(self::HARI)->toDateString()];
         $histori = UjDetail::query()
             ->where('biaya_transfer', false)
-            ->whereBetween('tanggal', [$tgl->copy()->subDays(self::HARI)->toDateString(), $tgl->copy()->addDays(self::HARI)->toDateString()])
+            ->whereBetween('tanggal', $rentang)
             ->when($kecualiTransaksi, fn ($q) => $q->where('uj_transaksi_id', '!=', $kecualiTransaksi))
             ->orderBy('tanggal')->orderBy('baris')
             ->get(['id_uj', 'tanggal', 'nama', 'keterangan', 'nominal', 'kategori', 'jenis_kendaraan', 'no_mobil', 'no_do'])
             ->map(fn (UjDetail $d) => self::baris($d->id_uj ?: 'tanpa ID', $d->tanggal, $d->nama, $d->keterangan, (int) $d->nominal, $d->kategori, $d->jenis_kendaraan, $d->no_mobil, $d->no_do));
+        // Pengajuan UJ yang masih menunggu realisasi ikut dibandingkan (kecuali detail yang sedang diedit / direalisasikan).
+        $histori = $histori->concat(\App\Models\UjPengajuanDetail::query()->where('status', 'menunggu')
+            ->whereNotIn('id', $kecualiPengajuan ?: [0])
+            ->whereHas('pengajuan', fn ($q) => $q->whereBetween('tanggal', $rentang))
+            ->with('pengajuan')->orderBy('id')->get()
+            ->map(fn ($d) => self::baris($d->pengajuan->kode().' (diajukan)', $d->pengajuan->tanggal, $d->nama ?: $d->pengajuan->nama, $d->keterangan, (int) $d->nominal,
+                $d->kategori, $d->jenis_kendaraan, $d->no_mobil, $d->no_do)));
 
         // Jenis kendaraan per DT dari seluruh histori (bukan hanya 30 hari).
         $jenisDt = UjDetail::whereNotNull('no_mobil')->whereNotNull('jenis_kendaraan')

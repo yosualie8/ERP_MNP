@@ -11,6 +11,8 @@ use App\Support\DaftarBank;
 use App\Support\FotoBon;
 use App\Support\GoogleSheets;
 use App\Models\AsetTruk;
+use App\Models\UjPengajuan;
+use App\Models\UjPengajuanDetail;
 use App\Support\KasSeabank;
 use App\Support\KategoriUj;
 use App\Support\Periode;
@@ -128,7 +130,7 @@ class UjController extends Controller
             ->sortByDesc('urut')->map(fn ($r) => collect($r)->except('urut')->all())->values()->all();
     }
 
-    private function bacaInput(Request $request): array|RedirectResponse
+    protected function bacaInput(Request $request): array|RedirectResponse
     {
         $polos = fn ($v) => is_string($v) ? preg_replace('/\D/', '', $v) : $v;
         $request->merge([
@@ -153,6 +155,7 @@ class UjController extends Controller
             'detail.*.no_mobil' => ['nullable', 'string', 'max:40'],
             'detail.*.no_do' => ['nullable', 'string', 'max:40'],
             'detail.*.konfirmasi' => ['nullable', 'string', 'max:1000'],
+            'detail.*.pengajuan' => ['nullable', 'integer'],
             'foto' => ['nullable', 'array', 'max:'.KasFotoController::MAKS_FOTO],
             'foto.*' => KasFotoController::ATURAN['foto.*'],
         ], [
@@ -183,6 +186,8 @@ class UjController extends Controller
                 'kategori' => KategoriUj::baku($rapi($d['kategori'])), 'jenis_kendaraan' => NomorMobil::rapikanJenis($d['jenis_kendaraan'] ?? null),
                 'no_mobil' => NomorMobil::rapikan($d['no_mobil'] ?? null), 'no_do' => $rapi($d['no_do'] ?? null),
                 'konfirmasi' => $rapi($d['konfirmasi'] ?? null),
+                // Detail pengajuan UJ yang direalisasikan oleh baris ini (Input UJ → "Ambil dari pengajuan").
+                'pengajuan' => ! empty($d['pengajuan']) ? (int) $d['pengajuan'] : null,
             ], $data['detail'])),
             'biaya_transfer' => $request->boolean('biaya_transfer'),
             'nominal_biaya' => (int) ($data['nominal_biaya'] ?? TulisUjSheet::BIAYA_TRANSFER),
@@ -218,7 +223,21 @@ class UjController extends Controller
         $kecuali = $request->filled('no_uj') ? UjTransaksi::where('no_uj', $request->integer('no_uj'))->value('id') : null;
         $input = ['tanggal' => $tanggal, 'nama' => trim((string) $request->input('nama')), 'detail' => $detail];
 
-        return response()->json(['temuan' => (object) ValidasiUj::periksa($input, $kecuali)]);
+        return response()->json(['temuan' => (object) ValidasiUj::periksa($input, $kecuali, $this->kecualiPengajuan($request))]);
+    }
+
+    /**
+     * Detail pengajuan yang tidak dijadikan pembanding validasi: yang sedang direalisasikan oleh form ini, dan seluruh detail
+     * pengajuan yang sedang diedit (supaya tidak dianggap dobel dengan dirinya sendiri).
+     */
+    protected function kecualiPengajuan(Request $request): array
+    {
+        $ids = collect((array) $request->input('detail', []))->pluck('pengajuan')->filter()->map(fn ($v) => (int) $v);
+        if ($request->filled('pengajuan_id')) {
+            $ids = $ids->merge(UjPengajuanDetail::where('uj_pengajuan_id', $request->integer('pengajuan_id'))->pluck('id'));
+        }
+
+        return $ids->unique()->values()->all();
     }
 
     /**
@@ -226,9 +245,9 @@ class UjController extends Controller
      *
      * @return array|RedirectResponse temuan per indeks detail, atau penolakan bila ada yang belum dikonfirmasi
      */
-    private function wajibKonfirmasi(array $input, ?int $kecuali): array|RedirectResponse
+    protected function wajibKonfirmasi(array $input, ?int $kecuali, array $kecualiPengajuan = []): array|RedirectResponse
     {
-        $temuan = ValidasiUj::periksa($input, $kecuali);
+        $temuan = ValidasiUj::periksa($input, $kecuali, $kecualiPengajuan);
         $pesan = [];
         foreach ($temuan as $i => $daftar) {
             if (mb_strlen((string) $input['detail'][$i]['konfirmasi']) >= self::MIN_KONFIRMASI) {
@@ -263,7 +282,13 @@ class UjController extends Controller
         if ($input instanceof RedirectResponse) {
             return $input;
         }
-        $temuan = $this->wajibKonfirmasi($input, null);
+        // Realisasi pengajuan: detail pengajuan yang dipilih harus masih menunggu (belum direalisasikan/dibatalkan).
+        $idPengajuan = collect($input['detail'])->pluck('pengajuan')->filter()->values();
+        if ($idPengajuan->count() !== $idPengajuan->unique()->count()
+            || UjPengajuanDetail::whereIn('id', $idPengajuan)->where('status', 'menunggu')->count() !== $idPengajuan->count()) {
+            return back()->withInput()->with('error', 'Sebagian detail pengajuan yang dipilih sudah direalisasikan atau dibatalkan (mungkin oleh admin lain). Muat ulang, lalu pilih lagi.');
+        }
+        $temuan = $this->wajibKonfirmasi($input, null, $idPengajuan->all());
         if ($temuan instanceof RedirectResponse) {
             return $temuan;
         }
@@ -275,6 +300,16 @@ class UjController extends Controller
 
             return back()->withInput()->with('error', 'Gagal menulis ke sheet: '.$e->getMessage());
         }
+        // Detail ke-i = ID UJ ke-i (biaya transfer tanpa ID ada di bawahnya).
+        $terealisasi = 0;
+        foreach ($input['detail'] as $i => $d) {
+            if ($d['pengajuan'] && isset($hasil['ids'][$i])) {
+                UjPengajuanDetail::where('id', $d['pengajuan'])->update(['status' => 'terealisasi', 'id_uj' => 'UJ-'.$hasil['ids'][$i],
+                    'realisasi_pada' => now(), 'realisasi_oleh' => $request->user()->id]);
+                $terealisasi++;
+            }
+        }
+        UjPengajuan::whereIn('id', UjPengajuanDetail::whereIn('id', $idPengajuan)->pluck('uj_pengajuan_id')->unique())->get()->each->hitungStatus();
         $pesanImpor = $this->perbarui(fn () => KasSeabank::perbaruiBlok(null, 0, 0, $hasil['mentah'], $hasil['baris_awal']));
         $this->catatTemuan($temuan, $input, $hasil['ids'], $request->user()->id);
         $jumlahFoto = $this->simpanFoto($request, $hasil['no_uj'], $input['tanggal']);
@@ -287,7 +322,8 @@ class UjController extends Controller
 
         return redirect()->route('uj.index', ['bulan' => $input['tanggal']->format('Y-m')])->with($pesanImpor ? 'error' : 'success',
             'Tersimpan di Kas Seabank baris '.$hasil['baris_awal'].'–'.$hasil['baris_akhir'].' (UJ-'.reset($hasil['ids']).(count($hasil['ids']) > 1 ? ' s/d UJ-'.end($hasil['ids']) : '').'): '
-            .$this->ringkasanInput($input).'.'.($jumlahFoto ? " {$jumlahFoto} foto bon terlampir." : '').$pesanImpor);
+            .$this->ringkasanInput($input).'.'.($jumlahFoto ? " {$jumlahFoto} foto bon terlampir." : '')
+            .($terealisasi ? " {$terealisasi} detail pengajuan tercatat terealisasi." : '').$pesanImpor);
     }
 
     public function edit(int $noUj): View|RedirectResponse
@@ -389,6 +425,12 @@ class UjController extends Controller
         $pesanImpor = $this->perbarui(fn () => KasSeabank::perbaruiBlok($t, $hasil['baris_akhir'] + 1, -$jumlah));
         $foto = FotoBon::hapusMilik($noUj, 'uj');
         UjTemuan::whereIn('id_uj', $t->detail->pluck('id_uj')->filter())->delete();
+        // Detail pengajuan yang direalisasikan oleh transaksi ini kembali "menunggu" (bisa direalisasikan ulang).
+        $kembali = UjPengajuanDetail::whereIn('id_uj', $t->detail->pluck('id_uj')->filter())->get();
+        if ($kembali->isNotEmpty()) {
+            UjPengajuanDetail::whereIn('id', $kembali->pluck('id'))->update(['status' => 'menunggu', 'id_uj' => null, 'realisasi_pada' => null, 'realisasi_oleh' => null]);
+            UjPengajuan::whereIn('id', $kembali->pluck('uj_pengajuan_id')->unique())->get()->each->hitungStatus();
+        }
         KasRiwayat::create([
             'aksi' => 'uj-hapus', 'lembar' => 'Seabank', 'baris_awal' => $hasil['baris_awal'], 'baris_akhir' => $hasil['baris_akhir'],
             'ringkasan' => $ringkasan, 'isi' => ['sebelum' => $hasil['sebelum']], 'user_id' => $request->user()->id,

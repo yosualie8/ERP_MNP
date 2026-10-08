@@ -6,6 +6,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\KasController;
 use App\Http\Controllers\KasFotoController;
 use App\Http\Controllers\KasInputController;
+use App\Http\Controllers\PengajuanUjController;
 use App\Http\Controllers\PenggunaController;
 use App\Http\Controllers\RapikanUjController;
 use App\Http\Controllers\ReimburseKasController;
@@ -64,6 +65,15 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::put('/uj/{noUj}', [UjController::class, 'update'])->whereNumber('noUj')->name('uj.update');
     Route::delete('/uj/{noUj}', [UjController::class, 'hapus'])->whereNumber('noUj')->name('uj.hapus');
     Route::post('/uj/sinkron', [UjController::class, 'sinkron'])->name('uj.sinkron');
+    Route::get('/uj/input/pengajuan', [PengajuanUjController::class, 'terbuka'])->name('uj.pengajuan-terbuka');
+    // Pengajuan uang jalan (disimpan di aplikasi, direalisasikan lewat Input UJ).
+    Route::get('/uj/pengajuan', [PengajuanUjController::class, 'daftar'])->name('pengajuan-uj.daftar');
+    Route::get('/uj/pengajuan/baru', [PengajuanUjController::class, 'buat'])->name('pengajuan-uj.buat');
+    Route::post('/uj/pengajuan', [PengajuanUjController::class, 'simpan'])->name('pengajuan-uj.simpan');
+    Route::post('/uj/pengajuan/periksa', [PengajuanUjController::class, 'periksa'])->name('pengajuan-uj.periksa');
+    Route::get('/uj/pengajuan/{pengajuan}/edit', [PengajuanUjController::class, 'ubah'])->whereNumber('pengajuan')->name('pengajuan-uj.ubah');
+    Route::put('/uj/pengajuan/{pengajuan}', [PengajuanUjController::class, 'simpanUbah'])->whereNumber('pengajuan')->name('pengajuan-uj.simpan-ubah');
+    Route::post('/uj/pengajuan/{pengajuan}/batal', [PengajuanUjController::class, 'batal'])->whereNumber('pengajuan')->name('pengajuan-uj.batal');
     // Ritasi dump truck (lembar "Ritasi").
     Route::get('/ritasi', [RitasiController::class, 'index'])->name('ritasi.index');
     Route::get('/ritasi/input', [RitasiController::class, 'create'])->name('ritasi.input');
