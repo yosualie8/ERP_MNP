@@ -326,11 +326,12 @@ class UjController extends Controller
         KasRiwayat::create([
             'aksi' => 'uj-tambah', 'lembar' => 'Seabank', 'baris_awal' => $hasil['baris_awal'], 'baris_akhir' => $hasil['baris_akhir'],
             'ringkasan' => mb_strimwidth($this->ringkasanInput($input), 0, 490, '…'),
-            'isi' => ['input' => [...$input, 'tanggal' => $input['tanggal']->toDateString()], 'id_uj' => $hasil['ids']], 'user_id' => $request->user()->id,
+            'isi' => ['input' => [...$input, 'tanggal' => $input['tanggal']->toDateString()], 'id_uj' => $hasil['ids'], 'id_biaya' => $hasil['id_biaya']], 'user_id' => $request->user()->id,
         ]);
 
         return redirect()->route('uj.index', ['bulan' => $input['tanggal']->format('Y-m')])->with($pesanImpor ? 'error' : 'success',
-            'Tersimpan di Kas Seabank baris '.$hasil['baris_awal'].'–'.$hasil['baris_akhir'].' (UJ-'.reset($hasil['ids']).(count($hasil['ids']) > 1 ? ' s/d UJ-'.end($hasil['ids']) : '').'): '
+            'Tersimpan di Kas Seabank baris '.$hasil['baris_awal'].'–'.$hasil['baris_akhir'].' (UJ-'.reset($hasil['ids']).(count($hasil['ids']) > 1 ? ' s/d UJ-'.end($hasil['ids']) : '')
+            .($hasil['id_biaya'] ? ', biaya transfer UJ-'.$hasil['id_biaya'] : '').'): '
             .$this->ringkasanInput($input).'.'.($jumlahFoto ? " {$jumlahFoto} foto bon terlampir." : '')
             .($terealisasi ? " {$terealisasi} detail pengajuan tercatat terealisasi." : '').$pesanImpor);
     }

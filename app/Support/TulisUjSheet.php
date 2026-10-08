@@ -46,11 +46,13 @@ class TulisUjSheet
                 $max = max($max, $maxSheet);
             }
             $ids = range($max + 1, $max + count($input['detail']));
+            // Baris Biaya Transfer juga mendapat ID UJ (lanjutan sesudah detail), seperti ketikan admin di sheet, supaya ikut direimburse.
+            $idBiaya = $input['biaya_transfer'] ? end($ids) + 1 : null;
             $mulai = $akhir + 1;
-            $baris = $this->susun($input, $ids, $mulai);
+            $baris = $this->susun($input, $ids, $mulai, $idBiaya);
             $sampai = $mulai + count($baris) - 1;
             Cache::forever('uj-akhir', $sampai);
-            Cache::forever('uj-max', end($ids));
+            Cache::forever('uj-max', $idBiaya ?? end($ids));
 
             $g = $this->grid();
             $requests = [];
@@ -60,7 +62,7 @@ class TulisUjSheet
             }
             $this->sheets->permintaan($this->id, [...$requests, ...$this->isiSel($g['sheetId'], $mulai, $baris, false)], 'menulis Kas Seabank');
 
-            return ['baris_awal' => $mulai, 'baris_akhir' => $sampai, 'no_uj' => $ids[0], 'ids' => $ids, 'mentah' => self::keMentah($baris)];
+            return ['baris_awal' => $mulai, 'baris_akhir' => $sampai, 'no_uj' => $ids[0], 'ids' => $ids, 'id_biaya' => $idBiaya, 'mentah' => self::keMentah($baris)];
         });
     }
 
@@ -78,14 +80,20 @@ class TulisUjSheet
 
             $idLama = $t->detail->reject->biaya_transfer->map(fn (UjDetail $d) => KasSeabank::noUj($d->id_uj))->filter()->values()->all();
             $ids = array_slice($idLama, 0, count($input['detail']));
-            if (count($ids) < count($input['detail'])) {
+            // Biaya Transfer memakai ID lamanya bila ada; bila belum punya (atau baru dicentang) mendapat ID baru.
+            $idBiaya = $input['biaya_transfer'] ? KasSeabank::noUj($t->detail->firstWhere('biaya_transfer', true)?->id_uj) : null;
+            $perlu = count($input['detail']) - count($ids) + ($input['biaya_transfer'] && ! $idBiaya ? 1 : 0);
+            if ($perlu > 0) {
                 $max = self::idTerbesar();
                 while (count($ids) < count($input['detail'])) {
                     $ids[] = ++$max;
                 }
+                if ($input['biaya_transfer'] && ! $idBiaya) {
+                    $idBiaya = ++$max;
+                }
                 Cache::forever('uj-max', $max);
             }
-            $baris = $this->susun($input, $ids, $dari);
+            $baris = $this->susun($input, $ids, $dari, $idBiaya);
             $n = count($baris);
             $m = $sampai - $dari + 1;
             $sheetId = $this->grid()['sheetId'];
@@ -154,8 +162,9 @@ class TulisUjSheet
      * Baris A..M untuk satu transaksi mulai baris $mulai.
      *
      * @param  int[]  $ids  nomor ID UJ per detail
+     * @param  ?int  $idBiaya  nomor ID UJ baris Biaya Transfer
      */
-    private function susun(array $input, array $ids, int $mulai): array
+    private function susun(array $input, array $ids, int $mulai, ?int $idBiaya = null): array
     {
         $tgl = $input['tanggal']->format('Y-m-d');
         $teks = fn (?string $v) => self::teks($v);
@@ -177,7 +186,7 @@ class TulisUjSheet
         }
         if ($input['biaya_transfer']) {
             $n = $mulai + count($baris);
-            $baris[] = ['', $tgl, '', '', '', '', 'Biaya Transfer', (int) $input['nominal_biaya'], 'Biaya Transfer', '', '', '', $status($n)];
+            $baris[] = [$idBiaya ? 'UJ-'.$idBiaya : '', $tgl, '', '', '', '', 'Biaya Transfer', (int) $input['nominal_biaya'], 'Biaya Transfer', '', '', '', $status($n)];
         }
 
         return $baris;
