@@ -51,6 +51,12 @@ class ReimburseKasController extends Controller
             .'Baris-barisnya sedang ditulis ke lembar Sudah Reimburse di sheet.');
     }
 
+    /** Excel offline: semua transaksi Kas Harian yang belum reimburse. */
+    public function unduhBelum(): BinaryFileResponse
+    {
+        return response()->download(ReimburseKas::excelBelum(), 'Kas Belum Reimburse per '.now()->format('Y-m-d H.i').'.xlsx')->deleteFileAfterSend();
+    }
+
     public function unduh(KasReimburse $reimburse): BinaryFileResponse
     {
         $nama = 'Reimburse Kas '.$reimburse->tanggal->format('Y-m-d').' - Rp '.number_format($reimburse->total, 0, ',', '.').' (#'.$reimburse->id.').xlsx';

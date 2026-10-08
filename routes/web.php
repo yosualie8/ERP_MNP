@@ -42,6 +42,7 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::post('/kas/sinkron', [KasInputController::class, 'sinkron'])->name('kas.sinkron');
     Route::get('/kas/rekap', [KasController::class, 'rekap'])->name('kas.rekap');
     Route::get('/kas/reimburse', [ReimburseKasController::class, 'index'])->name('kas.reimburse');
+    Route::get('/kas/belum-reimburse.xlsx', [ReimburseKasController::class, 'unduhBelum'])->name('kas.belum-reimburse');
     Route::post('/kas/reimburse', [ReimburseKasController::class, 'simpan'])->name('kas.reimburse.simpan');
     Route::get('/kas/reimburse/{reimburse}/excel', [ReimburseKasController::class, 'unduh'])->name('kas.reimburse.unduh');
     Route::get('/kas/kode-gl', [KasController::class, 'kodeGl'])->name('kas.kode-gl');

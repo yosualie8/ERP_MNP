@@ -58,6 +58,9 @@
             <a href="{{ route('kas.index', $p + ['status' => 'belum']) }}" @class(['chip', 'aktif' => $filterStatus === 'belum'])>Belum reimburse · {{ $ringkasStatus['belum'] }} transfer · {{ rp($ringkasStatus['nilai_belum']) }}</a>
             <a href="{{ route('kas.index', $p + ['status' => 'sudah']) }}" @class(['chip', 'aktif' => $filterStatus === 'sudah'])>Sudah reimburse · {{ $ringkasStatus['sudah'] }}</a>
             @if ($antreanSheet)<span class="redup" title="Status sudah tersimpan di aplikasi; sedang ditulis ke lembar Sudah Reimburse">⏳ {{ $antreanSheet }} status menunggu ditulis ke sheet</span>@endif
+            @if (auth()->user()->bolehMenu('kas-belum-reimburse'))
+                <a href="{{ route('kas.belum-reimburse') }}" class="tombol polos" style="padding: 4px 12px; font-size: 13px;" title="Semua transaksi Kas Harian yang belum reimburse (semua periode)">⬇ Excel belum reimburse</a>
+            @endif
         </div>
 
         <form method="GET" action="{{ route('kas.index') }}" style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">

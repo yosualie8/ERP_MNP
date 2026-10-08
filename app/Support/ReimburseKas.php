@@ -100,6 +100,49 @@ class ReimburseKas
         });
     }
 
+    /** File Excel daftar transaksi Kas Harian yang BELUM reimburse (semua periode), satu baris per transaksi detail. */
+    public static function excelBelum(): string
+    {
+        $antrean = self::antrean();
+        $path = storage_path('app/kas-belum-reimburse-'.now()->format('YmdHis').'.xlsx');
+        $opsi = new Options();
+        foreach ([1 => 5, 2 => 11, 3 => 9, 4 => 20, 5 => 24, 6 => 10, 7 => 15, 8 => 30, 9 => 12, 10 => 44, 11 => 28, 12 => 14] as $kolom => $lebar) {
+            $opsi->setColumnWidth($lebar, $kolom);
+        }
+        $w = new Writer($opsi);
+        $w->openToFile($path);
+
+        $judul = (new Style())->setFontBold()->setFontSize(14);
+        $kepala = (new Style())->setFontBold()->setFontColor('FFFFFF')->setBackgroundColor('B4232C');
+        $rupiah = (new Style())->setFormat('#,##0');
+        $totalStyle = (new Style())->setFontBold()->setFormat('#,##0')->setBackgroundColor('F2F2F2');
+        $total = $antrean->sum('total');
+        $jumlah = $antrean->sum(fn ($t) => count($t['detail']));
+
+        $w->addRow(Row::fromValues(['KAS HARIAN BELUM REIMBURSE — PT MULTI NIAGA PUTRA'], $judul));
+        $w->addRow(Row::fromValues(['Per', '', now()->translatedFormat('j F Y H:i')]));
+        $w->addRow(new Row([Cell::fromValue('Total'), Cell::fromValue(''), Cell::fromValue($total, (new Style())->setFontBold()->setFormat('"Rp "#,##0'))]));
+        $w->addRow(Row::fromValues(['Jumlah', '', $antrean->count()." transfer · {$jumlah} transaksi detail"]));
+        $w->addRow(Row::fromValues(['Sumber', '', 'Aplikasi MNP · Kas Harian (rekening Bank Jago)']));
+        $w->addRow(Row::fromValues([]));
+        $w->addRow(Row::fromValues(['No', 'Tanggal', 'NO ID', 'ID Transaksi', 'Tujuan', 'Bank', 'Rekening', 'Keterangan transfer', 'PIC', 'Keterangan detail', 'Kode GL', 'Nominal'], $kepala));
+        $no = 0;
+        foreach ($antrean as $t) {
+            foreach ($t['detail'] as $d) {
+                $w->addRow(new Row([
+                    Cell::fromValue(++$no), Cell::fromValue(\Carbon\Carbon::parse($t['tanggal'])->format('d/m/Y')), Cell::fromValue((int) $d['no_id']),
+                    Cell::fromValue((string) $d['id']), Cell::fromValue((string) $t['nama']), Cell::fromValue((string) $t['bank']), Cell::fromValue((string) $t['rekening']),
+                    Cell::fromValue((string) $t['ket']), Cell::fromValue((string) $d['pic']), Cell::fromValue((string) $d['ket']), Cell::fromValue((string) $d['kode_gl']),
+                    Cell::fromValue((int) $d['nominal'], $rupiah),
+                ]));
+            }
+        }
+        $w->addRow(new Row([...array_map(fn ($v) => Cell::fromValue($v, $totalStyle), ['', '', '', '', '', '', '', '', '', 'TOTAL', '']), Cell::fromValue($total, $totalStyle)]));
+        $w->close();
+
+        return $path;
+    }
+
     /** File Excel batch reimburse (untuk diunduh / dibagikan ke WhatsApp). */
     public static function excel(KasReimburse $r): string
     {

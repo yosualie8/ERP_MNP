@@ -44,7 +44,8 @@
     <form method="POST" action="{{ route('kas.reimburse.simpan') }}" id="form-reimburse">
         @csrf
         <div class="kartu">
-            <h3 style="margin: 0 0 12px;">Pilih transaksi untuk direimburse</h3>
+            <h3 style="margin: 0 0 12px; display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap;">Pilih transaksi untuk direimburse
+                <a href="{{ route('kas.belum-reimburse') }}" class="tombol polos" style="padding: 5px 12px; font-size: 13px; font-weight: normal;">⬇ Excel daftar belum reimburse</a></h3>
             <div class="panel-pilih">
                 <div>
                     <label for="target">Nominal reimburse</label>
