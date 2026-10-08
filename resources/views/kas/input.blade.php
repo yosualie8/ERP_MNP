@@ -28,6 +28,24 @@
         .form-kas .biaya-transfer #nominal_biaya { width: 110px; }
         .biaya-transfer.mati #nominal_biaya { opacity: .45; }
         .hapus { background: none; border: 0; color: var(--merah); cursor: pointer; font-size: 18px; line-height: 1; padding: 8px 6px; }
+        /* Panel "Input reimburse Kas UJ": satu baris per tanggal reimburse; ▸ membuka rinciannya, klik baris = masukkan ke form. */
+        .kartu-rui { border-color: var(--aksen); }
+        .rui-grup { border: 1px solid var(--garis); border-radius: 9px; margin-bottom: 8px; overflow: hidden; }
+        .rui-master { display: flex; align-items: center; gap: 12px; padding: 10px 12px; cursor: pointer; background: var(--kartu-2); }
+        .rui-master:hover { background: var(--aksen-muda); }
+        .rui-master.sudah { cursor: default; opacity: .75; }
+        .rui-master.sudah:hover { background: var(--kartu-2); }
+        .rui-buka { background: none; border: 1px solid var(--garis-kuat); color: var(--teks); border-radius: 6px; width: 28px; height: 28px; cursor: pointer; flex: none; }
+        .rui-buka:hover { border-color: var(--aksen); }
+        .rui-grup.terbuka .rui-buka { transform: rotate(90deg); }
+        .rui-judul { flex: 1; min-width: 0; }
+        .rui-judul b { display: block; }
+        .rui-total { font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+        .rui-detail { padding: 6px 10px 10px; max-height: 420px; overflow: auto; }
+        .rui-detail table { font-size: 12.5px; }
+        .rui-detail td, .rui-detail th { padding: 4px 6px; }
+        .mode-rui { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border: 1px solid var(--aksen); background: var(--aksen-muda); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 14px; }
+        .mode-rui[hidden] { display: none; }
         .total-bon { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
         .galat-isian { color: var(--merah); font-size: 13px; margin: 4px 0 0; }
         .isian-saran { position: relative; }
@@ -78,7 +96,23 @@
             </div>
         @endif
 
+        @unless ($edit)
+            <div class="kartu kartu-rui" id="panel-rui" hidden>
+                <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
+                    <h3 style="margin: 0;">🚚 Reimburse Kas UJ <span class="redup" style="font-size: 13px; font-weight: normal;">per tanggal reimburse (60 hari terakhir)</span></h3>
+                    <button type="button" class="tombol polos" id="tutup-rui">Tutup</button>
+                </div>
+                <p class="redup" style="margin: 6px 0 12px;">Klik ▸ untuk melihat rinciannya. Klik baris tanggalnya untuk memasukkan semua transaksi itu ke form di bawah, lalu periksa dan tekan <b>Simpan ke sheet</b>.</p>
+                <div id="daftar-rui"><p class="redup">Memuat…</p></div>
+            </div>
+        @endunless
+
         <div class="kartu">
+            <input type="hidden" name="reimburse_uj" id="reimburse_uj" value="{{ old('reimburse_uj') }}">
+            <div class="mode-rui" id="mode-rui" hidden>
+                <span>🚚 <b>Reimburse Kas UJ <span id="mode-rui-tgl"></span></b> · <span id="mode-rui-isi"></span> — setiap detail ditautkan ke baris Kas UJ-nya (kolom UJ di Mutasi Reimburse terisi otomatis).</span>
+                <button type="button" class="tombol polos" id="lepas-rui" style="padding: 4px 10px; font-size: 13px;">Lepas tautan</button>
+            </div>
             <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px;">
                 <h3 style="margin: 0;">
                     @if ($edit)
@@ -87,6 +121,9 @@
                         Input Transaksi Master
                     @endif
                 </h3>
+                @unless ($edit)
+                    <button type="button" class="tombol polos" id="buka-rui">🚚 Input reimburse Kas UJ</button>
+                @endunless
                 <div class="pilihan">
                     <input type="radio" name="arah" id="arah-keluar" value="keluar" @checked(old('arah', $edit['arah'] ?? 'keluar') === 'keluar')>
                     <label for="arah-keluar">Transfer keluar</label>
@@ -210,7 +247,7 @@
 
     <template id="templat-bon">
         <tr>
-            <td><input type="text" class="angka-input rupiah" data-nama="nominal" inputmode="numeric" autocomplete="off" required></td>
+            <td><input type="hidden" class="uj-kunci"><input type="text" class="angka-input rupiah" data-nama="nominal" inputmode="numeric" autocomplete="off" required></td>
             <td><input type="text" data-nama="pic" list="daftar-pic" autocomplete="off"></td>
             <td><input type="text" data-nama="keterangan" autocomplete="off" required></td>
             <td><input type="text" data-nama="kode_gl" list="daftar-kode" autocomplete="off" required><div class="saran-kode"></div></td>
@@ -245,8 +282,12 @@
             }, true);
             document.querySelectorAll('input.rupiah').forEach(rapikanRupiah);
 
-            const urutkanNama = () => daftar.querySelectorAll('tr').forEach((tr, i) =>
-                tr.querySelectorAll('[data-nama]').forEach(el => el.name = `bon[${i}][${el.dataset.nama}]`));
+            const urutkanNama = () => daftar.querySelectorAll('tr').forEach((tr, i) => {
+                tr.querySelectorAll('[data-nama]').forEach(el => el.name = `bon[${i}][${el.dataset.nama}]`);
+                // Kunci baris Kas UJ (hanya terisi pada mode reimburse Kas UJ).
+                const uj = tr.querySelector('.uj-kunci');
+                uj.name = uj.value ? `bon[${i}][uj]` : '';
+            });
             // Jumlah bon wajib sama persis dengan nominal transfer; selama belum sama, tombol Simpan dikunci.
             const nominalTransfer = document.getElementById('nominal_transfer');
             const statusCocok = document.getElementById('status-cocok');
@@ -272,6 +313,7 @@
             const tambah = (isi = {}) => {
                 const tr = templat.content.firstElementChild.cloneNode(true);
                 tr.querySelectorAll('[data-nama]').forEach(el => el.value = isi[el.dataset.nama] ?? '');
+                tr.querySelector('.uj-kunci').value = isi.uj ?? '';
                 tr.querySelectorAll('input.rupiah').forEach(rapikanRupiah);
                 tr.querySelector('.hapus').addEventListener('click', () => {
                     if (daftar.children.length > 1) { tr.remove(); urutkanNama(); hitung(); }
@@ -637,6 +679,98 @@
                 ].filter(Boolean).join(' ');
                 if (catatan) alert(catatan);
             });
+
+            // ===== Input reimburse Kas UJ: pilih satu tanggal reimburse → master + semua detail UJ masuk ke form =====
+            const inputRui = document.getElementById('reimburse_uj');
+            const modeRui = document.getElementById('mode-rui');
+            const tampilModeRui = (judul, isi) => {
+                modeRui.hidden = !inputRui.value;
+                if (judul) document.getElementById('mode-rui-tgl').textContent = judul;
+                if (isi) document.getElementById('mode-rui-isi').textContent = isi;
+            };
+            document.getElementById('lepas-rui').addEventListener('click', () => {
+                if (!confirm('Lepas tautan ke Kas UJ? Detail tetap di form, tetapi kolom UJ di Mutasi Reimburse tidak akan terisi otomatis.')) return;
+                inputRui.value = '';
+                daftar.querySelectorAll('.uj-kunci').forEach(el => el.value = '');
+                urutkanNama();
+                tampilModeRui();
+            });
+            if (inputRui.value) {
+                const n = [...daftar.querySelectorAll('.uj-kunci')].filter(el => el.value).length;
+                tampilModeRui(inputRui.value.split('-').reverse().join('/'), `${n} detail tertaut`);
+            }
+            const panelRui = document.getElementById('panel-rui');
+            if (panelRui) {
+                const daftarRui = document.getElementById('daftar-rui');
+                const rp = n => 'Rp ' + fmt(n);
+                const cacheIsi = {};
+                const ambilIsi = async tgl => cacheIsi[tgl] ??= await (await fetch(@json(url('/kas/input/reimburse-uj')) + '/' + tgl, {headers: {Accept: 'application/json'}})).json();
+                const tabelDetail = d => `<table><thead><tr><th>ID UJ</th><th>Tgl</th><th>Nama</th><th>Keterangan</th><th>Kategori</th><th>DT</th><th>No DO</th><th>Galian</th><th class="angka">Nominal</th></tr></thead><tbody>`
+                    + d.detail.map(x => `<tr><td>${esc(x.id_uj || '—')}</td><td>${esc(x.tanggal_uj)}</td><td>${esc(x.nama)}</td><td>${esc(x.keterangan)}</td><td>${esc(x.kategori)}</td>`
+                        + `<td>${esc(x.no_mobil)}</td><td>${esc(x.no_do)}</td><td>${esc(x.galian)}</td><td class="angka">${fmt(x.nominal)}</td></tr>`).join('')
+                    + `<tr><td colspan="8"><b>Total ${d.detail.length} transaksi</b></td><td class="angka"><b>${fmt(d.master.nominal)}</b></td></tr></tbody></table>`;
+
+                const masukkan = async g => {
+                    const d = await ambilIsi(g.tanggal);
+                    const adaIsi = [...daftar.querySelectorAll('[data-nama=keterangan], [data-nama=nominal]')].some(el => el.value.trim());
+                    if (adaIsi && !confirm('Isi form sekarang akan diganti dengan reimburse Kas UJ ' + d.judul + '. Lanjutkan?')) return;
+                    document.getElementById('arah-keluar').checked = true;
+                    aturArah();
+                    document.getElementById('tanggal').value = d.tanggal;
+                    nama.value = d.master.nama_tujuan || ''; noRek.value = d.master.no_rek || ''; bank.value = d.master.bank || ''; bank.rapikan();
+                    document.getElementById('keterangan').value = d.master.keterangan;
+                    nominalTransfer.value = fmt(d.master.nominal);
+                    daftar.innerHTML = '';
+                    d.detail.forEach(x => {
+                        const tr = tambah({nominal: x.nominal, pic: x.pic, keterangan: x.keterangan, kode_gl: x.kode_gl, uj: x.uj});
+                        tr.querySelector('[data-nama=kode_gl]').dataset.otomatis = '0';
+                    });
+                    urutkanNama();
+                    biayaDiubahManual = false;
+                    aturBiaya();
+                    inputRui.value = d.tanggal;
+                    tampilModeRui(d.judul, `${d.detail.length} transaksi · ${rp(d.master.nominal)}`);
+                    hitung();
+                    panelRui.hidden = true;
+                    document.getElementById('form-kas').scrollIntoView({behavior: 'smooth'});
+                };
+
+                const muat = async () => {
+                    daftarRui.innerHTML = '<p class="redup">Memuat…</p>';
+                    const {daftar: grup} = await (await fetch(@json(route('kas.input.reimburse-uj')), {headers: {Accept: 'application/json'}})).json();
+                    if (!grup.length) { daftarRui.innerHTML = '<p class="redup">Belum ada transaksi Kas UJ yang direimburse dalam 60 hari terakhir.</p>'; return; }
+                    daftarRui.innerHTML = '';
+                    grup.forEach(g => {
+                        const el = document.createElement('div');
+                        el.className = 'rui-grup';
+                        const status = g.kas
+                            ? `<span class="label hijau" title="Transfer Reimburse Uang Jalan tanggal ${esc(g.kas.tanggal)}">✓ Sudah di Kas Harian · NO ID ${g.kas.no_id}${g.kas.nominal !== g.total ? ' · ' + rp(g.kas.nominal) : ''}</span>`
+                            : '<span class="label merah">Belum dicatat di Kas Harian</span>';
+                        el.innerHTML = `<div class="rui-master${g.kas ? ' sudah' : ''}" title="${g.kas ? 'Sudah dicatat di Kas Harian' : 'Klik untuk memasukkan semua transaksi ini ke form'}">
+                                <button type="button" class="rui-buka" title="Lihat rincian">▸</button>
+                                <span class="rui-judul"><b>${esc(g.judul)}</b><span class="redup">${g.jumlah} transaksi</span></span>
+                                ${status}<span class="rui-total">${rp(g.total)}</span></div><div class="rui-detail" hidden></div>`;
+                        const detail = el.querySelector('.rui-detail');
+                        el.querySelector('.rui-buka').addEventListener('click', async e => {
+                            e.stopPropagation();
+                            el.classList.toggle('terbuka');
+                            detail.hidden = !el.classList.contains('terbuka');
+                            if (!detail.hidden && !detail.innerHTML) { detail.innerHTML = '<p class="redup">Memuat…</p>'; detail.innerHTML = tabelDetail(await ambilIsi(g.tanggal)); }
+                        });
+                        el.querySelector('.rui-master').addEventListener('click', () => {
+                            if (g.kas) { alert(`Reimburse ${g.judul} sudah dicatat di Kas Harian (NO ID ${g.kas.no_id}).`); return; }
+                            masukkan(g);
+                        });
+                        daftarRui.appendChild(el);
+                    });
+                };
+                document.getElementById('buka-rui').addEventListener('click', () => {
+                    panelRui.hidden = false;
+                    muat();
+                    panelRui.scrollIntoView({behavior: 'smooth'});
+                });
+                document.getElementById('tutup-rui').addEventListener('click', () => { panelRui.hidden = true; });
+            }
 
             document.getElementById('form-kas').addEventListener('submit', e => {
                 if (!arahMasuk() && !hitung()) {

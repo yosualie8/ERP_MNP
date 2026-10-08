@@ -29,6 +29,8 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/kas', [KasController::class, 'index'])->name('kas.index');
     Route::get('/kas/input', [KasInputController::class, 'create'])->name('kas.input');
     Route::post('/kas/input', [KasInputController::class, 'store'])->name('kas.input.store');
+    Route::get('/kas/input/reimburse-uj', [KasInputController::class, 'reimburseUj'])->name('kas.input.reimburse-uj');
+    Route::get('/kas/input/reimburse-uj/{tanggal}', [KasInputController::class, 'reimburseUjIsi'])->name('kas.input.reimburse-uj.isi');
     Route::delete('/kas/transfer/{transfer}', [KasInputController::class, 'hapus'])->name('kas.hapus');
     Route::get('/kas/transaksi/{noId}/edit', [KasInputController::class, 'edit'])->whereNumber('noId')->name('kas.edit');
     Route::put('/kas/transaksi/{noId}', [KasInputController::class, 'update'])->whereNumber('noId')->name('kas.update');

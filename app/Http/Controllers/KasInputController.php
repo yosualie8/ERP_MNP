@@ -9,6 +9,9 @@ use App\Models\KasTransfer;
 use App\Models\KodeGl;
 use App\Models\KasBulan;
 use App\Models\KasFoto;
+use App\Models\KasReimburseUj;
+use App\Support\ReimburseUjKeKas;
+use Illuminate\Http\JsonResponse;
 use App\Support\CerminReimburse;
 use App\Support\DaftarBank;
 use App\Support\FotoBon;
@@ -121,6 +124,8 @@ class KasInputController extends Controller
             'bon.*.pic' => ['nullable', 'string', 'max:60'],
             'bon.*.keterangan' => ['required', 'string', 'max:300'],
             'bon.*.kode_gl' => ['required', 'string', 'max:120'],
+            'bon.*.uj' => ['nullable', 'string', 'max:40'],
+            'reimburse_uj' => ['nullable', 'date'],
             'foto' => ['nullable', 'array', 'max:'.KasFotoController::MAKS_FOTO],
             'foto.*' => KasFotoController::ATURAN['foto.*'],
         ], [
@@ -157,6 +162,7 @@ class KasInputController extends Controller
             'bon' => $data['arah'] === 'keluar' ? array_values($data['bon']) : [],
             'biaya_transfer' => $data['arah'] === 'keluar' && $request->boolean('biaya_transfer'),
             'nominal_biaya' => (int) ($data['nominal_biaya'] ?? TulisKasSheet::BIAYA_TRANSFER),
+            'reimburse_uj' => $data['arah'] === 'keluar' ? ($data['reimburse_uj'] ?? null) : null,
         ];
 
         return $input;
@@ -169,6 +175,11 @@ class KasInputController extends Controller
             return $input;
         }
         $tanggal = $input['tanggal'];
+        // Reimburse Kas UJ: satu tanggal reimburse hanya boleh dicatat sekali.
+        if ($input['reimburse_uj'] && ($ada = KasReimburseUj::whereDate('tanggal_reimburse', $input['reimburse_uj'])->value('no_id_transfer'))) {
+            return back()->withInput()->with('error', 'Reimburse Kas UJ tanggal '.Carbon::parse($input['reimburse_uj'])->translatedFormat('j M Y')
+                ." sudah dicatat di Kas Harian (NO ID {$ada}). Transaksi tidak ditulis.");
+        }
 
         try {
             $hasil = (new TulisKasSheet(GoogleSheets::wajib()))->tulis($input);
@@ -177,6 +188,8 @@ class KasInputController extends Controller
 
             return back()->withInput()->with('error', 'Gagal menulis ke sheet: '.$e->getMessage());
         }
+        // Tautan detail ↔ baris UJ dicatat sebelum Mutasi Reimburse ditulis (kolom Id Transaksi UJ, Jenis Mobil, No DO, Galian, Kategori).
+        $tertaut = $input['reimburse_uj'] ? ReimburseUjKeKas::catat($input['reimburse_uj'], $input['bon'], $hasil['no_id'], $request->user()->id) : 0;
         // Sesudah halaman terkirim, sebelum chip Bon: baris-barisnya ikut ditulis di Mutasi Reimburse.
         CerminReimburse::tambahSegera($hasil['no_id']);
 
@@ -213,8 +226,23 @@ class KasInputController extends Controller
             .' (NO ID '.reset($hasil['no_id']).(count($hasil['no_id']) > 1 ?'–'.end($hasil['no_id']) : '').').'
             .($akunBaru->isNotEmpty() ? ' Akun baru: '.$akunBaru->implode(', ').'.' : '')
             .($jumlahFoto ? " {$jumlahFoto} foto bon terlampir." : '')
+            .($tertaut ? " {$tertaut} detail tertaut ke Kas UJ (reimburse ".Carbon::parse($input['reimburse_uj'])->translatedFormat('j M Y').')' : '')
             .$pesanImpor
         );
+    }
+
+    /** Daftar reimburse Kas UJ per tanggal (untuk panel "Input reimburse Kas UJ"). */
+    public function reimburseUj(): JsonResponse
+    {
+        return response()->json(['daftar' => ReimburseUjKeKas::daftar()]);
+    }
+
+    /** Isi form satu tanggal reimburse: master + semua detail UJ-nya. */
+    public function reimburseUjIsi(string $tanggal): JsonResponse
+    {
+        abort_unless(preg_match('/^\d{4}-\d{2}-\d{2}$/', $tanggal), 404);
+
+        return response()->json(ReimburseUjKeKas::untukForm($tanggal));
     }
 
     /** Hapus transfer + seluruh bonnya dari sheet (opsional beserta baris biaya transfernya), lalu impor ulang lembarnya. */
@@ -246,6 +274,10 @@ class KasInputController extends Controller
             'ringkasan' => $ringkasan, 'isi' => $hasil['isi'], 'user_id' => $request->user()->id,
         ]);
         CerminReimburse::hapusSegera($idReimburse);
+        // Reimburse Kas UJ yang transfernya dihapus bisa dicatat ulang.
+        if ($transfer->no_id) {
+            KasReimburseUj::where('no_id_transfer', $transfer->no_id)->delete();
+        }
         $fotoDihapus = $transfer->no_id ? FotoBon::hapusMilik($transfer->no_id) : 0;
         if ($fotoDihapus) {
             $ringkasan .= ", {$fotoDihapus} foto bon ikut dihapus";

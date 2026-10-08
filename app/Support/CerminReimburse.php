@@ -3,6 +3,7 @@
 namespace App\Support;
 
 use App\Models\KasBon;
+use App\Models\KasReimburseUj;
 use App\Models\KasTransfer;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
@@ -240,15 +241,24 @@ class CerminReimburse
             ]];
         }
 
-        return $t->bon->map(function (KasBon $b) use ($t, $tgl, $folder, $teks) {
+        // Detail yang berasal dari reimburse Kas UJ: kolom data uang jalan ikut diisi (C, E, H–L).
+        $uj = KasReimburseUj::whereIn('no_id', $t->bon->pluck('no_id')->filter()->map(fn ($n) => (int) $n))->get()->keyBy('no_id');
+
+        return $t->bon->map(function (KasBon $b) use ($t, $tgl, $folder, $teks, $uj) {
             $id = trim((string) $b->id_transaksi) ?: self::idTransfer($t, $b->no_id);
             $chip = TautanBon::menunjuk($b->kode_bon, $folder) && $folder;
+            $u = $uj[(int) $b->no_id] ?? null;
 
             return [
                 'id' => $id, 'no' => (string) ($b->no_id ?: $t->no_id), 'link' => $chip ? $folder['link'] : null,
-                'sel' => [0 => self::angka($b->no_id ?: $t->no_id), 1 => $id, 3 => $tgl, 4 => $tgl, 5 => $teks($b->pic),
+                // array_replace (bukan spread "..."), karena spread menomori ulang kunci angka.
+                'sel' => array_replace([0 => self::angka($b->no_id ?: $t->no_id), 1 => $id, 3 => $tgl, 4 => $tgl, 5 => $teks($b->pic),
                     6 => $teks($b->keterangan), 12 => $teks($b->kodeGl?->kode_asli), 13 => $chip ? $folder['link'] : $teks($b->kode_bon),
-                    14 => '', 15 => $b->nominal],
+                    14 => '', 15 => $b->nominal,
+                ], $u ? [2 => $teks($u->id_uj), 4 => $u->tanggal_uj?->format('Y-m-d') ?? $tgl, 7 => $teks($u->jenis_kendaraan),
+                    // No DO bernol depan ("0039") tetap teks; lainnya angka seperti ketikan admin.
+                    8 => preg_match('/^0\d/', (string) $u->no_do) ? "'".$u->no_do : self::angka($u->no_do),
+                    9 => $teks($u->galian), 10 => $teks($u->kategori), 11 => $u->tanggal_reimburse->format('Y-m-d')] : []),
             ];
         })->all();
     }
