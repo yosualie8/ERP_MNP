@@ -6,6 +6,7 @@ use App\Http\Controllers\KasController;
 use App\Http\Controllers\KasFotoController;
 use App\Http\Controllers\KasInputController;
 use App\Http\Controllers\PenggunaController;
+use App\Http\Controllers\ReimburseKasController;
 use App\Http\Controllers\ReimburseUjController;
 use App\Http\Controllers\RitasiController;
 use App\Http\Controllers\UjController;
@@ -40,6 +41,9 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::delete('/kas/foto/{foto}', [KasFotoController::class, 'destroy'])->name('kas.foto.destroy');
     Route::post('/kas/sinkron', [KasInputController::class, 'sinkron'])->name('kas.sinkron');
     Route::get('/kas/rekap', [KasController::class, 'rekap'])->name('kas.rekap');
+    Route::get('/kas/reimburse', [ReimburseKasController::class, 'index'])->name('kas.reimburse');
+    Route::post('/kas/reimburse', [ReimburseKasController::class, 'simpan'])->name('kas.reimburse.simpan');
+    Route::get('/kas/reimburse/{reimburse}/excel', [ReimburseKasController::class, 'unduh'])->name('kas.reimburse.unduh');
     Route::get('/kas/kode-gl', [KasController::class, 'kodeGl'])->name('kas.kode-gl');
     // Kas uang jalan dump truck (lembar "Kas Seabank").
     Route::get('/uj', [UjController::class, 'index'])->name('uj.index');

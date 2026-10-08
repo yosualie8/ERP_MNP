@@ -19,13 +19,14 @@ class MenuAkses
         'reimburse-uj' => ['Reimburse UJ', 'reimburse.index', ['reimburse.*'], 'Memilih & mencatat reimburse uang jalan, unduh Excel'],
         'input-ritasi' => ['Input Ritasi', 'ritasi.input', ['ritasi.input', 'ritasi.store', 'ritasi.periksa', 'ritasi.edit', 'ritasi.update', 'ritasi.hapus'], 'Input, edit & hapus ritasi dump truck'],
         'ritasi' => ['Ritasi', 'ritasi.index', ['ritasi.index', 'ritasi.sinkron'], 'Melihat daftar ritasi dump truck'],
+        'reimburse-kas' => ['Reimburse Kas', 'kas.reimburse', ['kas.reimburse', 'kas.reimburse.*'], 'Memilih & mencatat reimburse Kas Harian (owner), unduh Excel'],
         'rekap' => ['Rekap Biaya', 'kas.rekap', ['kas.rekap'], 'Rekap biaya per akun × bulan'],
         'kode-gl' => ['Kode GL', 'kas.kode-gl', ['kas.kode-gl'], 'Daftar Kode GL'],
     ];
 
     /** Kelompok menu di sidebar: kunci => [judul, ikon, menu di dalamnya]. */
     public const KATEGORI = [
-        'kas' => ['Kas Harian', '🏦', ['input-kas', 'kas-harian', 'rekap', 'kode-gl']],
+        'kas' => ['Kas Harian', '🏦', ['input-kas', 'kas-harian', 'reimburse-kas', 'rekap', 'kode-gl']],
         'uj' => ['Uang Jalan', '🚚', ['input-uj', 'kas-uj', 'reimburse-uj']],
         'ritasi' => ['Ritasi', '⛰️', ['input-ritasi', 'ritasi']],
     ];
