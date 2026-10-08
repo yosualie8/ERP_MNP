@@ -3,57 +3,56 @@
 @section('lebar', '1280px')
 
 @section('isi')
-    @if (! $bulan)
+    @if ($daftarBulan->isEmpty())
         <div class="kartu">
             <h3 style="margin-top: 0;">Belum ada data kas</h3>
             <p class="redup">Jalankan <code>php artisan mnp:impor-kas --simpan</code> di server untuk mengimpor lembar bulanan dari Kas Harian MNP.</p>
         </div>
     @else
-        <div style="margin-bottom: 10px;">
-            @foreach ($daftarBulan as $b)
-                <a href="{{ route('kas.index', ['lembar' => $b->lembar]) }}" @class(['chip', 'aktif' => $b->is($bulan)])>
-                    {{ $b->bulan->translatedFormat('M Y') }}@unless ($b->cocok()) <span title="Ada catatan rekonsiliasi">•</span>@endunless
-                </a>
-            @endforeach
-        </div>
-
+        @include('partials.periode', ['rute' => 'kas.index', 'bawa' => ['q' => $q, 'status' => $filterStatus]])
+    @if (! $bulan)
+        <div class="kartu"><p class="redup" style="margin: 0;">Belum ada data Kas Harian di periode {{ $periode->label() }}.</p></div>
+    @else
         <div class="ringkas">
-            <div class="kartu"><span class="redup">Saldo awal</span><b>{{ rp($bulan->saldo_awal) }}</b></div>
-            <div class="kartu"><span class="redup">Uang masuk</span><b>{{ rp($bulan->total_debet) }}</b></div>
-            <div class="kartu"><span class="redup">Transfer keluar</span><b>{{ rp($bulan->total_kredit) }}</b></div>
-            <div class="kartu"><span class="redup">Saldo akhir</span><b>{{ rp($bulan->saldo_akhir) }}</b></div>
+            <div class="kartu"><span class="redup">Saldo awal{{ $periode->tunggal() ? '' : ' · '.$periode->awal()->translatedFormat('M') }}</span><b>{{ rp($ringkas['saldo_awal']) }}</b></div>
+            <div class="kartu"><span class="redup">Uang masuk</span><b>{{ rp($ringkas['masuk']) }}</b></div>
+            <div class="kartu"><span class="redup">Transfer keluar</span><b>{{ rp($ringkas['keluar']) }}</b></div>
+            <div class="kartu"><span class="redup">Saldo akhir{{ $periode->tunggal() ? '' : ' · '.$bulan->bulan->translatedFormat('M') }}</span><b>{{ rp($ringkas['saldo_akhir']) }}</b></div>
             <div class="kartu">
                 <span class="redup">Rekonsiliasi</span>
                 <b style="font-size: 16px;">
-                    @if ($bulan->cocok())
+                    @if ($ringkas['cocok'])
                         <span class="label hijau" style="font-size: 14px;">Cocok 100%</span>
                     @else
-                        <span class="label merah" style="font-size: 14px;">{{ count($bulan->catatan ?? []) ?: 1 }} catatan</span>
+                        <span class="label merah" style="font-size: 14px;">{{ count($ringkas['catatan']) ?: $ringkas['tidak_cocok'] }} catatan</span>
                     @endif
                 </b>
             </div>
         </div>
 
-        @if ($bulan->catatan)
+        @if ($ringkas['catatan'])
             <div class="pesan galat">
-                <b>Catatan rekonsiliasi {{ $bulan->bulan->translatedFormat('F Y') }}</b>
+                <b>Catatan rekonsiliasi {{ $periode->label() }}</b>
                 <ul style="margin: 6px 0 0; padding-left: 18px;">
-                    @foreach ($bulan->catatan as $c)
+                    @foreach ($ringkas['catatan'] as $c)
                         <li>{{ $c }}</li>
                     @endforeach
                 </ul>
             </div>
         @endif
 
+        @php($pp = $periode->param())
+        @if ($periode->tunggal())
+            <div style="margin-bottom: 8px;">
+                <span class="redup" style="margin-right: 6px;">Tanggal:</span>
+                <a href="{{ route('kas.index', $pp + ['q' => $q ?: null, 'status' => $filterStatus]) }}" @class(['chip', 'aktif' => ! $tanggal])>Sebulan</a>
+                @foreach ($daftarTanggal as $tgl)
+                    <a href="{{ route('kas.index', $pp + ['tgl' => $tgl->day, 'q' => $q ?: null, 'status' => $filterStatus]) }}" @class(['chip', 'aktif' => $tanggal === $tgl->day])>{{ $tgl->day }}</a>
+                @endforeach
+            </div>
+        @endif
         <div style="margin-bottom: 8px;">
-            <span class="redup" style="margin-right: 6px;">Tanggal:</span>
-            <a href="{{ route('kas.index', ['lembar' => $bulan->lembar, 'q' => $q ?: null, 'status' => $filterStatus]) }}" @class(['chip', 'aktif' => ! $tanggal])>Sebulan</a>
-            @foreach ($daftarTanggal as $tgl)
-                <a href="{{ route('kas.index', ['lembar' => $bulan->lembar, 'tgl' => $tgl->day, 'q' => $q ?: null, 'status' => $filterStatus]) }}" @class(['chip', 'aktif' => $tanggal === $tgl->day])>{{ $tgl->day }}</a>
-            @endforeach
-        </div>
-        <div style="margin-bottom: 8px;">
-            @php($p = ['lembar' => $bulan->lembar, 'tgl' => $tanggal, 'q' => $q ?: null])
+            @php($p = $pp + ['tgl' => $tanggal, 'q' => $q ?: null])
             <span class="redup" style="margin-right: 6px;">Status reimburse:</span>
             <a href="{{ route('kas.index', $p) }}" @class(['chip', 'aktif' => ! $filterStatus])>Semua</a>
             <a href="{{ route('kas.index', $p + ['status' => 'belum']) }}" @class(['chip', 'aktif' => $filterStatus === 'belum'])>Belum reimburse · {{ $ringkasStatus['belum'] }} transfer · {{ rp($ringkasStatus['nilai_belum']) }}</a>
@@ -62,7 +61,7 @@
         </div>
 
         <form method="GET" action="{{ route('kas.index') }}" style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-            <input type="hidden" name="lembar" value="{{ $bulan->lembar }}">
+            @foreach ($pp as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
             @if ($tanggal)
                 <input type="hidden" name="tgl" value="{{ $tanggal }}">
             @endif
@@ -70,17 +69,17 @@
             <input type="search" name="q" value="{{ $q }}" placeholder="Cari keterangan, PIC, tujuan, Kode GL, ID transaksi…">
             <button class="tombol" type="submit" style="padding: 8px 14px;">Cari</button>
             @if ($q !== '')
-                <a href="{{ route('kas.index', ['lembar' => $bulan->lembar, 'tgl' => $tanggal]) }}" class="redup">Hapus pencarian</a>
+                <a href="{{ route('kas.index', $pp + ['tgl' => $tanggal, 'status' => $filterStatus]) }}" class="redup">Hapus pencarian</a>
             @endif
             <span class="redup">{{ $transfer->count() }} transfer · {{ $transfer->sum(fn ($t) => $t->bon->count()) }} detail · terbaru di atas</span>
             <button type="button" class="tombol polos" id="buka-semua">Buka semua detail</button>
-            <span class="redup" style="margin-left: auto;">Diimpor {{ $bulan->diimpor_pada->translatedFormat('j M Y H:i') }} dari lembar {{ $bulan->lembar }}</span>
-            <button type="submit" form="form-sinkron" class="tombol polos" title="Ambil ulang lembar ini dari sheet (setelah sheet diubah langsung)">Sinkron dari sheet</button>
+            <span class="redup" style="margin-left: auto;">Diimpor {{ $lembar->min('diimpor_pada')->translatedFormat('j M Y H:i') }} dari lembar {{ $lembar->pluck('lembar')->implode(', ') }}</span>
+            <button type="submit" form="form-sinkron" class="tombol polos" title="Ambil ulang lembar {{ $lembar->pluck('lembar')->implode(', ') }} dari sheet (setelah sheet diubah langsung)">Sinkron dari sheet</button>
             @if ($bolehInput)<a href="{{ route('kas.input') }}" class="tombol" style="padding: 8px 14px;">+ Input kas</a>@endif
         </form>
         <form method="POST" action="{{ route('kas.sinkron') }}" id="form-sinkron">
             @csrf
-            <input type="hidden" name="lembar" value="{{ $bulan->lembar }}">
+            <input type="hidden" name="lembar" value="{{ $lembar->pluck('lembar')->implode(',') }}">
         </form>
 
         <div class="kartu gulir" style="padding: 0;">
@@ -144,7 +143,7 @@
                                         @endif
                                     @endif
                                     @unless ($terkunci)
-                                    <button type="button" class="tombol-hapus" data-hapus="{{ route('kas.hapus', $t) }}" data-baris="{{ $t->baris }}"
+                                    <button type="button" class="tombol-hapus" data-hapus="{{ route('kas.hapus', $t) }}" data-lembar="{{ $namaLembar[$t->kas_bulan_id] }}" data-baris="{{ $t->baris }}"
                                         data-ringkasan="{{ ($t->debet ? 'Uang masuk ' : 'Transfer ').rp($t->debet ?: $t->kredit).' · '.$t->tanggal->translatedFormat('j M').' · '.($t->nama_tujuan ?? '').' · '.($t->keterangan ?? '') }}"
                                         data-bon="{{ $t->bon->count() }}" @if (isset($punyaBiaya[$t->id])) data-biaya="1" @endif>Hapus</button>
                                     @endunless
@@ -191,7 +190,7 @@
             document.querySelectorAll('[data-hapus]').forEach(tombol => tombol.addEventListener('click', () => {
                 const d = tombol.dataset;
                 const bon = +d.bon ? ` beserta ${d.bon} transaksi detail di bawahnya` : '';
-                if (!confirm(`Hapus dari sheet (lembar {{ $bulan->lembar }}, baris ${d.baris})${bon}?\n\n${d.ringkasan}\n\nBaris di sheet akan dihapus. Isinya tetap tersimpan di riwayat aplikasi.`)) return;
+                if (!confirm(`Hapus dari sheet (lembar ${d.lembar}, baris ${d.baris})${bon}?\n\n${d.ringkasan}\n\nBaris di sheet akan dihapus. Isinya tetap tersimpan di riwayat aplikasi.`)) return;
                 const form = document.getElementById('form-hapus');
                 form.dengan_biaya.value = d.biaya && confirm('Tepat di bawahnya ada baris "Biaya Transfer Keluar" untuk transfer ini.\n\nHapus juga? (OK = hapus juga, Batal = biarkan)') ? '1' : '0';
                 form.action = d.hapus;
@@ -200,5 +199,6 @@
                 form.submit();
             }));
         </script>
+    @endif
     @endif
 @endsection

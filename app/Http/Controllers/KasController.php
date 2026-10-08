@@ -8,6 +8,7 @@ use App\Models\KasBulan;
 use App\Models\KasTransfer;
 use App\Models\KasFoto;
 use App\Models\KodeGl;
+use App\Support\Periode;
 use App\Support\StatusReimburse;
 use App\Support\TulisKasSheet;
 use Illuminate\Http\Request;
@@ -16,19 +17,24 @@ use Illuminate\View\View;
 
 class KasController extends Controller
 {
-    /** Buku rekening per bulan: transfer + rincian bon, saldo berjalan seperti lembar bulanan. */
+    /** Buku rekening per periode (tahun, bulan mulai s.d. akhir): transfer + rincian bon, saldo berjalan seperti lembar bulanan. */
     public function index(Request $request): View
     {
         $daftarBulan = KasBulan::orderBy('bulan')->get();
-        $bulan = $daftarBulan->firstWhere('lembar', $request->query('lembar')) ?? $daftarBulan->last();
+        $periode = Periode::dari($request, $daftarBulan->map(fn ($b) => $b->bulan->format('Y-m')));
+        // Lembar bulanan di dalam periode (urut lama → baru); $bulan = lembar terakhir (untuk satu bulan: lembar itu sendiri).
+        $lembar = $daftarBulan->filter(fn ($b) => $b->bulan->between($periode->awal(), $periode->akhir()))->values();
+        $bulan = $lembar->last();
         $q = trim((string) $request->query('q'));
-        $tanggal = $request->integer('tgl') ?: null;
+        // Saring per tanggal hanya bila periodenya satu bulan.
+        $tanggal = $periode->tunggal() ? ($request->integer('tgl') ?: null) : null;
 
         $transfer = collect();
         $daftarTanggal = collect();
         if ($bulan) {
-            $daftarTanggal = KasTransfer::where('kas_bulan_id', $bulan->id)->distinct()->orderBy('tanggal')->pluck('tanggal');
-            $transfer = KasTransfer::where('kas_bulan_id', $bulan->id)
+            $urutLembar = $lembar->pluck('bulan', 'id')->map(fn ($b) => $b->format('Ym'));
+            $daftarTanggal = $periode->tunggal() ? KasTransfer::where('kas_bulan_id', $bulan->id)->distinct()->orderBy('tanggal')->pluck('tanggal') : collect();
+            $transfer = KasTransfer::whereIn('kas_bulan_id', $lembar->pluck('id'))
                 ->with(['bon.kodeGl.akun', 'bon.kodeGl.costCenter'])
                 ->when($tanggal, fn ($query) => $query->whereDay('tanggal', $tanggal))
                 ->when($q !== '', function ($query) use ($q) {
@@ -40,15 +46,15 @@ class KasController extends Controller
                             ->orWhere('id_transaksi', 'like', $like)
                             ->orWhereHas('kodeGl', fn ($k) => $k->where('kode_asli', 'like', $like))));
                 })
-                // Terbaru di atas: baris paling bawah di sheet = yang terakhir diinput.
-                ->orderByDesc('baris')
-                ->get();
+                ->get()
+                // Terbaru di atas: lembar terbaru dulu, lalu baris paling bawah di sheet (= yang terakhir diinput).
+                ->sortByDesc(fn ($t) => $urutLembar[$t->kas_bulan_id].sprintf('%07d', $t->baris))->values();
         }
 
         // Transfer yang tepat di bawahnya ada baris "Biaya Transfer Keluar" miliknya (ditanyakan saat menghapus).
         $punyaBiaya = [];
-        if ($bulan) {
-            $semua = KasTransfer::where('kas_bulan_id', $bulan->id)->withMax('bon', 'baris')->withCount('bon')
+        foreach ($lembar as $lb) {
+            $semua = KasTransfer::where('kas_bulan_id', $lb->id)->withMax('bon', 'baris')->withCount('bon')
                 ->orderBy('baris')->get(['id', 'baris', 'kredit', 'keterangan'])->values();
             foreach ($semua as $i => $t) {
                 $berikut = $semua[$i + 1] ?? null;
@@ -101,8 +107,17 @@ class KasController extends Controller
         $jumlahFoto = KasFoto::kas()->whereIn('no_id', $transfer->pluck('no_id')->filter())
             ->selectRaw('no_id, COUNT(*) as n')->groupBy('no_id')->pluck('n', 'no_id');
 
+        // Ringkasan periode: saldo awal lembar pertama, jumlah masuk/keluar, saldo akhir lembar terakhir, catatan rekonsiliasi semua lembar.
+        $ringkas = $bulan ? [
+            'saldo_awal' => $lembar->first()->saldo_awal, 'masuk' => $lembar->sum('total_debet'), 'keluar' => $lembar->sum('total_kredit'),
+            'saldo_akhir' => $bulan->saldo_akhir, 'cocok' => $lembar->every(fn ($b) => $b->cocok()),
+            'catatan' => $lembar->flatMap(fn ($b) => collect($b->catatan ?? [])->map(fn ($c) => ($lembar->count() > 1 ? $b->bulan->translatedFormat('M Y').': ' : '').$c))->all(),
+            'tidak_cocok' => $lembar->reject(fn ($b) => $b->cocok())->count(),
+        ] : null;
+        $namaLembar = $lembar->pluck('lembar', 'id');
+
         return view('kas.index', compact('daftarBulan', 'bulan', 'transfer', 'q', 'tanggal', 'daftarTanggal', 'punyaBiaya', 'jumlahFoto',
-            'statusBon', 'statusTransfer', 'ringkasStatus', 'filterStatus') + [
+            'statusBon', 'statusTransfer', 'ringkasStatus', 'filterStatus', 'periode', 'lembar', 'ringkas', 'namaLembar') + [
                 'bolehInput' => $request->user()->bolehMenu('input-kas'), 'antreanSheet' => StatusReimburse::antreanSheet(),
             ]);
     }

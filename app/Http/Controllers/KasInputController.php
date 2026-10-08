@@ -447,17 +447,18 @@ class KasInputController extends Controller
     /** Impor ulang satu lembar dari sheet (setelah admin mengubah sheet langsung). */
     public function sinkron(Request $request): RedirectResponse
     {
-        $lembar = $request->validate(['lembar' => ['required', 'regex:/^\d{4}$/']])['lembar'];
+        // Satu lembar ("1026") atau beberapa sekaligus untuk periode lebih dari sebulan ("0926,1026").
+        $lembar = explode(',', $request->validate(['lembar' => ['required', 'regex:/^\d{4}(,\d{4})*$/']])['lembar']);
         try {
-            $hasil = ImporKas::baca(ImporKas::ambilDariSheet([$lembar]));
+            $hasil = ImporKas::baca(ImporKas::ambilDariSheet($lembar));
             (new ImporKas)->simpan($hasil);
         } catch (\Throwable $e) {
             report($e);
 
             return back()->with('error', 'Sinkron gagal: '.$e->getMessage());
         }
-        $h = reset($hasil);
 
-        return back()->with('success', "Lembar {$lembar} disinkronkan dari sheet: ".count($h['transfer']).' transfer, '.$h['jumlah_bon'].' transaksi detail, saldo akhir '.rp($h['saldo_akhir']).'.');
+        return back()->with('success', 'Lembar '.implode(', ', $lembar).' disinkronkan dari sheet: '.collect($hasil)->sum(fn ($h) => count($h['transfer'])).' transfer, '
+            .collect($hasil)->sum('jumlah_bon').' transaksi detail, saldo akhir '.rp(collect($hasil)->last()['saldo_akhir']).'.');
     }
 }

@@ -11,6 +11,7 @@ use App\Support\DaftarBank;
 use App\Support\FotoBon;
 use App\Support\GoogleSheets;
 use App\Support\KasSeabank;
+use App\Support\Periode;
 use App\Support\ModelKodeGl;
 use App\Support\NomorMobil;
 use App\Support\TautanUj;
@@ -33,14 +34,15 @@ class UjController extends Controller
     public function index(Request $request): View
     {
         $daftarBulan = UjTransaksi::whereNotNull('tanggal')->selectRaw("DATE_FORMAT(tanggal, '%Y-%m') as bulan")->distinct()->orderBy('bulan')->pluck('bulan');
-        $bulan = $daftarBulan->contains($request->query('bulan')) ? $request->query('bulan') : $daftarBulan->last();
+        // Periode: tahun + bulan mulai s.d. bulan akhir (tautan lama ?bulan=2026-10 tetap dikenali).
+        $periode = Periode::dari($request, $daftarBulan);
+        $bulan = $daftarBulan->isNotEmpty() ? $periode->label() : null;
         $q = trim((string) $request->query('q'));
 
         $transaksi = collect();
         if ($bulan) {
-            $awal = Carbon::parse($bulan.'-01');
             $transaksi = UjTransaksi::with('detail')
-                ->whereBetween('tanggal', [$awal, $awal->copy()->endOfMonth()])
+                ->whereBetween('tanggal', [$periode->awal(), $periode->akhir()])
                 ->when($q !== '', function ($query) use ($q) {
                     $like = '%'.$q.'%';
                     $query->where(fn ($w) => $w->where('nama', 'like', $like)->orWhere('rekening', 'like', $like)
@@ -54,7 +56,7 @@ class UjController extends Controller
             ->selectRaw('no_id, COUNT(*) as n')->groupBy('no_id')->pluck('n', 'no_id');
         $diimpor = Cache::get('uj-diimpor-pada');
 
-        return view('uj.index', compact('daftarBulan', 'bulan', 'q', 'transaksi', 'jumlahFoto', 'diimpor') + ['bolehInput' => $request->user()->bolehMenu('input-uj')]);
+        return view('uj.index', compact('daftarBulan', 'bulan', 'q', 'transaksi', 'jumlahFoto', 'diimpor', 'periode') + ['bolehInput' => $request->user()->bolehMenu('input-uj')]);
     }
 
     public function create(): View

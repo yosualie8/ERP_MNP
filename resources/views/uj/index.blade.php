@@ -14,11 +14,7 @@
             <form method="POST" action="{{ route('uj.sinkron') }}">@csrf<button class="tombol" type="submit">Sinkron dari sheet</button></form>
         </div>
     @else
-        <div style="margin-bottom: 10px;">
-            @foreach ($daftarBulan as $b)
-                <a href="{{ route('uj.index', ['bulan' => $b]) }}" @class(['chip', 'aktif' => $b === $bulan])>{{ \Illuminate\Support\Carbon::parse($b.'-01')->translatedFormat('M Y') }}</a>
-            @endforeach
-        </div>
+        @include('partials.periode', ['rute' => 'uj.index', 'bawa' => ['q' => $q]])
 
         @php($detailSemua = $transaksi->flatMap->detail)
         <div class="ringkas">
@@ -29,11 +25,11 @@
         </div>
 
         <form method="GET" action="{{ route('uj.index') }}" style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-            <input type="hidden" name="bulan" value="{{ $bulan }}">
+            @foreach ($periode->param() as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
             <input type="search" name="q" value="{{ $q }}" placeholder="Cari nama, keterangan, ID UJ, no mobil, DO, kategori…">
             <button class="tombol" type="submit" style="padding: 8px 14px;">Cari</button>
             @if ($q !== '')
-                <a href="{{ route('uj.index', ['bulan' => $bulan]) }}" class="redup">Hapus pencarian</a>
+                <a href="{{ route('uj.index', $periode->param()) }}" class="redup">Hapus pencarian</a>
             @endif
             <span class="redup">{{ $transaksi->count() }} transfer · {{ $detailSemua->count() }} detail · terbaru di atas</span>
             <button type="button" class="tombol polos" id="buka-semua">Buka semua detail</button>

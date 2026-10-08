@@ -61,6 +61,15 @@
         }
         .chip { display: inline-block; padding: 4px 10px; border: 1px solid var(--garis); border-radius: 999px; font-size: 13px; color: var(--teks); text-decoration: none; margin: 0 4px 6px 0; background: var(--kartu); }
         .chip.aktif { background: var(--aksen); border-color: var(--aksen); color: #fff; }
+        /* Pemilih periode: Tahun · Jan–Des · Bulan mulai/akhir (partials/periode). */
+        .periode { display: flex; align-items: flex-end; gap: 10px 14px; flex-wrap: wrap; margin-bottom: 12px; }
+        .periode-isian { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--redup); }
+        .periode select { padding: 7px 10px; border-radius: 7px; font-size: 14px; min-width: 92px; border: 1px solid var(--garis-kuat); }
+        .periode select:focus { outline: none; border-color: var(--aksen); }
+        .periode-bulan { display: flex; flex-wrap: wrap; gap: 4px; }
+        .periode-bulan .chip { margin: 0; min-width: 46px; text-align: center; }
+        .periode-bulan .chip.dalam { background: var(--aksen-muda); border-color: var(--aksen); color: var(--aksen-terang); }
+        .periode-bulan .chip.kosong { opacity: .4; }
         .angka { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
         .ringkas { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; margin-bottom: 16px; }
         .ringkas .kartu { margin: 0; padding: 14px 16px; }
