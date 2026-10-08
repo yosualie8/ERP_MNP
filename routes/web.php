@@ -52,6 +52,8 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/aset/{aset}/edit', [AsetController::class, 'edit'])->whereNumber('aset')->name('aset.edit');
     Route::put('/aset/{aset}', [AsetController::class, 'update'])->whereNumber('aset')->name('aset.update');
     Route::get('/kas/reimburse', [ReimburseKasController::class, 'index'])->name('kas.reimburse');
+    Route::get('/kas/validasi-reimburse', [ReimburseKasController::class, 'validasi'])->name('kas.validasi-reimburse');
+    Route::post('/kas/validasi-reimburse', [ReimburseKasController::class, 'periksaValidasi'])->name('kas.validasi-reimburse.periksa');
     Route::get('/kas/belum-reimburse.xlsx', [ReimburseKasController::class, 'unduhBelum'])->name('kas.belum-reimburse');
     Route::post('/kas/reimburse', [ReimburseKasController::class, 'simpan'])->name('kas.reimburse.simpan');
     Route::get('/kas/reimburse/{reimburse}/excel', [ReimburseKasController::class, 'unduh'])->name('kas.reimburse.unduh');

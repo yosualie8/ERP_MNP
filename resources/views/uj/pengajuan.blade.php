@@ -27,15 +27,15 @@
 
     <div class="kartu gulir" style="padding: 0;">
         <table class="kas">
-            <thead><tr><th>Kode</th><th>Tanggal</th><th>Penerima</th><th>Rekening</th><th class="angka">Nominal</th><th>Status</th><th>Diajukan</th><th></th></tr></thead>
+            <thead><tr><th>Kode</th><th>Tanggal pengajuan</th><th>Driver</th><th>Kategori</th><th class="angka">Total</th><th>Status</th><th>Diajukan</th><th></th></tr></thead>
             @forelse ($pengajuan as $p)
                 @php($real = $p->detail->where('status', 'terealisasi'))
                 <tbody @class(['grup', 'buka' => in_array($p->status, ['diajukan', 'sebagian'], true)])>
                     <tr class="t ada-bon">
                         <td><span class="panah">▸</span> <b>{{ $p->kode() }}</b> <span class="jumlah-bon">{{ $p->detail->count() }}</span></td>
                         <td>{{ $p->tanggal->translatedFormat('j M Y') }}</td>
-                        <td><b>{{ $p->nama }}</b></td>
-                        <td class="redup">{{ $p->bank }} {{ $p->rekening }}</td>
+                        <td><b>{{ $p->detail->pluck('nama')->filter()->unique()->take(4)->implode(', ') }}</b>@if ($p->detail->pluck('nama')->filter()->unique()->count() > 4) …@endif</td>
+                        <td class="ringkas-gl">{{ $p->detail->pluck('kategori')->unique()->take(3)->implode(', ') }}</td>
                         <td class="angka"><b>{{ rp($p->nominal) }}</b></td>
                         <td><span @class(['label', 'kuning' => $p->status === 'sebagian', 'hijau' => $p->status === 'selesai', 'merah' => $p->status === 'batal'])>{{ \App\Models\UjPengajuan::STATUS[$p->status] }}</span>
                             @if ($real->count())<span class="redup" style="font-size: 12px;">{{ $real->count() }}/{{ $p->detail->count() }} · {{ rp($real->sum('nominal')) }}</span>@endif</td>
@@ -51,7 +51,7 @@
                     <tr class="bh"><td>Detail</td><td>Nama</td><td>Keterangan</td><td>Kategori · Mobil · DO</td><td class="angka">Nominal</td><td>Status</td><td>Realisasi</td><td></td></tr>
                     @foreach ($p->detail as $d)
                         <tr @class(['b', 'terealisasi' => $d->status === 'terealisasi', 'batal' => $d->status === 'batal'])>
-                            <td></td><td class="p">{{ $d->nama ?: ($d->urut === 1 ? $p->nama : '') }}</td><td>{{ $d->keterangan }}@if ($d->temuan)<i title="{{ collect($d->temuan)->pluck('pesan')->implode(' · ') }} — konfirmasi: {{ $d->konfirmasi }}"> ⚠ FLAG dikonfirmasi</i>@endif</td>
+                            <td></td><td class="p">{{ $d->nama }}</td><td>{{ $d->keterangan }}@if ($d->temuan)<i title="{{ collect($d->temuan)->pluck('pesan')->implode(' · ') }} — konfirmasi: {{ $d->konfirmasi }}"> ⚠ FLAG dikonfirmasi</i>@endif</td>
                             <td>{{ $d->kategori }} @if ($d->no_mobil)<i>{{ $d->no_mobil }}</i>@endif @if ($d->no_do)<span class="redup">DO {{ $d->no_do }}</span>@endif</td>
                             <td class="angka">{{ rp($d->nominal) }}</td>
                             <td>{{ ['menunggu' => '⏳ Menunggu', 'terealisasi' => '✓ Terealisasi', 'batal' => 'Dibatalkan'][$d->status] }}</td>

@@ -38,7 +38,7 @@ class PengajuanUjController extends UjController
 
     public function simpan(Request $request): RedirectResponse
     {
-        $input = $this->bacaInput($request);
+        $input = $this->bacaInput($request, true);
         if ($input instanceof RedirectResponse) {
             return $input;
         }
@@ -47,7 +47,8 @@ class PengajuanUjController extends UjController
             return $temuan;
         }
         $p = DB::transaction(function () use ($input, $temuan, $request) {
-            $p = UjPengajuan::create(['tanggal' => $input['tanggal']->toDateString(), 'nama' => $input['nama'], 'bank' => $input['bank'], 'rekening' => $input['rekening'],
+            // Pengajuan = daftar transaksi (tanpa penerima/rekening); nominal = jumlah detail.
+            $p = UjPengajuan::create(['tanggal' => $input['tanggal']->toDateString(), 'nama' => null, 'bank' => null, 'rekening' => null,
                 'nominal' => $input['nominal'], 'status' => 'diajukan', 'user_id' => $request->user()->id]);
             $this->simpanDetail($p, $input, $temuan);
 
@@ -65,8 +66,8 @@ class PengajuanUjController extends UjController
             return redirect()->route('pengajuan-uj.daftar')->with('error', $tolak);
         }
         $edit = [
-            'pengajuan_id' => $pengajuan->id, 'kode' => $pengajuan->kode(), 'tanggal' => $pengajuan->tanggal->toDateString(), 'nama' => $pengajuan->nama,
-            'bank' => $pengajuan->bank, 'rekening' => $pengajuan->rekening, 'nominal' => $pengajuan->nominal, 'biaya_transfer' => '0',
+            'pengajuan_id' => $pengajuan->id, 'kode' => $pengajuan->kode(), 'tanggal' => $pengajuan->tanggal->toDateString(),
+            'nominal' => $pengajuan->nominal, 'biaya_transfer' => '0',
             'detail' => $pengajuan->detail->map(fn ($d) => $d->only(['nama', 'keterangan', 'nominal', 'kategori', 'jenis_kendaraan', 'no_mobil', 'no_do', 'konfirmasi']))->all(),
         ];
 
@@ -78,7 +79,7 @@ class PengajuanUjController extends UjController
         if ($tolak = $this->tolakUbah($pengajuan)) {
             return redirect()->route('pengajuan-uj.daftar')->with('error', $tolak);
         }
-        $input = $this->bacaInput($request);
+        $input = $this->bacaInput($request, true);
         if ($input instanceof RedirectResponse) {
             return $input;
         }
@@ -87,7 +88,7 @@ class PengajuanUjController extends UjController
             return $temuan;
         }
         DB::transaction(function () use ($pengajuan, $input, $temuan) {
-            $pengajuan->update(['tanggal' => $input['tanggal']->toDateString(), 'nama' => $input['nama'], 'bank' => $input['bank'], 'rekening' => $input['rekening'], 'nominal' => $input['nominal']]);
+            $pengajuan->update(['tanggal' => $input['tanggal']->toDateString(), 'nominal' => $input['nominal']]);
             $pengajuan->detail()->delete();
             $this->simpanDetail($pengajuan, $input, $temuan);
         });
@@ -117,9 +118,9 @@ class PengajuanUjController extends UjController
 
         return response()->json(['pengajuan' => $p->map(fn ($p) => [
             'id' => $p->id, 'kode' => $p->kode(), 'tanggal' => $p->tanggal->toDateString(), 'tgl' => $p->tanggal->translatedFormat('j M Y'),
-            'nama' => $p->nama, 'bank' => $p->bank, 'rekening' => $p->rekening, 'oleh' => $p->user?->name ?? $p->user?->email,
-            'detail' => $p->detail->map(fn ($d, $i) => [
-                'pengajuan' => $d->id, 'nama' => $d->nama ?: ($d->urut === 1 ? $p->nama : null), 'keterangan' => $d->keterangan, 'nominal' => (int) $d->nominal,
+            'driver' => $p->detail->pluck('nama')->filter()->unique()->implode(', '), 'oleh' => $p->user?->name ?? $p->user?->email,
+            'detail' => $p->detail->map(fn ($d) => [
+                'pengajuan' => $d->id, 'nama' => $d->nama, 'keterangan' => $d->keterangan, 'nominal' => (int) $d->nominal,
                 'kategori' => $d->kategori, 'jenis_kendaraan' => $d->jenis_kendaraan, 'no_mobil' => $d->no_mobil, 'no_do' => $d->no_do,
             ])->values(),
         ])->values()]);
@@ -145,6 +146,8 @@ class PengajuanUjController extends UjController
 
     private function ringkas(UjPengajuan $p): string
     {
-        return rp($p->nominal).' '.$p->tanggal->translatedFormat('j M Y').' '.$p->nama.' ('.$p->detail()->count().' detail)';
+        $d = $p->detail()->get();
+
+        return rp($p->nominal).' '.$p->tanggal->translatedFormat('j M Y').' ('.$d->count().' transaksi · '.$d->pluck('nama')->filter()->unique()->implode(', ').')';
     }
 }

@@ -130,7 +130,11 @@ class UjController extends Controller
             ->sortByDesc('urut')->map(fn ($r) => collect($r)->except('urut')->all())->values()->all();
     }
 
-    protected function bacaInput(Request $request): array|RedirectResponse
+    /**
+     * @param  bool  $pengajuan  Pengajuan UJ: tanpa data master (penerima/rekening/nominal) — hanya tanggal + daftar transaksi,
+     *                           nama driver tiap baris wajib, nominal = jumlah detail.
+     */
+    protected function bacaInput(Request $request, bool $pengajuan = false): array|RedirectResponse
     {
         $polos = fn ($v) => is_string($v) ? preg_replace('/\D/', '', $v) : $v;
         $request->merge([
@@ -138,17 +142,21 @@ class UjController extends Controller
             'nominal_biaya' => $polos($request->input('nominal_biaya')),
             'detail' => array_map(fn ($d) => is_array($d) ? [...$d, 'nominal' => $polos($d['nominal'] ?? null)] : $d, (array) $request->input('detail', [])),
         ]);
+        if ($pengajuan) {
+            $request->merge(['nama' => null, 'bank' => null, 'rekening' => null, 'biaya_transfer' => '0',
+                'nominal' => (string) array_sum(array_map(fn ($d) => (int) ($d['nominal'] ?? 0), (array) $request->input('detail', [])))]);
+        }
         $data = $request->validate([
             'tanggal' => ['required', 'date'],
-            'nama' => ['required', 'string', 'max:150'],
+            'nama' => [$pengajuan ? 'nullable' : 'required', 'string', 'max:150'],
             'bank' => ['nullable', 'string', 'max:60', DaftarBank::aturan()],
             'rekening' => ['nullable', 'string', 'max:40'],
             'nominal' => ['required', 'integer', 'min:1'],
+            'detail.*.nama' => [$pengajuan ? 'required' : 'nullable', 'string', 'max:150'],
             'biaya_transfer' => ['nullable', 'boolean'],
             'nominal_biaya' => ['exclude_unless:biaya_transfer,1', 'required', 'integer', 'min:1', 'max:100000'],
             'detail' => ['required', 'array', 'min:1'],
             'detail.*.nominal' => ['required', 'integer', 'min:1'],
-            'detail.*.nama' => ['nullable', 'string', 'max:150'],
             'detail.*.keterangan' => ['required', 'string', 'max:500'],
             'detail.*.kategori' => ['required', 'string', 'max:60'],
             'detail.*.jenis_kendaraan' => ['nullable', 'string', 'max:40'],
@@ -165,6 +173,7 @@ class UjController extends Controller
             'detail.*.kategori.required' => 'Transaksi detail baris :position: Kategori belum diisi.',
             'detail.*.nominal.required' => 'Transaksi detail baris :position: Nominal belum diisi.',
             'detail.*.nominal.min' => 'Transaksi detail baris :position: Nominal harus lebih dari 0.',
+            'detail.*.nama.required' => 'Transaksi baris :position: Nama driver belum diisi.',
             'nominal_biaya.required' => 'Isi nominal biaya transfer, atau hilangkan centangnya.',
             'nominal_biaya.max' => 'Biaya transfer maksimal 100.000.',
         ]);
@@ -177,7 +186,7 @@ class UjController extends Controller
 
         return [
             'tanggal' => Carbon::parse($data['tanggal']),
-            'nama' => trim($data['nama']),
+            'nama' => trim((string) ($data['nama'] ?? '')),
             'bank' => DaftarBank::kode($data['bank'] ?? null),
             'rekening' => $rapi($data['rekening'] ?? null),
             'nominal' => (int) $data['nominal'],

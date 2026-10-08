@@ -22,6 +22,7 @@ class MenuAkses
         'input-ritasi' => ['Input Ritasi', 'ritasi.input', ['ritasi.input', 'ritasi.store', 'ritasi.periksa', 'ritasi.edit', 'ritasi.update', 'ritasi.hapus'], 'Input, edit & hapus ritasi dump truck'],
         'ritasi' => ['Ritasi', 'ritasi.index', ['ritasi.index', 'ritasi.sinkron'], 'Melihat daftar ritasi dump truck'],
         'reimburse-kas' => ['Reimburse Kas', 'kas.reimburse', ['kas.reimburse', 'kas.reimburse.*'], 'Memilih & mencatat reimburse Kas Harian (owner), unduh Excel'],
+        'validasi-reimburse' => ['Validasi Reimburse', 'kas.validasi-reimburse', ['kas.validasi-reimburse', 'kas.validasi-reimburse.*'], 'Upload Excel daftar reimburse: cek double reimburse & rekap per Kode GL'],
         'kas-belum-reimburse' => ['⬇ Excel Belum Reimburse', 'kas.belum-reimburse', ['kas.belum-reimburse'], 'Unduh daftar transaksi Kas Harian yang belum reimburse (Excel)'],
         'rekap' => ['Rekap Biaya', 'kas.rekap', ['kas.rekap'], 'Rekap biaya per akun × bulan'],
         'aset' => ['Data Aset Truk', 'aset.index', ['aset.*'], 'Daftar truk milik MNP: lihat, tambah & ubah'],
@@ -30,7 +31,7 @@ class MenuAkses
 
     /** Kelompok menu di sidebar: kunci => [judul, ikon, menu di dalamnya]. */
     public const KATEGORI = [
-        'kas' => ['Kas Harian', '🏦', ['input-kas', 'kas-harian', 'reimburse-kas', 'kas-belum-reimburse', 'rekap', 'kode-gl']],
+        'kas' => ['Kas Harian', '🏦', ['input-kas', 'kas-harian', 'reimburse-kas', 'validasi-reimburse', 'kas-belum-reimburse', 'rekap', 'kode-gl']],
         'uj' => ['Uang Jalan', '🚚', ['pengajuan-uj', 'input-uj', 'kas-uj', 'reimburse-uj', 'rapikan-uj']],
         'ritasi' => ['Ritasi', '⛰️', ['input-ritasi', 'ritasi']],
         'aset' => ['Aset', '🚛', ['aset']],

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\KasReimburse;
 use App\Models\KasRiwayat;
 use App\Support\ReimburseKas;
+use App\Support\ValidasiReimburse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
@@ -49,6 +50,36 @@ class ReimburseKasController extends Controller
         return redirect()->route('kas.reimburse')->with('batch_baru', $batch->id)->with('success',
             'Tercatat sudah reimburse tanggal '.$batch->tanggal->translatedFormat('j M Y').': '.rp($batch->total)." ({$batch->jumlah_transfer} transfer, {$batch->jumlah_baris} detail). "
             .'Baris-barisnya sedang ditulis ke lembar Sudah Reimburse di sheet.');
+    }
+
+    /** Validasi Excel daftar reimburse: upload + nama lembar → cek double reimburse, lalu rekap per Kode GL. */
+    public function validasi(): View
+    {
+        return view('kas.validasi-reimburse', ['hasil' => null, 'namaFile' => null]);
+    }
+
+    public function periksaValidasi(Request $request): View|RedirectResponse
+    {
+        $data = $request->validate([
+            'file' => ['required', 'file', 'mimes:xlsx', 'max:20480'],
+            'lembar' => ['required', 'string', 'max:100'],
+            'kolom_gl' => ['required', 'regex:/^[A-Za-z]{1,2}$/'],
+            'kolom_nominal' => ['required', 'regex:/^[A-Za-z]{1,2}$/'],
+        ], [
+            'file.required' => 'Pilih file Excel (.xlsx) dulu.', 'file.mimes' => 'File harus Excel .xlsx.',
+            'lembar.required' => 'Isi nama sheet yang berisi daftar transaksi.', '*.regex' => 'Kolom diisi huruf, mis. K atau N.',
+        ]);
+        try {
+            $hasil = ValidasiReimburse::periksa($request->file('file')->getRealPath(), $data['lembar'], $data['kolom_gl'], $data['kolom_nominal']);
+        } catch (\RuntimeException $e) {
+            return back()->withInput()->with('error', $e->getMessage());
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->withInput()->with('error', 'File tidak bisa dibaca: '.$e->getMessage());
+        }
+
+        return view('kas.validasi-reimburse', ['hasil' => $hasil, 'namaFile' => $request->file('file')->getClientOriginalName()]);
     }
 
     /** Excel offline: semua transaksi Kas Harian yang belum reimburse. */

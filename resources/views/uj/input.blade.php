@@ -153,16 +153,17 @@
             </div>
             <div class="baris2">
                 <div>
-                    <label for="tanggal">Tanggal</label>
+                    <label for="tanggal">{{ $ajukan ? 'Tanggal pengajuan' : 'Tanggal' }}</label>
                     <input type="date" name="tanggal" id="tanggal" value="{{ old('tanggal', $edit['tanggal'] ?? now()->toDateString()) }}" required>
                 </div>
-                <div style="grid-column: span 2;" class="isian-saran">
+                {{-- Pengajuan = daftar transaksi yang diajukan: belum ada penerima transfer, rekening, maupun nominal master. --}}
+                <div style="grid-column: span 2;{{ $ajukan ? ' display: none;' : '' }}" class="isian-saran">
                     <label for="nama_tujuan">Nama penerima transfer</label>
                     <input type="text" name="nama" id="nama_tujuan" value="{{ old('nama', $edit['nama'] ?? '') }}" autocomplete="off" required placeholder="Ketik nama, pilih rekeningnya dari daftar">
                     <div class="saran" id="saran-nama" hidden></div>
                 </div>
             </div>
-            <div class="baris2">
+            <div class="baris2" @if ($ajukan) style="display: none;" @endif>
                 <div class="isian-saran">
                     <label for="no_rek">No. rekening / e-wallet</label>
                     <input type="text" name="rekening" id="no_rek" value="{{ old('rekening', $edit['rekening'] ?? '') }}" inputmode="numeric" autocomplete="off" placeholder="Atau ketik nomornya">
@@ -173,7 +174,7 @@
                     <div class="isian-saran" style="max-width: 360px; margin-bottom: 6px;"><input type="text" name="bank" id="bank" value="{{ old('bank', $edit['bank'] ?? '') }}" autocomplete="off" placeholder="Ketik singkatan / nama bank / e-wallet, mis. BCA, GoPay"></div>
                 </div>
             </div>
-            <div style="max-width: 260px;">
+            <div style="max-width: 260px;{{ $ajukan ? ' display: none;' : '' }}">
                 <label for="nominal_transfer">Nominal master <span class="redup">(yang ditransfer, tanpa biaya transfer)</span></label>
                 <input type="text" name="nominal" id="nominal_transfer" class="angka-input rupiah" inputmode="numeric" autocomplete="off" value="{{ old('nominal', $edit['nominal'] ?? '') }}" required>
             </div>
@@ -198,17 +199,17 @@
 
         <div class="kartu">
             <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px;">
-                <h3 style="margin: 0 0 4px;">Transaksi detail</h3>
-                <span class="redup">Jumlah detail <span class="total-bon" id="total-bon">0</span> dari nominal master <b id="nilai-transfer">0</b></span>
+                <h3 style="margin: 0 0 4px;">{{ $ajukan ? 'Daftar transaksi yang diajukan' : 'Transaksi detail' }}</h3>
+                <span class="redup">{{ $ajukan ? 'Total pengajuan' : 'Jumlah detail' }} <span class="total-bon" id="total-bon">0</span>@unless ($ajukan) dari nominal master <b id="nilai-transfer">0</b>@else<b id="nilai-transfer" hidden>0</b>@endunless</span>
             </div>
-            <div id="status-cocok" class="pesan" style="margin: 8px 0 10px; padding: 8px 12px;"></div>
-            <p class="redup" style="margin: 0 0 10px;">{{ $ajukan ? 'Satu baris = satu uang jalan yang diajukan (nanti direalisasikan per baris).' : 'Satu baris = satu ID UJ di sheet (nomornya dilanjutkan otomatis).' }} Nama detail pertama mengikuti nama penerima; Jenis kendaraan terisi otomatis dari No Mobil (ungu = otomatis, boleh diganti).</p>
+            <div id="status-cocok" class="pesan" style="margin: 8px 0 10px; padding: 8px 12px;{{ $ajukan ? ' display: none;' : '' }}"></div>
+            <p class="redup" style="margin: 0 0 10px;">{{ $ajukan ? 'Satu baris = satu uang jalan yang diajukan, nanti direalisasikan per baris. Nama driver wajib diisi di setiap baris.' : 'Satu baris = satu ID UJ di sheet (nomornya dilanjutkan otomatis). Nama detail pertama mengikuti nama penerima.' }} Jenis kendaraan terisi otomatis dari No Mobil (ungu = otomatis, boleh diganti).</p>
             <div class="gulir">
             <table class="bon" style="min-width: 1100px;">
                 <thead>
                     <tr>
                         <th style="width: 130px;" class="angka">Nominal</th>
-                        <th style="width: 150px;">Nama</th>
+                        <th style="width: 150px;">{{ $ajukan ? 'Nama driver' : 'Nama' }}</th>
                         <th>Keterangan</th>
                         <th style="width: 160px;">Kategori</th>
                         <th style="width: 100px;">No Mobil</th>
@@ -275,6 +276,7 @@
             const rekening = @json($rekening);
             const jenisMobil = @json($mobil);
             const awal = @json(old('detail', $edit['detail'] ?? []));
+            const AJUKAN = @json($ajukan);
             const daftar = document.getElementById('daftar-bon');
             const templat = document.getElementById('templat-bon');
             const fmt = n => new Intl.NumberFormat('id-ID').format(n || 0);
@@ -313,6 +315,8 @@
             const tombolSimpan = document.getElementById('simpan');
             const hitung = () => {
                 const total = [...daftar.querySelectorAll('[data-nama=nominal]')].reduce((s, el) => s + angka(el.value), 0);
+                // Pengajuan: tidak ada nominal master — total pengajuan = jumlah transaksinya.
+                if (AJUKAN) nominalTransfer.value = total ? fmt(total) : '';
                 const transfer = angka(nominalTransfer.value);
                 const selisih = transfer - total;
                 document.getElementById('total-bon').textContent = fmt(total);
@@ -348,7 +352,7 @@
             });
             const aturJenis = tr => isiOtomatis(tr.querySelector('[data-nama=jenis_kendaraan]'), jenisMobil[kunciMobil(tr.querySelector('[data-nama=no_mobil]').value)] || '');
             const nama = document.getElementById('nama_tujuan');
-            const aturNamaPertama = () => { const tr = barisDetail()[0]; if (tr) isiOtomatis(tr.querySelector('[data-nama=nama]'), nama.value.trim()); };
+            const aturNamaPertama = () => { const tr = barisDetail()[0]; if (tr && !AJUKAN) isiOtomatis(tr.querySelector('[data-nama=nama]'), nama.value.trim()); };
 
             const tambah = (isi = {}) => {
                 const tr = templat.content.firstElementChild.cloneNode(true);
@@ -707,7 +711,8 @@
                 let pertama = null;
                 const tandai = el => { if (tandaiSemua || el.dataset.tersentuh) el.classList.add('wajib-kosong'); pertama ??= el; };
                 const master = [];
-                [[document.getElementById('tanggal'), 'Tanggal'], [nama, 'Nama penerima'], [nominalTransfer, 'Nominal master']].forEach(([el, label]) => {
+                // Pengajuan: tanpa data master (hanya tanggal); nama driver tiap baris wajib.
+                (AJUKAN ? [[document.getElementById('tanggal'), 'Tanggal']] : [[document.getElementById('tanggal'), 'Tanggal'], [nama, 'Nama penerima'], [nominalTransfer, 'Nominal master']]).forEach(([el, label]) => {
                     if (!el.value.trim() || (el === nominalTransfer && !angka(el.value))) { tandai(el); master.push(label + ' belum diisi'); }
                 });
                 if (bank.value.trim() && !kodeBank.has(bank.value.trim())) { tandai(bank); master.push(`Bank "${bank.value.trim()}" tidak ada di daftar`); }
@@ -715,7 +720,7 @@
                 // Kekurangan tiap transaksi detail ditulis tepat di bawah barisnya; kotak di atas tombol Simpan cukup ringkasannya.
                 const barisKurang = [];
                 barisDetail().forEach((tr, i) => {
-                    const kurang = [['nominal', 'Nominal'], ['keterangan', 'Keterangan'], ['kategori', 'Kategori']].filter(([f]) => {
+                    const kurang = [['nominal', 'Nominal'], ...(AJUKAN ? [['nama', 'Nama driver']] : []), ['keterangan', 'Keterangan'], ['kategori', 'Kategori']].filter(([f]) => {
                         const el = tr.querySelector(`[data-nama=${f}]`);
                         const kosong = f === 'nominal' ? !angka(el.value) : !el.value.trim();
                         if (kosong) tandai(el);
@@ -939,7 +944,7 @@
                     const sudah = new Set(barisDetail().map(tr => +tr.querySelector('.pengajuan-kunci').value).filter(Boolean));
                     if (!dataPj.length) { daftarPj.innerHTML = '<p class="redup">Tidak ada pengajuan UJ yang menunggu realisasi.</p>'; hitungPj(); return; }
                     daftarPj.innerHTML = dataPj.map(p => `<div class="pj-grup">
-                        <div class="pj-master"><label><input type="checkbox" class="pj-m" data-p="${p.id}"> <b>${esc(p.kode)}</b> · ${esc(p.tgl)} · ${esc(p.nama)} <span class="redup">${esc(p.bank || '')} ${esc(p.rekening || '')}</span></label>
+                        <div class="pj-master"><label><input type="checkbox" class="pj-m" data-p="${p.id}"> <b>${esc(p.kode)}</b> · diajukan ${esc(p.tgl)} <span class="redup">· ${esc(p.driver || '')}</span></label>
                             <span class="redup" style="margin-left: auto;">${p.detail.length} detail menunggu · Rp ${fmt(p.detail.reduce((s, d) => s + d.nominal, 0))}${p.oleh ? ' · diajukan ' + esc(p.oleh) : ''}</span></div>
                         <table class="pj-detail" style="width: 100%;"><tbody>${p.detail.map(d => `<tr data-d="${d.pengajuan}">
                             <td style="width: 34px;"><input type="checkbox" class="pj-d" data-p="${p.id}" value="${d.pengajuan}" ${sudah.has(d.pengajuan) ? 'checked' : ''}></td>
@@ -958,11 +963,7 @@
                     const pilih = terpilih();
                     const adaIsi = barisDetail().some(tr => tr.querySelector('[data-nama=keterangan]').value.trim() || tr.querySelector('[data-nama=nominal]').value.trim());
                     if (adaIsi && !confirm('Detail di form sekarang akan diganti dengan detail pengajuan yang dipilih. Lanjutkan?')) return;
-                    // Master: penerima dari pengajuan pertama yang dipilih (boleh diganti); nominal = jumlah detail terpilih.
-                    const p0 = pilih[0].p;
-                    if (!nama.value.trim() || adaIsi) {
-                        nama.value = p0.nama || ''; noRek.value = p0.rekening || ''; bank.value = p0.bank || ''; bank.rapikan?.();
-                    }
+                    // Pengajuan tidak punya penerima: penerima transfer & rekeningnya diisi admin; nominal master = jumlah detail terpilih.
                     barisDetail().forEach(tr => { tr.temuan?.remove(); tr.kurangEl?.remove(); tr.remove(); });
                     pilih.forEach(({p, d}) => {
                         const tr = tambah({...d, nama: d.nama || p.nama, kode: p.kode});
