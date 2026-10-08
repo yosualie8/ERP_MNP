@@ -53,6 +53,7 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::put('/aset/{aset}', [AsetController::class, 'update'])->whereNumber('aset')->name('aset.update');
     Route::get('/kas/validasi-reimburse', [ReimburseKasController::class, 'validasi'])->name('kas.validasi-reimburse');
     Route::post('/kas/validasi-reimburse', [ReimburseKasController::class, 'periksaValidasi'])->name('kas.validasi-reimburse.periksa');
+    Route::post('/kas/validasi-reimburse/tandai', [ReimburseKasController::class, 'tandaiValidasi'])->name('kas.validasi-reimburse.tandai');
     Route::get('/kas/belum-reimburse.xlsx', [ReimburseKasController::class, 'unduhBelum'])->name('kas.belum-reimburse');
     Route::get('/kas/kode-gl', [KasController::class, 'kodeGl'])->name('kas.kode-gl');
     // Kas uang jalan dump truck (lembar "Kas Seabank").

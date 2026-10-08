@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use OpenSpout\Reader\XLSX\Reader;
 use RuntimeException;
@@ -32,6 +34,43 @@ class ValidasiReimburse
         $s = preg_replace('/[^\d\-]/', '', preg_replace('/[.,]\d{1,2}$/', '', trim((string) $v)));
 
         return $s === '' || $s === '-' ? null : (int) $s;
+    }
+
+    /**
+     * Tandai daftar ID (hasil validasi yang sudah valid) Sudah Reimburse. Diperiksa ulang di sini: tidak boleh ada ID ganda
+     * atau yang sudah direimburse (mis. baru ditandai admin lain). ID yang tidak ada di Kas Harian aplikasi tidak ditandai.
+     *
+     * @param  string[]  $ids
+     * @return array{ditandai: string[], tak_dikenal: string[], total: int}
+     */
+    public static function tandai(array $ids, Carbon $tanggal, ?int $userId): array
+    {
+        $ids = array_values(array_filter(array_map(fn ($v) => trim((string) $v), $ids)));
+        if (! $ids) {
+            throw new RuntimeException('Tidak ada ID transaksi untuk ditandai.');
+        }
+        if (count($ids) !== count(array_unique($ids))) {
+            throw new RuntimeException('Ada ID transaksi ganda di daftar. Validasi ulang file-nya.');
+        }
+
+        return Cache::lock('tandai-reimburse-kas', 60)->block(30, function () use ($ids, $tanggal, $userId) {
+            $sudah = array_keys(StatusReimburse::untuk($ids));
+            if ($sudah) {
+                throw new RuntimeException('Ditolak: '.count($sudah).' transaksi sudah berstatus Sudah Reimburse ('.implode(', ', array_slice($sudah, 0, 5))
+                    .(count($sudah) > 5 ? ', …' : '').'). Validasi ulang file-nya.');
+            }
+            $nominal = [];
+            foreach (array_chunk($ids, 1000) as $potong) {
+                $nominal += DB::table('kas_bon')->whereIn('id_transaksi', $potong)->pluck('nominal', 'id_transaksi')->all();
+            }
+            $dikenal = array_values(array_filter($ids, fn ($id) => array_key_exists($id, $nominal)));
+            if ($dikenal) {
+                StatusReimburse::tandai($dikenal, $tanggal, $userId);
+            }
+
+            return ['ditandai' => $dikenal, 'tak_dikenal' => array_values(array_diff($ids, $dikenal)),
+                'total' => (int) array_sum(array_map(fn ($id) => (int) $nominal[$id], $dikenal))];
+        });
     }
 
     /** Nama lembar di file (untuk pesan bila nama yang diisi tidak ada). @return string[] */

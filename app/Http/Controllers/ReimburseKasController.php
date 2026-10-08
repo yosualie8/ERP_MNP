@@ -42,6 +42,37 @@ class ReimburseKasController extends Controller
         return view('kas.validasi-reimburse', ['hasil' => $hasil, 'namaFile' => $request->file('file')->getClientOriginalName()]);
     }
 
+    /** Hasil validasi yang sudah valid → tandai semua transaksinya Sudah Reimburse (aplikasi + lembar Sudah Reimburse di sheet). */
+    public function tandaiValidasi(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'ids' => ['required', 'json'],
+            'tanggal' => ['required', 'date', 'before_or_equal:today'],
+            'nama_file' => ['nullable', 'string', 'max:255'],
+            'lembar' => ['nullable', 'string', 'max:100'],
+        ], ['tanggal.required' => 'Isi tanggal reimburse.', 'tanggal.before_or_equal' => 'Tanggal reimburse tidak boleh di masa depan.']);
+        $tanggal = \Illuminate\Support\Carbon::parse($data['tanggal']);
+        try {
+            $hasil = ValidasiReimburse::tandai((array) json_decode($data['ids'], true), $tanggal, $request->user()->id);
+        } catch (\RuntimeException $e) {
+            return redirect()->route('kas.validasi-reimburse')->with('error', $e->getMessage());
+        }
+        $sumber = trim(($data['nama_file'] ?? '').' · sheet "'.($data['lembar'] ?? '').'"', ' ·');
+        \App\Models\KasRiwayat::create([
+            'aksi' => 'reimburse-validasi', 'lembar' => 'Kas', 'baris_awal' => 0, 'baris_akhir' => 0,
+            'ringkasan' => mb_strimwidth('Validasi Reimburse: '.count($hasil['ditandai']).' transaksi ('.rp($hasil['total']).') ditandai Sudah Reimburse tgl '
+                .$tanggal->translatedFormat('j M Y').' — '.$sumber, 0, 490, '…'),
+            'isi' => ['id_transaksi' => $hasil['ditandai'], 'tak_dikenal' => $hasil['tak_dikenal'], 'tanggal' => $tanggal->toDateString(), 'sumber' => $sumber],
+            'user_id' => $request->user()->id,
+        ]);
+
+        return redirect()->route('kas.validasi-reimburse')->with('success',
+            count($hasil['ditandai']).' transaksi ('.rp($hasil['total']).') dari '.$sumber.' ditandai Sudah Reimburse tanggal '.$tanggal->translatedFormat('j M Y')
+            .'. Statusnya langsung berlaku di aplikasi dan sedang ditulis ke lembar "Sudah Reimburse" di sheet.'
+            .($hasil['tak_dikenal'] ? ' '.count($hasil['tak_dikenal']).' ID tidak ditandai karena tidak ada di Kas Harian aplikasi: '
+                .implode(', ', array_slice($hasil['tak_dikenal'], 0, 10)).(count($hasil['tak_dikenal']) > 10 ? ', …' : '').'.' : ''));
+    }
+
     /** Excel offline: semua transaksi Kas Harian yang belum reimburse. */
     public function unduhBelum(): BinaryFileResponse
     {

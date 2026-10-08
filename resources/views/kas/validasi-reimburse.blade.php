@@ -16,6 +16,7 @@
         table.kas tr.total td { font-weight: 700; border-top: 2px solid var(--garis); }
         table.kas tr.merah td { color: #ff8a8f; }
         h4 { margin: 18px 0 8px; }
+        .tandai-reimburse { border: 1px solid rgba(76, 195, 138, .45); background: var(--sukses-muda); }
         @media (max-width: 900px) { .panel-unggah { grid-template-columns: 1fr 1fr; } }
     </style>
 
@@ -72,6 +73,34 @@
                     </tbody>
                 </table>
             </div>
+
+            @php($nTakDikenal = count($hasil['tak_dikenal']))
+            @php($nTandai = count($hasil['baris']) - $nTakDikenal)
+            @php($totalTandai = $hasil['total'] - array_sum(array_column($hasil['tak_dikenal'], 'nominal')))
+            <form method="POST" action="{{ route('kas.validasi-reimburse.tandai') }}" class="kartu tandai-reimburse" id="form-tandai"
+                data-pesan="Tandai {{ $nTandai }} transaksi ({{ rp($totalTandai) }}) dari sheet &quot;{{ $hasil['lembar'] }}&quot; menjadi SUDAH REIMBURSE?{{ $nTakDikenal ? ' '.$nTakDikenal.' ID yang tidak ada di Kas Harian aplikasi tidak ikut ditandai.' : '' }} Status ini juga ditulis ke sheet.">
+                @csrf
+                <input type="hidden" name="ids" value="{{ json_encode(array_column($hasil['baris'], 'id')) }}">
+                <input type="hidden" name="nama_file" value="{{ $namaFile }}">
+                <input type="hidden" name="lembar" value="{{ $hasil['lembar'] }}">
+                <h4 style="margin: 0 0 4px;">Tandai Sudah Reimburse</h4>
+                <p class="redup" style="margin: 0 0 12px; font-size: 14px;">Semua transaksi di daftar ini diubah statusnya menjadi <b>Sudah Reimburse</b> di aplikasi, lalu ditulis ke lembar "Sudah Reimburse" di sheet.
+                    @if ($nTakDikenal)<br>⚠ {{ $nTakDikenal }} ID tidak ada di Kas Harian aplikasi (lihat "Perlu dicek") dan <b>tidak</b> ikut ditandai.@endif</p>
+                <div style="display: flex; gap: 12px; align-items: end; flex-wrap: wrap;">
+                    <div>
+                        <label for="tanggal" style="display: block; font-size: 13px; color: var(--redup); margin-bottom: 4px;">Tanggal reimburse</label>
+                        <input type="date" id="tanggal" name="tanggal" value="{{ now()->toDateString() }}" max="{{ now()->toDateString() }}" required style="padding: 9px 10px; border-radius: 7px; font-size: 15px;">
+                    </div>
+                    <button class="tombol" type="submit" @disabled(! $nTandai)>✓ Tandai {{ $nTandai }} transaksi Sudah Reimburse · {{ rp($totalTandai) }}</button>
+                </div>
+            </form>
+            <script>
+                document.getElementById('form-tandai').addEventListener('submit', e => {
+                    const f = e.target;
+                    if (!confirm(f.dataset.pesan)) { e.preventDefault(); return; }
+                    const b = f.querySelector('button[type=submit]'); b.disabled = true; b.textContent = 'Menandai…';
+                });
+            </script>
         @endif
 
         @if ($hasil['sudah'])
