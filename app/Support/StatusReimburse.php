@@ -101,9 +101,16 @@ class StatusReimburse
             }
 
             $baris = [];
+            $lewati = [];
             foreach ($antre as $s) {
                 if (isset($sudahDiSheet[$s->id_transaksi])) {
                     continue; // sudah ada (mis. diketik admin) — cukup ditandai tertulis
+                }
+                // ID tanpa NO ID ("260123-Jago-", baris lama yang NO ID-nya kosong di sheet) tidak bisa dicari di sheet: cukup di aplikasi.
+                if (! preg_match('/^\d{6}-Jago-\d+$/', $s->id_transaksi)) {
+                    $lewati[] = $s->id_transaksi;
+
+                    continue;
                 }
                 $r = $mutasi[$s->id_transaksi] ?? self::dariKas($s->id_transaksi);
                 if (! $r) {
@@ -131,7 +138,7 @@ class StatusReimburse
                 }
                 $sheets->tulis($id, $data);
             }
-            $tertulis = [...array_keys($baris), ...$antre->pluck('id_transaksi')->filter(fn ($i) => isset($sudahDiSheet[$i]))->all()];
+            $tertulis = [...array_keys($baris), ...$lewati, ...$antre->pluck('id_transaksi')->filter(fn ($i) => isset($sudahDiSheet[$i]))->all()];
             DB::table('kas_sudah_reimburse')->whereIn('id_transaksi', $tertulis)->update(['di_sheet' => true]);
 
             return count($baris);
