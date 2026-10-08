@@ -47,10 +47,18 @@
 
         <div style="margin-bottom: 8px;">
             <span class="redup" style="margin-right: 6px;">Tanggal:</span>
-            <a href="{{ route('kas.index', ['lembar' => $bulan->lembar, 'q' => $q ?: null]) }}" @class(['chip', 'aktif' => ! $tanggal])>Sebulan</a>
+            <a href="{{ route('kas.index', ['lembar' => $bulan->lembar, 'q' => $q ?: null, 'status' => $filterStatus]) }}" @class(['chip', 'aktif' => ! $tanggal])>Sebulan</a>
             @foreach ($daftarTanggal as $tgl)
-                <a href="{{ route('kas.index', ['lembar' => $bulan->lembar, 'tgl' => $tgl->day, 'q' => $q ?: null]) }}" @class(['chip', 'aktif' => $tanggal === $tgl->day])>{{ $tgl->day }}</a>
+                <a href="{{ route('kas.index', ['lembar' => $bulan->lembar, 'tgl' => $tgl->day, 'q' => $q ?: null, 'status' => $filterStatus]) }}" @class(['chip', 'aktif' => $tanggal === $tgl->day])>{{ $tgl->day }}</a>
             @endforeach
+        </div>
+        <div style="margin-bottom: 8px;">
+            @php($p = ['lembar' => $bulan->lembar, 'tgl' => $tanggal, 'q' => $q ?: null])
+            <span class="redup" style="margin-right: 6px;">Status reimburse:</span>
+            <a href="{{ route('kas.index', $p) }}" @class(['chip', 'aktif' => ! $filterStatus])>Semua</a>
+            <a href="{{ route('kas.index', $p + ['status' => 'belum']) }}" @class(['chip', 'aktif' => $filterStatus === 'belum'])>Belum reimburse · {{ $ringkasStatus['belum'] }} transfer · {{ rp($ringkasStatus['nilai_belum']) }}</a>
+            <a href="{{ route('kas.index', $p + ['status' => 'sudah']) }}" @class(['chip', 'aktif' => $filterStatus === 'sudah'])>Sudah reimburse · {{ $ringkasStatus['sudah'] }}</a>
+            <span class="redup" title="Disalin dari lembar &quot;Sudah Reimburse&quot; (Transaksi Belum Reimburse V3) tiap 10 menit">status per {{ $statusPada?->translatedFormat('j M H:i') ?? 'belum pernah diambil' }}</span>
         </div>
 
         <form method="GET" action="{{ route('kas.index') }}" style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
@@ -58,6 +66,7 @@
             @if ($tanggal)
                 <input type="hidden" name="tgl" value="{{ $tanggal }}">
             @endif
+            @if ($filterStatus)<input type="hidden" name="status" value="{{ $filterStatus }}">@endif
             <input type="search" name="q" value="{{ $q }}" placeholder="Cari keterangan, PIC, tujuan, Kode GL, ID transaksi…">
             <button class="tombol" type="submit" style="padding: 8px 14px;">Cari</button>
             @if ($q !== '')
@@ -85,6 +94,7 @@
                         <th class="angka">Masuk</th>
                         <th class="angka">Keluar / Detail</th>
                         <th class="angka">Saldo</th>
+                        <th>Reimburse</th>
                         <th></th>
                     </tr>
                 </thead>
@@ -104,6 +114,18 @@
                             <td class="angka">{{ rp($t->debet, true) }}</td>
                             <td class="angka"><b>{{ rp($t->kredit, true) }}</b></td>
                             <td class="angka">{{ rp($t->saldo) }}</td>
+                            @php($s = $statusTransfer[$t->id])
+                            <td style="white-space: nowrap;">
+                                @if ($s['kode'] === 'sudah')
+                                    <span class="label hijau" title="Semua detail sudah direimburse">✓ Sudah{{ $s['tanggal'] ? ' · '.$s['tanggal']->translatedFormat('j M') : '' }}</span>
+                                @elseif ($s['kode'] === 'sebagian')
+                                    <span class="label kuning" title="{{ $s['sudah'] }} dari {{ $s['jumlah'] }} detail sudah direimburse; belum {{ rp($s['nilai_belum']) }}">Sebagian {{ $s['sudah'] }}/{{ $s['jumlah'] }}</span>
+                                @elseif ($s['kode'] === 'belum')
+                                    <span class="label merah">Belum</span>
+                                @elseif ($s['kode'] === 'masuk')
+                                    <span class="redup" style="font-size: 12px;">Saldo masuk</span>
+                                @endif
+                            </td>
                             <td style="white-space: nowrap;">
                                 {{-- Edit, foto bon & Hapus hanya untuk akun yang punya menu Input Kas. --}}
                                 @if ($bolehInput)
@@ -121,15 +143,15 @@
                                 @endif</td>
                         </tr>
                         @if ($t->bon->isNotEmpty())
-                            <tr class="bh"><td>Transaksi detail</td><td>PIC</td><td>Keterangan</td><td>Kode GL</td><td></td><td class="angka">Nominal</td><td>ID transaksi</td><td></td></tr>
+                            <tr class="bh"><td>Transaksi detail</td><td>PIC</td><td>Keterangan</td><td>Kode GL</td><td></td><td class="angka">Nominal</td><td>ID transaksi</td><td>Reimburse</td><td></td></tr>
                         @endif
                         @foreach ($t->bon as $b)
                             @php($k = $b->kodeGl)
-                            <tr class="b"><td></td><td class="p">{{ $b->pic }}</td><td>{{ $b->keterangan }}</td><td>@if ($k){{ $k->akun?->nama ?? $k->kode_asli }}@if ($k->costCenter) <i>{{ $k->costCenter->kode }}</i>@endif @if ($k->ref)<i title="Tahap proyek">{{ $k->ref }}</i>@endif @if ($b->kode_gl_ditebak)<i title="Kode GL kosong di sheet, ditebak dari keterangan">ditebak</i>@endif @else<i class="x">tanpa Kode GL</i>@endif</td><td></td><td class="angka">{{ rp($b->nominal) }}</td><td class="i">{{ $b->id_transaksi }}</td><td></td></tr>
+                            <tr class="b"><td></td><td class="p">{{ $b->pic }}</td><td>{{ $b->keterangan }}</td><td>@if ($k){{ $k->akun?->nama ?? $k->kode_asli }}@if ($k->costCenter) <i>{{ $k->costCenter->kode }}</i>@endif @if ($k->ref)<i title="Tahap proyek">{{ $k->ref }}</i>@endif @if ($b->kode_gl_ditebak)<i title="Kode GL kosong di sheet, ditebak dari keterangan">ditebak</i>@endif @else<i class="x">tanpa Kode GL</i>@endif</td><td></td><td class="angka">{{ rp($b->nominal) }}</td><td class="i">{{ $b->id_transaksi }}</td><td style="white-space: nowrap;">@if ($statusBon[$b->id]['sudah'])<span class="label hijau">✓ Sudah{{ $statusBon[$b->id]['tanggal'] ? ' · '.$statusBon[$b->id]['tanggal']->translatedFormat('j M') : '' }}</span>@else<span class="label merah">Belum</span>@endif</td><td></td></tr>
                         @endforeach
                     </tbody>
                 @empty
-                    <tbody><tr><td colspan="8" class="redup" style="padding: 20px 14px;">Tidak ada transfer yang cocok.</td></tr></tbody>
+                    <tbody><tr><td colspan="9" class="redup" style="padding: 20px 14px;">Tidak ada transfer yang cocok.</td></tr></tbody>
                 @endforelse
             </table>
         </div>

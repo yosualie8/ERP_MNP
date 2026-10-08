@@ -8,6 +8,7 @@ use App\Models\KasBulan;
 use App\Models\KasTransfer;
 use App\Models\KasFoto;
 use App\Models\KodeGl;
+use App\Support\StatusReimburse;
 use App\Support\TulisKasSheet;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -60,10 +61,50 @@ class KasController extends Controller
             }
         }
 
+        // Status reimburse per detail (lembar "Sudah Reimburse") dan per transfer: sudah semua / sebagian / belum.
+        $sudah = StatusReimburse::untuk($transfer->flatMap(fn ($t) => $t->bon->map(fn ($b) => StatusReimburse::idBon($b, $t)))->all());
+        $statusBon = [];
+        $statusTransfer = [];
+        foreach ($transfer as $t) {
+            if ($t->bon->isEmpty()) {
+                $statusTransfer[$t->id] = ['kode' => $t->debet ? 'masuk' : 'kosong'];
+
+                continue;
+            }
+            $tgl = [];
+            foreach ($t->bon as $b) {
+                $id = StatusReimburse::idBon($b, $t);
+                $statusBon[$b->id] = array_key_exists($id, $sudah) ? ['sudah' => true, 'tanggal' => $sudah[$id]] : ['sudah' => false];
+                if ($statusBon[$b->id]['sudah']) {
+                    $tgl[] = $sudah[$id];
+                }
+            }
+            $n = count($tgl);
+            $statusTransfer[$t->id] = [
+                'kode' => $n === $t->bon->count() ? 'sudah' : ($n ? 'sebagian' : 'belum'),
+                'tanggal' => collect($tgl)->filter()->max(), 'sudah' => $n, 'jumlah' => $t->bon->count(),
+                'nilai_belum' => (int) $t->bon->reject(fn ($b) => $statusBon[$b->id]['sudah'])->sum('nominal'),
+            ];
+        }
+        $ringkasStatus = [
+            'belum' => collect($statusTransfer)->whereIn('kode', ['belum', 'sebagian'])->count(),
+            'nilai_belum' => (int) collect($statusTransfer)->sum(fn ($s) => $s['nilai_belum'] ?? 0),
+            'sudah' => collect($statusTransfer)->where('kode', 'sudah')->count(),
+        ];
+        $filterStatus = in_array($request->query('status'), ['belum', 'sudah'], true) ? $request->query('status') : null;
+        if ($filterStatus) {
+            $transfer = $transfer->filter(fn ($t) => $filterStatus === 'sudah'
+                ? $statusTransfer[$t->id]['kode'] === 'sudah'
+                : in_array($statusTransfer[$t->id]['kode'], ['belum', 'sebagian'], true))->values();
+        }
+
         $jumlahFoto = KasFoto::kas()->whereIn('no_id', $transfer->pluck('no_id')->filter())
             ->selectRaw('no_id, COUNT(*) as n')->groupBy('no_id')->pluck('n', 'no_id');
 
-        return view('kas.index', compact('daftarBulan', 'bulan', 'transfer', 'q', 'tanggal', 'daftarTanggal', 'punyaBiaya', 'jumlahFoto') + ['bolehInput' => $request->user()->bolehMenu('input-kas')]);
+        return view('kas.index', compact('daftarBulan', 'bulan', 'transfer', 'q', 'tanggal', 'daftarTanggal', 'punyaBiaya', 'jumlahFoto',
+            'statusBon', 'statusTransfer', 'ringkasStatus', 'filterStatus') + [
+                'bolehInput' => $request->user()->bolehMenu('input-kas'), 'statusPada' => StatusReimburse::diperbaruiPada(),
+            ]);
     }
 
     /** Pengeluaran (jumlah bon) per akun × bulan, bisa disaring per cost center. */

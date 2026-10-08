@@ -69,6 +69,7 @@
         .label { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--latar); color: var(--redup); }
         .label.merah { background: var(--merah-muda); color: var(--merah); }
         .label.hijau { background: var(--sukses-muda); color: var(--sukses); }
+        .label.kuning { background: rgba(224, 165, 38, .16); color: #f0c05a; }
         table.kas { font-size: 13px; }
         table.kas td, table.kas th { padding: 6px; }
         table.kas td:first-child, table.kas th:first-child { padding-left: 14px; }
