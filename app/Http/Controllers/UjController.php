@@ -7,6 +7,7 @@ use App\Models\KasRiwayat;
 use App\Models\UjDetail;
 use App\Models\UjTemuan;
 use App\Models\UjTransaksi;
+use App\Support\BandingPengajuan;
 use App\Support\DaftarBank;
 use App\Support\FotoBon;
 use App\Support\GoogleSheets;
@@ -164,6 +165,7 @@ class UjController extends Controller
             'detail.*.no_do' => ['nullable', 'string', 'max:40'],
             'detail.*.konfirmasi' => ['nullable', 'string', 'max:1000'],
             'detail.*.pengajuan' => ['nullable', 'integer'],
+            'detail.*.alasan_pengajuan' => ['nullable', 'string', 'max:1000'],
             'foto' => ['nullable', 'array', 'max:'.KasFotoController::MAKS_FOTO],
             'foto.*' => KasFotoController::ATURAN['foto.*'],
         ], [
@@ -197,6 +199,8 @@ class UjController extends Controller
                 'konfirmasi' => $rapi($d['konfirmasi'] ?? null),
                 // Detail pengajuan UJ yang direalisasikan oleh baris ini (Input UJ → "Ambil dari pengajuan").
                 'pengajuan' => ! empty($d['pengajuan']) ? (int) $d['pengajuan'] : null,
+                // Alasan bila realisasinya berbeda dari pengajuan (penyesuaian / dialihkan).
+                'alasan_pengajuan' => $rapi($d['alasan_pengajuan'] ?? null),
             ], $data['detail'])),
             'biaya_transfer' => $request->boolean('biaya_transfer'),
             'nominal_biaya' => (int) ($data['nominal_biaya'] ?? TulisUjSheet::BIAYA_TRANSFER),
@@ -232,7 +236,42 @@ class UjController extends Controller
         $kecuali = $request->filled('no_uj') ? UjTransaksi::where('no_uj', $request->integer('no_uj'))->value('id') : null;
         $input = ['tanggal' => $tanggal, 'nama' => trim((string) $request->input('nama')), 'detail' => $detail];
 
-        return response()->json(['temuan' => (object) ValidasiUj::periksa($input, $kecuali, $this->kecualiPengajuan($request))]);
+        // Baris yang diambil dari pengajuan: bandingkan dengan pengajuan aslinya (berbeda = wajib alasan).
+        $pengajuan = [];
+        $rawDetail = (array) $request->input('detail', []);
+        foreach ($detail as $i => $d) {
+            if (! empty($rawDetail[$i]['pengajuan']) && ($p = UjPengajuanDetail::with('pengajuan')->find((int) $rawDetail[$i]['pengajuan']))) {
+                $b = BandingPengajuan::banding($p, $d);
+                if ($b['jenis'] !== BandingPengajuan::SESUAI) {
+                    $pengajuan[$i] = [...$b, 'kode' => $p->pengajuan->kode()];
+                }
+            }
+        }
+
+        return response()->json(['temuan' => (object) ValidasiUj::periksa($input, $kecuali, $this->kecualiPengajuan($request)), 'pengajuan' => (object) $pengajuan]);
+    }
+
+    /**
+     * Perbandingan setiap baris realisasi dengan pengajuannya. Baris yang berbeda wajib beralasan (min. 10 karakter).
+     *
+     * @return array<int, array{jenis: string, beda: array}>|RedirectResponse indeks detail => hasil banding
+     */
+    protected function bandingPengajuan(array $input): array|RedirectResponse
+    {
+        $hasil = [];
+        $kurang = [];
+        $p = UjPengajuanDetail::whereIn('id', collect($input['detail'])->pluck('pengajuan')->filter())->get()->keyBy('id');
+        foreach ($input['detail'] as $i => $d) {
+            if (! $d['pengajuan'] || ! isset($p[$d['pengajuan']])) {
+                continue;
+            }
+            $hasil[$i] = BandingPengajuan::banding($p[$d['pengajuan']], $d);
+            if ($hasil[$i]['jenis'] !== BandingPengajuan::SESUAI && mb_strlen((string) $d['alasan_pengajuan']) < 10) {
+                $kurang[] = 'baris '.($i + 1).' ('.BandingPengajuan::ringkas($hasil[$i]['beda']).')';
+            }
+        }
+
+        return $kurang ? back()->withInput()->with('error', 'Ditolak: realisasi berbeda dari pengajuannya tetapi alasannya belum diisi (min. 10 karakter): '.implode('; ', $kurang).'.') : $hasil;
     }
 
     /**
@@ -297,6 +336,10 @@ class UjController extends Controller
             || UjPengajuanDetail::whereIn('id', $idPengajuan)->where('status', 'menunggu')->count() !== $idPengajuan->count()) {
             return back()->withInput()->with('error', 'Sebagian detail pengajuan yang dipilih sudah direalisasikan atau dibatalkan (mungkin oleh admin lain). Muat ulang, lalu pilih lagi.');
         }
+        $banding = $this->bandingPengajuan($input);
+        if ($banding instanceof RedirectResponse) {
+            return $banding;
+        }
         $temuan = $this->wajibKonfirmasi($input, null, $idPengajuan->all());
         if ($temuan instanceof RedirectResponse) {
             return $temuan;
@@ -311,11 +354,23 @@ class UjController extends Controller
         }
         // Detail ke-i = ID UJ ke-i (biaya transfer tanpa ID ada di bawahnya).
         $terealisasi = 0;
+        $berbeda = 0;
         foreach ($input['detail'] as $i => $d) {
             if ($d['pengajuan'] && isset($hasil['ids'][$i])) {
-                UjPengajuanDetail::where('id', $d['pengajuan'])->update(['status' => 'terealisasi', 'id_uj' => 'UJ-'.$hasil['ids'][$i],
-                    'realisasi_pada' => now(), 'realisasi_oleh' => $request->user()->id]);
+                $b = $banding[$i] ?? ['jenis' => BandingPengajuan::SESUAI, 'beda' => []];
+                $sesuai = $b['jenis'] === BandingPengajuan::SESUAI;
+                // Pengajuan asli tidak diubah; isi realisasinya disimpan di samping (dialihkan = pengajuan selesai, DO tetap dihitung dibiayai).
+                UjPengajuanDetail::where('id', $d['pengajuan'])->update([
+                    'status' => $b['jenis'] === BandingPengajuan::DIALIHKAN ? 'dialihkan' : 'terealisasi', 'id_uj' => 'UJ-'.$hasil['ids'][$i],
+                    'jenis_realisasi' => $b['jenis'], 'alasan' => $sesuai ? null : $d['alasan_pengajuan'],
+                    'realisasi' => $sesuai ? null : json_encode([
+                        ...collect($d)->only(['nama', 'keterangan', 'nominal', 'kategori', 'jenis_kendaraan', 'no_mobil', 'no_do'])->all(),
+                        'id_uj' => 'UJ-'.$hasil['ids'][$i], 'beda' => $b['beda'],
+                    ]),
+                    'realisasi_pada' => now(), 'realisasi_oleh' => $request->user()->id,
+                ]);
                 $terealisasi++;
+                $berbeda += $sesuai ? 0 : 1;
             }
         }
         UjPengajuan::whereIn('id', UjPengajuanDetail::whereIn('id', $idPengajuan)->pluck('uj_pengajuan_id')->unique())->get()->each->hitungStatus();
@@ -333,7 +388,7 @@ class UjController extends Controller
             'Tersimpan di Kas Seabank baris '.$hasil['baris_awal'].'–'.$hasil['baris_akhir'].' (UJ-'.reset($hasil['ids']).(count($hasil['ids']) > 1 ? ' s/d UJ-'.end($hasil['ids']) : '')
             .($hasil['id_biaya'] ? ', biaya transfer UJ-'.$hasil['id_biaya'] : '').'): '
             .$this->ringkasanInput($input).'.'.($jumlahFoto ? " {$jumlahFoto} foto bon terlampir." : '')
-            .($terealisasi ? " {$terealisasi} detail pengajuan tercatat terealisasi." : '').$pesanImpor);
+            .($terealisasi ? " {$terealisasi} detail pengajuan tercatat terealisasi".($berbeda ? " ({$berbeda} berbeda dari pengajuannya, tercatat beserta alasannya)" : '').'.' : '').$pesanImpor);
     }
 
     public function edit(int $noUj): View|RedirectResponse
@@ -438,7 +493,8 @@ class UjController extends Controller
         // Detail pengajuan yang direalisasikan oleh transaksi ini kembali "menunggu" (bisa direalisasikan ulang).
         $kembali = UjPengajuanDetail::whereIn('id_uj', $t->detail->pluck('id_uj')->filter())->get();
         if ($kembali->isNotEmpty()) {
-            UjPengajuanDetail::whereIn('id', $kembali->pluck('id'))->update(['status' => 'menunggu', 'id_uj' => null, 'realisasi_pada' => null, 'realisasi_oleh' => null]);
+            UjPengajuanDetail::whereIn('id', $kembali->pluck('id'))->update(['status' => 'menunggu', 'id_uj' => null, 'jenis_realisasi' => null, 'alasan' => null,
+                'realisasi' => null, 'realisasi_pada' => null, 'realisasi_oleh' => null]);
             UjPengajuan::whereIn('id', $kembali->pluck('uj_pengajuan_id')->unique())->get()->each->hitungStatus();
         }
         KasRiwayat::create([

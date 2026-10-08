@@ -47,6 +47,15 @@ class ValidasiUj
             ->with('pengajuan')->orderBy('id')->get()
             ->map(fn ($d) => self::baris($d->pengajuan->kode().' (diajukan)', $d->pengajuan->tanggal, $d->nama ?: $d->pengajuan->nama, $d->keterangan, (int) $d->nominal,
                 $d->kategori, $d->jenis_kendaraan, $d->no_mobil, $d->no_do)));
+        // Pengajuan yang dananya dialihkan: DO-nya tetap dihitung sudah dibiayai sesuai pengajuan aslinya — kecuali baris
+        // realisasinya di Kas UJ sudah memuat DO & jenis kategori yang sama (supaya tidak terhitung dua kali).
+        $histori = $histori->concat(\App\Models\UjPengajuanDetail::query()->where('status', 'dialihkan')
+            ->whereHas('pengajuan', fn ($q) => $q->whereBetween('tanggal', $rentang))
+            ->with('pengajuan')->orderBy('id')->get()
+            ->reject(fn ($d) => self::kunciDo($d->realisasi['no_do'] ?? null) === self::kunciDo($d->no_do)
+                && self::jenisKategori($d->realisasi['kategori'] ?? null) === self::jenisKategori($d->kategori))
+            ->map(fn ($d) => self::baris($d->pengajuan->kode().' (dialihkan ke '.$d->id_uj.')', $d->pengajuan->tanggal, $d->nama, $d->keterangan, (int) $d->nominal,
+                $d->kategori, $d->jenis_kendaraan, $d->no_mobil, $d->no_do)));
 
         // Jenis kendaraan per DT dari seluruh histori (bukan hanya 30 hari).
         $jenisDt = UjDetail::whereNotNull('no_mobil')->whereNotNull('jenis_kendaraan')

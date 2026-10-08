@@ -93,6 +93,19 @@
         table.pj-tabel tr.dipilih td { background: rgba(76, 195, 138, .14); }
         .pj-alat { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 0 0 8px; font-size: 13px; }
         table.bon tr.dari-pengajuan td:first-child { box-shadow: inset 4px 0 0 var(--otomatis-garis); }
+        table.bon tr.beda-baris td { padding: 0 4px 10px; }
+        .beda-pj { border: 1px solid #3d4f86; border-left: 4px solid #6c8cff; background: #121a2e; border-radius: 8px; padding: 8px 12px; font-size: 13px; }
+        .beda-pj.dialihkan { border-color: #7a4a86; border-left-color: #c77dff; background: #1d1426; }
+        .beda-pj .judul-beda { font-weight: 600; margin-bottom: 4px; color: #a9bbff; }
+        .beda-pj.dialihkan .judul-beda { color: #dcb3ff; }
+        .beda-pj ul { margin: 0 0 8px; padding-left: 18px; }
+        .beda-pj li { margin: 2px 0; }
+        .beda-pj del { color: var(--redup); }
+        .beda-pj label { display: block; color: var(--teks); font-size: 12px; margin: 0; }
+        .beda-pj input[data-alasan] { margin-top: 4px; }
+        .beda-pj input[data-alasan].kosong { border-color: var(--aksen); box-shadow: 0 0 0 2px var(--aksen-muda); }
+        .beda-pj .status-alasan { margin-top: 4px; font-size: 12px; color: var(--merah); }
+        .beda-pj .status-alasan.ok { color: var(--sukses); }
     </style>
 
     @php($edit ??= null)
@@ -310,6 +323,8 @@
                 tr.querySelectorAll('[data-nama]').forEach(el => el.name = `detail[${i}][${el.dataset.nama}]`);
                 const k = tr.temuan?.querySelector('[data-konfirmasi]');
                 if (k) k.name = `detail[${i}][konfirmasi]`;
+                const a = tr.bedaEl?.querySelector('[data-alasan]');
+                if (a) a.name = `detail[${i}][alasan_pengajuan]`;
                 // Tautan ke detail Pengajuan UJ yang direalisasikan baris ini (hanya bila diambil dari pengajuan).
                 const p = tr.querySelector('.pengajuan-kunci');
                 p.name = p.value ? `detail[${i}][pengajuan]` : '';
@@ -366,7 +381,7 @@
                 tr.querySelectorAll('input.rupiah').forEach(rapikanRupiah);
                 tr.konfirmasi = isi.konfirmasi ?? '';
                 tr.querySelector('.hapus').addEventListener('click', () => {
-                    if (barisDetail().length > 1) { tr.temuan?.remove(); tr.kurangEl?.remove(); tr.remove(); urutkanNama(); hitung(); aturNamaPertama(); }
+                    if (barisDetail().length > 1) { tr.temuan?.remove(); tr.kurangEl?.remove(); tr.bedaEl?.remove(); tr.remove(); urutkanNama(); hitung(); aturNamaPertama(); }
                 });
                 daftar.appendChild(tr);
                 urutkanNama();
@@ -781,6 +796,33 @@
                 urutkanNama();
                 return jumlah;
             };
+            // Baris dari pengajuan yang isinya berbeda dengan pengajuannya: tampilkan perbandingan + alasan wajib (hasil server).
+            const tampilBeda = beda => {
+                barisDetail().forEach((tr, i) => {
+                    if (tr.bedaEl) tr.alasan = tr.bedaEl.querySelector('[data-alasan]').value;
+                    tr.bedaEl?.remove();
+                    tr.bedaEl = null;
+                    const b = beda[i];
+                    if (!b) return;
+                    const dialih = b.jenis === 'dialihkan';
+                    const t = document.createElement('tr');
+                    t.className = 'beda-baris';
+                    t.innerHTML = `<td colspan="8"><div class="beda-pj ${dialih ? 'dialihkan' : ''}">
+                        <div class="judul-beda">${dialih
+                            ? `↪ Baris ${i + 1} DIALIHKAN dari pengajuan ${esc2(b.kode)} — dana dipakai untuk keperluan lain. Pengajuan aslinya selesai (tidak bisa direalisasikan lagi) dan DO-nya tetap terhitung sudah dibiayai.`
+                            : `≠ Baris ${i + 1} berbeda dari pengajuan ${esc2(b.kode)} (penyesuaian)`}</div>
+                        <ul>${b.beda.map(x => `<li>${esc2(x.kolom)}: <del>${esc2(x.lama)}</del> → <b>${esc2(x.baru)}</b></li>`).join('')}</ul>
+                        <label>Alasan ${dialih ? 'pengalihan' : 'perbedaan'} <span class="redup">(wajib, min. ${MIN_KONFIRMASI} karakter — tampil ke owner di menu Pengajuan UJ)</span>
+                            <input type="text" data-alasan maxlength="1000" autocomplete="off"></label>
+                        <div class="status-alasan"></div></div></td>`;
+                    const a = t.querySelector('[data-alasan]');
+                    a.value = tr.alasan || '';
+                    a.addEventListener('input', () => { tr.alasan = a.value; evaluasi(false); });
+                    (tr.temuan ?? tr.kurangEl ?? tr).after(t);
+                    tr.bedaEl = t;
+                });
+                urutkanNama();
+            };
             // Lapis 3: setiap baris ber-FLAG wajib punya konfirmasi yang memadai.
             const cekKonfirmasi = () => {
                 const masalah = [];
@@ -798,6 +840,21 @@
                     baris.push(i + 1);
                 });
                 if (baris.length) masalah.push(`${baris.length} transaksi detail kena FLAG validasi dan belum dikonfirmasi (baris ${baris.join(', ')}) — alasan & kotak konfirmasinya ada tepat di bawah barisnya.`);
+                // Realisasi yang berbeda dari pengajuannya wajib beralasan.
+                const tanpaAlasan = [];
+                barisDetail().forEach((tr, i) => {
+                    const a = tr.bedaEl?.querySelector('[data-alasan]');
+                    if (!a) return;
+                    const isi = a.value.trim();
+                    const status = tr.bedaEl.querySelector('.status-alasan');
+                    a.classList.toggle('kosong', isi.length < MIN_KONFIRMASI);
+                    if (isi.length >= MIN_KONFIRMASI) { status.className = 'status-alasan ok'; status.textContent = '✓ Alasan terisi'; return; }
+                    status.className = 'status-alasan';
+                    status.textContent = isi ? `✗ Alasan terlalu singkat (${isi.length}/${MIN_KONFIRMASI} karakter).` : '✗ Alasan belum diisi.';
+                    pertama ??= a;
+                    tanpaAlasan.push(i + 1);
+                });
+                if (tanpaAlasan.length) masalah.push(`${tanpaAlasan.length} transaksi berbeda dari pengajuannya dan belum diberi alasan (baris ${tanpaAlasan.join(', ')}) — isi alasannya di kotak tepat di bawah barisnya.`);
                 return {masalah, pertama};
             };
             // Status validasi dihitung terus saat admin mengisi. Tombol Simpan hanya menyala bila SEMUA transaksi valid:
@@ -806,7 +863,7 @@
             const teksSimpan = @json($teksTombol);
             const kunciIsi = () => {
                 const d = new FormData(form);
-                return JSON.stringify([...d.entries()].filter(([k, v]) => typeof v === 'string' && !/konfirmasi|_token|_method|versi/.test(k)));
+                return JSON.stringify([...d.entries()].filter(([k, v]) => typeof v === 'string' && !/konfirmasi|alasan_pengajuan|_token|_method|versi/.test(k)));
             };
             let diperiksa = null;   // kunciIsi() yang terakhir lolos pemeriksaan server
             let memeriksa = null;   // kunciIsi() yang sedang diperiksa
@@ -832,6 +889,7 @@
                     } else {
                         galatServer = [];
                         tampilTemuan(hasil.temuan || {});
+                        tampilBeda(hasil.pengajuan || {});
                         diperiksa = kunci;
                     }
                 } catch (err) {
@@ -846,7 +904,8 @@
             // sudah dikonfirmasi) berlatar hijau.
             const warnaiBaris = sudahDiperiksa => barisDetail().forEach(tr => {
                 const k = tr.temuan?.querySelector('[data-konfirmasi]');
-                const konfOk = !k || k.value.trim().length >= MIN_KONFIRMASI;
+                const a = tr.bedaEl?.querySelector('[data-alasan]');
+                const konfOk = (!k || k.value.trim().length >= MIN_KONFIRMASI) && (!a || a.value.trim().length >= MIN_KONFIRMASI);
                 tr.classList.toggle('valid', sudahDiperiksa && !tr.kurang?.length && konfOk);
             });
             const evaluasi = (bolehPeriksa = true) => {
@@ -875,7 +934,7 @@
                     return;
                 }
                 if (konf.masalah.length) {
-                    aturTombol(false, 'Ada transaksi ber-FLAG yang belum dikonfirmasi');
+                    aturTombol(false, 'Ada transaksi ber-FLAG yang belum dikonfirmasi / realisasi berbeda yang belum diberi alasan');
                     tampilMasalah('Simpan belum aktif:', konf.masalah);
                     return;
                 }
@@ -885,7 +944,7 @@
                 kotakValidasi.hidden = false;
                 kotakValidasi.textContent = '✓ Semua transaksi tervalidasi' + (jumlahFlag ? ` (${jumlahFlag} baris ber-FLAG sudah dikonfirmasi)` : '') + ' — siap disimpan.';
             };
-            form.addEventListener('input', e => { if (!e.target.matches('[data-konfirmasi]')) evaluasi(); });
+            form.addEventListener('input', e => { if (!e.target.matches('[data-konfirmasi], [data-alasan]')) evaluasi(); });
             form.addEventListener('change', () => evaluasi());
             daftar.addEventListener('click', e => { if (e.target.closest('.hapus')) setTimeout(evaluasi); });
             document.getElementById('tambah-bon').addEventListener('click', () => setTimeout(evaluasi));
@@ -918,7 +977,7 @@
             };
             document.getElementById('lepas-pengajuan')?.addEventListener('click', () => {
                 if (!confirm('Lepas tautan ke pengajuan? Detail tetap di form, tetapi pengajuannya tidak akan tercatat terealisasi.')) return;
-                barisDetail().forEach(tr => { tr.querySelector('.pengajuan-kunci').value = ''; tr.classList.remove('dari-pengajuan'); tr.title = ''; });
+                barisDetail().forEach(tr => { tr.querySelector('.pengajuan-kunci').value = ''; tr.classList.remove('dari-pengajuan'); tr.title = ''; tr.bedaEl?.remove(); tr.bedaEl = null; });
                 urutkanNama(); tampilModePj(); evaluasi();
             });
             tampilModePj();
@@ -993,7 +1052,7 @@
                     const adaIsi = barisDetail().some(tr => tr.querySelector('[data-nama=keterangan]').value.trim() || tr.querySelector('[data-nama=nominal]').value.trim());
                     if (adaIsi && !confirm('Detail di form sekarang akan diganti dengan detail pengajuan yang dipilih. Lanjutkan?')) return;
                     // Pengajuan tidak punya penerima: penerima transfer & rekeningnya diisi admin; nominal master = jumlah detail terpilih.
-                    barisDetail().forEach(tr => { tr.temuan?.remove(); tr.kurangEl?.remove(); tr.remove(); });
+                    barisDetail().forEach(tr => { tr.temuan?.remove(); tr.kurangEl?.remove(); tr.bedaEl?.remove(); tr.remove(); });
                     pilih.forEach(b => {
                         const {p, pilih: _, kode, tgl, oleh, ...d} = b;
                         const tr = tambah({...d, nama: d.nama || p.nama, kode: p.kode});

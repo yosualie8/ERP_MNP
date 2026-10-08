@@ -36,7 +36,7 @@ class UjPengajuan extends Model
     public function hitungStatus(): void
     {
         $d = $this->detail()->get();
-        $real = $d->where('status', 'terealisasi')->count();
+        $real = $d->whereIn('status', ['terealisasi', 'dialihkan'])->count(); // dialihkan = dana sudah keluar
         $tunggu = $d->where('status', 'menunggu')->count();
         $this->update(['status' => $tunggu === 0 ? ($real ? 'selesai' : 'batal') : ($real ? 'sebagian' : 'diajukan')]);
     }

@@ -20,12 +20,19 @@ class PengajuanUjController extends UjController
     public function daftar(Request $request): View
     {
         $status = array_key_exists($request->query('status'), UjPengajuan::STATUS) ? $request->query('status') : null;
+        $beda = $request->boolean('beda');
         $semua = UjPengajuan::with(['detail', 'user'])->orderByDesc('tanggal')->orderByDesc('id')->get();
         $terbuka = fn ($p) => in_array($p->status, ['diajukan', 'sebagian'], true);
+        $adaBeda = fn ($p) => $p->detail->contains(fn ($d) => $d->berbeda());
+        $detailBeda = $semua->flatMap->detail->filter(fn ($d) => $d->berbeda());
 
         return view('uj.pengajuan', [
-            'pengajuan' => $status ? $semua->where('status', $status)->values() : $semua->filter($terbuka)->merge($semua->reject($terbuka)->take(50))->values(),
-            'semua' => $semua, 'status' => $status,
+            'pengajuan' => match (true) {
+                $beda => $semua->filter($adaBeda)->values(),
+                (bool) $status => $semua->where('status', $status)->values(),
+                default => $semua->filter($terbuka)->merge($semua->reject($terbuka)->take(50))->values(),
+            },
+            'semua' => $semua, 'status' => $status, 'beda' => $beda, 'detailBeda' => $detailBeda,
             'menunggu' => UjPengajuanDetail::where('status', 'menunggu')->selectRaw('COUNT(*) n, SUM(nominal) s')->first(),
             'bolehRealisasi' => $request->user()->bolehMenu('input-uj'),
         ]);
