@@ -64,7 +64,7 @@
         /* Pemilih periode: Tahun · Jan–Des · Bulan mulai/akhir (partials/periode). */
         .periode { display: flex; align-items: flex-end; gap: 10px 14px; flex-wrap: wrap; margin-bottom: 12px; }
         .periode-isian { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--redup); }
-        .periode select { padding: 7px 10px; border-radius: 7px; font-size: 14px; min-width: 92px; border: 1px solid var(--garis-kuat); }
+        .periode select { padding: 7px 10px; border-radius: 7px; font-size: 14px; min-width: 120px; border: 1px solid var(--garis-kuat); }
         .periode select:focus { outline: none; border-color: var(--aksen); }
         .periode-bulan { display: flex; flex-wrap: wrap; gap: 4px; }
         .periode-bulan .chip { margin: 0; min-width: 46px; text-align: center; }

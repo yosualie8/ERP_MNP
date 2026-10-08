@@ -4,6 +4,7 @@
 --}}
 @php($bawa = array_filter($bawa ?? [], fn ($v) => $v !== null && $v !== ''))
 @php($namaBulan = collect(range(1, 12))->mapWithKeys(fn ($m) => [$m => \Illuminate\Support\Carbon::create(2000, $m, 1)->translatedFormat('M')]))
+@php($namaLengkap = collect(range(1, 12))->mapWithKeys(fn ($m) => [$m => \Illuminate\Support\Carbon::create(2000, $m, 1)->translatedFormat('F')]))
 <form method="GET" action="{{ route($rute) }}" class="periode" id="form-periode">
     @foreach ($bawa as $k => $v)
         <input type="hidden" name="{{ $k }}" value="{{ $v }}">
@@ -25,14 +26,14 @@
     </div>
     <label class="periode-isian">Bulan mulai
         <select name="dari" class="periode-rentang">
-            @foreach ($namaBulan as $m => $nama)
+            @foreach ($namaLengkap as $m => $nama)
                 <option value="{{ $m }}" @selected($m === $periode->dari)>{{ $nama }}</option>
             @endforeach
         </select>
     </label>
     <label class="periode-isian">Bulan akhir
         <select name="sampai" class="periode-rentang">
-            @foreach ($namaBulan as $m => $nama)
+            @foreach ($namaLengkap as $m => $nama)
                 <option value="{{ $m }}" @selected($m === $periode->sampai)>{{ $nama }}</option>
             @endforeach
         </select>
