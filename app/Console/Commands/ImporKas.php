@@ -26,14 +26,21 @@ class ImporKas extends Command
             $pilihan = [now()->format('my'), now()->subMonthNoOverflow()->format('my')];
         }
 
-        $sumber = ($folder = $this->option('dari-folder')) ? $this->dariFolder($folder, $pilihan) : Impor::ambilDariSheet($pilihan);
-        if (! $sumber) {
+        $folder = $this->option('dari-folder');
+        if (! $folder && $this->option('simpan')) {
+            // Dari sheet + simpan: baca & simpan di bawah kunci tulis (lihat ImporKas::imporUlang).
+            $hasil = Impor::imporUlang($pilihan);
+            $disimpan = true;
+        } else {
+            $sumber = $folder ? $this->dariFolder($folder, $pilihan) : Impor::ambilDariSheet($pilihan);
+            $hasil = $sumber ? Impor::baca($sumber) : [];
+        }
+        if (! $hasil) {
             $this->error('Tidak ada lembar bulanan (format BBTT) yang cocok.');
 
             return self::FAILURE;
         }
 
-        $hasil = Impor::baca($sumber);
         $baris = [];
         foreach ($hasil as $h) {
             foreach ($h['catatan'] as $c) {
@@ -50,7 +57,9 @@ class ImporKas extends Command
             return self::SUCCESS;
         }
 
-        (new Impor)->simpan($hasil);
+        if (empty($disimpan)) {
+            (new Impor)->simpan($hasil);
+        }
         $this->info('Tersimpan: '.implode(', ', array_keys($hasil)).'.');
 
         return self::SUCCESS;

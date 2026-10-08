@@ -16,6 +16,22 @@ class ImporKas
 {
     private array $cacheKode = [];
 
+    /**
+     * Baca lembar dari sheet lalu simpan, di bawah kunci yang sama dengan penulisan ke sheet (tulis-kas-sheet):
+     * impor berkala tidak boleh membaca sheet tepat sebelum aplikasi menulis lalu menimpa hasilnya dengan data lama.
+     *
+     * @return array<string, array> hasil baca per lembar
+     */
+    public static function imporUlang(array $lembar = []): array
+    {
+        return \Illuminate\Support\Facades\Cache::lock('tulis-kas-sheet', 120)->block(90, function () use ($lembar) {
+            $hasil = self::baca(self::ambilDariSheet($lembar));
+            (new self)->simpan($hasil);
+
+            return $hasil;
+        });
+    }
+
     /** @return array<string, array> lembar => baris nilai, diurutkan per bulan */
     public static function ambilDariSheet(array $pilihan = []): array
     {

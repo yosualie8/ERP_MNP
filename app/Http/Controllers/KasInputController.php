@@ -455,7 +455,7 @@ class KasInputController extends Controller
     private function imporUlang(string $lembar): string
     {
         try {
-            (new ImporKas)->simpan(ImporKas::baca(ImporKas::ambilDariSheet([$lembar])));
+            ImporKas::imporUlang([$lembar]);
 
             return '';
         } catch (\Throwable $e) {
@@ -471,8 +471,7 @@ class KasInputController extends Controller
         // Satu lembar ("1026") atau beberapa sekaligus untuk periode lebih dari sebulan ("0926,1026").
         $lembar = explode(',', $request->validate(['lembar' => ['required', 'regex:/^\d{4}(,\d{4})*$/']])['lembar']);
         try {
-            $hasil = ImporKas::baca(ImporKas::ambilDariSheet($lembar));
-            (new ImporKas)->simpan($hasil);
+            $hasil = ImporKas::imporUlang($lembar);
         } catch (\Throwable $e) {
             report($e);
 

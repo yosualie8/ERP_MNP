@@ -73,7 +73,7 @@ class KasNoMobil extends Command
                     $sheets->tulis($id, $potong);
                 }
             });
-            (new ImporKas)->simpan(ImporKas::baca(ImporKas::ambilDariSheet([$lembar])));
+            ImporKas::imporUlang([$lembar]);
             $this->line("  {$lembar}: ditulis & diimpor ulang");
         }
         KasRiwayat::create(['aksi' => 'kas-no-mobil', 'lembar' => 'Kas', 'baris_awal' => 0, 'baris_akhir' => 0,
