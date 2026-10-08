@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AsetController;
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\KasController;
@@ -41,6 +42,14 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::delete('/kas/foto/{foto}', [KasFotoController::class, 'destroy'])->name('kas.foto.destroy');
     Route::post('/kas/sinkron', [KasInputController::class, 'sinkron'])->name('kas.sinkron');
     Route::get('/kas/rekap', [KasController::class, 'rekap'])->name('kas.rekap');
+    Route::get('/aset', [AsetController::class, 'index'])->name('aset.index');
+    Route::get('/aset/tambah', [AsetController::class, 'create'])->name('aset.create');
+    Route::post('/aset', [AsetController::class, 'store'])->name('aset.store');
+    Route::get('/aset/temuan', [AsetController::class, 'temuan'])->name('aset.temuan');
+    Route::get('/aset/temuan.xlsx', [AsetController::class, 'temuanExcel'])->name('aset.temuan.excel');
+    Route::get('/aset/{aset}', [AsetController::class, 'show'])->whereNumber('aset')->name('aset.show');
+    Route::get('/aset/{aset}/edit', [AsetController::class, 'edit'])->whereNumber('aset')->name('aset.edit');
+    Route::put('/aset/{aset}', [AsetController::class, 'update'])->whereNumber('aset')->name('aset.update');
     Route::get('/kas/reimburse', [ReimburseKasController::class, 'index'])->name('kas.reimburse');
     Route::get('/kas/belum-reimburse.xlsx', [ReimburseKasController::class, 'unduhBelum'])->name('kas.belum-reimburse');
     Route::post('/kas/reimburse', [ReimburseKasController::class, 'simpan'])->name('kas.reimburse.simpan');
