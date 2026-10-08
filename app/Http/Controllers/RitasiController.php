@@ -31,7 +31,8 @@ class RitasiController extends Controller
     /** Monitor Ritasi: DO yang sudah ada uang jalannya di Kas UJ tetapi belum ada di data Ritasi (belum bongkar). */
     public function monitor(Request $request): View
     {
-        $umur = in_array($request->query('umur'), ['7', '30', 'lama'], true) ? $request->query('umur') : null;
+        // Umur DO: ≤ 7 hari, ≤ 30 hari, atau all time (bawaan).
+        $umur = in_array($request->query('umur'), ['7', '30'], true) ? $request->query('umur') : null;
         $q = trim((string) $request->query('q'));
         ['do' => $semua, 'bukan_angka' => $bukanAngka] = MonitorRitasi::belumBongkar();
         // Tujuan buangan DO = tujuan buangan truk-truknya, hanya truk yang terdaftar di Buangan Truck (aktif 30 hari terakhir)
@@ -40,12 +41,7 @@ class RitasiController extends Controller
         $semua = $semua->map(fn ($d) => [...$d, 'buangan' => collect($d['mobil'])->map(fn ($m) => $tujuanTruk[$m] ?? null)->filter()->unique()->values()->all()]);
         $tujuan = trim((string) $request->query('tujuan'));
         $cocokTujuan = fn ($d) => $tujuan === '' || ($tujuan === BuanganTruk::TANPA ? ! $d['buangan'] : in_array($tujuan, $d['buangan'], true));
-        $cocokUmur = fn ($d) => match ($umur) {
-            '7' => $d['umur'] !== null && $d['umur'] <= 7,
-            '30' => $d['umur'] !== null && $d['umur'] > 7 && $d['umur'] <= 30,
-            'lama' => $d['umur'] === null || $d['umur'] > 30,
-            default => true,
-        };
+        $cocokUmur = fn ($d) => $umur === null || ($d['umur'] !== null && $d['umur'] <= (int) $umur);
         $kata = array_filter(preg_split('/\s+/', mb_strtolower($q)));
         $cocokCari = fn ($d) => ! $kata || collect($kata)->every(fn ($w) => str_contains(mb_strtolower(implode(' ', [
             $d['do'], implode(' ', $d['mobil']), implode(' ', $d['driver']), (string) $d['tujuan'], implode(' ', $d['kategori']),
@@ -60,7 +56,7 @@ class RitasiController extends Controller
             'jumlahTanpa' => $semua->filter($cocokUmur)->filter(fn ($d) => ! $d['buangan'])->count(),
             'jumlahUmur' => [
                 '7' => $hitung(fn ($d) => $d['umur'] !== null && $d['umur'] <= 7),
-                '30' => $hitung(fn ($d) => $d['umur'] !== null && $d['umur'] > 7 && $d['umur'] <= 30),
+                '30' => $hitung(fn ($d) => $d['umur'] !== null && $d['umur'] <= 30),
                 'lama' => $hitung(fn ($d) => $d['umur'] === null || $d['umur'] > 30),
             ],
             'ritasiTerakhir' => Ritasi::max('tanggal'),
