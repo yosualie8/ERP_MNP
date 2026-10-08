@@ -9,6 +9,7 @@ use App\Models\UjDetail;
 use App\Support\GoogleSheets;
 use App\Support\KasSeabank;
 use App\Support\LembarRitasi;
+use App\Support\MonitorRitasi;
 use App\Support\NomorMobil;
 use App\Support\TebakGalian;
 use App\Support\TulisRitasiSheet;
@@ -25,6 +26,37 @@ use Illuminate\View\View;
 class RitasiController extends Controller
 {
     private const MIN_KONFIRMASI = 10;
+
+    /** Monitor Ritasi: DO yang sudah ada uang jalannya di Kas UJ tetapi belum ada di data Ritasi (belum bongkar). */
+    public function monitor(Request $request): View
+    {
+        $umur = in_array($request->query('umur'), ['7', '30', 'lama'], true) ? $request->query('umur') : null;
+        $q = trim((string) $request->query('q'));
+        ['do' => $semua, 'bukan_angka' => $bukanAngka] = MonitorRitasi::belumBongkar();
+        $cocokUmur = fn ($d) => match ($umur) {
+            '7' => $d['umur'] !== null && $d['umur'] <= 7,
+            '30' => $d['umur'] !== null && $d['umur'] > 7 && $d['umur'] <= 30,
+            'lama' => $d['umur'] === null || $d['umur'] > 30,
+            default => true,
+        };
+        $kata = array_filter(preg_split('/\s+/', mb_strtolower($q)));
+        $cocokCari = fn ($d) => ! $kata || collect($kata)->every(fn ($w) => str_contains(mb_strtolower(implode(' ', [
+            $d['do'], implode(' ', $d['mobil']), implode(' ', $d['driver']), (string) $d['tujuan'], implode(' ', $d['kategori']),
+            collect($d['detail'])->map(fn ($x) => $x->keterangan.' '.$x->id_uj)->implode(' '),
+        ])), $w));
+        $hitung = fn ($f) => $semua->filter($f)->count();
+
+        return view('ritasi.monitor', [
+            'daftar' => $semua->filter($cocokUmur)->filter($cocokCari)->values(),
+            'semua' => $semua, 'umur' => $umur, 'q' => $q, 'bukanAngka' => $bukanAngka,
+            'jumlahUmur' => [
+                '7' => $hitung(fn ($d) => $d['umur'] !== null && $d['umur'] <= 7),
+                '30' => $hitung(fn ($d) => $d['umur'] !== null && $d['umur'] > 7 && $d['umur'] <= 30),
+                'lama' => $hitung(fn ($d) => $d['umur'] === null || $d['umur'] > 30),
+            ],
+            'ritasiTerakhir' => Ritasi::max('tanggal'),
+        ]);
+    }
 
     public function index(Request $request): View
     {

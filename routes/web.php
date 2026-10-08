@@ -75,6 +75,7 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::post('/uj/pengajuan/{pengajuan}/batal', [PengajuanUjController::class, 'batal'])->whereNumber('pengajuan')->name('pengajuan-uj.batal');
     // Ritasi dump truck (lembar "Ritasi").
     Route::get('/ritasi', [RitasiController::class, 'index'])->name('ritasi.index');
+    Route::get('/ritasi/monitor', [RitasiController::class, 'monitor'])->name('ritasi.monitor');
     Route::get('/ritasi/input', [RitasiController::class, 'create'])->name('ritasi.input');
     Route::post('/ritasi/input', [RitasiController::class, 'store'])->name('ritasi.store');
     Route::post('/ritasi/periksa', [RitasiController::class, 'periksa'])->name('ritasi.periksa');
