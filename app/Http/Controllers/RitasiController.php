@@ -6,6 +6,7 @@ use App\Models\KasRiwayat;
 use App\Models\Ritasi;
 use App\Models\RitasiTemuan;
 use App\Models\UjDetail;
+use App\Support\BuanganTruk;
 use App\Support\GoogleSheets;
 use App\Support\KasSeabank;
 use App\Support\LembarRitasi;
@@ -33,6 +34,11 @@ class RitasiController extends Controller
         $umur = in_array($request->query('umur'), ['7', '30', 'lama'], true) ? $request->query('umur') : null;
         $q = trim((string) $request->query('q'));
         ['do' => $semua, 'bukan_angka' => $bukanAngka] = MonitorRitasi::belumBongkar();
+        // Tujuan buangan DO = tujuan buangan truk-truknya (menu Buangan Truck; bawaannya tahap rit terakhir truk).
+        $tujuanTruk = BuanganTruk::tujuan();
+        $semua = $semua->map(fn ($d) => [...$d, 'buangan' => collect($d['mobil'])->map(fn ($m) => $tujuanTruk[$m]['tujuan'] ?? null)->filter()->unique()->values()->all()]);
+        $tujuan = trim((string) $request->query('tujuan'));
+        $cocokTujuan = fn ($d) => $tujuan === '' || ($tujuan === '(belum ada)' ? ! $d['buangan'] : in_array($tujuan, $d['buangan'], true));
         $cocokUmur = fn ($d) => match ($umur) {
             '7' => $d['umur'] !== null && $d['umur'] <= 7,
             '30' => $d['umur'] !== null && $d['umur'] > 7 && $d['umur'] <= 30,
@@ -47,8 +53,9 @@ class RitasiController extends Controller
         $hitung = fn ($f) => $semua->filter($f)->count();
 
         return view('ritasi.monitor', [
-            'daftar' => $semua->filter($cocokUmur)->filter($cocokCari)->values(),
-            'semua' => $semua, 'umur' => $umur, 'q' => $q, 'bukanAngka' => $bukanAngka,
+            'daftar' => $semua->filter($cocokUmur)->filter($cocokCari)->filter($cocokTujuan)->values(),
+            'semua' => $semua, 'umur' => $umur, 'q' => $q, 'tujuan' => $tujuan, 'bukanAngka' => $bukanAngka,
+            'jumlahTujuan' => $semua->filter($cocokUmur)->flatMap(fn ($d) => $d['buangan'] ?: ['(belum ada)'])->countBy()->sortDesc(),
             'jumlahUmur' => [
                 '7' => $hitung(fn ($d) => $d['umur'] !== null && $d['umur'] <= 7),
                 '30' => $hitung(fn ($d) => $d['umur'] !== null && $d['umur'] > 7 && $d['umur'] <= 30),

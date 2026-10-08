@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AsetController;
 use App\Http\Controllers\Auth\GoogleController;
+use App\Http\Controllers\BuanganTrukController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\KasController;
 use App\Http\Controllers\KasFotoController;
@@ -76,6 +77,8 @@ Route::middleware(['auth', 'menu'])->group(function () {
     // Ritasi dump truck (lembar "Ritasi").
     Route::get('/ritasi', [RitasiController::class, 'index'])->name('ritasi.index');
     Route::get('/ritasi/monitor', [RitasiController::class, 'monitor'])->name('ritasi.monitor');
+    Route::get('/ritasi/buangan', [BuanganTrukController::class, 'index'])->name('ritasi.buangan');
+    Route::post('/ritasi/buangan', [BuanganTrukController::class, 'simpan'])->name('ritasi.buangan.simpan');
     Route::get('/ritasi/input', [RitasiController::class, 'create'])->name('ritasi.input');
     Route::post('/ritasi/input', [RitasiController::class, 'store'])->name('ritasi.store');
     Route::post('/ritasi/periksa', [RitasiController::class, 'periksa'])->name('ritasi.periksa');

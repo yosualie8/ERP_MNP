@@ -21,7 +21,8 @@ class MenuAkses
         'rapikan-uj' => ['Rapikan Kas UJ', 'uj.rapikan', ['uj.rapikan', 'uj.rapikan.*'], 'Mengisi No Mobil yang kosong di Kas UJ (ditulis ke sheet)'],
         'input-ritasi' => ['Input Ritasi', 'ritasi.input', ['ritasi.input', 'ritasi.store', 'ritasi.periksa', 'ritasi.edit', 'ritasi.update', 'ritasi.hapus'], 'Input, edit & hapus ritasi dump truck'],
         'ritasi' => ['Ritasi', 'ritasi.index', ['ritasi.index', 'ritasi.sinkron'], 'Melihat daftar ritasi dump truck'],
-        'monitor-ritasi' => ['Monitor Ritasi', 'ritasi.monitor', ['ritasi.monitor'], 'DO yang sudah ada uang jalannya di Kas UJ tetapi belum ada di data Ritasi (belum bongkar)'],
+        'buangan-truk' => ['Buangan Truck', 'ritasi.buangan', ['ritasi.buangan', 'ritasi.buangan.*'], 'Truk aktif 30 hari terakhir & tujuan buangannya; ubah tujuan buangan'],
+        'monitor-ritasi' =>['Monitor Ritasi', 'ritasi.monitor', ['ritasi.monitor'], 'DO yang sudah ada uang jalannya di Kas UJ tetapi belum ada di data Ritasi (belum bongkar)'],
         'validasi-reimburse' => ['Validasi Reimburse', 'kas.validasi-reimburse', ['kas.validasi-reimburse', 'kas.validasi-reimburse.*'], 'Upload Excel daftar reimburse: cek double reimburse & rekap per Kode GL'],
         'kas-belum-reimburse' => ['⬇ Excel Belum Reimburse', 'kas.belum-reimburse', ['kas.belum-reimburse'], 'Unduh daftar transaksi Kas Harian yang belum reimburse (Excel)'],
         'rekap' => ['Rekap Biaya', 'kas.rekap', ['kas.rekap'], 'Rekap biaya per akun × bulan'],
@@ -33,7 +34,7 @@ class MenuAkses
     public const KATEGORI = [
         'kas' => ['Kas Harian', '🏦', ['input-kas', 'kas-harian', 'validasi-reimburse', 'kas-belum-reimburse', 'rekap', 'kode-gl']],
         'uj' => ['Uang Jalan', '🚚', ['pengajuan-uj', 'input-uj', 'kas-uj', 'reimburse-uj', 'rapikan-uj']],
-        'ritasi' => ['Ritasi', '⛰️', ['input-ritasi', 'ritasi', 'monitor-ritasi']],
+        'ritasi' => ['Ritasi', '⛰️', ['input-ritasi', 'ritasi', 'buangan-truk', 'monitor-ritasi']],
         'aset' => ['Aset', '🚛', ['aset']],
     ];
 
