@@ -34,11 +34,12 @@ class RitasiController extends Controller
         $umur = in_array($request->query('umur'), ['7', '30', 'lama'], true) ? $request->query('umur') : null;
         $q = trim((string) $request->query('q'));
         ['do' => $semua, 'bukan_angka' => $bukanAngka] = MonitorRitasi::belumBongkar();
-        // Tujuan buangan DO = tujuan buangan truk-truknya (menu Buangan Truck; bawaannya tahap rit terakhir truk).
-        $tujuanTruk = BuanganTruk::tujuan();
-        $semua = $semua->map(fn ($d) => [...$d, 'buangan' => collect($d['mobil'])->map(fn ($m) => $tujuanTruk[$m]['tujuan'] ?? null)->filter()->unique()->values()->all()]);
+        // Tujuan buangan DO = tujuan buangan truk-truknya, hanya truk yang terdaftar di Buangan Truck (aktif 30 hari terakhir)
+        // dan berstatus aktif di Data Aset. Truk lain (mis. DO lama dari truk yang sudah tidak jalan) tidak diberi tujuan.
+        $tujuanTruk = BuanganTruk::daftar()->filter(fn ($t) => $t['status_aset'] === 'aktif' && $t['tujuan'])->pluck('tujuan', 'no_lambung');
+        $semua = $semua->map(fn ($d) => [...$d, 'buangan' => collect($d['mobil'])->map(fn ($m) => $tujuanTruk[$m] ?? null)->filter()->unique()->values()->all()]);
         $tujuan = trim((string) $request->query('tujuan'));
-        $cocokTujuan = fn ($d) => $tujuan === '' || ($tujuan === '(belum ada)' ? ! $d['buangan'] : in_array($tujuan, $d['buangan'], true));
+        $cocokTujuan = fn ($d) => $tujuan === '' || ($tujuan === BuanganTruk::TANPA ? ! $d['buangan'] : in_array($tujuan, $d['buangan'], true));
         $cocokUmur = fn ($d) => match ($umur) {
             '7' => $d['umur'] !== null && $d['umur'] <= 7,
             '30' => $d['umur'] !== null && $d['umur'] > 7 && $d['umur'] <= 30,
@@ -55,7 +56,8 @@ class RitasiController extends Controller
         return view('ritasi.monitor', [
             'daftar' => $semua->filter($cocokUmur)->filter($cocokCari)->filter($cocokTujuan)->values(),
             'semua' => $semua, 'umur' => $umur, 'q' => $q, 'tujuan' => $tujuan, 'bukanAngka' => $bukanAngka,
-            'jumlahTujuan' => $semua->filter($cocokUmur)->flatMap(fn ($d) => $d['buangan'] ?: ['(belum ada)'])->countBy()->sortDesc(),
+            'jumlahTujuan' => $semua->filter($cocokUmur)->flatMap(fn ($d) => $d['buangan'])->countBy()->sortDesc(),
+            'jumlahTanpa' => $semua->filter($cocokUmur)->filter(fn ($d) => ! $d['buangan'])->count(),
             'jumlahUmur' => [
                 '7' => $hitung(fn ($d) => $d['umur'] !== null && $d['umur'] <= 7),
                 '30' => $hitung(fn ($d) => $d['umur'] !== null && $d['umur'] > 7 && $d['umur'] <= 30),

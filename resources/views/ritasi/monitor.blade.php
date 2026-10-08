@@ -42,6 +42,10 @@
         @foreach ($jumlahTujuan as $t => $n)
             <a href="{{ $tautan(['tujuan' => $t]) }}" @class(['chip', 'aktif' => $tujuan === $t])>{{ $t }} · {{ $n }}</a>
         @endforeach
+        @if ($jumlahTanpa)
+            <a href="{{ $tautan(['tujuan' => \App\Support\BuanganTruk::TANPA]) }}" @class(['chip', 'aktif' => $tujuan === \App\Support\BuanganTruk::TANPA])
+                title="DO yang truknya tidak terdaftar / tidak aktif di Buangan Truck" style="opacity: .75;">Truk tidak aktif · {{ $jumlahTanpa }}</a>
+        @endif
         <a href="{{ route('ritasi.buangan') }}" class="redup" style="margin-left: auto; font-size: 13px;">Atur tujuan buangan truk →</a>
     </div>
 

@@ -17,6 +17,9 @@ class BuanganTruk
 {
     public const HARI = 30;
 
+    /** Saringan Monitor Ritasi untuk DO yang truknya tidak terdaftar/aktif di Buangan Truck. */
+    public const TANPA = 'tanpa';
+
     /** Tahap rit terakhir per truk (seluruh histori). @return array<string, array{tahap: string, tanggal: ?Carbon, galian: ?string}> */
     public static function ritTerakhir(): array
     {
@@ -26,17 +29,6 @@ class BuanganTruk
             if ($dt = NomorMobil::rapikan($r->no_lambung)) {
                 $hasil[$dt] = ['tahap' => trim($r->tahap), 'tanggal' => $r->tanggal, 'galian' => $r->galian];
             }
-        }
-
-        return $hasil;
-    }
-
-    /** Tujuan buangan berlaku per truk. @return array<string, array{tujuan: string, sumber: string}> sumber: admin | ritasi */
-    public static function tujuan(): array
-    {
-        $hasil = array_map(fn ($r) => ['tujuan' => $r['tahap'], 'sumber' => 'ritasi'], self::ritTerakhir());
-        foreach (TrukBuangan::pluck('tujuan', 'no_lambung') as $dt => $t) {
-            $hasil[$dt] = ['tujuan' => $t, 'sumber' => 'admin'];
         }
 
         return $hasil;
