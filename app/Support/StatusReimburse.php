@@ -177,6 +177,15 @@ class StatusReimburse
             ->map(fn ($t) => $t ? Carbon::parse($t) : null)->all();
     }
 
+    /** Pesan penolakan Edit/Hapus bila ada ID yang sudah direimburse; null bila semua belum. */
+    public static function pesanTolak(array $ids): ?string
+    {
+        $sudah = array_keys(self::untuk($ids));
+
+        return $sudah ? 'Ditolak: transaksi ini sudah direimburse ('.implode(', ', array_slice($sudah, 0, 3)).(count($sudah) > 3 ? ', …' : '')
+            .'). Hanya transaksi yang belum direimburse yang bisa diubah atau dihapus.' : null;
+    }
+
     /** Jumlah status dari aplikasi yang belum tertulis di sheet. */
     public static function antreanSheet(): int
     {

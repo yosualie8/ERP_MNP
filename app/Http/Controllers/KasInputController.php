@@ -11,6 +11,7 @@ use App\Models\KasBulan;
 use App\Models\KasFoto;
 use App\Models\KasReimburseUj;
 use App\Support\ReimburseUjKeKas;
+use App\Support\StatusReimburse;
 use Illuminate\Http\JsonResponse;
 use App\Support\CerminReimburse;
 use App\Support\DaftarBank;
@@ -299,6 +300,10 @@ class KasInputController extends Controller
             return redirect()->route('kas.index')->with('error', "Transaksi NO ID {$noId} tidak ditemukan. Mungkin sudah dihapus atau sheet berubah — klik \"Sinkron dari sheet\".");
         }
         $biaya = HapusKasSheet::biayaTransferMilik($t);
+        // Hanya transaksi yang belum direimburse yang boleh diedit (dicek juga saat disimpan).
+        if ($tolak = $this->cekReimburse([...CerminReimburse::idMilik($t), ...($biaya ? CerminReimburse::idMilik($biaya) : [])])) {
+            return redirect()->route('kas.index', ['lembar' => $t->kasBulan->lembar, 'tgl' => $t->tanggal->day])->with('error', $tolak);
+        }
 
         $edit = [
             'no_id' => $noId,
@@ -396,16 +401,10 @@ class KasInputController extends Controller
         );
     }
 
-    /** Pesan penolakan bila baris transaksi ini sudah direimburse (atau Mutasi Reimburse tidak bisa diperiksa). */
+    /** Pesan penolakan bila ada baris transaksi ini yang sudah direimburse (status milik aplikasi). */
     private function cekReimburse(array $ids): ?string
     {
-        try {
-            return CerminReimburse::wajib()->pesanTolak($ids);
-        } catch (\Throwable $e) {
-            report($e);
-
-            return 'Gagal memeriksa status di Mutasi Reimburse: '.$e->getMessage().' Coba lagi sebentar.';
-        }
+        return StatusReimburse::pesanTolak($ids);
     }
 
     /** Sidik transaksi saat form dibuka; bila berbeda saat disimpan, berarti sheet sudah berubah di antaranya. */

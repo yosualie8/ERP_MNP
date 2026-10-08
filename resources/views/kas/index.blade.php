@@ -128,18 +128,26 @@
                             </td>
                             <td style="white-space: nowrap;">
                                 {{-- Edit, foto bon & Hapus hanya untuk akun yang punya menu Input Kas. --}}
+                                {{-- Transaksi yang sudah (sebagian) direimburse dikunci: tidak bisa diedit/dihapus. --}}
+                                @php($terkunci = in_array($s['kode'], ['sudah', 'sebagian'], true))
                                 @if ($bolehInput)
-                                    @if ($t->no_id)
+                                    @if ($terkunci)
+                                        <span class="kunci-reimburse" title="Sudah {{ $s['kode'] === 'sebagian' ? 'sebagian ' : '' }}direimburse — tidak bisa diedit atau dihapus">🔒</span>
+                                    @elseif ($t->no_id)
                                         <a href="{{ route('kas.edit', $t->no_id) }}" class="tombol-edit" title="Edit transaksi ini (ditulis ulang di sheet)">Edit</a>
+                                    @endif
+                                    @if ($t->no_id)
                                         @if ($n = $jumlahFoto[$t->no_id] ?? 0)
                                             <a href="{{ route('kas.bon', $t->no_id) }}" class="lampiran ada" title="Lihat {{ $n }} foto bon">📎 {{ $n }}</a>
                                         @else
                                             <a href="{{ route('kas.bon', $t->no_id) }}" class="lampiran kosong" title="Lampirkan foto bon">📎+</a>
                                         @endif
                                     @endif
+                                    @unless ($terkunci)
                                     <button type="button" class="tombol-hapus" data-hapus="{{ route('kas.hapus', $t) }}" data-baris="{{ $t->baris }}"
                                         data-ringkasan="{{ ($t->debet ? 'Uang masuk ' : 'Transfer ').rp($t->debet ?: $t->kredit).' · '.$t->tanggal->translatedFormat('j M').' · '.($t->nama_tujuan ?? '').' · '.($t->keterangan ?? '') }}"
                                         data-bon="{{ $t->bon->count() }}" @if (isset($punyaBiaya[$t->id])) data-biaya="1" @endif>Hapus</button>
+                                    @endunless
                                 @endif</td>
                         </tr>
                         @if ($t->bon->isNotEmpty())

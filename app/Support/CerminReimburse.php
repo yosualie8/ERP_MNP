@@ -73,20 +73,6 @@ class CerminReimburse
     }
 
     /**
-     * Tolak Edit/Hapus bila ada baris transaksi ini yang sudah direimburse (status "Sudah").
-     *
-     * @param  string[]  $ids
-     */
-    public function pesanTolak(array $ids): ?string
-    {
-        // Status reimburse milik aplikasi (bukan dibaca dari sheet).
-        $sudah = array_keys(StatusReimburse::untuk($ids));
-
-        return $sudah ? 'Ditolak: transaksi ini sudah direimburse ('.implode(', ', array_slice($sudah, 0, 3)).(count($sudah) > 3 ? ', …' : '')
-            .'). Transaksi yang sudah direimburse tidak bisa diubah atau dihapus.' : null;
-    }
-
-    /**
      * Tambahkan baris transfer-transfer ini yang belum ada di Mutasi Reimburse, di bawah data terakhir (urut NO ID).
      *
      * @param  iterable<KasTransfer>  $transfer
