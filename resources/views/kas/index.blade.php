@@ -58,7 +58,7 @@
             <a href="{{ route('kas.index', $p) }}" @class(['chip', 'aktif' => ! $filterStatus])>Semua</a>
             <a href="{{ route('kas.index', $p + ['status' => 'belum']) }}" @class(['chip', 'aktif' => $filterStatus === 'belum'])>Belum reimburse · {{ $ringkasStatus['belum'] }} transfer · {{ rp($ringkasStatus['nilai_belum']) }}</a>
             <a href="{{ route('kas.index', $p + ['status' => 'sudah']) }}" @class(['chip', 'aktif' => $filterStatus === 'sudah'])>Sudah reimburse · {{ $ringkasStatus['sudah'] }}</a>
-            <span class="redup" title="Disalin dari lembar &quot;Sudah Reimburse&quot; (Transaksi Belum Reimburse V3) tiap 10 menit">status per {{ $statusPada?->translatedFormat('j M H:i') ?? 'belum pernah diambil' }}</span>
+            @if ($antreanSheet)<span class="redup" title="Status sudah tersimpan di aplikasi; sedang ditulis ke lembar Sudah Reimburse">⏳ {{ $antreanSheet }} status menunggu ditulis ke sheet</span>@endif
         </div>
 
         <form method="GET" action="{{ route('kas.index') }}" style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">

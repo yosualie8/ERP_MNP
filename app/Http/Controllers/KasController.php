@@ -103,7 +103,7 @@ class KasController extends Controller
 
         return view('kas.index', compact('daftarBulan', 'bulan', 'transfer', 'q', 'tanggal', 'daftarTanggal', 'punyaBiaya', 'jumlahFoto',
             'statusBon', 'statusTransfer', 'ringkasStatus', 'filterStatus') + [
-                'bolehInput' => $request->user()->bolehMenu('input-kas'), 'statusPada' => StatusReimburse::diperbaruiPada(),
+                'bolehInput' => $request->user()->bolehMenu('input-kas'), 'antreanSheet' => StatusReimburse::antreanSheet(),
             ]);
     }
 

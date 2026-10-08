@@ -19,8 +19,8 @@ class Kernel extends ConsoleKernel
         $schedule->command('mnp:unggah-foto-drive')->everyMinute()->withoutOverlapping(10);
         // Cadangan: transaksi dari aplikasi yang belum tercermin di Mutasi Reimburse ditambahkan.
         $schedule->command('mnp:sinkron-reimburse')->hourlyAt(10)->withoutOverlapping();
-        // Status "sudah reimburse" di Kas Harian (salinan lembar Sudah Reimburse).
-        $schedule->command('mnp:status-reimburse')->everyTenMinutes()->withoutOverlapping();
+        // Status reimburse milik aplikasi → lembar Sudah Reimburse (cadangan bila penulisan sesudah simpan gagal; tanpa antrean = tidak membaca sheet).
+        $schedule->command('mnp:status-reimburse')->everyFiveMinutes()->withoutOverlapping();
         // Ketikan/penghapusan admin langsung di lembar Kas Seabank (uang jalan) ikut ke aplikasi.
         $schedule->command('mnp:impor-uj')->everyFiveMinutes()->withoutOverlapping();
         // Lembar Ritasi (Proyek ASG - Gsheet) ikut ke aplikasi.

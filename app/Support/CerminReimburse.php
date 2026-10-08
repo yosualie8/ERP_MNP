@@ -16,7 +16,7 @@ use RuntimeException;
  * Kolom yang diisi aplikasi: A No (NO ID), B ID, D & E tanggal, F PIC, G Keterangan, M Kode GL,
  * N Bon (chip folder Drive bila berfoto), O Debit, P Kredit; Q Saldo & R Reimburse berupa rumus.
  * Kolom C, H–L (data uang jalan/ritasi) diisi admin dan tidak pernah disentuh; E juga tidak ditimpa saat edit.
- * Baris yang statusnya "Sudah" (sudah direimburse) tidak boleh diubah/dihapus lewat aplikasi.
+ * Transaksi yang sudah direimburse (status milik aplikasi, StatusReimburse) tidak boleh diubah/dihapus.
  */
 class CerminReimburse
 {
@@ -79,11 +79,11 @@ class CerminReimburse
      */
     public function pesanTolak(array $ids): ?string
     {
-        $peta = $this->peta();
-        $sudah = array_values(array_filter($ids, fn ($i) => ($peta['status'][$peta['baris'][$i] ?? 0] ?? '') === 'Sudah'));
+        // Status reimburse milik aplikasi (bukan dibaca dari sheet).
+        $sudah = array_keys(StatusReimburse::untuk($ids));
 
-        return $sudah ? 'Ditolak: transaksi ini sudah direimburse di Mutasi Reimburse ('.implode(', ', array_slice($sudah, 0, 3)).(count($sudah) > 3 ? ', …' : '')
-            .'). Ubah/hapus lewat sheet setelah dicek bagian reimburse.' : null;
+        return $sudah ? 'Ditolak: transaksi ini sudah direimburse ('.implode(', ', array_slice($sudah, 0, 3)).(count($sudah) > 3 ? ', …' : '')
+            .'). Transaksi yang sudah direimburse tidak bisa diubah atau dihapus.' : null;
     }
 
     /**
@@ -138,7 +138,7 @@ class CerminReimburse
             if ($pos->isEmpty()) {
                 return; // belum pernah dicerminkan → ditambahkan oleh tambahYangBelum()
             }
-            if ($sudah = array_filter($idLama, fn ($i) => ($peta['status'][$peta['baris'][$i] ?? 0] ?? '') === 'Sudah')) {
+            if ($sudah = array_keys(StatusReimburse::untuk($idLama))) {
                 throw new RuntimeException('Mutasi Reimburse tidak diubah: baris '.implode(', ', $sudah).' sudah direimburse.');
             }
             $sheetId = $this->sheetId();
@@ -183,7 +183,7 @@ class CerminReimburse
             if ($pos->isEmpty()) {
                 return 0;
             }
-            if ($sudah = array_filter($ids, fn ($i) => ($peta['status'][$peta['baris'][$i] ?? 0] ?? '') === 'Sudah')) {
+            if ($sudah = array_keys(StatusReimburse::untuk($ids))) {
                 throw new RuntimeException('Mutasi Reimburse tidak diubah: baris '.implode(', ', $sudah).' sudah direimburse.');
             }
             $sheetId = $this->sheetId();
