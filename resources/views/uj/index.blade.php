@@ -61,6 +61,7 @@
                     @php($detail = $t->detail)
                     @php($jumlah = $detail->reject->biaya_transfer->sum('nominal'))
                     @php($sudah = $t->sudahReimburse())
+                    @php($jumlahSudah = $detail->whereNotNull('tanggal_reimburse')->count())
                     <tbody @class(['grup', 'buka' => $q !== ''])>
                         <tr @class(['t', 'ada-bon' => $detail->isNotEmpty()])>
                             <td>
@@ -74,9 +75,13 @@
                             <td class="ringkas-gl">{{ $detail->pluck('no_mobil')->filter()->unique()->take(3)->implode(', ') }}</td>
                             <td class="angka"><b>{{ rp($t->nominal, true) }}</b></td>
                             <td class="i">@if ($t->no_uj)UJ-{{ $t->no_uj }}@else<i title="Baris master belum diberi ID UJ di sheet">tanpa ID</i>@endif
-                                @if ($sudah)<span class="label hijau">Sudah reimburse</span>@endif</td>
+                                @if ($jumlahSudah === $detail->count() && $sudah)<span class="label hijau">Sudah reimburse</span>
+                                @elseif ($sudah)<span class="label kuning" title="{{ $jumlahSudah }} dari {{ $detail->count() }} detail sudah direimburse">Sebagian {{ $jumlahSudah }}/{{ $detail->count() }}</span>@endif</td>
                             <td style="white-space: nowrap;">
-                                {{-- Edit, foto bon & Hapus hanya untuk akun yang punya menu Input UJ. --}}
+                                {{-- Edit, foto bon & Hapus hanya untuk akun yang punya menu Input UJ; yang sudah (sebagian) direimburse dikunci. --}}
+                                @if ($bolehInput && $sudah)
+                                    <span class="kunci-reimburse" title="Sudah {{ $jumlahSudah < $detail->count() ? 'sebagian ' : '' }}direimburse — tidak bisa diedit atau dihapus">🔒</span>
+                                @endif
                                 @if ($bolehInput && $t->no_uj && ! $sudah)
                                     <a href="{{ route('uj.edit', $t->no_uj) }}" class="tombol-edit" title="Edit transaksi ini (ditulis ulang di sheet)">Edit</a>
                                 @endif

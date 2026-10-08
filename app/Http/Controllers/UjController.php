@@ -289,8 +289,8 @@ class UjController extends Controller
         if (! $t) {
             return redirect()->route('uj.index')->with('error', "Transaksi UJ-{$noUj} tidak ditemukan. Mungkin sudah dihapus atau sheet berubah — klik \"Sinkron dari sheet\".");
         }
-        if ($t->sudahReimburse()) {
-            return redirect()->route('uj.index', ['bulan' => $t->tanggal?->format('Y-m')])->with('error', "UJ-{$noUj} sudah direimburse, tidak bisa diubah lewat aplikasi.");
+        if ($tolak = $this->tolakReimburse($t)) {
+            return redirect()->route('uj.index', ['bulan' => $t->tanggal?->format('Y-m')])->with('error', $tolak);
         }
         $biaya = $t->detail->firstWhere('biaya_transfer', true);
         $edit = [
@@ -310,6 +310,10 @@ class UjController extends Controller
         $t = UjTransaksi::with('detail')->where('no_uj', $noUj)->first();
         if (! $t || $request->input('versi') !== $this->versi($t)) {
             return back()->withInput()->with('error', 'Transaksi ini sudah berubah di sheet sejak form dibuka (atau baru disinkron). Buka Edit lagi supaya perubahan tidak menimpa data terbaru.');
+        }
+        // Hanya transaksi yang belum direimburse (satu detail pun) yang boleh diubah — dicek dari data aplikasi dulu.
+        if ($tolak = $this->tolakReimburse($t)) {
+            return redirect()->route('uj.index', ['bulan' => $t->tanggal?->format('Y-m')])->with('error', $tolak);
         }
         $input = $this->bacaInput($request);
         if ($input instanceof RedirectResponse) {
@@ -347,9 +351,24 @@ class UjController extends Controller
             .($jumlahFoto ? " {$jumlahFoto} foto bon ditambahkan." : '').$pesanImpor);
     }
 
+    /** Pesan penolakan Edit/Hapus bila ada detail transaksi ini yang sudah direimburse (sama seperti Kas Harian). */
+    private function tolakReimburse(UjTransaksi $t): ?string
+    {
+        $sudah = $t->detail->filter(fn ($d) => $d->tanggal_reimburse !== null);
+        if ($sudah->isEmpty()) {
+            return null;
+        }
+
+        return 'Ditolak: UJ-'.$t->no_uj.' sudah direimburse ('.$sudah->count().' dari '.$t->detail->count().' detail, mis. '
+            .$sudah->pluck('id_uj')->filter()->take(3)->implode(', ').'). Hanya transaksi yang belum direimburse yang bisa diubah atau dihapus.';
+    }
+
     public function hapus(Request $request, int $noUj): RedirectResponse
     {
         $t = UjTransaksi::with('detail')->where('no_uj', $noUj)->firstOrFail();
+        if ($tolak = $this->tolakReimburse($t)) {
+            return back()->with('error', $tolak);
+        }
         $ringkasan = $this->ringkasan($t);
         try {
             $sheets = GoogleSheets::wajib();
