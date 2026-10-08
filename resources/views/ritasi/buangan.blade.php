@@ -34,17 +34,13 @@
         @csrf
         <div class="kartu gulir" style="padding: 0;">
             <table class="kas">
-                <thead><tr><th>Truk</th><th>Jenis</th><th>Driver terakhir</th><th class="angka">Rit</th><th>Rit terakhir</th><th class="angka">UJ</th><th>Galian terakhir</th><th style="min-width: 260px;">Tujuan buangan</th><th>Keterangan</th></tr></thead>
+                <thead><tr><th>Truk</th><th>Jenis</th><th>Driver terakhir</th><th style="min-width: 260px;">Tujuan buangan</th><th>Keterangan</th></tr></thead>
                 <tbody>
                     @forelse ($truk as $t)
                         <tr>
                             <td><b>{{ $t['no_lambung'] }}</b>@unless ($t['di_aset'])<span class="label kuning" title="Tidak terdaftar di Data Aset" style="margin-left: 4px;">!</span>@endunless</td>
                             <td>{{ $t['jenis'] ?? '–' }}</td>
                             <td>{{ $t['driver'] ?? '–' }}</td>
-                            <td class="angka">{{ $t['rit'] }}</td>
-                            <td>{{ $t['rit_terakhir']?->translatedFormat('j M') ?? '–' }}</td>
-                            <td class="angka">{{ $t['uj'] }}</td>
-                            <td>{{ $t['galian'] ?? '–' }}</td>
                             <td><input type="text" class="tujuan" name="tujuan[{{ $t['no_lambung'] }}]" value="{{ $t['tujuan'] }}" data-awal="{{ $t['tujuan'] }}"
                                     list="saran-tujuan" autocomplete="off" placeholder="mis. ASG Tahap 116"></td>
                             <td style="font-size: 12px;">
@@ -59,7 +55,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="9" class="redup" style="padding: 20px 14px;">Tidak ada truk yang aktif dalam {{ \App\Support\BuanganTruk::HARI }} hari terakhir.</td></tr>
+                        <tr><td colspan="5" class="redup" style="padding: 20px 14px;">Tidak ada truk yang aktif dalam {{ \App\Support\BuanganTruk::HARI }} hari terakhir.</td></tr>
                     @endforelse
                 </tbody>
             </table>
