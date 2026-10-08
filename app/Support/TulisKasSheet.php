@@ -77,9 +77,10 @@ class TulisKasSheet
      * NO ID & nomor Kode Bon lama dipakai lagi; baris tambahan mendapat NO ID lanjutan sheet.
      * Bila tanggal pindah bulan: dihapus dari lembar lama lalu ditulis di lembar bulan baru.
      *
+     * @param  (callable(int): ?array)|null  $linkBon  NO ID transfer → folder foto bon di Drive; bila ada, link-nya tetap di kolom Kode Bon
      * @return array{lembar: string, lembar_lama: string, baris_awal: int, baris_akhir: int, no_id: int[], sebelum: array}
      */
-    public function ubah(\App\Models\KasTransfer $t, array $input): array
+    public function ubah(\App\Models\KasTransfer $t, array $input, ?callable $linkBon = null): array
     {
         $t->loadMissing('bon', 'kasBulan');
         $lembarLama = $t->kasBulan->lembar;
