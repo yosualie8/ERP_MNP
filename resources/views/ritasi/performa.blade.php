@@ -128,14 +128,40 @@
                 finally { tombol.disabled = false; tombol.textContent = asli; }
             };
             document.getElementById('unduh-gambar').addEventListener('click', e => jalan(e.currentTarget, async blob => unduh(blob)));
-            document.getElementById('bagikan-gambar').addEventListener('click', e => jalan(e.currentTarget, async blob => {
-                const file = new File([blob], namaFile, {type: 'image/png'});
-                if (navigator.canShare?.({files: [file]})) { await navigator.share({files: [file], title: namaFile, text: teks}); return; }
-                // Laptop: unduh gambarnya, lalu lampirkan di WhatsApp Web.
+            // HP: menu bagikan bawaan (langsung pilih WhatsApp). Laptop: menu bagikan Windows sering gagal ("Try that again"),
+            // jadi gambar disalin ke clipboard + diunduh, lalu WhatsApp Web dibuka — tinggal Ctrl+V di chat.
+            const hp = navigator.userAgentData?.mobile ?? /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+            const selesaiLaptop = (blob, tersalin) => {
                 unduh(blob);
                 window.open('https://web.whatsapp.com/', '_blank');
-                alert('Gambar sudah diunduh. Lampirkan gambar itu di chat WhatsApp Web yang baru dibuka.');
-            }));
+                alert(tersalin
+                    ? 'Gambar sudah disalin. Buka chat di WhatsApp Web (tab baru), lalu tekan Ctrl+V untuk menempelkan gambarnya.\n\nGambar juga sudah diunduh bila ingin dilampirkan manual.'
+                    : 'Gambar sudah diunduh. Lampirkan gambar itu di chat WhatsApp Web yang baru dibuka.');
+            };
+            document.getElementById('bagikan-gambar').addEventListener('click', async e => {
+                const tombol = e.currentTarget;
+                const asli = tombol.textContent; tombol.disabled = true; tombol.textContent = 'Membuat gambar…';
+                try {
+                    const janji = gambar();
+                    // Salin ke clipboard harus dimulai langsung saat klik (izin browser); gambarnya menyusul lewat promise.
+                    const salin = !hp && window.ClipboardItem && navigator.clipboard?.write
+                        ? navigator.clipboard.write([new ClipboardItem({'image/png': janji})]).then(() => true, () => false)
+                        : Promise.resolve(false);
+                    const blob = await janji;
+                    if (hp) {
+                        const file = new File([blob], namaFile, {type: 'image/png'});
+                        if (navigator.canShare?.({files: [file]})) {
+                            try { await navigator.share({files: [file], title: namaFile, text: teks}); return; }
+                            catch (err) { if (err.name === 'AbortError') return; }
+                        }
+                    }
+                    selesaiLaptop(blob, await salin);
+                } catch (err) {
+                    alert('Gagal membuat gambar: ' + err.message);
+                } finally {
+                    tombol.disabled = false; tombol.textContent = asli;
+                }
+            });
         })();
     </script>
 @endsection
