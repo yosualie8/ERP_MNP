@@ -45,9 +45,6 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/aset', [AsetController::class, 'index'])->name('aset.index');
     Route::get('/aset/tambah', [AsetController::class, 'create'])->name('aset.create');
     Route::post('/aset', [AsetController::class, 'store'])->name('aset.store');
-    Route::get('/aset/temuan', [AsetController::class, 'temuan'])->name('aset.temuan');
-    Route::get('/aset/temuan.xlsx', [AsetController::class, 'temuanExcel'])->name('aset.temuan.excel');
-    Route::get('/aset/{aset}', [AsetController::class, 'show'])->whereNumber('aset')->name('aset.show');
     Route::get('/aset/{aset}/edit', [AsetController::class, 'edit'])->whereNumber('aset')->name('aset.edit');
     Route::put('/aset/{aset}', [AsetController::class, 'update'])->whereNumber('aset')->name('aset.update');
     Route::get('/kas/reimburse', [ReimburseKasController::class, 'index'])->name('kas.reimburse');

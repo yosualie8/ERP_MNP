@@ -22,8 +22,6 @@ class MenuAkses
         'reimburse-kas' => ['Reimburse Kas', 'kas.reimburse', ['kas.reimburse', 'kas.reimburse.*'], 'Memilih & mencatat reimburse Kas Harian (owner), unduh Excel'],
         'kas-belum-reimburse' => ['⬇ Excel Belum Reimburse', 'kas.belum-reimburse', ['kas.belum-reimburse'], 'Unduh daftar transaksi Kas Harian yang belum reimburse (Excel)'],
         'rekap' => ['Rekap Biaya', 'kas.rekap', ['kas.rekap'], 'Rekap biaya per akun × bulan'],
-        // "aset-temuan" sebelum "aset" supaya rute aset.temuan* masuk menu Cek Data Truk (pola dicek berurutan).
-        'aset-temuan' => ['Cek Data Truk', 'aset.temuan', ['aset.temuan', 'aset.temuan.*'], 'Pencocokan truk MNP × Ritasi × Kas UJ (data janggal)'],
         'aset' => ['Data Aset Truk', 'aset.index', ['aset.*'], 'Daftar truk milik MNP: lihat, tambah & ubah'],
         'kode-gl' => ['Kode GL', 'kas.kode-gl', ['kas.kode-gl'], 'Daftar Kode GL'],
     ];
@@ -33,7 +31,7 @@ class MenuAkses
         'kas' => ['Kas Harian', '🏦', ['input-kas', 'kas-harian', 'reimburse-kas', 'kas-belum-reimburse', 'rekap', 'kode-gl']],
         'uj' => ['Uang Jalan', '🚚', ['input-uj', 'kas-uj', 'reimburse-uj']],
         'ritasi' => ['Ritasi', '⛰️', ['input-ritasi', 'ritasi']],
-        'aset' => ['Aset', '🚛', ['aset', 'aset-temuan']],
+        'aset' => ['Aset', '🚛', ['aset']],
     ];
 
     /** Foto bon dipakai Input Kas dan Input UJ: boleh bila salah satunya boleh. */

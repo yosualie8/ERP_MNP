@@ -36,7 +36,7 @@
         <div style="margin-bottom: 14px;"><label for="catatan">Catatan</label><textarea id="catatan" name="catatan" rows="3">{{ old('catatan', $aset->catatan) }}</textarea></div>
         <div style="display: flex; gap: 10px;">
             <button type="submit" class="tombol">Simpan</button>
-            <a href="{{ $aset->exists ? route('aset.show', $aset) : route('aset.index') }}" class="tombol polos">Batal</a>
+            <a href="{{ route('aset.index') }}" class="tombol polos">Batal</a>
         </div>
     </form>
 @endsection
