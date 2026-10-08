@@ -11,6 +11,7 @@ use App\Support\GoogleSheets;
 use App\Support\KasSeabank;
 use App\Support\LembarRitasi;
 use App\Support\MonitorRitasi;
+use App\Support\PerformaRitasi;
 use App\Support\NomorMobil;
 use App\Support\TebakGalian;
 use App\Support\TulisRitasiSheet;
@@ -27,6 +28,20 @@ use Illuminate\View\View;
 class RitasiController extends Controller
 {
     private const MIN_KONFIRMASI = 10;
+
+    /** Performa Ritasi: jumlah rit per truk per bulan/tanggal (setahun), bisa disaring per tujuan buangan & dibagikan sebagai gambar. */
+    public function performa(Request $request): View
+    {
+        $daftarTahun = PerformaRitasi::daftarTahun();
+        $tahun = in_array($request->integer('tahun'), $daftarTahun, true) ? $request->integer('tahun') : ($daftarTahun[0] ?? (int) now()->year);
+        // Tujuan buangan = catatan menu Buangan Truck (hanya dibaca): truk aktif & berstatus aktif di Data Aset.
+        $tujuanTruk = BuanganTruk::daftar()->filter(fn ($t) => $t['status_aset'] === 'aktif' && $t['tujuan']);
+        $daftarTujuan = $tujuanTruk->countBy('tujuan')->sortDesc();
+        $tujuan = $daftarTujuan->has($request->query('tujuan')) ? (string) $request->query('tujuan') : null;
+        $data = PerformaRitasi::data($tahun, $tujuan ? $tujuanTruk->where('tujuan', $tujuan)->pluck('no_lambung')->all() : null);
+
+        return view('ritasi.performa', compact('daftarTahun', 'tahun', 'daftarTujuan', 'tujuan', 'data'));
+    }
 
     /** Monitor Ritasi: DO yang sudah ada uang jalannya di Kas UJ tetapi belum ada di data Ritasi (belum bongkar). */
     public function monitor(Request $request): View

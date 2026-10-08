@@ -77,6 +77,7 @@ Route::middleware(['auth', 'menu'])->group(function () {
     // Ritasi dump truck (lembar "Ritasi").
     Route::get('/ritasi', [RitasiController::class, 'index'])->name('ritasi.index');
     Route::get('/ritasi/monitor', [RitasiController::class, 'monitor'])->name('ritasi.monitor');
+    Route::get('/ritasi/performa', [RitasiController::class, 'performa'])->name('ritasi.performa');
     Route::get('/ritasi/buangan', [BuanganTrukController::class, 'index'])->name('ritasi.buangan');
     Route::post('/ritasi/buangan', [BuanganTrukController::class, 'simpan'])->name('ritasi.buangan.simpan');
     Route::get('/ritasi/input', [RitasiController::class, 'create'])->name('ritasi.input');
