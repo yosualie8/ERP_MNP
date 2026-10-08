@@ -64,7 +64,6 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::put('/uj/{noUj}', [UjController::class, 'update'])->whereNumber('noUj')->name('uj.update');
     Route::delete('/uj/{noUj}', [UjController::class, 'hapus'])->whereNumber('noUj')->name('uj.hapus');
     Route::post('/uj/sinkron', [UjController::class, 'sinkron'])->name('uj.sinkron');
-    Route::get('/uj/input/pengajuan', [PengajuanUjController::class, 'terbuka'])->name('uj.pengajuan-terbuka');
     // Pengajuan uang jalan (disimpan di aplikasi, direalisasikan lewat Input UJ).
     Route::get('/uj/pengajuan', [PengajuanUjController::class, 'daftar'])->name('pengajuan-uj.daftar');
     Route::get('/uj/pengajuan/baru', [PengajuanUjController::class, 'buat'])->name('pengajuan-uj.buat');

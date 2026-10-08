@@ -82,16 +82,6 @@
         .kartu-rui { border-color: var(--aksen); }
         .mode-rui { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border: 1px solid var(--aksen); background: var(--aksen-muda); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; font-size: 14px; }
         .mode-rui[hidden] { display: none; }
-        .pj-gulir { max-height: 60vh; overflow: auto; border: 1px solid var(--garis); border-radius: 9px; }
-        table.pj-tabel { width: 100%; border-collapse: collapse; font-size: 13px; }
-        table.pj-tabel th { position: sticky; top: 0; z-index: 1; background: var(--kartu-2); text-align: left; padding: 6px 6px 2px; font-size: 12px; color: var(--redup); font-weight: 600; white-space: nowrap; }
-        table.pj-tabel tr.saring th { top: 25px; padding: 2px 6px 6px; }
-        table.pj-tabel tr.saring input[type=text] { width: 100%; min-width: 60px; padding: 4px 6px; font-size: 12px; border-radius: 5px; }
-        table.pj-tabel td { padding: 5px 6px; border-top: 1px solid var(--garis); cursor: pointer; }
-        table.pj-tabel td.angka, table.pj-tabel th.angka { text-align: right; font-variant-numeric: tabular-nums; }
-        table.pj-tabel input[type=checkbox] { width: 17px; height: 17px; cursor: pointer; }
-        table.pj-tabel tr.dipilih td { background: rgba(76, 195, 138, .14); }
-        .pj-alat { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 0 0 8px; font-size: 13px; }
         table.bon tr.dari-pengajuan td:first-child { box-shadow: inset 4px 0 0 var(--otomatis-garis); }
         table.bon tr.beda-baris td { padding: 0 4px 10px; }
         .beda-pj { border: 1px solid #3d4f86; border-left: 4px solid #6c8cff; background: #121a2e; border-radius: 8px; padding: 8px 12px; font-size: 13px; }
@@ -134,21 +124,6 @@
             </div>
         @endif
 
-        @unless ($ajukan || $edit)
-            {{-- Realisasi: pilih detail dari Pengajuan UJ yang masih menunggu → masuk ke form (boleh beberapa pengajuan & driver). --}}
-            <div class="kartu kartu-rui" id="panel-pengajuan" hidden>
-                <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
-                    <h3 style="margin: 0;">📝 Pengajuan UJ yang menunggu realisasi</h3>
-                    <div style="display: flex; gap: 8px;">
-                        <button type="button" class="tombol" id="masukkan-pengajuan" disabled>Masukkan ke form</button>
-                        <button type="button" class="tombol polos" id="tutup-pengajuan">Tutup</button>
-                    </div>
-                </div>
-                <p class="redup" style="margin: 6px 0 10px;">Centang detail yang direalisasikan sekarang (boleh dari beberapa pengajuan / driver; yang tidak dicentang tetap menunggu). Ketik di kotak bawah judul kolom untuk menyaring. <b id="pilih-pengajuan-info">0 detail dipilih</b></p>
-                <div id="daftar-pengajuan"><p class="redup">Memuat…</p></div>
-            </div>
-        @endunless
-
         <div class="kartu">
             <div class="mode-rui" id="mode-pengajuan" hidden>
                 <span>📝 <b>Realisasi pengajuan</b> · <span id="mode-pengajuan-isi"></span> — setelah disimpan, detail itu tercatat terealisasi dengan ID UJ-nya.</span>
@@ -164,9 +139,6 @@
                     Input Transaksi Master UJ <span class="redup" style="font-size: 13px; font-weight: normal;">rekening Seabank · uang jalan dump truck</span>
                 @endif
             </h3>
-            @unless ($ajukan || $edit)
-                <button type="button" class="tombol polos" id="buka-pengajuan">📝 Ambil dari pengajuan</button>
-            @endunless
             </div>
             <div class="baris2">
                 <div>
@@ -268,7 +240,7 @@
             @if ($edit)
                 <a href="{{ $ajukan ? route('pengajuan-uj.daftar') : route('uj.index') }}" class="tombol polos">Batal</a>
             @endif
-            <span class="redup">{!! $ajukan ? 'Disimpan sebagai pengajuan di aplikasi (belum ditulis ke sheet). Admin kantor merealisasikannya lewat <i>Input UJ → Ambil dari pengajuan</i>.' : 'Ditulis ke lembar <i>Kas Seabank</i> (sheet KAS MMP Uang Jalan dan UM), di bawah data terakhir.' !!}</span>
+            <span class="redup">{!! $ajukan ? 'Disimpan sebagai pengajuan di aplikasi (belum ditulis ke sheet). Admin kantor menginput transaksinya di <i>Input UJ</i>, lalu menautkannya ke pengajuan ini (tombol <i>Tautkan</i> muncul otomatis bila DO-nya cocok).' : 'Ditulis ke lembar <i>Kas Seabank</i> (sheet KAS MMP Uang Jalan dan UM), di bawah data terakhir.' !!}</span>
         </div>
     </form>
     @foreach ($edit['foto'] ?? [] as $f)
@@ -325,7 +297,7 @@
                 if (k) k.name = `detail[${i}][konfirmasi]`;
                 const a = tr.bedaEl?.querySelector('[data-alasan]');
                 if (a) a.name = `detail[${i}][alasan_pengajuan]`;
-                // Tautan ke detail Pengajuan UJ yang direalisasikan baris ini (hanya bila diambil dari pengajuan).
+                // Tautan ke detail Pengajuan UJ yang direalisasikan baris ini (hanya bila ditautkan lewat tombol "Tautkan").
                 const p = tr.querySelector('.pengajuan-kunci');
                 p.name = p.value ? `detail[${i}][pengajuan]` : '';
             });
@@ -978,7 +950,7 @@
                 tombolSimpan.textContent = @json($ajukan ? 'Mengajukan…' : 'Menyimpan ke sheet…');
             });
 
-            // ===== Input UJ → "Ambil dari pengajuan": centang detail Pengajuan UJ yang menunggu, lalu masukkan ke form =====
+            // ===== Baris yang ditautkan ke Pengajuan UJ (tombol "Tautkan" di pesan validasinya) =====
             const modePj = document.getElementById('mode-pengajuan');
             const tampilModePj = () => {
                 const rows = barisDetail().filter(tr => tr.querySelector('.pengajuan-kunci').value);
@@ -992,93 +964,6 @@
                 urutkanNama(); tampilModePj(); evaluasi();
             });
             tampilModePj();
-            const panelPj = document.getElementById('panel-pengajuan');
-            if (panelPj) {
-                const daftarPj = document.getElementById('daftar-pengajuan');
-                const tombolMasuk = document.getElementById('masukkan-pengajuan');
-                let dataPj = [];
-                // Satu tabel datar (satu baris = satu detail pengajuan); setiap kolom bisa disaring. Centang tetap tersimpan walau
-                // barisnya sedang tersembunyi oleh saringan.
-                const kolomPj = [
-                    ['kode', 'Kode'], ['tgl', 'Diajukan'], ['nama', 'Driver'], ['keterangan', 'Keterangan'], ['kategori', 'Kategori'],
-                    ['no_mobil', 'No Mobil'], ['jenis_kendaraan', 'Jenis'], ['no_do', 'No DO'], ['nominal', 'Nominal'], ['oleh', 'Oleh'],
-                ];
-                let barisPj = [];
-                const terpilih = () => barisPj.filter(b => b.pilih);
-                const nilaiKolom = (b, k) => k === 'nominal' ? `${b.nominal} ${fmt(b.nominal)}` : String(b[k] ?? '');
-                const tampakPj = () => [...daftarPj.querySelectorAll('tbody tr[data-d]')].filter(tr => !tr.hidden);
-                const hitungPj = () => {
-                    const pilih = terpilih();
-                    const tampak = tampakPj();
-                    daftarPj.querySelectorAll('tbody tr[data-d]').forEach(tr => {
-                        const b = barisPj[+tr.dataset.i];
-                        tr.querySelector('input').checked = b.pilih; tr.classList.toggle('dipilih', b.pilih);
-                    });
-                    const semua = daftarPj.querySelector('#pj-semua');
-                    if (semua) {
-                        const n = tampak.filter(tr => barisPj[+tr.dataset.i].pilih).length;
-                        semua.checked = tampak.length > 0 && n === tampak.length; semua.indeterminate = n > 0 && n < tampak.length;
-                    }
-                    const info = daftarPj.querySelector('#pj-tampak');
-                    if (info) info.textContent = `${tampak.length} dari ${barisPj.length} detail tampil · Rp ${fmt(tampak.reduce((s, tr) => s + barisPj[+tr.dataset.i].nominal, 0))}`;
-                    document.getElementById('pilih-pengajuan-info').textContent = `${pilih.length} detail dipilih · ${'Rp ' + fmt(pilih.reduce((s, b) => s + b.nominal, 0))}`;
-                    tombolMasuk.disabled = !pilih.length;
-                };
-                const saringPj = () => {
-                    const saring = [...daftarPj.querySelectorAll('input[data-saring]')].map(i => [i.dataset.saring, i.value.trim().toLowerCase()]).filter(([, v]) => v);
-                    daftarPj.querySelectorAll('tbody tr[data-d]').forEach(tr => {
-                        const b = barisPj[+tr.dataset.i];
-                        // Beberapa kata dalam satu kotak = semuanya harus ada (urutan bebas).
-                        tr.hidden = !saring.every(([k, v]) => { const isi = nilaiKolom(b, k).toLowerCase(); return v.split(/\s+/).every(w => isi.includes(w)); });
-                    });
-                    hitungPj();
-                };
-                const muatPj = async () => {
-                    daftarPj.innerHTML = '<p class="redup">Memuat…</p>';
-                    dataPj = (await (await fetch(@json(route('uj.pengajuan-terbuka')), {headers: {Accept: 'application/json'}})).json()).pengajuan;
-                    const sudah = new Set(barisDetail().map(tr => +tr.querySelector('.pengajuan-kunci').value).filter(Boolean));
-                    barisPj = dataPj.flatMap(p => p.detail.map(d => ({...d, p, kode: p.kode, tgl: p.tgl, oleh: p.oleh, pilih: sudah.has(d.pengajuan)})));
-                    if (!barisPj.length) { daftarPj.innerHTML = '<p class="redup">Tidak ada pengajuan UJ yang menunggu realisasi.</p>'; hitungPj(); return; }
-                    daftarPj.innerHTML = `<div class="pj-alat"><span class="redup" id="pj-tampak"></span>
-                            <button type="button" class="tombol polos" id="pj-reset" style="padding: 3px 10px; font-size: 12px;">Hapus saringan</button></div>
-                        <div class="pj-gulir"><table class="pj-tabel">
-                        <thead><tr><th style="width: 30px;"><input type="checkbox" id="pj-semua" title="Centang / lepas semua yang tampil"></th>${kolomPj.map(([k, l]) => `<th${k === 'nominal' ? ' class="angka"' : ''}>${l}</th>`).join('')}</tr>
-                        <tr class="saring"><th></th>${kolomPj.map(([k, l]) => `<th><input type="text" data-saring="${k}" placeholder="saring…" autocomplete="off" aria-label="Saring ${l}"></th>`).join('')}</tr></thead>
-                        <tbody>${barisPj.map((b, i) => `<tr data-d="${b.pengajuan}" data-i="${i}">
-                            <td><input type="checkbox" class="pj-d" value="${b.pengajuan}"></td>
-                            <td><b>${esc(b.kode)}</b></td><td>${esc(b.tgl)}</td><td>${esc(b.nama || '')}</td><td>${esc(b.keterangan || '')}</td>
-                            <td>${esc(b.kategori || '')}</td><td>${esc(b.no_mobil || '')}</td><td>${esc(b.jenis_kendaraan || '')}</td><td>${esc(b.no_do || '')}</td>
-                            <td class="angka">${fmt(b.nominal)}</td><td class="redup">${esc(b.oleh || '')}</td></tr>`).join('')}</tbody></table></div>`;
-                    daftarPj.querySelectorAll('input[data-saring]').forEach(i => i.addEventListener('input', saringPj));
-                    daftarPj.querySelector('#pj-reset').addEventListener('click', () => { daftarPj.querySelectorAll('input[data-saring]').forEach(i => i.value = ''); saringPj(); });
-                    daftarPj.querySelector('#pj-semua').addEventListener('change', e => { tampakPj().forEach(tr => barisPj[+tr.dataset.i].pilih = e.target.checked); hitungPj(); });
-                    daftarPj.querySelectorAll('tbody tr[data-d]').forEach(tr => tr.addEventListener('click', e => {
-                        const b = barisPj[+tr.dataset.i];
-                        b.pilih = e.target.matches('input') ? e.target.checked : !b.pilih; hitungPj();
-                    }));
-                    saringPj();
-                };
-                tombolMasuk.addEventListener('click', () => {
-                    const pilih = terpilih();
-                    const adaIsi = barisDetail().some(tr => tr.querySelector('[data-nama=keterangan]').value.trim() || tr.querySelector('[data-nama=nominal]').value.trim());
-                    if (adaIsi && !confirm('Detail di form sekarang akan diganti dengan detail pengajuan yang dipilih. Lanjutkan?')) return;
-                    // Pengajuan tidak punya penerima: penerima transfer & rekeningnya diisi admin; nominal master = jumlah detail terpilih.
-                    barisDetail().forEach(tr => { tr.temuan?.remove(); tr.kurangEl?.remove(); tr.bedaEl?.remove(); tr.remove(); });
-                    pilih.forEach(b => {
-                        const {p, pilih: _, kode, tgl, oleh, ...d} = b;
-                        const tr = tambah({...d, nama: d.nama || p.nama, kode: p.kode});
-                        tr.querySelector('[data-nama=kategori]').dataset.otomatis = '0';
-                        aturJenis(tr);
-                    });
-                    nominalTransfer.value = fmt(pilih.reduce((s, b) => s + b.nominal, 0));
-                    urutkanNama(); hitung(); tampilModePj();
-                    panelPj.hidden = true;
-                    form.scrollIntoView({behavior: 'smooth'});
-                    evaluasi();
-                });
-                document.getElementById('buka-pengajuan').addEventListener('click', () => { panelPj.hidden = false; muatPj(); panelPj.scrollIntoView({behavior: 'smooth'}); });
-                document.getElementById('tutup-pengajuan').addEventListener('click', () => { panelPj.hidden = true; });
-            }
             evaluasi();
         })();
     </script>

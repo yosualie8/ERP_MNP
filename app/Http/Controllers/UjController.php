@@ -197,7 +197,7 @@ class UjController extends Controller
                 'kategori' => KategoriUj::baku($rapi($d['kategori'])), 'jenis_kendaraan' => NomorMobil::rapikanJenis($d['jenis_kendaraan'] ?? null),
                 'no_mobil' => NomorMobil::rapikan($d['no_mobil'] ?? null), 'no_do' => $rapi($d['no_do'] ?? null),
                 'konfirmasi' => $rapi($d['konfirmasi'] ?? null),
-                // Detail pengajuan UJ yang direalisasikan oleh baris ini (Input UJ → "Ambil dari pengajuan").
+                // Detail pengajuan UJ yang direalisasikan oleh baris ini (ditautkan lewat tombol "Tautkan" di Input UJ).
                 'pengajuan' => ! empty($d['pengajuan']) ? (int) $d['pengajuan'] : null,
                 // Alasan bila realisasinya berbeda dari pengajuan (penyesuaian / dialihkan).
                 'alasan_pengajuan' => $rapi($d['alasan_pengajuan'] ?? null),
@@ -236,7 +236,7 @@ class UjController extends Controller
         $kecuali = $request->filled('no_uj') ? UjTransaksi::where('no_uj', $request->integer('no_uj'))->value('id') : null;
         $input = ['tanggal' => $tanggal, 'nama' => trim((string) $request->input('nama')), 'detail' => $detail];
 
-        // Baris yang diambil dari pengajuan: bandingkan dengan pengajuan aslinya (berbeda = wajib alasan).
+        // Baris yang ditautkan ke pengajuan: bandingkan dengan pengajuan aslinya (berbeda = wajib alasan).
         $pengajuan = [];
         $rawDetail = (array) $request->input('detail', []);
         foreach ($detail as $i => $d) {

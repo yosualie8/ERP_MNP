@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\KasRiwayat;
 use App\Models\UjPengajuan;
 use App\Models\UjPengajuanDetail;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -13,7 +12,8 @@ use Illuminate\View\View;
 
 /**
  * Pengajuan Uang Jalan: form & validasi sama persis dengan Input UJ (memakai bacaInput/wajibKonfirmasi milik UjController),
- * tetapi disimpan di aplikasi saja (tidak ditulis ke sheet). Direalisasikan per detail lewat Input UJ → "Ambil dari pengajuan".
+ * tetapi disimpan di aplikasi saja (tidak ditulis ke sheet). Direalisasikan per detail lewat Input UJ: admin mengetik transaksinya,
+ * lalu baris yang DO & kategorinya cocok ditawari "Tautkan ke PUJ-xxxx" (ValidasiUj).
  */
 class PengajuanUjController extends UjController
 {
@@ -120,23 +120,6 @@ class PengajuanUjController extends UjController
             'ringkasan' => "{$pengajuan->kode()} dibatalkan ({$n} detail)", 'isi' => ['pengajuan_id' => $pengajuan->id], 'user_id' => $request->user()->id]);
 
         return back()->with('success', "Pengajuan {$pengajuan->kode()}: {$n} detail yang menunggu dibatalkan.");
-    }
-
-    /** Untuk panel "Ambil dari pengajuan" di Input UJ: semua detail yang masih menunggu, per pengajuan. */
-    public function terbuka(): JsonResponse
-    {
-        $p = UjPengajuan::whereIn('status', ['diajukan', 'sebagian'])
-            ->with(['detail' => fn ($q) => $q->where('status', 'menunggu'), 'user'])->orderBy('tanggal')->orderBy('id')->get()
-            ->filter(fn ($p) => $p->detail->isNotEmpty());
-
-        return response()->json(['pengajuan' => $p->map(fn ($p) => [
-            'id' => $p->id, 'kode' => $p->kode(), 'tanggal' => $p->tanggal->toDateString(), 'tgl' => $p->tanggal->translatedFormat('j M Y'),
-            'driver' => $p->detail->pluck('nama')->filter()->unique()->implode(', '), 'oleh' => $p->user?->name ?? $p->user?->email,
-            'detail' => $p->detail->map(fn ($d) => [
-                'pengajuan' => $d->id, 'nama' => $d->nama, 'keterangan' => $d->keterangan, 'nominal' => (int) $d->nominal,
-                'kategori' => $d->kategori, 'jenis_kendaraan' => $d->jenis_kendaraan, 'no_mobil' => $d->no_mobil, 'no_do' => $d->no_do,
-            ])->values(),
-        ])->values()]);
     }
 
     private function simpanDetail(UjPengajuan $p, array $input, array $temuan): void
