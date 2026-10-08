@@ -248,7 +248,14 @@ class UjController extends Controller
             }
         }
 
-        return response()->json(['temuan' => (object) ValidasiUj::periksa($input, $kecuali, $this->kecualiPengajuan($request)), 'pengajuan' => (object) $pengajuan]);
+        return response()->json(['temuan' => (object) ValidasiUj::periksa($input, $kecuali, $this->kecualiPengajuan($request), $this->tawarkanTautan() && ! $kecuali),
+            'pengajuan' => (object) $pengajuan]);
+    }
+
+    /** Input UJ menawarkan "Tautkan ke pengajuan" untuk baris yang cocok dengan pengajuan menunggu; form Pengajuan UJ tidak. */
+    protected function tawarkanTautan(): bool
+    {
+        return true;
     }
 
     /**
@@ -295,7 +302,7 @@ class UjController extends Controller
      */
     protected function wajibKonfirmasi(array $input, ?int $kecuali, array $kecualiPengajuan = []): array|RedirectResponse
     {
-        $temuan = ValidasiUj::periksa($input, $kecuali, $kecualiPengajuan);
+        $temuan = ValidasiUj::periksa($input, $kecuali, $kecualiPengajuan, $this->tawarkanTautan() && ! $kecuali);
         $pesan = [];
         foreach ($temuan as $i => $daftar) {
             if (mb_strlen((string) $input['detail'][$i]['konfirmasi']) >= self::MIN_KONFIRMASI) {

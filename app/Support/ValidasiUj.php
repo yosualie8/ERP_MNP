@@ -29,7 +29,11 @@ class ValidasiUj
      * @param  int|null  $kecualiTransaksi  id uj_transaksi yang sedang diedit (baris lamanya tidak dihitung)
      * @return array<int, array<int, array{kode: string, prioritas: string, pesan: string}>> indeks detail => temuan
      */
-    public static function periksa(array $input, ?int $kecualiTransaksi = null, array $kecualiPengajuan = []): array
+    /**
+     * @param  bool  $tawarkanTautan  Input UJ: baris yang DO & jenis kategorinya sama dengan pengajuan yang masih menunggu tidak
+     *                                dianggap dobel, tetapi ditawari "Tautkan ke PUJ-xxxx" (kemungkinan besar itu realisasinya).
+     */
+    public static function periksa(array $input, ?int $kecualiTransaksi = null, array $kecualiPengajuan = [], bool $tawarkanTautan = false): array
     {
         $tgl = $input['tanggal'];
         $rentang = [$tgl->copy()->subDays(self::HARI)->toDateString(), $tgl->copy()->addDays(self::HARI)->toDateString()];
@@ -45,8 +49,8 @@ class ValidasiUj
             ->whereNotIn('id', $kecualiPengajuan ?: [0])
             ->whereHas('pengajuan', fn ($q) => $q->whereBetween('tanggal', $rentang))
             ->with('pengajuan')->orderBy('id')->get()
-            ->map(fn ($d) => self::baris($d->pengajuan->kode().' (diajukan)', $d->pengajuan->tanggal, $d->nama ?: $d->pengajuan->nama, $d->keterangan, (int) $d->nominal,
-                $d->kategori, $d->jenis_kendaraan, $d->no_mobil, $d->no_do)));
+            ->map(fn ($d) => [...self::baris($d->pengajuan->kode().' (diajukan)', $d->pengajuan->tanggal, $d->nama ?: $d->pengajuan->nama, $d->keterangan, (int) $d->nominal,
+                $d->kategori, $d->jenis_kendaraan, $d->no_mobil, $d->no_do), 'pengajuan' => $d->id, 'kode' => $d->pengajuan->kode()]));
         // Pengajuan yang dananya dialihkan: DO-nya tetap dihitung sudah dibiayai sesuai pengajuan aslinya — kecuali baris
         // realisasinya di Kas UJ sudah memuat DO & jenis kategori yang sama (supaya tidak terhitung dua kali).
         $histori = $histori->concat(\App\Models\UjPengajuanDetail::query()->where('status', 'dialihkan')
@@ -69,7 +73,22 @@ class ValidasiUj
             $nama = $i === 0 ? ($d['nama'] ?: $input['nama']) : $d['nama'];
             $r = self::baris('baris '.($i + 1).' input ini', $tgl, $nama, $d['keterangan'], (int) $d['nominal'], $d['kategori'], $d['jenis_kendaraan'], $d['no_mobil'], $d['no_do']);
             $pembanding = $histori->concat($sebelumnya);
-            $temuan[$i] = self::aturan($r, $pembanding, $jenisDt);
+            $tautan = [];
+            if ($tawarkanTautan && $r['do'] !== null) {
+                // Pengajuan menunggu dengan DO & jenis kategori sama = calon pengajuan yang sedang direalisasikan baris ini:
+                // jangan dihitung dobel; tawarkan untuk ditautkan.
+                $calon = $histori->filter(fn ($x) => isset($x['pengajuan']) && $x['do'] === $r['do'] && $x['jenisKat'] === $r['jenisKat']);
+                if ($calon->isNotEmpty()) {
+                    $pembanding = $pembanding->reject(fn ($x) => isset($x['pengajuan']) && $calon->contains('pengajuan', $x['pengajuan']));
+                    foreach ($calon as $c) {
+                        $tautan[] = ['kode' => 'P', 'prioritas' => 'tinggi', 'tautan' => ['id' => $c['pengajuan'], 'kode' => $c['kode']],
+                            'pesan' => "DO {$r['doAsli']} sudah diajukan di {$c['kode']} ({$c['tanggal']?->translatedFormat('j M')}, {$c['nama']}, {$c['kategori']} ".rp($c['nominal'])
+                                .', "'.$c['ket'].'") dan belum direalisasikan. Bila baris ini realisasinya, klik "Tautkan" supaya pengajuan itu tercatat terealisasi — bukan dobel.'
+                                .' Bila memang transaksi terpisah, tulis konfirmasi.'];
+                    }
+                }
+            }
+            $temuan[$i] = [...$tautan, ...self::aturan($r, $pembanding, $jenisDt)];
             $sebelumnya->push($r);
         }
 

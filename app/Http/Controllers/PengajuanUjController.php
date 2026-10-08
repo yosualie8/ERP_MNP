@@ -38,6 +38,12 @@ class PengajuanUjController extends UjController
         ]);
     }
 
+    /** Mengajukan lagi DO yang sudah diajukan memang dobel — tidak ditawari tautan. */
+    protected function tawarkanTautan(): bool
+    {
+        return false;
+    }
+
     public function buat(): View
     {
         return $this->create()->with('mode', 'pengajuan');

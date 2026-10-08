@@ -781,7 +781,8 @@
                     t.className = 'temuan-baris';
                     t.innerHTML = `<td colspan="8"><div class="temuan">
                         <div class="judul-temuan">⚠ Baris ${i + 1} kena FLAG validasi (${daftarT.length}) — periksa, perbaiki bila salah, atau tulis konfirmasi bila memang valid</div>
-                        <ul>${daftarT.map(x => `<li><span class="prioritas ${x.prioritas}">${x.prioritas}</span> <span class="aturan">Aturan ${esc2(x.kode)}</span> ${esc2(x.pesan)}</li>`).join('')}</ul>
+                        <ul>${daftarT.map(x => `<li><span class="prioritas ${x.prioritas}">${x.prioritas}</span> <span class="aturan">${x.tautan ? 'Pengajuan' : 'Aturan ' + esc2(x.kode)}</span> ${esc2(x.pesan)}
+                            ${x.tautan ? `<button type="button" class="tombol tautkan" data-id="${x.tautan.id}" data-kode="${esc2(x.tautan.kode)}" style="padding: 3px 10px; font-size: 12px; margin-left: 6px;">🔗 Tautkan ke ${esc2(x.tautan.kode)}</button>` : ''}</li>`).join('')}</ul>
                         <label>Konfirmasi admin <span class="redup">(wajib, min. ${MIN_KONFIRMASI} karakter — mis. "Kekurangan UJ karena rute dialihkan", "Ganti driver, Sule sakit")</span>
                             <input type="text" data-konfirmasi maxlength="1000" autocomplete="off"></label>
                         <div class="status-konf"></div></div></td>`;
@@ -789,6 +790,16 @@
                     k.value = tr.konfirmasi || '';
                     k.addEventListener('input', () => { tr.konfirmasi = k.value; k.classList.toggle('kosong', k.value.trim().length < MIN_KONFIRMASI); evaluasi(); });
                     k.classList.toggle('kosong', k.value.trim().length < MIN_KONFIRMASI);
+                    // Baris yang diketik manual tetapi cocok dengan pengajuan yang menunggu: tautkan → tercatat sebagai realisasinya.
+                    t.querySelectorAll('button.tautkan').forEach(btn => btn.addEventListener('click', () => {
+                        const id = btn.dataset.id;
+                        const lain = barisDetail().find(x => x !== tr && x.querySelector('.pengajuan-kunci').value === id);
+                        if (lain) { alert(`${btn.dataset.kode} itu sudah ditautkan ke baris ${barisDetail().indexOf(lain) + 1}.`); return; }
+                        tr.querySelector('.pengajuan-kunci').value = id;
+                        tr.classList.add('dari-pengajuan');
+                        tr.title = 'Dari pengajuan ' + btn.dataset.kode;
+                        urutkanNama(); tampilModePj?.(); evaluasi();
+                    }));
                     (tr.kurangEl ?? tr).after(t);
                     tr.temuan = t;
                     tr.classList.add('ber-flag');
