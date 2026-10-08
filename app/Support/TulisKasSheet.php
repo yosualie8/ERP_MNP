@@ -67,7 +67,7 @@ class TulisKasSheet
         }
 
         $daftarNoId = range($noId, $noId + $butuh - 1);
-        $this->sheets->tulis($this->spreadsheetId, $this->dataBlok($lembar, $baris, $mulai, $daftarNoId, $total, self::barisSaldoSebelum($nilai, $mulai, $judul)));
+        $this->sheets->tulis($this->spreadsheetId, $this->dataBlok($lembar, $baris, $mulai, $daftarNoId, $total, self::barisSaldoSebelum($nilai, $mulai, $judul)) + $this->kepalaNoMobil($lembar, $nilai, $judul));
 
         return ['lembar' => $lembar, 'baris_awal' => $mulai, 'baris_akhir' => $mulai + $butuh - 1, 'no_id' => $daftarNoId];
     }
@@ -142,7 +142,7 @@ class TulisKasSheet
             }
             $total += $n - $m;
 
-            $this->sheets->tulis($this->spreadsheetId, $this->dataBlok($lembar, $baris, $dari, $ids, $total, self::barisSaldoSebelum($nilai, $dari, $judul)));
+            $this->sheets->tulis($this->spreadsheetId, $this->dataBlok($lembar, $baris, $dari, $ids, $total, self::barisSaldoSebelum($nilai, $dari, $judul)) + $this->kepalaNoMobil($lembar, $nilai, $judul));
 
             return ['lembar' => $lembar, 'lembar_lama' => $lembarLama, 'baris_awal' => $dari, 'baris_akhir' => $dari + $n - 1, 'no_id' => $ids,
                 'sebelum' => array_slice($sebelum, 0, $m)];
@@ -168,7 +168,8 @@ class TulisKasSheet
             }
             $sel[16] = $noId[$i];
             $sel[17] = '=CONCATENATE(TEXT(B'.$n.';"yymmdd");"-Jago-";Q'.$n.')';
-            $data["{$lembar}!B{$n}:R{$n}"] = [array_values(array_slice(array_replace(array_fill(1, 17, ''), $sel), 0, 17))];
+            // B..S (S = NO MOBIL, nomor truk detail).
+            $data["{$lembar}!B{$n}:S{$n}"] = [array_values(array_slice(array_replace(array_fill(1, 18, ''), $sel), 0, 18))];
         }
         // Baris pertama setelah blok (transfer berikutnya atau baris kosong siap isi): saldonya menyambung ke saldo terakhir blok.
         $setelah = $mulai + count($baris);
@@ -177,6 +178,12 @@ class TulisKasSheet
         }
 
         return $data;
+    }
+
+    /** Judul kolom S "NO MOBIL" di baris judul lembar, bila belum ada. */
+    private function kepalaNoMobil(string $lembar, array $nilai, int $judul): array
+    {
+        return trim((string) ($nilai[$judul - 1][18] ?? '')) === '' ? ["{$lembar}!S{$judul}" => [['NO MOBIL']]] : [];
     }
 
     /** Nomor baris terakhir di atas $baris yang kolom Saldo (I) terisi — baris detail buatan admin dikosongkan. */
@@ -274,7 +281,8 @@ class TulisKasSheet
         $baris = [];
         foreach ($bon as $i => $b) {
             $sel = $i === 0 ? $kepala + [7 => array_sum(array_column($bon, 'nominal'))] : [1 => $tgl];
-            $baris[] = $sel + [10 => (int) $b['nominal'], 11 => $teks($b['pic']), 12 => $teks($b['keterangan']), 14 => $teks($b['kode_gl']), 15 => ($i === 0 || empty($input['link_hanya_pertama']) ? $input['link_bon'] ?? null : null) ?? $kodeBon[$i]];
+            $baris[] = $sel + [10 => (int) $b['nominal'], 11 => $teks($b['pic']), 12 => $teks($b['keterangan']), 14 => $teks($b['kode_gl']), 15 => ($i === 0 || empty($input['link_hanya_pertama']) ? $input['link_bon'] ?? null : null) ?? $kodeBon[$i],
+                18 => (string) ($b['no_mobil'] ?? '')];
         }
 
         if (! empty($input['biaya_transfer'])) {

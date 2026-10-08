@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\AkunGl;
+use App\Models\AsetTruk;
+use App\Support\NomorMobil;
 use App\Models\KasBon;
 use App\Models\KasRiwayat;
 use App\Models\KasTransfer;
@@ -56,7 +58,10 @@ class KasInputController extends Controller
         $versi = (string) KasBulan::max('diimpor_pada');
         $modelKode = Cache::remember('model-kode-gl:'.md5($versi), now()->addDay(), fn () => ModelKodeGl::latih(ModelKodeGl::dataLatih()));
 
-        return view('kas.input', compact('kodeGl', 'pic', 'rekening', 'bank', 'modelKode'));
+        // No Mobil per detail dipilih dari Data Aset (truk yang belum dijual).
+        $aset = AsetTruk::where('status', '!=', 'dijual')->orderBy('no_lambung')->get(['no_lambung', 'plat', 'jenis']);
+
+        return view('kas.input', compact('kodeGl', 'pic', 'rekening', 'bank', 'modelKode', 'aset'));
     }
 
     /**
@@ -126,6 +131,7 @@ class KasInputController extends Controller
             'bon.*.keterangan' => ['required', 'string', 'max:300'],
             'bon.*.kode_gl' => ['required', 'string', 'max:120'],
             'bon.*.uj' => ['nullable', 'string', 'max:40'],
+            'bon.*.no_mobil' => ['nullable', 'string', 'max:20'],
             'reimburse_uj' => ['nullable', 'date'],
             'foto' => ['nullable', 'array', 'max:'.KasFotoController::MAKS_FOTO],
             'foto.*' => KasFotoController::ATURAN['foto.*'],
@@ -147,6 +153,21 @@ class KasInputController extends Controller
             if ($jumlahBon !== $nominal) {
                 return back()->withInput()->withErrors(['nominal_transfer' => 'Ditolak: jumlah transaksi detail '.rp($jumlahBon).' tidak sama dengan nominal transfer '.rp($nominal)
                     .' (selisih '.rp(abs($nominal - $jumlahBon)).'). Transaksi tidak ditulis ke sheet.']);
+            }
+        }
+
+        // No Mobil: dibakukan ("dt34" → "DT 034") dan harus terdaftar di Data Aset.
+        if ($data['arah'] === 'keluar') {
+            $aset = AsetTruk::pluck('no_lambung')->flip();
+            $salah = [];
+            foreach ($data['bon'] as $i => $b) {
+                $data['bon'][$i]['no_mobil'] = NomorMobil::rapikan($b['no_mobil'] ?? null);
+                if ($data['bon'][$i]['no_mobil'] && $aset->isNotEmpty() && ! isset($aset[$data['bon'][$i]['no_mobil']])) {
+                    $salah[] = 'detail baris '.((int) $i + 1).': "'.$data['bon'][$i]['no_mobil'].'"';
+                }
+            }
+            if ($salah) {
+                return back()->withInput()->withErrors(['bon' => 'No Mobil tidak terdaftar di Data Aset ('.implode(', ', $salah).'). Pilih dari daftar, atau kosongkan bila bukan biaya truk.']);
             }
         }
 
@@ -320,7 +341,7 @@ class KasInputController extends Controller
             'nominal_transfer' => $t->kredit ?: null,
             'biaya_transfer' => $biaya ? '1' : '0',
             'nominal_biaya' => $biaya?->kredit ?: TulisKasSheet::BIAYA_TRANSFER,
-            'bon' => $t->bon->map(fn ($b) => ['nominal' => $b->nominal, 'pic' => $b->pic, 'keterangan' => $b->keterangan, 'kode_gl' => $b->kodeGl?->kode_asli])->all(),
+            'bon' => $t->bon->map(fn ($b) => ['nominal' => $b->nominal, 'pic' => $b->pic, 'keterangan' => $b->keterangan, 'kode_gl' => $b->kodeGl?->kode_asli, 'no_mobil' => $b->no_mobil])->all(),
             'foto' => KasFoto::kas()->where('no_id', $noId)->orderBy('id')->get()
                 ->map(fn ($f) => ['penuh' => route('kas.foto', $f), 'kecil' => route('kas.foto', ['foto' => $f, 'ukuran' => 'kecil'])])->all(),
         ];

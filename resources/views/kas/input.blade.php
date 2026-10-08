@@ -202,6 +202,7 @@
                         <th style="width: 130px;">PIC</th>
                         <th>Keterangan</th>
                         <th style="width: 270px;">Kode GL</th>
+                        <th style="width: 110px;" title="Nomor truk (Data Aset) bila biaya ini untuk truk tertentu — sparepart, BBM, servis, uang jalan…">No Mobil</th>
                         <th style="width: 30px;"></th>
                     </tr>
                 </thead>
@@ -222,6 +223,11 @@
             <datalist id="daftar-kode">
                 @foreach ($kodeGl as $k)
                     <option value="{{ $k }}">
+                @endforeach
+            </datalist>
+            <datalist id="daftar-aset">
+                @foreach ($aset as $a)
+                    <option value="{{ $a->no_lambung }}">{{ trim($a->plat.' · '.$a->jenis, ' ·') }}</option>
                 @endforeach
             </datalist>
 
@@ -251,6 +257,7 @@
             <td><input type="text" data-nama="pic" list="daftar-pic" autocomplete="off"></td>
             <td><input type="text" data-nama="keterangan" autocomplete="off" required></td>
             <td><input type="text" data-nama="kode_gl" list="daftar-kode" autocomplete="off" required><div class="saran-kode"></div></td>
+            <td><input type="text" data-nama="no_mobil" list="daftar-aset" autocomplete="off" placeholder="DT …"></td>
             <td><button type="button" class="hapus" title="Hapus baris detail">×</button></td>
         </tr>
     </template>
@@ -358,6 +365,24 @@
                     saran.appendChild(b);
                 });
             };
+            // No Mobil: bila keterangan menyebut tepat satu truk ("Oli DT034", "DT 34") → diisi otomatis (ungu) bila truknya ada di Data Aset.
+            const ASET = new Set(@json($aset->pluck('no_lambung')));
+            const saranMobil = tr => {
+                const el = tr.querySelector('[data-nama=no_mobil]');
+                if (el.value && el.dataset.otomatis !== '1') return;
+                const dt = [...new Set([...tr.querySelector('[data-nama=keterangan]').value.matchAll(/\bDT\s*[-.]?\s*0?(\d{2,3})\b/gi)]
+                    .map(m => 'DT ' + m[1].padStart(3, '0')))].filter(d => ASET.has(d));
+                el.value = dt.length === 1 ? dt[0] : '';
+                el.dataset.otomatis = '1';
+                el.classList.toggle('tebakan', dt.length === 1);
+                el.title = dt.length === 1 ? 'Dari keterangan — periksa' : '';
+            };
+            daftar.addEventListener('focusout', e => {
+                const el = e.target;
+                if (el.dataset?.nama !== 'no_mobil' || !el.value.trim()) return;
+                const m = el.value.trim().toUpperCase().match(/^DT\s*[-.]?\s*0?(\d{2,3})$/);
+                if (m) el.value = 'DT ' + m[1].padStart(3, '0');
+            });
             daftar.addEventListener('input', e => {
                 const tr = e.target.closest('tr');
                 const nama = e.target.dataset.nama;
@@ -369,6 +394,10 @@
                     tr.querySelector('.saran-kode').innerHTML = '';
                 } else if (nama === 'keterangan' || nama === 'pic') {
                     tebakBaris(tr);
+                    if (nama === 'keterangan') saranMobil(tr);
+                } else if (nama === 'no_mobil') {
+                    e.target.dataset.otomatis = e.target.value ? '0' : '1';
+                    e.target.classList.remove('tebakan');
                 }
             });
 
@@ -722,7 +751,7 @@
                     nominalTransfer.value = fmt(d.master.nominal);
                     daftar.innerHTML = '';
                     d.detail.forEach(x => {
-                        const tr = tambah({nominal: x.nominal, pic: x.pic, keterangan: x.keterangan, kode_gl: x.kode_gl, uj: x.uj});
+                        const tr = tambah({nominal: x.nominal, pic: x.pic, keterangan: x.keterangan, kode_gl: x.kode_gl, uj: x.uj, no_mobil: x.no_mobil || ''});
                         tr.querySelector('[data-nama=kode_gl]').dataset.otomatis = '0';
                     });
                     urutkanNama();

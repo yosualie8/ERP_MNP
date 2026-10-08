@@ -98,6 +98,7 @@ class BacaLembarKas
                     'kode_bon' => $sel($r, 'kode_bon') ?: null,
                     'no_id' => $sel($r, 'no_id') ?: null,
                     'id_transaksi' => $sel($r, 'id_transaksi') ?: null,
+                    'no_mobil' => $k['no_mobil'] !== null ? (NomorMobil::rapikan($sel($r, 'no_mobil')) ?: null) : null,
                 ];
                 unset($t);
             }
@@ -159,6 +160,8 @@ class BacaLembarKas
             'kode_bon' => $cari('kode bon'),
             'no_id' => $cari('no id'),
             'id_transaksi' => $cari('id transaksi'),
+            // Kolom S "NO MOBIL" (sejak 8 Okt 2026); lembar lama boleh belum punya.
+            'no_mobil' => array_keys($judul, 'no mobil', true)[0] ?? null,
         ];
     }
 
