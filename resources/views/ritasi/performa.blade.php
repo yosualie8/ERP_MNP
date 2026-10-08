@@ -31,8 +31,28 @@
         $bulanKini = array_key_last($data['bulan']);
         $judulTujuan = $tujuan ?? 'Semua tujuan buangan';
         $namaFile = 'Performa Ritasi '.$tahun.' - '.($tujuan ?? 'Semua').' ('.now()->format('Y-m-d').').png';
-        $teksBagikan = 'Performa ritasi DT '.$tahun.' · '.$judulTujuan.' · total '.number_format($data['jumlah'], 0, ',', '.').' rit'
-            .($data['terakhir'] ? ', data s/d '.$data['terakhir']->translatedFormat('j M Y') : '');
+        // Teks yang ikut dibagikan = rekap bulan terakhir (bukan total setahun).
+        $teksBagikan = '';
+        if ($bulanKini) {
+            $b = $data['bulan'][$bulanKini];
+            $hariData = collect($b['hari']);
+            $akhir = $hariData->last();
+            $perTruk = collect($b['truk'])->sortDesc();
+            $jalan = $perTruk->filter();
+            $nol = $perTruk->reject(fn ($n) => $n > 0)->keys();
+            $rata = $hariData->count() ? $b['total'] / $hariData->count() : 0;
+            $teksBagikan = implode("\n", array_filter([
+                '*Rekap Ritasi '.$b['awal']->translatedFormat('F Y').'*',
+                $judulTujuan.' · data s/d '.$akhir['tanggal']->translatedFormat('j M Y'),
+                'Total: *'.number_format($b['total'], 0, ',', '.').' rit* dari '.$jalan->count().' truk · rata-rata '
+                    .number_format($rata, 1, ',', '.').' rit/hari ('.$hariData->count().' hari)',
+                $akhir['tanggal']->translatedFormat('j M').': '.$akhir['total'].' rit',
+                '',
+                'Per truk:',
+                $jalan->map(fn ($n, $dt) => "{$dt}: {$n}")->implode("\n"),
+                $nol->isNotEmpty() ? "\nTanpa rit bulan ini: ".$nol->implode(', ') : null,
+            ], fn ($x) => $x !== null));
+        }
     @endphp
     <div class="alat-performa">
         <span class="redup">Tahun:</span>
@@ -60,7 +80,7 @@
     <div class="gulir-rekap" id="gulir-rekap">
         <div class="rekap-kertas" id="rekap">
             <div class="judul-rekap">REKAPAN RITASI PER DT THN {{ $tahun }}</div>
-            <div class="sub-rekap">{{ $judulTujuan }} · {{ count($data['truk']) }} truk · total {{ number_format($data['jumlah'], 0, ',', '.') }} rit
+            <div class="sub-rekap">{{ $judulTujuan }} · {{ count($data['truk']) }} truk
                 @if ($data['terakhir']) · data ritasi s/d {{ $data['terakhir']->translatedFormat('j M Y') }}@endif</div>
             @if (! $data['truk'])
                 <p style="margin: 10px 0;">Belum ada ritasi truk MNP di tahun ini{{ $tujuan ? ' untuk tujuan buangan ini' : '' }}.</p>
@@ -89,14 +109,21 @@
                             @endforeach
                         </tbody>
                     @endforeach
-                    <tfoot><tr><td class="kol-label">Grand Total</td>
-                        @foreach ($data['truk'] as $dt)<td>{{ $data['total'][$dt] }}</td>@endforeach
-                        <td class="gt">{{ $data['jumlah'] }}</td></tr></tfoot>
                 </table>
             @endif
             <div class="kaki-rekap">Aplikasi MNP · dibuat {{ now()->translatedFormat('j M Y H:i') }} · sel merah = truk tidak ada rit di tanggal itu</div>
         </div>
     </div>
+
+    @if ($teksBagikan)
+        <div class="kartu" style="margin-top: 12px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px;">
+                <h4 style="margin: 0;">Teks rekap bulanan <span class="redup" style="font-weight: normal; font-size: 13px;">— ikut terkirim bersama gambar</span></h4>
+                <button type="button" class="tombol polos" id="salin-teks" style="padding: 5px 12px; font-size: 13px;">📋 Salin teks</button>
+            </div>
+            <pre id="teks-rekap" style="margin: 0; white-space: pre-wrap; font-family: inherit; font-size: 14px; line-height: 1.5;">{{ $teksBagikan }}</pre>
+        </div>
+    @endif
 
     <script src="{{ asset('js/html2canvas.min.js') }}"></script>
     <script>
@@ -131,13 +158,19 @@
             // HP: menu bagikan bawaan (langsung pilih WhatsApp). Laptop: menu bagikan Windows sering gagal ("Try that again"),
             // jadi gambar disalin ke clipboard + diunduh, lalu WhatsApp Web dibuka — tinggal Ctrl+V di chat.
             const hp = navigator.userAgentData?.mobile ?? /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+            // Laptop: teks rekap bulanan dibawa lewat tautan resmi wa.me (terisi di kotak pesan setelah memilih chat),
+            // gambarnya ditempel dari clipboard.
             const selesaiLaptop = (blob, tersalin) => {
                 unduh(blob);
-                window.open('https://web.whatsapp.com/', '_blank');
+                window.open('https://wa.me/?text=' + encodeURIComponent(teks), '_blank');
                 alert(tersalin
-                    ? 'Gambar sudah disalin. Buka chat di WhatsApp Web (tab baru), lalu tekan Ctrl+V untuk menempelkan gambarnya.\n\nGambar juga sudah diunduh bila ingin dilampirkan manual.'
-                    : 'Gambar sudah diunduh. Lampirkan gambar itu di chat WhatsApp Web yang baru dibuka.');
+                    ? 'Gambar sudah disalin. Di tab WhatsApp yang baru terbuka, pilih chat tujuan — teks rekap bulanan sudah terisi — lalu tekan Ctrl+V untuk menempelkan gambarnya, dan kirim.\n\nGambar juga sudah diunduh bila ingin dilampirkan manual.'
+                    : 'Gambar sudah diunduh. Di tab WhatsApp yang baru terbuka, pilih chat tujuan (teks rekap sudah terisi), lalu lampirkan gambar itu.');
             };
+            document.getElementById('salin-teks')?.addEventListener('click', async e => {
+                try { await navigator.clipboard.writeText(teks); e.currentTarget.textContent = '✓ Tersalin'; }
+                catch { alert('Tidak bisa menyalin otomatis — blok teksnya lalu tekan Ctrl+C.'); }
+            });
             document.getElementById('bagikan-gambar').addEventListener('click', async e => {
                 const tombol = e.currentTarget;
                 const asli = tombol.textContent; tombol.disabled = true; tombol.textContent = 'Membuat gambar…';
