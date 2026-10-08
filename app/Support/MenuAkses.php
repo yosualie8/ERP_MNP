@@ -17,6 +17,7 @@ class MenuAkses
         'input-uj' => ['Input UJ', 'uj.input', ['uj.input', 'uj.store', 'uj.periksa', 'uj.edit', 'uj.update', 'uj.hapus'], 'Input, edit & hapus transaksi uang jalan (Kas Seabank)'],
         'kas-uj' => ['Kas UJ', 'uj.index', ['uj.index', 'uj.sinkron'], 'Melihat daftar transaksi uang jalan'],
         'reimburse-uj' => ['Reimburse UJ', 'reimburse.index', ['reimburse.*'], 'Memilih & mencatat reimburse uang jalan, unduh Excel'],
+        'rapikan-uj' => ['Rapikan Kas UJ', 'uj.rapikan', ['uj.rapikan', 'uj.rapikan.*'], 'Mengisi No Mobil yang kosong di Kas UJ (ditulis ke sheet)'],
         'input-ritasi' => ['Input Ritasi', 'ritasi.input', ['ritasi.input', 'ritasi.store', 'ritasi.periksa', 'ritasi.edit', 'ritasi.update', 'ritasi.hapus'], 'Input, edit & hapus ritasi dump truck'],
         'ritasi' => ['Ritasi', 'ritasi.index', ['ritasi.index', 'ritasi.sinkron'], 'Melihat daftar ritasi dump truck'],
         'reimburse-kas' => ['Reimburse Kas', 'kas.reimburse', ['kas.reimburse', 'kas.reimburse.*'], 'Memilih & mencatat reimburse Kas Harian (owner), unduh Excel'],
@@ -29,7 +30,7 @@ class MenuAkses
     /** Kelompok menu di sidebar: kunci => [judul, ikon, menu di dalamnya]. */
     public const KATEGORI = [
         'kas' => ['Kas Harian', '🏦', ['input-kas', 'kas-harian', 'reimburse-kas', 'kas-belum-reimburse', 'rekap', 'kode-gl']],
-        'uj' => ['Uang Jalan', '🚚', ['input-uj', 'kas-uj', 'reimburse-uj']],
+        'uj' => ['Uang Jalan', '🚚', ['input-uj', 'kas-uj', 'reimburse-uj', 'rapikan-uj']],
         'ritasi' => ['Ritasi', '⛰️', ['input-ritasi', 'ritasi']],
         'aset' => ['Aset', '🚛', ['aset']],
     ];

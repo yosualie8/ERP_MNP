@@ -7,6 +7,7 @@ use App\Http\Controllers\KasController;
 use App\Http\Controllers\KasFotoController;
 use App\Http\Controllers\KasInputController;
 use App\Http\Controllers\PenggunaController;
+use App\Http\Controllers\RapikanUjController;
 use App\Http\Controllers\ReimburseKasController;
 use App\Http\Controllers\ReimburseUjController;
 use App\Http\Controllers\RitasiController;
@@ -42,6 +43,8 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::delete('/kas/foto/{foto}', [KasFotoController::class, 'destroy'])->name('kas.foto.destroy');
     Route::post('/kas/sinkron', [KasInputController::class, 'sinkron'])->name('kas.sinkron');
     Route::get('/kas/rekap', [KasController::class, 'rekap'])->name('kas.rekap');
+    Route::get('/uj/rapikan', [RapikanUjController::class, 'index'])->name('uj.rapikan');
+    Route::post('/uj/rapikan', [RapikanUjController::class, 'simpan'])->name('uj.rapikan.simpan');
     Route::get('/aset', [AsetController::class, 'index'])->name('aset.index');
     Route::get('/aset/tambah', [AsetController::class, 'create'])->name('aset.create');
     Route::post('/aset', [AsetController::class, 'store'])->name('aset.store');

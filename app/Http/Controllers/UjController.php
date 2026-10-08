@@ -10,7 +10,9 @@ use App\Models\UjTransaksi;
 use App\Support\DaftarBank;
 use App\Support\FotoBon;
 use App\Support\GoogleSheets;
+use App\Models\AsetTruk;
 use App\Support\KasSeabank;
+use App\Support\KategoriUj;
 use App\Support\Periode;
 use App\Support\ModelKodeGl;
 use App\Support\NomorMobil;
@@ -71,10 +73,13 @@ class UjController extends Controller
             ->map(fn ($g) => ['nama' => trim(preg_replace('/\s+/', ' ', $g->sortByDesc('n')->first()->kategori)), 'n' => $g->sum('n')])
             ->sortByDesc('n')->pluck('nama')->values();
 
-        // No mobil → jenis kendaraan terakhir yang dipakai (DT 062 → Faw).
-        $mobil = UjDetail::whereNotNull('no_mobil')->where('no_mobil', '!=', '')->orderBy('baris')->get(['no_mobil', 'jenis_kendaraan'])
-            ->mapWithKeys(fn ($d) => [NomorMobil::rapikan($d->no_mobil) => $d->jenis_kendaraan])
-            ->filter()->sortKeys();
+        // No mobil → jenis kendaraan, dari Data Aset (truk yang belum dijual); cadangan: histori Kas UJ.
+        $mobil = AsetTruk::where('status', '!=', 'dijual')->orderBy('no_lambung')->pluck('jenis', 'no_lambung');
+        if ($mobil->isEmpty()) {
+            $mobil = UjDetail::whereNotNull('no_mobil')->where('no_mobil', '!=', '')->orderBy('baris')->get(['no_mobil', 'jenis_kendaraan'])
+                ->mapWithKeys(fn ($d) => [NomorMobil::rapikan($d->no_mobil) => $d->jenis_kendaraan])->filter()->sortKeys();
+        }
+        $kategori = $kategori->map(fn ($k) => KategoriUj::baku($k))->unique()->values();
 
         $bank = UjTransaksi::whereNotNull('bank')->where('tanggal', '>=', $sejak)->select('bank', DB::raw('COUNT(*) as n'))->groupBy('bank')->orderByDesc('n')->limit(8)->pluck('bank')
             ->map(fn ($b) => DaftarBank::kode($b))->filter()->unique()->values();
@@ -175,7 +180,7 @@ class UjController extends Controller
             'nominal' => (int) $data['nominal'],
             'detail' => array_values(array_map(fn ($d) => [
                 'nama' => $rapi($d['nama'] ?? null), 'keterangan' => trim($d['keterangan']), 'nominal' => (int) $d['nominal'],
-                'kategori' => $rapi($d['kategori']), 'jenis_kendaraan' => NomorMobil::rapikanJenis($d['jenis_kendaraan'] ?? null),
+                'kategori' => KategoriUj::baku($rapi($d['kategori'])), 'jenis_kendaraan' => NomorMobil::rapikanJenis($d['jenis_kendaraan'] ?? null),
                 'no_mobil' => NomorMobil::rapikan($d['no_mobil'] ?? null), 'no_do' => $rapi($d['no_do'] ?? null),
                 'konfirmasi' => $rapi($d['konfirmasi'] ?? null),
             ], $data['detail'])),
@@ -205,7 +210,7 @@ class UjController extends Controller
                 continue;
             }
             $detail[(int) $i] = [
-                'nama' => $rapi($d['nama'] ?? null), 'keterangan' => trim($d['keterangan']), 'nominal' => $nominal, 'kategori' => $rapi($d['kategori']),
+                'nama' => $rapi($d['nama'] ?? null), 'keterangan' => trim($d['keterangan']), 'nominal' => $nominal, 'kategori' => KategoriUj::baku($rapi($d['kategori'])),
                 'jenis_kendaraan' => NomorMobil::rapikanJenis($d['jenis_kendaraan'] ?? null), 'no_mobil' => NomorMobil::rapikan($d['no_mobil'] ?? null),
                 'no_do' => $rapi($d['no_do'] ?? null), 'konfirmasi' => null,
             ];

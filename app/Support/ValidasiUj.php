@@ -73,6 +73,14 @@ class ValidasiUj
     }
 
     /** @return array<int, array{kode: string, prioritas: string, pesan: string}> */
+    /** @return array<string, string> no lambung → status Data Aset (kosong bila Data Aset belum diisi) */
+    private static function aset(): array
+    {
+        static $aset;
+
+        return $aset ??= \App\Models\AsetTruk::pluck('status', 'no_lambung')->all();
+    }
+
     private static function aturan(array $r, Collection $lain, Collection $jenisDt): array
     {
         $t = [];
@@ -94,6 +102,14 @@ class ValidasiUj
         }
         if ($r['mobil'] !== null && ! preg_match('/^DT \d{3}$/', $r['mobil']) && ! preg_match('/^LV\b/', $r['mobil'])) {
             $flag('17', 'sedang', "Format No Mobil \"{$r['mobilAsli']}\" tidak normal (seharusnya DT + 3 digit, mis. DT 061).");
+        } elseif ($r['mobil'] !== null && self::aset()) {
+            // Data Aset = daftar truk MNP (no lambung → status).
+            $status = self::aset()[$r['mobil']] ?? null;
+            if ($status === null) {
+                $flag('17', 'tinggi', "{$r['mobil']} tidak terdaftar di Data Aset (truk MNP) — periksa nomornya, atau daftarkan truknya dulu di menu Data Aset.");
+            } elseif ($status === 'dijual') {
+                $flag('17', 'tinggi', "{$r['mobil']} berstatus Dijual / keluar di Data Aset.");
+            }
         }
         if ($r['doAsli'] !== '' && ! preg_match('/^\d+$/', $r['doAsli'])) {
             $flag('17', 'rendah', "Format No DO \"{$r['doAsli']}\" tidak normal (seharusnya angka saja).");
