@@ -61,7 +61,7 @@
         {{-- Saringan per kolom detail transaksi (seperti filter Excel): beberapa kata dalam satu kotak = semuanya harus ada. --}}
         <div class="kartu saring-pj" id="saring-pj">
             <div class="kolom-saring">
-                @foreach (['kode' => 'Kode', 'nama' => 'Driver', 'ket' => 'Keterangan', 'kategori' => 'Kategori', 'mobil' => 'No Mobil', 'do' => 'No DO', 'nominal' => 'Nominal', 'status' => 'Status'] as $k => $l)
+                @foreach (['mobil' => 'No Mobil', 'nama' => 'Driver', 'nominal' => 'Nominal', 'kategori' => 'Kategori', 'do' => 'No DO', 'status' => 'Status', 'kode' => 'Kode'] as $k => $l)
                     <label><span>{{ $l }}</span><input type="search" data-saring="{{ $k }}" autocomplete="off" placeholder="saring…" @if ($k === 'status') list="saran-status-pj" @endif></label>
                 @endforeach
             </div>
@@ -98,20 +98,22 @@
                             @endif
                         </td>
                     </tr>
-                    <tr class="bh"><td>Detail</td><td>Nama</td><td>Keterangan</td><td>Kategori · Mobil · DO</td><td class="angka">Nominal</td><td>Status</td><td>Realisasi</td><td></td></tr>
+                    <tr class="bh"><td>Detail</td><td>No Mobil</td><td>Driver</td><td class="angka">Nominal</td><td>Kategori</td><td>No DO</td><td></td><td></td></tr>
                     @foreach ($p->detail as $d)
                         @php($teksStatus = $d->jenis_realisasi === 'penyesuaian' ? 'Terealisasi (berbeda)' : ['menunggu' => 'Menunggu', 'terealisasi' => 'Terealisasi', 'dialihkan' => 'Dialihkan', 'batal' => 'Dibatalkan'][$d->status] ?? $d->status)
                         <tr @class(['b', $d->status, 'berbeda' => $d->jenis_realisasi === 'penyesuaian']) data-detail
                             data-kode="{{ $p->kode() }}" data-nama="{{ $d->nama }}" data-ket="{{ $d->keterangan }}" data-kategori="{{ $d->kategori }}"
                             data-mobil="{{ $d->no_mobil }}" data-do="{{ $d->no_do }}" data-nominal="{{ (int) $d->nominal }} {{ number_format((int) $d->nominal, 0, ',', '.') }}"
-                            data-status="{{ $teksStatus }}">
+                            data-status="{{ $teksStatus }}"
+                            title="{{ $teksStatus }}{{ $d->id_uj ? ' · '.$d->id_uj : '' }}{{ $d->realisasi_pada ? ' · '.$d->realisasi_pada->translatedFormat('j M') : '' }} · {{ $d->keterangan }}{{ $d->temuan ? ' · FLAG dikonfirmasi: '.$d->konfirmasi : '' }}">
                             <td>@if ($bolehRealisasi && $d->status === 'menunggu')<input type="checkbox" class="pilih-real" value="{{ $d->id }}" data-pj="{{ $p->id }}" data-nominal="{{ (int) $d->nominal }}"
-                                data-nama="{{ $d->nama }}" title="Pilih untuk direalisasikan bersama (satu transfer)">@endif</td><td class="p">{{ $d->nama }}</td><td>{{ $d->keterangan }}@if ($d->temuan)<i title="{{ collect($d->temuan)->pluck('pesan')->implode(' · ') }} — konfirmasi: {{ $d->konfirmasi }}"> ⚠ FLAG dikonfirmasi</i>@endif</td>
-                            <td>{{ $d->kategori }} @if ($d->no_mobil)<i>{{ $d->no_mobil }}</i>@endif @if ($d->no_do)<span class="redup">DO {{ $d->no_do }}</span>@endif</td>
+                                data-nama="{{ $d->nama }}" title="Pilih untuk direalisasikan bersama (satu transfer)">@endif</td>
+                            <td>{{ $d->no_mobil ?: '–' }}</td>
+                            <td>{{ $d->nama }}</td>
                             <td class="angka">{{ rp($d->nominal) }}</td>
-                            <td>{{ $d->jenis_realisasi === 'penyesuaian' ? '✓ Terealisasi (berbeda)' : \App\Models\UjPengajuanDetail::STATUS[$d->status] ?? $d->status }}</td>
-                            <td class="i">{{ $d->id_uj }}@if ($d->realisasi_pada) · {{ $d->realisasi_pada->translatedFormat('j M') }}@endif</td>
-                            <td></td>
+                            <td>{{ $d->kategori }}</td>
+                            <td>{{ $d->no_do ?: '–' }}</td>
+                            <td></td><td></td>
                         </tr>
                         @if ($d->berbeda() && $d->realisasi)
                             @php($r = $d->realisasi)
