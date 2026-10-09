@@ -1,4 +1,5 @@
-@extends('layouts.app', ['judul' => 'Monitor Ritasi'])
+@php($tanah = $mode === 'tanah')
+@extends('layouts.app', ['judul' => $tanah ? 'Bayar Tanah' : 'Monitor Ritasi'])
 
 @section('lebar', '1440px')
 
@@ -14,23 +15,27 @@
     </style>
 
     <div class="ringkas">
-        <div class="kartu"><span class="redup">DO belum ada di Ritasi</span><b>{{ $semua->count() }}</b></div>
+        <div class="kartu"><span class="redup">{{ $tanah ? 'DO belum bayar tanah' : 'DO belum ada di Ritasi' }}</span><b>{{ $semua->count() }}</b></div>
         <div class="kartu"><span class="redup">Uang jalan DO tersebut</span><b>{{ rp($semua->sum('total')) }}</b></div>
         <div class="kartu"><span class="redup">Lebih dari 30 hari</span><b>{{ $jumlahUmur['lama'] }}</b></div>
+        @if ($tanah)
+            <div class="kartu"><span class="redup">Sudah bongkar (ada di Ritasi)</span><b>{{ $semua->whereNotNull('bongkar')->count() }}</b></div>
+        @endif
         <div class="kartu"><span class="redup">Data Ritasi terakhir</span><b>{{ $ritasiTerakhir ? \Illuminate\Support\Carbon::parse($ritasiTerakhir)->translatedFormat('j M Y') : '–' }}</b></div>
     </div>
 
-    <p class="redup" style="margin: 0 0 12px; font-size: 13px;">Daftar No DO yang sudah punya transaksi di Kas UJ tetapi nomornya belum ada di data Ritasi — truk belum bongkar, atau ritasinya belum diinput.
+    <p class="redup" style="margin: 0 0 12px; font-size: 13px;">@if ($tanah)Daftar No DO yang sudah ada Uang Jalan-nya di Kas UJ tetapi belum ada transaksi Uang Tanah-nya. Galian yang memang tidak bayar tanah (mis. ambil material) bisa disaring lewat baris Galian.@else Daftar No DO yang sudah punya transaksi di Kas UJ tetapi nomornya belum ada di data Ritasi — truk belum bongkar, atau ritasinya belum diinput.@endif
         Umur dihitung dari tanggal uang jalan pertama DO itu. Klik baris untuk melihat transaksinya.</p>
 
-    @php($tautan = fn (array $ubah) => route('ritasi.monitor', array_filter([...['umur' => $umur, 'q' => $q, 'tujuan' => $tujuan], ...$ubah], fn ($v) => $v !== null && $v !== '')))
-    <form method="GET" action="{{ route('ritasi.monitor') }}" class="cari-monitor">
+    @php($tautan = fn (array $ubah) => route($rute, array_filter([...['umur' => $umur, 'q' => $q, 'tujuan' => $tujuan, 'galian' => $galian], ...$ubah], fn ($v) => $v !== null && $v !== '')))
+    <form method="GET" action="{{ route($rute) }}" class="cari-monitor">
         <span class="redup">Umur:</span>
         <a href="{{ $tautan(['umur' => '7']) }}" @class(['chip', 'aktif' => $umur === '7'])>≤ 7 hari · {{ $jumlahUmur['7'] }}</a>
         <a href="{{ $tautan(['umur' => '30']) }}" @class(['chip', 'aktif' => $umur === '30'])>≤ 30 hari · {{ $jumlahUmur['30'] }}</a>
         <a href="{{ $tautan(['umur' => null]) }}" @class(['chip', 'aktif' => ! $umur])>All time · {{ $semua->count() }}</a>
         @if ($umur)<input type="hidden" name="umur" value="{{ $umur }}">@endif
         @if ($tujuan !== '')<input type="hidden" name="tujuan" value="{{ $tujuan }}">@endif
+        @if ($galian !== '')<input type="hidden" name="galian" value="{{ $galian }}">@endif
         <input type="search" name="q" value="{{ $q }}" placeholder="Cari No DO, DT, driver, galian, keterangan…" style="margin-left: auto;">
         <button class="tombol polos" type="submit">Cari</button>
         @if ($q)<a href="{{ $tautan(['q' => null]) }}" class="redup">Hapus pencarian</a>@endif
@@ -47,10 +52,17 @@
         @endif
         <a href="{{ route('ritasi.buangan') }}" class="redup" style="margin-left: auto; font-size: 13px;">Atur tujuan buangan truk →</a>
     </div>
+    <div class="cari-monitor">
+        <span class="redup">Galian:</span>
+        <a href="{{ $tautan(['galian' => null]) }}" @class(['chip', 'aktif' => $galian === ''])>Semua</a>
+        @foreach ($jumlahGalian as $g => $n)
+            <a href="{{ $tautan(['galian' => $g]) }}" @class(['chip', 'aktif' => $galian === $g])>{{ $g }} · {{ $n }}</a>
+        @endforeach
+    </div>
 
     <div class="kartu gulir" style="padding: 0;">
         <table class="kas">
-            <thead><tr><th>No DO</th><th>UJ pertama</th><th>Umur</th><th>No Mobil</th><th>Tujuan buangan</th><th>Driver</th><th>Galian</th><th>Kategori</th><th class="angka">Transaksi</th><th class="angka">Total UJ</th></tr></thead>
+            <thead><tr><th>No DO</th><th>UJ pertama</th><th>Umur</th><th>No Mobil</th><th>Tujuan buangan</th><th>Driver</th><th>Galian</th>@if ($tanah)<th>Bongkar</th>@endif<th>Kategori</th><th class="angka">Transaksi</th><th class="angka">Total UJ</th></tr></thead>
             @forelse ($daftar as $d)
                 <tbody class="grup">
                     <tr class="t ada-bon">
@@ -61,11 +73,12 @@
                         <td>{{ implode(', ', $d['buangan']) ?: '–' }}</td>
                         <td>{{ implode(', ', $d['driver']) ?: '–' }}</td>
                         <td>{{ $d['tujuan'] ? ucwords($d['tujuan']) : '–' }}</td>
+                        @if ($tanah)<td>{!! $d['bongkar'] ? '✓ '.e($d['bongkar']->translatedFormat('j M')) : '<span class="redup">belum</span>' !!}</td>@endif
                         <td class="ringkas-gl">{{ implode(', ', $d['kategori']) }}</td>
                         <td class="angka">{{ count($d['detail']) }}</td>
                         <td class="angka"><b>{{ rp($d['total']) }}</b></td>
                     </tr>
-                    <tr class="bh"><td>ID UJ</td><td>Tanggal</td><td>Status</td><td>No Mobil · Jenis</td><td>Driver</td><td colspan="3">Keterangan</td><td>Kategori</td><td class="angka">Nominal</td></tr>
+                    <tr class="bh"><td>ID UJ</td><td>Tanggal</td><td>Status</td><td>No Mobil · Jenis</td><td>Driver</td><td colspan="{{ $tanah ? 4 : 3 }}">Keterangan</td><td>Kategori</td><td class="angka">Nominal</td></tr>
                     @foreach ($d['detail'] as $x)
                         <tr class="b">
                             <td class="i">{{ $x->id_uj ?: 'baris '.$x->baris }}</td>
@@ -73,14 +86,14 @@
                             <td class="redup" style="font-size: 12px;">{{ $x->status }}</td>
                             <td>{{ $x->no_mobil }}@if ($x->jenis_kendaraan) <span class="redup">· {{ $x->jenis_kendaraan }}</span>@endif</td>
                             <td class="p">{{ $x->nama }}</td>
-                            <td colspan="3">{{ $x->keterangan }} <span class="redup">· DO {{ $x->no_do }}</span></td>
+                            <td colspan="{{ $tanah ? 4 : 3 }}">{{ $x->keterangan }} <span class="redup">· DO {{ $x->no_do }}</span></td>
                             <td>{{ $x->kategori }}</td>
                             <td class="angka">{{ rp((int) $x->nominal) }}</td>
                         </tr>
                     @endforeach
                 </tbody>
             @empty
-                <tbody><tr><td colspan="10" class="redup" style="padding: 20px 14px;">{{ $q || $umur ? 'Tidak ada DO yang cocok dengan saringan ini.' : 'Semua DO di Kas UJ sudah ada di data Ritasi.' }}</td></tr></tbody>
+                <tbody><tr><td colspan="{{ $tanah ? 11 : 10 }}" class="redup" style="padding: 20px 14px;">{{ $q || $umur || $tujuan !== '' || $galian !== '' ? 'Tidak ada DO yang cocok dengan saringan ini.' : ($tanah ? 'Semua DO yang ada uang jalannya sudah ada transaksi uang tanahnya.' : 'Semua DO di Kas UJ sudah ada di data Ritasi.') }}</td></tr></tbody>
             @endforelse
         </table>
     </div>

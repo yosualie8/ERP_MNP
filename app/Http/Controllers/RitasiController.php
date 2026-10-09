@@ -46,10 +46,25 @@ class RitasiController extends Controller
     /** Monitor Ritasi: DO yang sudah ada uang jalannya di Kas UJ tetapi belum ada di data Ritasi (belum bongkar). */
     public function monitor(Request $request): View
     {
+        return $this->tampilMonitor($request, 'ritasi', MonitorRitasi::belumBongkar());
+    }
+
+    /** Bayar Tanah: DO yang sudah ada Uang Jalan-nya di Kas UJ tetapi belum ada transaksi Uang Tanah-nya. */
+    public function bayarTanah(Request $request): View
+    {
+        return $this->tampilMonitor($request, 'tanah', MonitorRitasi::belumBayarTanah());
+    }
+
+    /** Halaman monitor DO bersama (Monitor Ritasi & Bayar Tanah): saringan umur, tujuan buangan, galian & pencarian. */
+    private function tampilMonitor(Request $request, string $mode, array $hasil): View
+    {
         // Umur DO: ≤ 7 hari, ≤ 30 hari, atau all time (bawaan).
         $umur = in_array($request->query('umur'), ['7', '30'], true) ? $request->query('umur') : null;
         $q = trim((string) $request->query('q'));
-        ['do' => $semua, 'bukan_angka' => $bukanAngka] = MonitorRitasi::belumBongkar();
+        ['do' => $semua, 'bukan_angka' => $bukanAngka] = $hasil;
+        $galian = trim((string) $request->query('galian'));
+        $namaGalian = fn ($d) => $d['tujuan'] ? ucwords($d['tujuan']) : '(tidak diketahui)';
+        $cocokGalian = fn ($d) => $galian === '' || $namaGalian($d) === $galian;
         // Tujuan buangan DO = tujuan buangan truk-truknya, hanya truk yang terdaftar di Buangan Truck (aktif 30 hari terakhir)
         // dan berstatus aktif di Data Aset. Truk lain (mis. DO lama dari truk yang sudah tidak jalan) tidak diberi tujuan.
         $tujuanTruk = BuanganTruk::daftar()->filter(fn ($t) => $t['status_aset'] === 'aktif' && $t['tujuan'])->pluck('tujuan', 'no_lambung');
@@ -65,10 +80,12 @@ class RitasiController extends Controller
         $hitung = fn ($f) => $semua->filter($f)->count();
 
         return view('ritasi.monitor', [
-            'daftar' => $semua->filter($cocokUmur)->filter($cocokCari)->filter($cocokTujuan)->values(),
-            'semua' => $semua, 'umur' => $umur, 'q' => $q, 'tujuan' => $tujuan, 'bukanAngka' => $bukanAngka,
-            'jumlahTujuan' => $semua->filter($cocokUmur)->flatMap(fn ($d) => $d['buangan'])->countBy()->sortDesc(),
-            'jumlahTanpa' => $semua->filter($cocokUmur)->filter(fn ($d) => ! $d['buangan'])->count(),
+            'mode' => $mode, 'rute' => $mode === 'tanah' ? 'ritasi.bayar-tanah' : 'ritasi.monitor',
+            'daftar' => $semua->filter($cocokUmur)->filter($cocokCari)->filter($cocokTujuan)->filter($cocokGalian)->values(),
+            'semua' => $semua, 'umur' => $umur, 'q' => $q, 'tujuan' => $tujuan, 'galian' => $galian, 'bukanAngka' => $bukanAngka,
+            'jumlahTujuan' => $semua->filter($cocokUmur)->filter($cocokGalian)->flatMap(fn ($d) => $d['buangan'])->countBy()->sortDesc(),
+            'jumlahTanpa' => $semua->filter($cocokUmur)->filter($cocokGalian)->filter(fn ($d) => ! $d['buangan'])->count(),
+            'jumlahGalian' => $semua->filter($cocokUmur)->filter($cocokTujuan)->map($namaGalian)->countBy()->sortDesc(),
             'jumlahUmur' => [
                 '7' => $hitung(fn ($d) => $d['umur'] !== null && $d['umur'] <= 7),
                 '30' => $hitung(fn ($d) => $d['umur'] !== null && $d['umur'] <= 30),
