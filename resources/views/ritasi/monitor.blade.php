@@ -17,22 +17,21 @@
         table.bongkar input.isi-bongkar { width: 100%; min-width: 110px; padding: 6px 8px; border-radius: 6px; font-size: 13px; }
         table.bongkar input[data-tanggal-id].isi-bongkar { min-width: 112px; }
         .tanggal-id { display: inline-flex; align-items: center; gap: 4px; position: relative; width: 100%; }
-        /* Isi sekaligus: satu baris per isian — label (teks tebal, tanpa kotak) · isian (kotak terang) · tombol (garis aksen). */
-        .isi-massal { max-width: 720px; padding: 14px 18px; margin-bottom: 14px; }
-        .isi-massal .judul-massal { font-size: 14px; margin-bottom: 10px; color: var(--redup); }
+        /* Isi sekaligus: satu baris per isian — label (teks tebal, tanpa kotak) · isian (tema gelap, bingkai tebal) · tombol (garis aksen). */
+        .isi-massal { max-width: 560px; padding: 10px 14px; margin-bottom: 12px; }
+        .isi-massal .judul-massal { font-size: 13px; margin-bottom: 6px; color: var(--redup); }
         .isi-massal .judul-massal b { color: var(--teks); }
-        .isi-massal .baris-massal { display: grid; grid-template-columns: 170px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 7px 0; border-top: 1px dashed var(--garis); }
-        .isi-massal .baris-massal label { margin: 0; font-weight: 700; font-size: 14px; color: var(--teks); }
-        .isi-massal .isian-massal input { width: 100%; padding: 8px 10px; border-radius: 7px; font-size: 15px;
-            background: #f4f6fa; color: #111; border: 1px solid #c4cad6; }
-        .isi-massal .isian-massal input::placeholder { color: #8a909c; }
-        .isi-massal .isian-massal input:focus { outline: 2px solid var(--aksen); outline-offset: 0; }
+        .isi-massal .baris-massal { display: grid; grid-template-columns: 140px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 4px 0; }
+        .isi-massal .baris-massal label { margin: 0; font-weight: 700; font-size: 13px; color: var(--teks); }
+        .isi-massal .isian-massal input { width: 100%; padding: 5px 8px; border-radius: 6px; font-size: 13px; border: 2px solid #4a5160; }
+        .isi-massal .isian-massal input:focus { border-color: var(--aksen); outline: none; }
         .isi-massal .tanggal-id { width: 100%; }
-        .isi-massal .tanggal-id .tombol-kalender { background: #f4f6fa; border-color: #c4cad6; padding: 7px 8px; }
-        .isi-massal .tombol-massal { background: transparent; color: var(--teks); border: 1.5px solid var(--aksen); border-radius: 7px;
-            padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+        .isi-massal .tanggal-id .tombol-kalender { border: 2px solid #4a5160; padding: 3px 6px; }
+        .isi-massal .tombol-massal { background: transparent; color: var(--teks); border: 1.5px solid var(--aksen); border-radius: 6px;
+            padding: 4px 10px; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; }
         .isi-massal .tombol-massal:hover { background: var(--aksen); color: #fff; }
-        .isi-massal .kaki-massal { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding-top: 10px; border-top: 1px dashed var(--garis); font-size: 12px; }
+        .isi-massal .kaki-massal { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; padding-top: 8px; margin-top: 4px; border-top: 1px dashed var(--garis); font-size: 12px; }
+        .isi-massal .kaki-massal .tombol { padding: 4px 10px; font-size: 12px; }
         @media (max-width: 640px) { .isi-massal .baris-massal { grid-template-columns: 1fr; gap: 6px; } }
         .tanggal-id .tombol-kalender { background: none; border: 1px solid var(--garis); border-radius: 6px; padding: 4px 6px; cursor: pointer; font-size: 13px; line-height: 1; }
         input.tanggal-salah { border-color: var(--aksen) !important; box-shadow: 0 0 0 2px var(--aksen-muda); }
