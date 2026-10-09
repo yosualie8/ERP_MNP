@@ -82,11 +82,15 @@
                 <div class="cari-monitor isi-massal">
                     <span class="redup">Isi sekaligus untuk {{ $daftar->count() }} DO yang tampil:</span>
                     <input type="date" id="tanggal-massal" value="{{ now()->toDateString() }}" max="{{ now()->toDateString() }}" style="padding: 7px 9px; border-radius: 7px;">
-                    <button type="button" class="tombol polos" data-massal="tanggal" data-sumber="tanggal-massal">Isi tanggal bongkar</button>
+                    <button type="button" class="tombol polos" data-massal="tanggal" data-sumber="tanggal-massal" data-label="tanggal bongkar">Isi tanggal bongkar</button>
                     <input type="time" id="jam-massal" value="08:00" style="padding: 7px 9px; border-radius: 7px;">
-                    <button type="button" class="tombol polos" data-massal="jam" data-sumber="jam-massal">Isi jam bongkar</button>
+                    <button type="button" class="tombol polos" data-massal="jam" data-sumber="jam-massal" data-label="jam bongkar">Isi jam bongkar</button>
+                    <input type="text" id="tahap-massal" list="saran-tahap" autocomplete="off" placeholder="Tujuan bongkar, mis. ASG Tahap 116" style="padding: 7px 9px; border-radius: 7px; min-width: 210px;">
+                    <button type="button" class="tombol polos" data-massal="tahap" data-sumber="tahap-massal" data-label="tujuan bongkar">Isi tujuan bongkar</button>
+                    <input type="text" id="tanah-massal" list="saran-tanah" autocomplete="off" placeholder="Jenis tanah / barang" style="padding: 7px 9px; border-radius: 7px; min-width: 170px;">
+                    <button type="button" class="tombol polos" data-massal="jenis_tanah" data-sumber="tanah-massal" data-label="jenis tanah / barang">Isi jenis tanah</button>
                     <button type="button" class="tombol polos" id="kosongkan-massal" style="padding: 7px 12px;">Kosongkan isian sekaligus</button>
-                    <span class="redup" style="font-size: 12px; flex-basis: 100%;">DO yang hanya berisi tanggal/jam dari tombol ini tidak ikut disimpan — lengkapi Tujuan, Jenis Tanah & No Surat Jalan untuk DO yang sudah bongkar.</span>
+                    <span class="redup" style="font-size: 12px; flex-basis: 100%;">DO yang hanya berisi isian dari tombol-tombol ini tidak ikut disimpan — cukup ketik No Surat Jalan (atau ubah isiannya) di DO yang sudah bongkar, lalu Simpan bongkar.</span>
                 </div>
             @endif
             <div class="kartu gulir" style="padding: 0;">
@@ -223,10 +227,10 @@
             // Kolom bongkar lain (selain galian & isian sekaligus) sudah diisi = baris memang sedang dicatat.
             const lainTerisi = tr => [...tr.querySelectorAll('.isi-bongkar')].some(x => !x.name.endsWith('[galian]') && x.dataset.massal !== '1' && x.value.trim());
             form.querySelectorAll('button[data-massal]').forEach(b => b.addEventListener('click', () => {
-                const f = b.dataset.massal, nilai = document.getElementById(b.dataset.sumber).value;
-                if (!nilai) { alert(`Pilih ${f}nya dulu.`); return; }
+                const f = b.dataset.massal, label = b.dataset.label, nilai = document.getElementById(b.dataset.sumber).value.trim().replace(/\s+/g, ' ');
+                if (!nilai) { alert(`Isi ${label}nya dulu.`); return; }
                 const ada = kolomBaris(f).filter(i => i.value && i.value !== nilai && i.dataset.massal !== '1');
-                const timpa = ada.length ? confirm(`${ada.length} DO sudah punya ${f} bongkar lain. Timpa juga?\n\nOK = timpa semua · Batal = isi yang masih kosong saja`) : false;
+                const timpa = ada.length ? confirm(`${ada.length} DO sudah punya ${label} lain. Timpa juga?\n\nOK = timpa semua · Batal = isi yang masih kosong saja`) : false;
                 kolomBaris(f).forEach(i => {
                     if (i.value && i.dataset.massal !== '1' && !timpa) return;
                     i.value = nilai;
@@ -235,9 +239,14 @@
                 });
                 hitung();
             }));
-            // Kosongkan isian sekaligus (tanggal/jam yang diketik sendiri tidak disentuh).
+            // Enter di kotak isian sekaligus = jalankan tombol "Isi …"-nya (bukan mengirim form).
+            form.querySelectorAll('button[data-massal]').forEach(b => document.getElementById(b.dataset.sumber)
+                ?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); b.click(); } }));
+            // Kosongkan isian sekaligus di DO yang belum dicatat (isian yang diketik sendiri, dan DO yang sudah diberi
+            // No Surat Jalan / isian lain, tidak disentuh).
             document.getElementById('kosongkan-massal')?.addEventListener('click', () => {
-                [...kolomBaris('tanggal'), ...kolomBaris('jam')].forEach(i => { if (i.dataset.massal === '1') { i.value = ''; delete i.dataset.massal; } });
+                ['tanggal', 'jam', 'tahap', 'jenis_tanah'].flatMap(kolomBaris)
+                    .forEach(i => { if (i.dataset.massal === '1' && !lainTerisi(i.closest('tr'))) { i.value = ''; delete i.dataset.massal; } });
                 hitung();
             });
             // Baris yang tidak diisi tidak ikut dikirim.
