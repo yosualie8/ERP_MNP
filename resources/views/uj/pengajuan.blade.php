@@ -46,7 +46,6 @@
         .saring-pj .kaki-saring .tombol { padding: 4px 10px; font-size: 12px; margin-left: auto; }
         .saring-pj .pilih-tampil { display: flex; align-items: center; gap: 6px; margin: 0; cursor: pointer; }
         table.kas tr.b.tersaring, table.kas tr.realisasi.tersaring, table.kas tbody.grup.tersaring { display: none; }
-        table.kas tbody.grup.cocok tr.b:not(.tersaring), table.kas tbody.grup.cocok tr.bh { display: table-row; }
     </style>
     <div class="ringkas">
         <div class="kartu"><span class="redup">Menunggu realisasi</span><b>{{ rp((int) $menunggu->s) }}</b></div>
@@ -70,7 +69,13 @@
         @if ($detailBeda->count())
             <a href="{{ route('pengajuan-uj.daftar', ['beda' => 1]) }}" @class(['chip', 'aktif' => $beda])>⚠ Tidak sesuai / dialihkan · {{ $detailBeda->count() }}</a>
         @endif
-        <a href="{{ route('pengajuan-uj.buat') }}" class="tombol" style="margin-left: auto; padding: 8px 14px;">+ Ajukan uang jalan</a>
+        @if ($pengajuan->isNotEmpty())
+            <span style="margin-left: auto; display: flex; gap: 6px;">
+                <button type="button" class="tombol polos" id="buka-semua-pj" style="padding: 6px 12px; font-size: 13px;" title="Buka rincian semua pengajuan">▾ Expand all</button>
+                <button type="button" class="tombol polos" id="tutup-semua-pj" style="padding: 6px 12px; font-size: 13px;" title="Tutup rincian semua pengajuan">▸ Collapse all</button>
+            </span>
+        @endif
+        <a href="{{ route('pengajuan-uj.buat') }}" class="tombol" style="{{ $pengajuan->isNotEmpty() ? '' : 'margin-left: auto; ' }}padding: 8px 14px;">+ Ajukan uang jalan</a>
         @if ($bolehRealisasi)<a href="{{ route('uj.input') }}" class="tombol polos" style="padding: 8px 14px;">Realisasikan di Input UJ →</a>@endif
     </div>
 
@@ -260,6 +265,10 @@
                 if (e.target.closest('button, a, form, input')) return;
                 tr.parentElement.classList.toggle('buka');
             }));
+            // Expand / collapse all: semua pengajuan yang sedang tampil (hasil saringan).
+            const grupTampil = () => [...document.querySelectorAll('tbody.grup')].filter(tb => !tb.classList.contains('tersaring'));
+            document.getElementById('buka-semua-pj')?.addEventListener('click', () => grupTampil().forEach(tb => tb.classList.add('buka')));
+            document.getElementById('tutup-semua-pj')?.addEventListener('click', () => grupTampil().forEach(tb => tb.classList.remove('buka')));
             const fmt = n => new Intl.NumberFormat('id-ID').format(n || 0);
 
             // ===== Saringan per kolom detail (seperti filter Excel) =====
@@ -280,7 +289,7 @@
                 document.querySelectorAll('tbody.grup').forEach(tb => {
                     const ada = [...tb.querySelectorAll('tr[data-detail]')].some(tampak);
                     tb.classList.toggle('tersaring', aturan.length > 0 && !ada);
-                    tb.classList.toggle('cocok', aturan.length > 0 && ada); // pengajuan yang cocok otomatis terbuka
+                    if (aturan.length > 0 && ada) tb.classList.add('buka'); // pengajuan yang cocok dibuka (masih bisa ditutup)
                 });
                 const terlihat = detailRows.filter(tampak);
                 const info = document.getElementById('info-saring');
