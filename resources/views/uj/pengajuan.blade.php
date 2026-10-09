@@ -80,8 +80,7 @@
                             <td class="angka">{{ rp($d->nominal) }}</td>
                             <td>{{ $d->jenis_realisasi === 'penyesuaian' ? '✓ Terealisasi (berbeda)' : \App\Models\UjPengajuanDetail::STATUS[$d->status] ?? $d->status }}</td>
                             <td class="i">{{ $d->id_uj }}@if ($d->realisasi_pada) · {{ $d->realisasi_pada->translatedFormat('j M') }}@endif</td>
-                            <td style="white-space: nowrap;">@if ($bolehRealisasi && $d->status === 'menunggu')<a href="{{ route('uj.input', ['pengajuan' => $d->id]) }}" class="tombol-edit"
-                                title="Buka Input UJ yang sudah berisi detail ini persis seperti pengajuannya">➜ Input UJ</a>@endif</td>
+                            <td></td>
                         </tr>
                         @if ($d->berbeda() && $d->realisasi)
                             @php($r = $d->realisasi)
