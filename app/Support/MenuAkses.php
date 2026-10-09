@@ -24,7 +24,7 @@ class MenuAkses
         'buangan-truk' => ['Buangan Truck', 'ritasi.buangan', ['ritasi.buangan', 'ritasi.buangan.*'], 'Truk aktif 30 hari terakhir & tujuan buangannya; ubah tujuan buangan'],
         'performa-ritasi' => ['Performa Ritasi', 'ritasi.performa', ['ritasi.performa'], 'Jumlah rit per truk per bulan & tanggal; bagikan ke WhatsApp sebagai gambar'],
         'bayar-tanah' => ['Bayar Tanah', 'ritasi.bayar-tanah', ['ritasi.bayar-tanah'], 'DO yang sudah ada uang jalannya di Kas UJ tetapi belum ada transaksi uang tanahnya'],
-        'monitor-ritasi' => ['Monitor Ritasi', 'ritasi.monitor', ['ritasi.monitor'], 'DO yang sudah ada uang jalannya di Kas UJ tetapi belum ada di data Ritasi (belum bongkar)'],
+        'monitor-ritasi' => ['Monitor Ritasi', 'ritasi.monitor', ['ritasi.monitor', 'ritasi.monitor.*'], 'Isi data bongkar dari surat jalan (masuk ke Ritasi) — DO yang sudah ada uang jalannya di Kas UJ tetapi belum ada di data Ritasi (belum bongkar)'],
         'validasi-reimburse' => ['Validasi Reimburse', 'kas.validasi-reimburse', ['kas.validasi-reimburse', 'kas.validasi-reimburse.*'], 'Upload Excel daftar reimburse: cek double reimburse & rekap per Kode GL'],
         'kas-belum-reimburse' => ['⬇ Excel Belum Reimburse', 'kas.belum-reimburse', ['kas.belum-reimburse'], 'Unduh daftar transaksi Kas Harian yang belum reimburse (Excel)'],
         'rekap' => ['Rekap Biaya', 'kas.rekap', ['kas.rekap'], 'Rekap biaya per akun × bulan'],

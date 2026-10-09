@@ -70,6 +70,7 @@ class MonitorRitasi
                     'terakhir' => $c->last()->tanggal,
                     'umur' => $pertama ? (int) $pertama->diffInDays($hariIni) : null,
                     'mobil' => $c->pluck('no_mobil')->filter()->unique()->values()->all(),
+                    'jenis' => $c->pluck('jenis_kendaraan')->filter()->unique()->values()->all(),
                     'driver' => $c->pluck('nama')->filter()->unique()->values()->all(),
                     'tujuan' => TebakGalian::tempat($c->pluck('keterangan')),
                     'kategori' => $c->pluck('kategori')->filter()->unique()->values()->all(),

@@ -12,6 +12,15 @@
         table.kas td.angka, table.kas th.angka { text-align: right; font-variant-numeric: tabular-nums; }
         .cari-monitor { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
         .cari-monitor input[type=search] { min-width: 280px; padding: 8px 10px; border-radius: 7px; }
+        table.bongkar td { vertical-align: middle; }
+        table.bongkar td.sel-do { cursor: pointer; white-space: nowrap; }
+        table.bongkar input.isi-bongkar { width: 100%; min-width: 110px; padding: 6px 8px; border-radius: 6px; font-size: 13px; }
+        table.bongkar input[type=date].isi-bongkar { min-width: 135px; }
+        table.bongkar tr.t.diisi td { background: rgba(76, 195, 138, .10); }
+        table.bongkar tr.t.belum-lengkap td, table.bongkar tr.t.baris-salah td { background: rgba(224, 165, 38, .12); }
+        table.bongkar tr.t.belum-lengkap input.wajib:placeholder-shown, table.bongkar tr.t.belum-lengkap input.wajib[value=""] { border-color: #e0a526; }
+        .simpan-bongkar { position: sticky; bottom: 0; display: flex; gap: 12px; align-items: center; padding: 12px 16px; margin-top: 12px;
+            background: var(--kartu); border: 1px solid var(--garis); border-radius: 10px; z-index: 2; }
     </style>
 
     <div class="ringkas">
@@ -24,8 +33,9 @@
         <div class="kartu"><span class="redup">Data Ritasi terakhir</span><b>{{ $ritasiTerakhir ? \Illuminate\Support\Carbon::parse($ritasiTerakhir)->translatedFormat('j M Y') : '–' }}</b></div>
     </div>
 
-    <p class="redup" style="margin: 0 0 12px; font-size: 13px;">@if ($tanah)Daftar No DO yang sudah ada Uang Jalan-nya di Kas UJ tetapi belum ada transaksi Uang Tanah-nya. Galian yang memang tidak bayar tanah (mis. ambil material) bisa disaring lewat baris Galian.@else Daftar No DO yang sudah punya transaksi di Kas UJ tetapi nomornya belum ada di data Ritasi — truk belum bongkar, atau ritasinya belum diinput.@endif
-        Umur dihitung dari tanggal uang jalan pertama DO itu. Klik baris untuk melihat transaksinya.</p>
+    <p class="redup" style="margin: 0 0 12px; font-size: 13px;">@if ($tanah)Daftar No DO yang sudah ada Uang Jalan-nya di Kas UJ tetapi belum ada transaksi Uang Tanah-nya. Galian yang memang tidak bayar tanah (mis. ambil material) bisa disaring lewat baris Galian.@else DO yang sudah ada uang jalannya di Kas UJ tetapi belum bongkar (belum ada di data Ritasi). Begitu surat jalannya masuk, isi Tanggal Bongkar, Tujuan Bongkar,
+            Jenis Tanah & No Surat Jalan lalu klik <b>Simpan bongkar</b> — rit tercatat di Ritasi (aplikasi & sheet) dan DO hilang dari daftar ini.@endif
+        Umur dihitung dari tanggal uang jalan pertama DO itu. Klik {{ $tanah ? 'baris' : 'No DO' }} untuk melihat transaksi uang jalannya.</p>
 
     @php($tautan = fn (array $ubah) => route($rute, array_filter([...['umur' => $umur, 'q' => $q, 'tujuan' => $tujuan, 'galian' => $galian], ...$ubah], fn ($v) => $v !== null && $v !== '')))
     <form method="GET" action="{{ route($rute) }}" class="cari-monitor">
@@ -60,6 +70,70 @@
         @endforeach
     </div>
 
+    @unless ($tanah)
+        {{-- Monitor Ritasi: admin mengisi data bongkar dari surat jalan; tiap DO yang diisi menjadi satu rit di Ritasi. --}}
+        <form method="POST" action="{{ route('ritasi.monitor.bongkar') }}" id="form-bongkar">
+            @csrf
+            @if ($errors->any())
+                <div class="pesan galat"><b>Belum tersimpan — perbaiki dulu:</b>
+                    <ul style="margin: 6px 0 0; padding-left: 18px;">@foreach ($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul></div>
+            @endif
+            <div class="kartu gulir" style="padding: 0;">
+                <table class="kas bongkar">
+                    <thead><tr><th>No DO</th><th>Nomor Mobil</th><th>Jenis Mobil</th><th>Nama Supir</th><th>Tanggal UJ</th><th>Galian</th>
+                        <th>Tanggal Bongkar</th><th>Tujuan Bongkar</th><th>Jenis Tanah / Barang</th><th>No Surat Jalan</th><th>Keterangan</th></tr></thead>
+                    @forelse ($daftar as $d)
+                        @php($n = 'bongkar['.$d['do'].']')
+                        @php($lama = old('bongkar.'.$d['do'], []))
+                        @php($salah = $errors->has('bongkar.'.$d['do']) || $errors->has('konfirmasi.'.$d['do']))
+                        <tbody class="grup">
+                            <tr @class(['t', 'ada-bon', 'baris-salah' => $salah]) data-do="{{ $d['do'] }}">
+                                <td class="sel-do" title="Klik untuk melihat transaksi UJ DO ini"><span class="panah">▸</span> <b>{{ $d['do'] }}</b></td>
+                                <td>{{ implode(', ', $d['mobil']) ?: '–' }}</td>
+                                <td>{{ implode(', ', $d['jenis']) ?: '–' }}</td>
+                                <td>{{ implode(', ', $d['driver']) ?: '–' }}</td>
+                                <td style="white-space: nowrap;">{{ $d['pertama']?->translatedFormat('j M Y') ?? '–' }}
+                                    @if ($d['umur'] !== null)<br><span @class(['umur', 'baru' => $d['umur'] <= 7, 'sedang' => $d['umur'] > 7 && $d['umur'] <= 30, 'lama' => $d['umur'] > 30])>{{ $d['umur'] }} hari</span>@endif</td>
+                                <td><input type="text" name="{{ $n }}[galian]" value="{{ $lama['galian'] ?? $d['galian_saran'] }}" list="saran-galian" autocomplete="off" class="isi-bongkar" data-bawaan="{{ $d['galian_saran'] }}"></td>
+                                <td><input type="date" name="{{ $n }}[tanggal]" value="{{ $lama['tanggal'] ?? '' }}" max="{{ now()->toDateString() }}" class="isi-bongkar wajib"></td>
+                                <td><input type="text" name="{{ $n }}[tahap]" value="{{ $lama['tahap'] ?? '' }}" list="saran-tahap" autocomplete="off" class="isi-bongkar wajib" placeholder="mis. ASG Tahap 116"></td>
+                                <td><input type="text" name="{{ $n }}[jenis_tanah]" value="{{ $lama['jenis_tanah'] ?? '' }}" list="saran-tanah" autocomplete="off" class="isi-bongkar wajib"></td>
+                                <td><input type="text" name="{{ $n }}[no_seri]" value="{{ $lama['no_seri'] ?? '' }}" autocomplete="off" class="isi-bongkar wajib" inputmode="numeric"></td>
+                                <td><input type="text" name="{{ $n }}[keterangan]" value="{{ $lama['keterangan'] ?? '' }}" autocomplete="off" class="isi-bongkar" maxlength="300" placeholder="catatan admin">
+                                    @if ($errors->has('konfirmasi.'.$d['do']) || ($lama['konfirmasi'] ?? ''))
+                                        <input type="text" name="{{ $n }}[konfirmasi]" value="{{ $lama['konfirmasi'] ?? '' }}" autocomplete="off" class="isi-bongkar" maxlength="1000"
+                                            placeholder="konfirmasi FLAG (min. 10 karakter)" style="margin-top: 4px; border-color: #e0a526;">
+                                    @endif
+                                </td>
+                            </tr>
+                            <tr class="bh"><td>ID UJ</td><td>Tanggal</td><td>Status</td><td>No Mobil · Jenis</td><td>Supir</td><td colspan="4">Keterangan UJ</td><td>Kategori</td><td class="angka">Nominal</td></tr>
+                            @foreach ($d['detail'] as $x)
+                                <tr class="b">
+                                    <td class="i">{{ $x->id_uj ?: 'baris '.$x->baris }}</td>
+                                    <td>{{ $x->tanggal?->translatedFormat('j M Y') }}</td>
+                                    <td class="redup" style="font-size: 12px;">{{ $x->status }}</td>
+                                    <td>{{ $x->no_mobil }}@if ($x->jenis_kendaraan) <span class="redup">· {{ $x->jenis_kendaraan }}</span>@endif</td>
+                                    <td class="p">{{ $x->nama }}</td>
+                                    <td colspan="4">{{ $x->keterangan }}</td>
+                                    <td>{{ $x->kategori }}</td>
+                                    <td class="angka">{{ rp((int) $x->nominal) }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    @empty
+                        <tbody><tr><td colspan="11" class="redup" style="padding: 20px 14px;">{{ $q || $umur || $tujuan !== '' || $galian !== '' ? 'Tidak ada DO yang cocok dengan saringan ini.' : 'Semua DO di Kas UJ sudah ada di data Ritasi.' }}</td></tr></tbody>
+                    @endforelse
+                </table>
+            </div>
+            <datalist id="saran-tahap">@foreach ($saran['tahap'] as $s)<option value="{{ $s }}">@endforeach</datalist>
+            <datalist id="saran-tanah">@foreach ($saran['jenis_tanah'] as $s)<option value="{{ $s }}">@endforeach</datalist>
+            <datalist id="saran-galian">@foreach ($saran['galian'] as $s)<option value="{{ $s }}">@endforeach</datalist>
+            <div class="simpan-bongkar">
+                <button class="tombol" type="submit" id="simpan-bongkar" disabled>Simpan bongkar</button>
+                <span class="redup" id="info-bongkar">Isi Tanggal Bongkar, Tujuan Bongkar, Jenis Tanah & No Surat Jalan dari surat jalan untuk DO yang sudah bongkar.</span>
+            </div>
+        </form>
+    @else
     <div class="kartu gulir" style="padding: 0;">
         <table class="kas">
             <thead><tr><th>No DO</th><th>UJ pertama</th><th>Umur</th><th>No Mobil</th><th>Tujuan buangan</th><th>Driver</th><th>Galian</th>@if ($tanah)<th>Bongkar</th>@endif<th>Kategori</th><th class="angka">Transaksi</th><th class="angka">Total UJ</th></tr></thead>
@@ -97,6 +171,7 @@
             @endforelse
         </table>
     </div>
+    @endunless
 
     @if ($bukanAngka->isNotEmpty())
         <p class="redup" style="font-size: 12px; margin-top: 10px;">Tidak ikut dimonitor: {{ $bukanAngka->count() }} isian "No DO" di Kas UJ yang bukan nomor DO
@@ -104,6 +179,37 @@
     @endif
 
     <script>
-        document.querySelectorAll('tbody.grup tr.t').forEach(tr => tr.addEventListener('click', () => tr.parentElement.classList.toggle('buka')));
+        (() => {
+            // Bayar Tanah: klik baris membuka transaksi. Monitor Ritasi: hanya sel No DO (sel lain berisi isian).
+            document.querySelectorAll('tbody.grup tr.t').forEach(tr => (tr.querySelector('.sel-do') ?? tr).addEventListener('click', () => tr.parentElement.classList.toggle('buka')));
+            const form = document.getElementById('form-bongkar');
+            if (!form) return;
+            const tombol = document.getElementById('simpan-bongkar');
+            const info = document.getElementById('info-bongkar');
+            const awal = info.textContent;
+            const baris = [...form.querySelectorAll('tr.t[data-do]')];
+            // Baris terisi = salah satu kolom bongkar/keterangan diisi (galian terisi otomatis, tidak dihitung).
+            const terisi = tr => [...tr.querySelectorAll('.isi-bongkar')].some(i => i.name.endsWith('[galian]') ? false : i.value.trim());
+            const kurang = tr => [...tr.querySelectorAll('.isi-bongkar.wajib')].filter(i => !i.value.trim()).length + (tr.querySelector('[name$="[galian]"]').value.trim() ? 0 : 1);
+            const hitung = () => {
+                const isi = baris.filter(terisi);
+                baris.forEach(tr => tr.classList.toggle('diisi', terisi(tr)));
+                baris.forEach(tr => tr.classList.toggle('belum-lengkap', terisi(tr) && kurang(tr) > 0));
+                const belum = isi.filter(tr => kurang(tr) > 0);
+                tombol.disabled = !isi.length || belum.length > 0;
+                info.textContent = !isi.length ? awal : belum.length
+                    ? `${isi.length} DO diisi · ${belum.length} belum lengkap (DO ${belum.map(tr => tr.dataset.do).join(', ')}) — lengkapi Tanggal, Tujuan, Galian, Jenis Tanah & No Surat Jalan.`
+                    : `${isi.length} DO siap disimpan sebagai bongkar: ${isi.map(tr => tr.dataset.do).join(', ')}.`;
+            };
+            form.addEventListener('input', hitung);
+            // Baris yang tidak diisi tidak ikut dikirim.
+            form.addEventListener('submit', e => {
+                if (!confirm(`Simpan ${baris.filter(terisi).length} DO sebagai sudah bongkar? Data masuk ke Ritasi (aplikasi & sheet).`)) { e.preventDefault(); return; }
+                baris.filter(tr => !terisi(tr)).forEach(tr => tr.querySelectorAll('input').forEach(i => i.disabled = true));
+                tombol.disabled = true; tombol.textContent = 'Menyimpan…';
+            });
+            window.addEventListener('beforeunload', e => { if (baris.some(terisi) && tombol.textContent !== 'Menyimpan…') e.preventDefault(); });
+            hitung();
+        })();
     </script>
 @endsection
