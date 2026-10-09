@@ -109,7 +109,7 @@
             <span class="redup" id="ringkas-pilih"></span>
             <span style="margin-left: auto; display: flex; gap: 8px;">
                 <button type="button" class="tombol polos" id="batal-pilih">Batal pilih</button>
-                <a href="#" class="tombol" id="realisasi-pilih">➜ Realisasikan terpilih (1 transfer)</a>
+                <a href="#" class="tombol" id="realisasi-pilih">➜ Realisasikan transaksi terpilih</a>
             </span>
         </div>
     @endif
@@ -135,7 +135,10 @@
                 const driver = [...new Set(pilih.map(c => c.dataset.nama).filter(Boolean))];
                 document.getElementById('jumlah-pilih').textContent = `${pilih.length} transaksi dipilih · Rp ${fmt(pilih.reduce((s, c) => s + +c.dataset.nominal, 0))}`;
                 document.getElementById('ringkas-pilih').textContent = driver.length ? `driver: ${driver.join(', ')}` : '';
-                document.getElementById('realisasi-pilih').href = dasar + '?pengajuan=' + pilih.map(c => c.value).join(',');
+                const tombol = document.getElementById('realisasi-pilih');
+                tombol.href = dasar + '?pengajuan=' + pilih.map(c => c.value).join(',');
+                // Semua transaksi terpilih dibayar dalam satu kali transfer ke satu rekening penerima.
+                tombol.textContent = `➜ Realisasikan ${pilih.length} transaksi dalam 1 kali transfer`;
             };
             semua.forEach(c => c.addEventListener('change', hitung));
             document.querySelectorAll('input.pilih-semua-pj').forEach(m => m.addEventListener('change', () => {
