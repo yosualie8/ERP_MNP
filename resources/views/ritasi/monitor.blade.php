@@ -17,7 +17,23 @@
         table.bongkar input.isi-bongkar { width: 100%; min-width: 110px; padding: 6px 8px; border-radius: 6px; font-size: 13px; }
         table.bongkar input[data-tanggal-id].isi-bongkar { min-width: 112px; }
         .tanggal-id { display: inline-flex; align-items: center; gap: 4px; position: relative; width: 100%; }
-        .isi-massal .tanggal-id { width: auto; }
+        /* Isi sekaligus: satu baris per isian — label (teks tebal, tanpa kotak) · isian (kotak terang) · tombol (garis aksen). */
+        .isi-massal { max-width: 720px; padding: 14px 18px; margin-bottom: 14px; }
+        .isi-massal .judul-massal { font-size: 14px; margin-bottom: 10px; color: var(--redup); }
+        .isi-massal .judul-massal b { color: var(--teks); }
+        .isi-massal .baris-massal { display: grid; grid-template-columns: 170px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 7px 0; border-top: 1px dashed var(--garis); }
+        .isi-massal .baris-massal label { margin: 0; font-weight: 700; font-size: 14px; color: var(--teks); }
+        .isi-massal .isian-massal input { width: 100%; padding: 8px 10px; border-radius: 7px; font-size: 15px;
+            background: #f4f6fa; color: #111; border: 1px solid #c4cad6; }
+        .isi-massal .isian-massal input::placeholder { color: #8a909c; }
+        .isi-massal .isian-massal input:focus { outline: 2px solid var(--aksen); outline-offset: 0; }
+        .isi-massal .tanggal-id { width: 100%; }
+        .isi-massal .tanggal-id .tombol-kalender { background: #f4f6fa; border-color: #c4cad6; padding: 7px 8px; }
+        .isi-massal .tombol-massal { background: transparent; color: var(--teks); border: 1.5px solid var(--aksen); border-radius: 7px;
+            padding: 7px 14px; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+        .isi-massal .tombol-massal:hover { background: var(--aksen); color: #fff; }
+        .isi-massal .kaki-massal { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding-top: 10px; border-top: 1px dashed var(--garis); font-size: 12px; }
+        @media (max-width: 640px) { .isi-massal .baris-massal { grid-template-columns: 1fr; gap: 6px; } }
         .tanggal-id .tombol-kalender { background: none; border: 1px solid var(--garis); border-radius: 6px; padding: 4px 6px; cursor: pointer; font-size: 13px; line-height: 1; }
         input.tanggal-salah { border-color: var(--aksen) !important; box-shadow: 0 0 0 2px var(--aksen-muda); }
         table.bongkar tr.t.diisi td { background: rgba(76, 195, 138, .10); }
@@ -83,18 +99,33 @@
                     <ul style="margin: 6px 0 0; padding-left: 18px;">@foreach ($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul></div>
             @endif
             @if ($daftar->isNotEmpty())
-                <div class="cari-monitor isi-massal">
-                    <span class="redup">Isi sekaligus untuk {{ $daftar->count() }} DO yang tampil:</span>
-                    <input type="text" id="tanggal-massal" data-tanggal-id data-maks="{{ now()->toDateString() }}" value="{{ now()->toDateString() }}" style="padding: 7px 9px; border-radius: 7px; width: 130px;">
-                    <button type="button" class="tombol polos" data-massal="tanggal" data-sumber="tanggal-massal" data-label="tanggal bongkar">Isi tanggal bongkar</button>
-                    <input type="text" id="jam-massal" data-jam-id value="08:00" style="padding: 7px 9px; border-radius: 7px; width: 80px;">
-                    <button type="button" class="tombol polos" data-massal="jam" data-sumber="jam-massal" data-label="jam bongkar">Isi jam bongkar</button>
-                    <input type="text" id="tahap-massal" list="saran-tahap" autocomplete="off" placeholder="Tujuan bongkar, mis. ASG Tahap 116" style="padding: 7px 9px; border-radius: 7px; min-width: 210px;">
-                    <button type="button" class="tombol polos" data-massal="tahap" data-sumber="tahap-massal" data-label="tujuan bongkar">Isi tujuan bongkar</button>
-                    <input type="text" id="tanah-massal" list="saran-tanah" autocomplete="off" placeholder="Jenis tanah / barang" style="padding: 7px 9px; border-radius: 7px; min-width: 170px;">
-                    <button type="button" class="tombol polos" data-massal="jenis_tanah" data-sumber="tanah-massal" data-label="jenis tanah / barang">Isi jenis tanah</button>
-                    <button type="button" class="tombol polos" id="kosongkan-massal" style="padding: 7px 12px;">Kosongkan isian sekaligus</button>
-                    <span class="redup" style="font-size: 12px; flex-basis: 100%;">DO yang hanya berisi isian dari tombol-tombol ini tidak ikut disimpan — cukup ketik No Surat Jalan (atau ubah isiannya) di DO yang sudah bongkar, lalu Simpan bongkar.</span>
+                @php($nDo = $daftar->count())
+                <div class="kartu isi-massal">
+                    <div class="judul-massal">Isi sekaligus untuk <b>{{ $nDo }} DO</b> yang sedang tampil</div>
+                    <div class="baris-massal">
+                        <label for="tanggal-massal">Tanggal bongkar</label>
+                        <div class="isian-massal"><input type="text" id="tanggal-massal" data-tanggal-id data-maks="{{ now()->toDateString() }}" value="{{ now()->toDateString() }}"></div>
+                        <button type="button" class="tombol-massal" data-massal="tanggal" data-sumber="tanggal-massal" data-label="tanggal bongkar">Isi ke {{ $nDo }} DO</button>
+                    </div>
+                    <div class="baris-massal">
+                        <label for="jam-massal">Jam bongkar</label>
+                        <div class="isian-massal"><input type="text" id="jam-massal" data-jam-id value="08:00"></div>
+                        <button type="button" class="tombol-massal" data-massal="jam" data-sumber="jam-massal" data-label="jam bongkar">Isi ke {{ $nDo }} DO</button>
+                    </div>
+                    <div class="baris-massal">
+                        <label for="tahap-massal">Tujuan bongkar</label>
+                        <div class="isian-massal"><input type="text" id="tahap-massal" list="saran-tahap" autocomplete="off" placeholder="mis. ASG Tahap 116"></div>
+                        <button type="button" class="tombol-massal" data-massal="tahap" data-sumber="tahap-massal" data-label="tujuan bongkar">Isi ke {{ $nDo }} DO</button>
+                    </div>
+                    <div class="baris-massal">
+                        <label for="tanah-massal">Jenis tanah / barang</label>
+                        <div class="isian-massal"><input type="text" id="tanah-massal" list="saran-tanah" autocomplete="off" placeholder="mis. Tanah Merah"></div>
+                        <button type="button" class="tombol-massal" data-massal="jenis_tanah" data-sumber="tanah-massal" data-label="jenis tanah / barang">Isi ke {{ $nDo }} DO</button>
+                    </div>
+                    <div class="kaki-massal">
+                        <button type="button" class="tombol polos" id="kosongkan-massal">Kosongkan isian sekaligus</button>
+                        <span class="redup">DO yang hanya berisi isian dari tombol-tombol ini tidak ikut disimpan — cukup ketik No Surat Jalan di DO yang sudah bongkar, lalu Simpan bongkar.</span>
+                    </div>
                 </div>
             @endif
             <div class="kartu gulir" style="padding: 0;">
