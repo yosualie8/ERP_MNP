@@ -146,15 +146,27 @@ class ValidasiRitasi
     public static function periksa(array $rit): array
     {
         $dt = collect($rit)->pluck('no_lambung')->filter()->unique()->all();
+        // Acuan jenis kendaraan: Data Aset (daftar truk resmi); bila truk belum ada di Data Aset, jenis terbanyak di rit setahun terakhir.
+        $jenisAset = \App\Models\AsetTruk::whereIn('no_lambung', $dt)->whereNotNull('jenis')->pluck('jenis', 'no_lambung')
+            ->map(fn ($j) => NomorMobil::rapikanJenis($j))->filter();
         /** @var Collection $jenisDt */
         $jenisDt = Ritasi::whereIn('no_lambung', $dt)->whereNotNull('jenis_kendaraan')->where('tanggal', '>=', now()->subYear())
             ->selectRaw('no_lambung, jenis_kendaraan, COUNT(*) n')->groupBy('no_lambung', 'jenis_kendaraan')->get()
-            ->groupBy('no_lambung')->map(fn ($g) => $g->sortByDesc('n')->first()->jenis_kendaraan);
+            ->groupBy('no_lambung')->map(fn ($g) => $g->sortByDesc('n')->first());
 
         $temuan = [];
         foreach ($rit as $i => $r) {
-            if ($r['no_lambung'] && $r['jenis_kendaraan'] && ($seharusnya = $jenisDt[$r['no_lambung']] ?? null) && $seharusnya !== $r['jenis_kendaraan']) {
-                $temuan[$i][] = ['kode' => 'R6', 'prioritas' => 'sedang', 'pesan' => "{$r['no_lambung']} di histori ritasi tercatat {$seharusnya}, di Kas UJ (DO {$r['no_do']}) {$r['jenis_kendaraan']}."];
+            if (! $r['no_lambung'] || ! $r['jenis_kendaraan']) {
+                continue;
+            }
+            $jenis = NomorMobil::rapikanJenis($r['jenis_kendaraan']);
+            $sumber = self::milikMnp($r['pemilik'] ?? null) ? 'Kas UJ (DO '.$r['no_do'].')' : 'isian rit ini';
+            if ($acuan = $jenisAset[$r['no_lambung']] ?? null) {
+                if ($acuan !== $jenis) {
+                    $temuan[$i][] = ['kode' => 'R6', 'prioritas' => 'sedang', 'pesan' => "Jenis {$r['no_lambung']} di Data Aset {$acuan}, tetapi di {$sumber} {$jenis}."];
+                }
+            } elseif (($h = $jenisDt[$r['no_lambung']] ?? null) && NomorMobil::rapikanJenis($h->jenis_kendaraan) !== $jenis) {
+                $temuan[$i][] = ['kode' => 'R6', 'prioritas' => 'sedang', 'pesan' => "{$r['no_lambung']} belum ada di Data Aset; di rit setahun terakhir kebanyakan tercatat {$h->jenis_kendaraan} ({$h->n} rit), sedangkan di {$sumber} {$jenis}."];
             }
         }
 
