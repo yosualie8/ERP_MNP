@@ -207,6 +207,36 @@
             if (!form) return;
             // Tanggal selalu tampil "dd-MMM-yyyy" (mis. 09-Okt-2026), tidak mengikuti pengaturan bahasa komputer.
             TanggalId.pasangSemua(form);
+
+            // Seperti Excel: ↑ ↓ (dan Enter / Shift+Enter) pindah ke kolom yang sama di DO atas/bawah; ← → pindah kolom bila
+            // kursor di ujung teks (atau seluruh isi terpilih). Baris rincian transaksi UJ yang sedang terbuka dilewati.
+            const barisGrid = () => [...form.querySelectorAll('table.bongkar tr.t[data-do]')];
+            const kolomKe = el => el.name.replace(/^bongkar\[[^\]]+\]/, ''); // mis. "[tanggal]"
+            const pilihSel = el => { el.focus(); try { el.select(); } catch { /* bukan isian teks */ } };
+            form.querySelector('table.bongkar')?.addEventListener('keydown', e => {
+                const el = e.target;
+                if (!el.matches?.('input.isi-bongkar') || e.altKey || e.ctrlKey || e.metaKey || e.isComposing) return;
+                const tr = el.closest('tr.t');
+                if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                    if (e.shiftKey) return;
+                    const semua = el.selectionStart === 0 && el.selectionEnd === el.value.length;
+                    const ujung = e.key === 'ArrowLeft' ? el.selectionStart === 0 && el.selectionEnd === 0
+                        : el.selectionStart === el.value.length && el.selectionEnd === el.value.length;
+                    if (!semua && !ujung) return;
+                    const kol = [...tr.querySelectorAll('input.isi-bongkar')];
+                    const tuju = kol[kol.indexOf(el) + (e.key === 'ArrowLeft' ? -1 : 1)];
+                    if (tuju) { e.preventDefault(); pilihSel(tuju); }
+                    return;
+                }
+                const turun = e.key === 'ArrowDown' || (e.key === 'Enter' && !e.shiftKey);
+                const naik = e.key === 'ArrowUp' || (e.key === 'Enter' && e.shiftKey);
+                if (!turun && !naik) return;
+                e.preventDefault(); // Enter tidak mengirim form; panah tidak membuka daftar saran
+                el.dispatchEvent(new Event('blur')); // rapikan tanggal/jam sebelum pindah
+                const semuaBaris = barisGrid();
+                const tuju = semuaBaris[semuaBaris.indexOf(tr) + (turun ? 1 : -1)]?.querySelector(`input.isi-bongkar[name$="${kolomKe(el)}"]`);
+                if (tuju) pilihSel(tuju);
+            });
             const tombol = document.getElementById('simpan-bongkar');
             const info = document.getElementById('info-bongkar');
             const awal = info.textContent;
