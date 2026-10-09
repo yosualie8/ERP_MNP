@@ -80,17 +80,19 @@
             @endif
             @if ($daftar->isNotEmpty())
                 <div class="cari-monitor isi-massal">
-                    <span class="redup">Tanggal bongkar untuk {{ $daftar->count() }} DO yang tampil:</span>
+                    <span class="redup">Isi sekaligus untuk {{ $daftar->count() }} DO yang tampil:</span>
                     <input type="date" id="tanggal-massal" value="{{ now()->toDateString() }}" max="{{ now()->toDateString() }}" style="padding: 7px 9px; border-radius: 7px;">
-                    <button type="button" class="tombol polos" id="isi-tanggal-massal">Isi tanggal bongkar ke semua DO yang tampil</button>
-                    <button type="button" class="tombol polos" id="kosongkan-tanggal-massal" style="padding: 7px 12px;">Kosongkan tanggal</button>
-                    <span class="redup" style="font-size: 12px;">DO yang hanya berisi tanggal ini tidak ikut disimpan — lengkapi Tujuan, Jenis Tanah & No Surat Jalan untuk DO yang sudah bongkar.</span>
+                    <button type="button" class="tombol polos" data-massal="tanggal" data-sumber="tanggal-massal">Isi tanggal bongkar</button>
+                    <input type="time" id="jam-massal" value="08:00" style="padding: 7px 9px; border-radius: 7px;">
+                    <button type="button" class="tombol polos" data-massal="jam" data-sumber="jam-massal">Isi jam bongkar</button>
+                    <button type="button" class="tombol polos" id="kosongkan-massal" style="padding: 7px 12px;">Kosongkan isian sekaligus</button>
+                    <span class="redup" style="font-size: 12px; flex-basis: 100%;">DO yang hanya berisi tanggal/jam dari tombol ini tidak ikut disimpan — lengkapi Tujuan, Jenis Tanah & No Surat Jalan untuk DO yang sudah bongkar.</span>
                 </div>
             @endif
             <div class="kartu gulir" style="padding: 0;">
                 <table class="kas bongkar">
                     <thead><tr><th>No DO</th><th>Nomor Mobil</th><th>Jenis Mobil</th><th>Nama Supir</th><th>Tanggal UJ</th><th>Galian</th>
-                        <th>Tanggal Bongkar</th><th>Tujuan Bongkar</th><th>Jenis Tanah / Barang</th><th>No Surat Jalan</th><th>Keterangan</th></tr></thead>
+                        <th>Tanggal Bongkar</th><th>Jam Bongkar</th><th>Tujuan Bongkar</th><th>Jenis Tanah / Barang</th><th>No Surat Jalan</th><th>Keterangan</th></tr></thead>
                     @forelse ($daftar as $d)
                         @php($n = 'bongkar['.$d['do'].']')
                         @php($lama = old('bongkar.'.$d['do'], []))
@@ -105,6 +107,7 @@
                                     @if ($d['umur'] !== null)<br><span @class(['umur', 'baru' => $d['umur'] <= 7, 'sedang' => $d['umur'] > 7 && $d['umur'] <= 30, 'lama' => $d['umur'] > 30])>{{ $d['umur'] }} hari</span>@endif</td>
                                 <td><input type="text" name="{{ $n }}[galian]" value="{{ $lama['galian'] ?? $d['galian_saran'] }}" list="saran-galian" autocomplete="off" class="isi-bongkar" data-bawaan="{{ $d['galian_saran'] }}"></td>
                                 <td><input type="date" name="{{ $n }}[tanggal]" value="{{ $lama['tanggal'] ?? '' }}" max="{{ now()->toDateString() }}" class="isi-bongkar wajib"></td>
+                                <td><input type="time" name="{{ $n }}[jam]" value="{{ $lama['jam'] ?? '' }}" class="isi-bongkar"></td>
                                 <td><input type="text" name="{{ $n }}[tahap]" value="{{ $lama['tahap'] ?? '' }}" list="saran-tahap" autocomplete="off" class="isi-bongkar wajib" placeholder="mis. ASG Tahap 116"></td>
                                 <td><input type="text" name="{{ $n }}[jenis_tanah]" value="{{ $lama['jenis_tanah'] ?? '' }}" list="saran-tanah" autocomplete="off" class="isi-bongkar wajib"></td>
                                 <td><input type="text" name="{{ $n }}[no_seri]" value="{{ $lama['no_seri'] ?? '' }}" autocomplete="off" class="isi-bongkar wajib" inputmode="numeric"></td>
@@ -115,7 +118,7 @@
                                     @endif
                                 </td>
                             </tr>
-                            <tr class="bh"><td>ID UJ</td><td>Tanggal</td><td>Status</td><td>No Mobil · Jenis</td><td>Supir</td><td colspan="4">Keterangan UJ</td><td>Kategori</td><td class="angka">Nominal</td></tr>
+                            <tr class="bh"><td>ID UJ</td><td>Tanggal</td><td>Status</td><td>No Mobil · Jenis</td><td>Supir</td><td colspan="5">Keterangan UJ</td><td>Kategori</td><td class="angka">Nominal</td></tr>
                             @foreach ($d['detail'] as $x)
                                 <tr class="b">
                                     <td class="i">{{ $x->id_uj ?: 'baris '.$x->baris }}</td>
@@ -123,14 +126,14 @@
                                     <td class="redup" style="font-size: 12px;">{{ $x->status }}</td>
                                     <td>{{ $x->no_mobil }}@if ($x->jenis_kendaraan) <span class="redup">· {{ $x->jenis_kendaraan }}</span>@endif</td>
                                     <td class="p">{{ $x->nama }}</td>
-                                    <td colspan="4">{{ $x->keterangan }}</td>
+                                    <td colspan="5">{{ $x->keterangan }}</td>
                                     <td>{{ $x->kategori }}</td>
                                     <td class="angka">{{ rp((int) $x->nominal) }}</td>
                                 </tr>
                             @endforeach
                         </tbody>
                     @empty
-                        <tbody><tr><td colspan="11" class="redup" style="padding: 20px 14px;">{{ $q || $umur || $tujuan !== '' || $galian !== '' ? 'Tidak ada DO yang cocok dengan saringan ini.' : 'Semua DO di Kas UJ sudah ada di data Ritasi.' }}</td></tr></tbody>
+                        <tbody><tr><td colspan="12" class="redup" style="padding: 20px 14px;">{{ $q || $umur || $tujuan !== '' || $galian !== '' ? 'Tidak ada DO yang cocok dengan saringan ini.' : 'Semua DO di Kas UJ sudah ada di data Ritasi.' }}</td></tr></tbody>
                     @endforelse
                 </table>
             </div>
@@ -212,28 +215,29 @@
                     : `${isi.length} DO siap disimpan sebagai bongkar: ${isi.map(tr => tr.dataset.do).join(', ')}.`;
             };
             form.addEventListener('input', e => {
-                if (e.target.name?.endsWith('[tanggal]')) delete e.target.dataset.massal; // diubah sendiri = isian biasa
+                if (e.target.dataset?.massal) delete e.target.dataset.massal; // diubah sendiri = isian biasa
                 hitung();
             });
-            // Isi Tanggal Bongkar semua DO yang tampil (hasil saringan) sekaligus.
-            const tanggalBaris = () => baris.map(tr => tr.querySelector('[name$="[tanggal]"]'));
-            document.getElementById('isi-tanggal-massal')?.addEventListener('click', () => {
-                const tgl = document.getElementById('tanggal-massal').value;
-                if (!tgl) { alert('Pilih tanggalnya dulu.'); return; }
-                const ada = tanggalBaris().filter(i => i.value && i.value !== tgl && i.dataset.massal !== '1');
-                const timpa = ada.length ? confirm(`${ada.length} DO sudah punya tanggal bongkar lain. Timpa juga dengan tanggal ini?\n\nOK = timpa semua · Batal = isi yang masih kosong saja`) : false;
-                // Kolom lain (tujuan, jenis tanah, no surat jalan, keterangan) sudah diisi = baris memang sedang dicatat.
-                const lainTerisi = tr => [...tr.querySelectorAll('.isi-bongkar')].some(x => !x.name.endsWith('[galian]') && !x.name.endsWith('[tanggal]') && x.value.trim());
-                tanggalBaris().forEach(i => {
+            // Isi Tanggal / Jam Bongkar semua DO yang tampil (hasil saringan) sekaligus.
+            const kolomBaris = f => baris.map(tr => tr.querySelector(`[name$="[${f}]"]`));
+            // Kolom bongkar lain (selain galian & isian sekaligus) sudah diisi = baris memang sedang dicatat.
+            const lainTerisi = tr => [...tr.querySelectorAll('.isi-bongkar')].some(x => !x.name.endsWith('[galian]') && x.dataset.massal !== '1' && x.value.trim());
+            form.querySelectorAll('button[data-massal]').forEach(b => b.addEventListener('click', () => {
+                const f = b.dataset.massal, nilai = document.getElementById(b.dataset.sumber).value;
+                if (!nilai) { alert(`Pilih ${f}nya dulu.`); return; }
+                const ada = kolomBaris(f).filter(i => i.value && i.value !== nilai && i.dataset.massal !== '1');
+                const timpa = ada.length ? confirm(`${ada.length} DO sudah punya ${f} bongkar lain. Timpa juga?\n\nOK = timpa semua · Batal = isi yang masih kosong saja`) : false;
+                kolomBaris(f).forEach(i => {
                     if (i.value && i.dataset.massal !== '1' && !timpa) return;
-                    i.value = tgl;
-                    if (lainTerisi(i.closest('tr'))) delete i.dataset.massal; else i.dataset.massal = '1';
+                    i.value = nilai;
+                    i.dataset.massal = '1';
+                    if (lainTerisi(i.closest('tr'))) delete i.dataset.massal;
                 });
                 hitung();
-            });
-            // Kosongkan tanggal hasil isi massal (tanggal yang diketik sendiri tidak disentuh).
-            document.getElementById('kosongkan-tanggal-massal')?.addEventListener('click', () => {
-                tanggalBaris().forEach(i => { if (i.dataset.massal === '1') { i.value = ''; delete i.dataset.massal; } });
+            }));
+            // Kosongkan isian sekaligus (tanggal/jam yang diketik sendiri tidak disentuh).
+            document.getElementById('kosongkan-massal')?.addEventListener('click', () => {
+                [...kolomBaris('tanggal'), ...kolomBaris('jam')].forEach(i => { if (i.dataset.massal === '1') { i.value = ''; delete i.dataset.massal; } });
                 hitung();
             });
             // Baris yang tidak diisi tidak ikut dikirim.

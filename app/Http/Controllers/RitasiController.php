@@ -58,10 +58,10 @@ class RitasiController extends Controller
     {
         $data = $request->validate(['bongkar' => ['required', 'array'], 'bongkar.*' => ['array']]);
         $rapi = fn ($v) => ($v = trim(preg_replace('/\s+/', ' ', (string) $v))) === '' ? null : $v;
-        $isian = collect($data['bongkar'])->map(fn ($b) => collect(['tanggal', 'tahap', 'galian', 'jenis_tanah', 'no_seri', 'keterangan', 'konfirmasi'])
+        $isian = collect($data['bongkar'])->map(fn ($b) => collect(['tanggal', 'jam', 'tahap', 'galian', 'jenis_tanah', 'no_seri', 'keterangan', 'konfirmasi'])
             ->mapWithKeys(fn ($k) => [$k => $rapi($b[$k] ?? null)])->all())
-            // Baris yang tidak diisi sama sekali dilewati (galian terisi otomatis, jadi tidak dihitung).
-            ->filter(fn ($b) => $b['tanggal'] || $b['tahap'] || $b['jenis_tanah'] || $b['no_seri'] || $b['keterangan']);
+            // Baris yang tidak diisi sama sekali dilewati (galian terisi otomatis, jadi tidak dihitung). Jam bongkar tidak wajib.
+            ->filter(fn ($b) => $b['tanggal'] || $b['jam'] || $b['tahap'] || $b['jenis_tanah'] || $b['no_seri'] || $b['keterangan']);
         if ($isian->isEmpty()) {
             return back()->with('error', 'Belum ada DO yang diisi data bongkarnya.');
         }
@@ -92,7 +92,7 @@ class RitasiController extends Controller
             $pemilik = $info['pemilik'] ?? 'MNP';
 
             return [
-                'tanggal' => $b['tanggal'], 'tahap' => $b['tahap'], 'galian' => $b['galian'], 'jenis_buangan' => 'Ritasi', 'jenis_tanah' => $b['jenis_tanah'],
+                'tanggal' => $b['tanggal'], 'jam' => $b['jam'], 'tahap' => $b['tahap'], 'galian' => $b['galian'], 'jenis_buangan' => 'Ritasi', 'jenis_tanah' => $b['jenis_tanah'],
                 'no_seri' => $b['no_seri'], 'plat' => $info['plat'] ?? null, 'pemilik' => $pemilik, 'no_do' => $do,
                 'harga_jual' => (string) (self::cariHarga($harga, $b['tahap'], $b['galian'], $uj['jenis_kendaraan'] ?? null, $pemilik) ?? ''),
                 'keterangan' => $b['keterangan'], 'konfirmasi' => $b['konfirmasi'],
@@ -314,6 +314,11 @@ class RitasiController extends Controller
                 'no_seri' => $rapi($r['no_seri'] ?? null), 'jam' => LembarRitasi::jam($rapi($r['jam'] ?? null)), 'no_lambung' => null,
                 'plat' => $rapi(strtoupper((string) ($r['plat'] ?? ''))), 'driver' => null, 'jenis_kendaraan' => null,
                 'pemilik' => $rapi($r['pemilik'] ?? null), 'no_do' => $rapi(preg_replace('/\s+/', '', (string) ($r['no_do'] ?? ''))),
+                // Truk bukan milik MNP: tidak ada di Kas UJ, jadi No Lambung, Driver & Jenis diisi manual.
+                ...(ValidasiRitasi::milikMnp($r['pemilik'] ?? null) ? [] : [
+                    'no_lambung' => $rapi(strtoupper((string) ($r['no_lambung'] ?? ''))), 'driver' => $rapi($r['driver'] ?? null),
+                    'jenis_kendaraan' => NomorMobil::rapikanJenis($rapi($r['jenis_kendaraan'] ?? null)),
+                ]),
                 'harga_jual' => (int) preg_replace('/\D/', '', (string) ($r['harga_jual'] ?? '')) ?: null, 'keterangan' => $rapi($r['keterangan'] ?? null),
                 'konfirmasi' => $rapi($r['konfirmasi'] ?? null),
             ];
@@ -323,9 +328,9 @@ class RitasiController extends Controller
             }
             $rit[(int) $i] = $baris;
         }
-        $uj = ValidasiRitasi::dariUj(array_column($rit, 'no_do'));
+        $uj = ValidasiRitasi::dariUj(array_column(array_filter($rit, fn ($r) => ValidasiRitasi::milikMnp($r['pemilik'])), 'no_do'));
         foreach ($rit as $i => $r) {
-            if ($d = $uj[LembarRitasi::kunciAngka($r['no_do'])] ?? null) {
+            if (ValidasiRitasi::milikMnp($r['pemilik']) && ($d = $uj[LembarRitasi::kunciAngka($r['no_do'])] ?? null)) {
                 $rit[$i] = [...$r, 'no_lambung' => $d['no_lambung'], 'driver' => $d['driver'], 'jenis_kendaraan' => $d['jenis_kendaraan']];
             }
         }
@@ -346,7 +351,9 @@ class RitasiController extends Controller
             'rit.*.jenis_buangan' => ['required', 'string', 'max:40'], 'rit.*.jenis_tanah' => ['required', 'string', 'max:60'],
             'rit.*.no_seri' => ['required', 'string', 'max:30'], 'rit.*.jam' => ['nullable', 'string', 'max:10'],
             'rit.*.plat' => ['nullable', 'string', 'max:30'], 'rit.*.pemilik' => ['required', 'string', 'max:60'],
-            'rit.*.no_do' => ['required', 'string', 'max:30'], 'rit.*.harga_jual' => ['nullable', 'string', 'max:20'], 'rit.*.keterangan' => ['nullable', 'string', 'max:300'],
+            // No DO wajib hanya untuk truk milik MNP (dicek di ValidasiRitasi::galat); truk mitra boleh tanpa DO.
+            'rit.*.no_do' => ['nullable', 'string', 'max:30'],
+            'rit.*.no_lambung' => ['nullable', 'string', 'max:20'], 'rit.*.driver' => ['nullable', 'string', 'max:60'], 'rit.*.jenis_kendaraan' => ['nullable', 'string', 'max:40'], 'rit.*.harga_jual' => ['nullable', 'string', 'max:20'], 'rit.*.keterangan' => ['nullable', 'string', 'max:300'],
             'rit.*.konfirmasi' => ['nullable', 'string', 'max:1000'],
         ];
     }
@@ -359,7 +366,6 @@ class RitasiController extends Controller
         'rit.*.jenis_buangan.required' => 'Rit baris :position: Jenis Buangan belum diisi.',
         'rit.*.jenis_tanah.required' => 'Rit baris :position: Jenis Tanah belum diisi.',
         'rit.*.no_seri.required' => 'Rit baris :position: No Seri belum diisi.',
-        'rit.*.no_do.required' => 'Rit baris :position: No DO wajib diisi.',
         'rit.*.pemilik.required' => 'Rit baris :position: Pemilik belum diisi.',
     ];
 

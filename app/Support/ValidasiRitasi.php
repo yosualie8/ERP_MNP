@@ -9,13 +9,22 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Pemeriksaan rit saat input.
- * GALAT (memblokir, tidak bisa dikonfirmasi — permintaan user 7 Okt 2026): No DO wajib & harus ada di Kas UJ; satu No DO dan
- * satu No Seri hanya boleh dipakai SATU kali di seluruh data ritasi (tanpa melihat tahap).
- * DT, driver & jenis kendaraan tidak diketik admin: diambil dari Kas UJ lewat No DO ({@see dariUj}).
+ * GALAT (memblokir, tidak bisa dikonfirmasi — permintaan user 7 Okt 2026): untuk truk milik MNP, No DO wajib & harus ada di Kas UJ;
+ * satu No DO dan satu No Seri hanya boleh dipakai SATU kali di seluruh data ritasi (tanpa melihat tahap).
+ * Truk MNP: DT, driver & jenis kendaraan tidak diketik admin, diambil dari Kas UJ lewat No DO ({@see dariUj}).
+ * Truk pemilik lain (mitra, mis. RUDI — 9 Okt 2026): tidak memakai uang jalan MNP, jadi No DO tidak wajib dan data truk diketik manual.
  * FLAG (boleh dikonfirmasi): R6 jenis kendaraan beda dari histori ritasi DT itu.
  */
 class ValidasiRitasi
 {
+    /** Pemilik "MNP" (atau belum diisi) = truk sendiri: wajib No DO yang ada di Kas UJ. */
+    public static function milikMnp(?string $pemilik): bool
+    {
+        $p = strtoupper(trim((string) $pemilik));
+
+        return $p === '' || $p === 'MNP';
+    }
+
     /** Ekspresi SQL kunci nomor ("0039" = "39", spasi diabaikan) — sama dengan {@see LembarRitasi::kunciAngka}. */
     private static function sqlKunci(string $kolom): string
     {
@@ -87,8 +96,11 @@ class ValidasiRitasi
             $g = [];
             $do = LembarRitasi::kunciAngka($r['no_do'] ?? null);
             $seri = LembarRitasi::kunciAngka($r['no_seri'] ?? null);
+            $mnp = self::milikMnp($r['pemilik'] ?? null);
             if (! $do) {
-                $g[] = 'No DO wajib diisi.';
+                if ($mnp) {
+                    $g[] = 'No DO wajib diisi untuk truk milik MNP.';
+                }
             } else {
                 if (! preg_match('/^\d{1,10}$/', preg_replace('/\s+/', '', (string) $r['no_do']))) {
                     $g[] = 'No DO "'.$r['no_do'].'" harus berupa angka.';
@@ -99,7 +111,9 @@ class ValidasiRitasi
                 if (isset($doDiInput[$do])) {
                     $g[] = 'No DO '.$r['no_do'].' sama dengan rit baris '.($doDiInput[$do] + 1).' di input ini.';
                 }
-                if (! isset($uj[$do])) {
+                if (! $mnp) {
+                    // Truk mitra: DO (bila diisi) cukup tidak dobel; tidak dicocokkan ke Kas UJ MNP.
+                } elseif (! isset($uj[$do])) {
                     $g[] = 'No DO '.$r['no_do'].' tidak ditemukan di Kas Uang Jalan — catat dulu uang jalannya (dengan No DO ini) di Input UJ, lalu ulangi.';
                 } elseif (! $uj[$do]['no_lambung']) {
                     $g[] = 'No DO '.$r['no_do'].' ada di Kas UJ ('.$uj[$do]['id_uj'].') tapi No Mobil-nya kosong — lengkapi dulu di Kas UJ.';

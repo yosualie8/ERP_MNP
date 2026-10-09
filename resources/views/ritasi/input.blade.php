@@ -71,7 +71,7 @@
                 </h3>
                 <span class="redup"><b id="jumlah-rit">0</b> rit · total harga jual <b id="total-harga">0</b></span>
             </div>
-            <p class="redup" style="margin: 0 0 10px;">Satu baris = satu rit, masing-masing berdiri sendiri (tanggal, tahap, galian boleh berbeda per baris). Ketik No DO → No Lambung, Driver & Jenis diambil dari Kas UJ (terkunci); Galian disarankan dari keterangan Kas UJ; Plat, Pemilik & Harga Jual dari riwayat ritasi; No Seri berikutnya disarankan per tahap (ungu = saran otomatis, boleh diganti).</p>
+            <p class="redup" style="margin: 0 0 10px;">Satu baris = satu rit, masing-masing berdiri sendiri (tanggal, tahap, galian boleh berbeda per baris). Truk milik MNP: ketik No DO → No Lambung, Driver & Jenis diambil dari Kas UJ (terkunci). Pemilik selain MNP (truk mitra): No DO tidak wajib, No Lambung/Driver/Jenis diketik manual. Galian disarankan dari keterangan Kas UJ; Plat, Pemilik & Harga Jual dari riwayat ritasi; No Seri berikutnya disarankan per tahap (ungu = saran otomatis, boleh diganti).</p>
             <div class="gulir">
             <table class="bon" style="min-width: 1880px;">
                 <thead><tr>
@@ -171,7 +171,20 @@
                 isiOtomatis(sel(tr, 'plat'), d?.plat || '');
                 isiOtomatis(sel(tr, 'pemilik'), d?.pemilik || '');
             };
+            // Truk milik MNP (pemilik "MNP" atau kosong): No DO wajib & DT/driver/jenis terkunci dari Kas UJ.
+            // Pemilik lain (truk mitra): No DO opsional, DT/driver/jenis diketik manual.
+            const milikMnp = tr => ['', 'mnp'].includes(kecil(sel(tr, 'pemilik').value));
+            const aturKunci = tr => {
+                const mnp = milikMnp(tr);
+                ['no_lambung', 'driver', 'jenis_kendaraan'].forEach(f => {
+                    const el = sel(tr, f);
+                    el.readOnly = mnp; el.classList.toggle('terkunci', mnp); el.tabIndex = mnp ? -1 : 0;
+                    el.title = mnp ? 'Diambil dari Kas UJ lewat No DO' : 'Truk bukan milik MNP: isi manual';
+                });
+                sel(tr, 'no_do').placeholder = mnp ? '' : 'opsional';
+            };
             const isiTruk = (tr, t) => {
+                if (!milikMnp(tr)) { aturHarga(tr); return; } // truk mitra: data truk diketik manual, tidak ditimpa
                 ['no_lambung', 'driver', 'jenis_kendaraan'].forEach(f => { sel(tr, f).value = t?.[f] || ''; });
                 if (t?.galian) isiOtomatis(sel(tr, 'galian'), t.galian); // saran dari keterangan Kas UJ; isian admin sendiri tidak ditimpa
                 aturDariDt(tr);
@@ -228,6 +241,7 @@
                 });
                 if (MODE_EDIT) tr.querySelector('.hapus').hidden = true;
                 daftar.appendChild(tr);
+                aturKunci(tr);
                 urutkanNama();
                 return tr;
             };
@@ -239,8 +253,14 @@
                 if (el.classList.contains('rupiah') && e.isTrusted) rapikanRupiah(el);
                 const f = el.dataset.nama;
                 // No DO berubah → data truk lama dikosongkan sampai server mengisinya lagi dari Kas UJ.
-                if (f === 'no_do') { el.value = el.value.replace(/\s+/g, ''); if (sel(tr, 'no_lambung').value) isiTruk(tr, null); }
-                if (['pemilik', 'galian', 'tahap'].includes(f)) aturHarga(tr);
+                if (f === 'no_do') { el.value = el.value.replace(/\s+/g, ''); if (milikMnp(tr) && sel(tr, 'no_lambung').value) isiTruk(tr, null); }
+                if (f === 'pemilik') {
+                    const sebelum = sel(tr, 'no_lambung').readOnly;
+                    aturKunci(tr);
+                    // Kembali ke MNP: data truk ketikan manual dikosongkan, nanti diisi lagi dari Kas UJ lewat No DO.
+                    if (!sebelum && milikMnp(tr)) ['no_lambung', 'driver', 'jenis_kendaraan'].forEach(x => { sel(tr, x).value = ''; });
+                }
+                if (['pemilik', 'galian', 'tahap', 'jenis_kendaraan'].includes(f)) aturHarga(tr);
                 if (f === 'no_seri' || f === 'tahap') aturSeri();
                 hitung();
             });
@@ -301,7 +321,8 @@
                 rows.forEach(tr => {
                     const tg = sel(tr, 'tanggal'); if (tg.value) tg.value = uraiTanggal(tg.value) ?? tg.value;
                     const d = sel(tr, 'no_do'); d.value = d.value.replace(/\s+/g, '');
-                    isiTruk(tr, null);
+                    aturKunci(tr);
+                    if (milikMnp(tr)) isiTruk(tr, null);
                 });
                 aturSeri();
             }});
@@ -332,7 +353,7 @@
                     cek('tahap', 'Tahap');
                     cek('no_seri', 'No Seri');
                     const d = sel(tr, 'no_do');
-                    if (!d.value.trim()) { tandai(d); kurang.push('No DO'); }
+                    if (!d.value.trim()) { if (milikMnp(tr)) { tandai(d); kurang.push('No DO'); } }
                     else if (!/^\d+$/.test(d.value.trim())) { d.classList.add('wajib-kosong'); kurang.push('No DO (angka saja)'); }
                     cek('galian', 'Galian'); cek('jenis_tanah', 'Jenis tanah'); cek('jenis_buangan', 'Jenis buangan');
                     cek('pemilik', 'Pemilik');
@@ -344,7 +365,7 @@
             };
             const tampilHasil = hasil => {
                 baris().forEach((tr, i) => {
-                    if (sel(tr, 'no_do').value.trim()) isiTruk(tr, hasil.truk?.[i]);
+                    if (milikMnp(tr) && sel(tr, 'no_do').value.trim()) isiTruk(tr, hasil.truk?.[i]);
                     pasangGalat(tr, i, hasil.galat?.[i] || []);
                 });
                 pasangTemuan(hasil.temuan || {});
@@ -397,7 +418,7 @@
                 return belum.length ? [`${belum.length} rit kena FLAG validasi dan belum dikonfirmasi (baris ${belum.join(', ')}) — alasan & kotak konfirmasinya ada tepat di bawah barisnya.`] : [];
             };
             // Pemeriksaan server hanya bergantung pada No Seri & No DO tiap baris.
-            const kunciIsi = () => JSON.stringify(baris().map(tr => [sel(tr, 'no_seri').value.trim(), sel(tr, 'no_do').value.trim()]));
+            const kunciIsi = () => JSON.stringify(baris().map(tr => [sel(tr, 'no_seri').value.trim(), sel(tr, 'no_do').value.trim(), kecil(sel(tr, 'pemilik').value)]));
             let diperiksa = null, memeriksa = null, jeda = null;
             const periksaServer = async kunci => {
                 memeriksa = kunci;
