@@ -13,6 +13,7 @@ use App\Http\Controllers\RapikanUjController;
 use App\Http\Controllers\ReimburseKasController;
 use App\Http\Controllers\ReimburseUjController;
 use App\Http\Controllers\RitasiController;
+use App\Http\Controllers\TransferBcaController;
 use App\Http\Controllers\UjController;
 use Illuminate\Support\Facades\Route;
 
@@ -55,6 +56,10 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/kas/validasi-reimburse', [ReimburseKasController::class, 'validasi'])->name('kas.validasi-reimburse');
     Route::post('/kas/validasi-reimburse', [ReimburseKasController::class, 'periksaValidasi'])->name('kas.validasi-reimburse.periksa');
     Route::post('/kas/validasi-reimburse/tandai', [ReimburseKasController::class, 'tandaiValidasi'])->name('kas.validasi-reimburse.tandai');
+    Route::get('/kas/transfer-bca', [TransferBcaController::class, 'index'])->name('kas.transfer-bca');
+    Route::post('/kas/transfer-bca/rekening', [TransferBcaController::class, 'simpanRekening'])->name('kas.transfer-bca.rekening');
+    Route::post('/kas/transfer-bca', [TransferBcaController::class, 'buat'])->name('kas.transfer-bca.buat');
+    Route::get('/kas/transfer-bca/{transfer}/excel', [TransferBcaController::class, 'unduh'])->whereNumber('transfer')->name('kas.transfer-bca.unduh');
     Route::get('/kas/belum-reimburse.xlsx', [ReimburseKasController::class, 'unduhBelum'])->name('kas.belum-reimburse');
     Route::get('/kas/kode-gl', [KasController::class, 'kodeGl'])->name('kas.kode-gl');
     // Kas uang jalan dump truck (lembar "Kas Seabank").
