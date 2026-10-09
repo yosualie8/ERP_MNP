@@ -15,7 +15,11 @@
         table.bongkar td { vertical-align: middle; }
         table.bongkar td.sel-do { cursor: pointer; white-space: nowrap; }
         table.bongkar input.isi-bongkar { width: 100%; min-width: 110px; padding: 6px 8px; border-radius: 6px; font-size: 13px; }
-        table.bongkar input[type=date].isi-bongkar { min-width: 135px; }
+        table.bongkar input[data-tanggal-id].isi-bongkar { min-width: 112px; }
+        .tanggal-id { display: inline-flex; align-items: center; gap: 4px; position: relative; width: 100%; }
+        .isi-massal .tanggal-id { width: auto; }
+        .tanggal-id .tombol-kalender { background: none; border: 1px solid var(--garis); border-radius: 6px; padding: 4px 6px; cursor: pointer; font-size: 13px; line-height: 1; }
+        input.tanggal-salah { border-color: var(--aksen) !important; box-shadow: 0 0 0 2px var(--aksen-muda); }
         table.bongkar tr.t.diisi td { background: rgba(76, 195, 138, .10); }
         table.bongkar tr.t.belum-lengkap td, table.bongkar tr.t.baris-salah td { background: rgba(224, 165, 38, .12); }
         table.bongkar tr.t.belum-lengkap input.wajib:placeholder-shown, table.bongkar tr.t.belum-lengkap input.wajib[value=""] { border-color: #e0a526; }
@@ -81,9 +85,9 @@
             @if ($daftar->isNotEmpty())
                 <div class="cari-monitor isi-massal">
                     <span class="redup">Isi sekaligus untuk {{ $daftar->count() }} DO yang tampil:</span>
-                    <input type="date" id="tanggal-massal" value="{{ now()->toDateString() }}" max="{{ now()->toDateString() }}" style="padding: 7px 9px; border-radius: 7px;">
+                    <input type="text" id="tanggal-massal" data-tanggal-id data-maks="{{ now()->toDateString() }}" value="{{ now()->toDateString() }}" style="padding: 7px 9px; border-radius: 7px; width: 130px;">
                     <button type="button" class="tombol polos" data-massal="tanggal" data-sumber="tanggal-massal" data-label="tanggal bongkar">Isi tanggal bongkar</button>
-                    <input type="time" id="jam-massal" value="08:00" style="padding: 7px 9px; border-radius: 7px;">
+                    <input type="text" id="jam-massal" data-jam-id value="08:00" style="padding: 7px 9px; border-radius: 7px; width: 80px;">
                     <button type="button" class="tombol polos" data-massal="jam" data-sumber="jam-massal" data-label="jam bongkar">Isi jam bongkar</button>
                     <input type="text" id="tahap-massal" list="saran-tahap" autocomplete="off" placeholder="Tujuan bongkar, mis. ASG Tahap 116" style="padding: 7px 9px; border-radius: 7px; min-width: 210px;">
                     <button type="button" class="tombol polos" data-massal="tahap" data-sumber="tahap-massal" data-label="tujuan bongkar">Isi tujuan bongkar</button>
@@ -110,8 +114,8 @@
                                 <td style="white-space: nowrap;">{{ $d['pertama']?->translatedFormat('j M Y') ?? '–' }}
                                     @if ($d['umur'] !== null)<br><span @class(['umur', 'baru' => $d['umur'] <= 7, 'sedang' => $d['umur'] > 7 && $d['umur'] <= 30, 'lama' => $d['umur'] > 30])>{{ $d['umur'] }} hari</span>@endif</td>
                                 <td><input type="text" name="{{ $n }}[galian]" value="{{ $lama['galian'] ?? $d['galian_saran'] }}" list="saran-galian" autocomplete="off" class="isi-bongkar" data-bawaan="{{ $d['galian_saran'] }}"></td>
-                                <td><input type="date" name="{{ $n }}[tanggal]" value="{{ $lama['tanggal'] ?? '' }}" max="{{ now()->toDateString() }}" class="isi-bongkar wajib"></td>
-                                <td><input type="time" name="{{ $n }}[jam]" value="{{ $lama['jam'] ?? '' }}" class="isi-bongkar"></td>
+                                <td><input type="text" name="{{ $n }}[tanggal]" value="{{ $lama['tanggal'] ?? '' }}" data-tanggal-id data-maks="{{ now()->toDateString() }}" class="isi-bongkar wajib"></td>
+                                <td><input type="text" name="{{ $n }}[jam]" value="{{ $lama['jam'] ?? '' }}" data-jam-id class="isi-bongkar" style="min-width: 70px;"></td>
                                 <td><input type="text" name="{{ $n }}[tahap]" value="{{ $lama['tahap'] ?? '' }}" list="saran-tahap" autocomplete="off" class="isi-bongkar wajib" placeholder="mis. ASG Tahap 116"></td>
                                 <td><input type="text" name="{{ $n }}[jenis_tanah]" value="{{ $lama['jenis_tanah'] ?? '' }}" list="saran-tanah" autocomplete="off" class="isi-bongkar wajib"></td>
                                 <td><input type="text" name="{{ $n }}[no_seri]" value="{{ $lama['no_seri'] ?? '' }}" autocomplete="off" class="isi-bongkar wajib" inputmode="numeric"></td>
@@ -194,12 +198,15 @@
             ({{ $bukanAngka->take(12)->implode(', ') }}{{ $bukanAngka->count() > 12 ? ', …' : '' }}).</p>
     @endif
 
+    <script src="{{ asset('js/tanggal-id.js') }}"></script>
     <script>
         (() => {
             // Bayar Tanah: klik baris membuka transaksi. Monitor Ritasi: hanya sel No DO (sel lain berisi isian).
             document.querySelectorAll('tbody.grup tr.t').forEach(tr => (tr.querySelector('.sel-do') ?? tr).addEventListener('click', () => tr.parentElement.classList.toggle('buka')));
             const form = document.getElementById('form-bongkar');
             if (!form) return;
+            // Tanggal selalu tampil "dd-MMM-yyyy" (mis. 09-Okt-2026), tidak mengikuti pengaturan bahasa komputer.
+            TanggalId.pasangSemua(form);
             const tombol = document.getElementById('simpan-bongkar');
             const info = document.getElementById('info-bongkar');
             const awal = info.textContent;
@@ -234,6 +241,7 @@
                 kolomBaris(f).forEach(i => {
                     if (i.value && i.dataset.massal !== '1' && !timpa) return;
                     i.value = nilai;
+                    i.dispatchEvent(new Event('blur')); // rapikan format & hapus tanda salah lama
                     i.dataset.massal = '1';
                     if (lainTerisi(i.closest('tr'))) delete i.dataset.massal;
                 });

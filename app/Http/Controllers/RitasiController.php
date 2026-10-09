@@ -68,12 +68,15 @@ class RitasiController extends Controller
         $kurang = [];
         foreach ($isian as $do => $b) {
             $label = ['tanggal' => 'Tanggal Bongkar', 'tahap' => 'Tujuan Bongkar', 'galian' => 'Galian', 'jenis_tanah' => 'Jenis Tanah', 'no_seri' => 'No Surat Jalan'];
-            $tidak = array_values(array_map(fn ($k) => $label[$k], array_filter(array_keys($label), fn ($k) => ! $b[$k])));
-            if ($b['tanggal'] && ! self::tanggal($b['tanggal'])) {
-                $tidak[] = 'Tanggal Bongkar tidak dikenali';
+            $kosong = array_values(array_map(fn ($k) => $label[$k], array_filter(array_keys($label), fn ($k) => ! $b[$k])));
+            $salah = [];
+            if ($b['tanggal'] && ! ($tgl = self::tanggal($b['tanggal']))) {
+                $salah[] = "Tanggal Bongkar \"{$b['tanggal']}\" tidak dikenali (format dd-MMM-yyyy, mis. 09-Okt-2026)";
+            } elseif ($b['tanggal'] && $tgl->isAfter(today())) {
+                $salah[] = 'Tanggal Bongkar tidak boleh sesudah hari ini';
             }
-            if ($tidak) {
-                $kurang["bongkar.{$do}"] = "DO {$do}: ".implode(', ', $tidak).(count($tidak) > 1 || ! str_contains($tidak[0], 'dikenali') ? ' belum diisi.' : '.');
+            if ($kosong || $salah) {
+                $kurang["bongkar.{$do}"] = "DO {$do}: ".implode('; ', array_filter([$kosong ? implode(', ', $kosong).' belum diisi' : null, ...$salah])).'.';
             }
         }
         if ($kurang) {
@@ -293,6 +296,10 @@ class RitasiController extends Controller
             return checkdate((int) $m[2], (int) $m[1], $th) ? Carbon::create($th, (int) $m[2], (int) $m[1]) : null;
         }
         $t = KasSeabank::tanggal($v) ?? KasSeabank::tanggal(str_replace(' ', '-', $v));
+        // "32-Okt-2026" jangan bergeser ke 1 Nov: tanggal di depan harus sama dengan hasil uraian.
+        if ($t && preg_match('/^(\d{1,2})[\s-][a-z]/i', $v, $h) && (int) $h[1] !== $t->day) {
+            return null;
+        }
 
         return $t && $t->year >= 2020 && $t->year <= 2100 ? $t : null;
     }
