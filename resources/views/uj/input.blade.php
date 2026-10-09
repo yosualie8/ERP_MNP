@@ -139,7 +139,7 @@
                 @elseif ($edit)
                     Edit Transaksi Master UJ <span class="redup" style="font-size: 13px; font-weight: normal;">UJ-{{ $edit['no_uj'] }} · Kas Seabank baris {{ $edit['baris'] }}</span>
                 @else
-                    Input Transaksi Master UJ <span class="redup" style="font-size: 13px; font-weight: normal;">rekening Seabank · uang jalan dump truck</span>
+                    Input Transaksi Master UJ <span class="redup" style="font-size: 13px; font-weight: normal;">rekening Bank Jago · uang jalan dump truck</span>
                 @endif
             </h3>
             </div>
@@ -574,7 +574,7 @@
                 }
             }));
 
-            // Dikirim dari rekening Seabank: sesama Seabank biasanya tanpa biaya, bank/e-wallet lain 2.500.
+            // Dikirim dari rekening Bank Jago: sesama Jago tanpa biaya, bank/e-wallet lain 2.500 (biaya transfer otomatis dicentang).
             const biaya = document.getElementById('biaya_transfer');
             const catatanBiaya = document.getElementById('catatan-biaya');
             let biayaDiubahManual = {{ old('biaya_transfer') !== null || $edit ? 'true' : 'false' }};
@@ -585,10 +585,12 @@
             nominalBiaya.addEventListener('input', () => { biayaDiubahManual = true; biaya.checked = angka(nominalBiaya.value) > 0; tandaiBiaya(); });
             nominalBiaya.addEventListener('focus', () => nominalBiaya.select());
             const aturBiaya = () => {
-                const seabank = bank.value.trim().toLowerCase() === 'seabank' || bank.value.trim() === '';
-                if (!biayaDiubahManual) biaya.checked = !seabank;
+                const b = bank.value.trim().toLowerCase();
+                const sesamaJago = b === 'jago' || b === 'bank jago' || b === '';
+                if (!biayaDiubahManual) biaya.checked = !sesamaJago;
                 tandaiBiaya();
-                catatanBiaya.textContent = seabank ? 'Sesama Seabank biasanya tanpa biaya transfer.' : 'Transfer ke ' + bank.value + ' biasanya kena biaya transfer.';
+                catatanBiaya.textContent = b === '' ? 'Isi bank tujuan: selain Bank Jago, biaya transfer otomatis dicentang.'
+                    : sesamaJago ? 'Sesama Bank Jago tanpa biaya transfer.' : 'Transfer dari Bank Jago ke ' + bank.value + ' kena biaya transfer.';
             };
             bank.addEventListener('input', aturBiaya);
             aturBiaya();
