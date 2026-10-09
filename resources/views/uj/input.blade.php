@@ -127,6 +127,11 @@
         @if ($pesanPengajuan ?? null)
             <div class="pesan galat">{{ $pesanPengajuan }}</div>
         @endif
+        @if (! empty($dariPengajuan) && ! old('detail'))
+            <div class="pesan sukses" id="petunjuk-pengajuan">📝 {{ count($dariPengajuan) }} transaksi dari pengajuan
+                ({{ collect($dariPengajuan)->pluck('kode')->unique()->implode(', ') }} · Rp {{ number_format(array_sum(array_column($dariPengajuan, 'nominal')), 0, ',', '.') }})
+                sudah terisi persis seperti pengajuannya. Isi <b>nama, rekening & bank penerima transfer</b>, lalu klik Simpan — semuanya tercatat sebagai satu transfer.</div>
+        @endif
         <div class="kartu">
             <div class="mode-rui" id="mode-pengajuan" hidden>
                 <span>📝 <b>Realisasi pengajuan</b> · <span id="mode-pengajuan-isi"></span> — setelah disimpan, detail itu tercatat terealisasi dengan ID UJ-nya.</span>
@@ -463,6 +468,11 @@
                 }),
             });
             if (!awal.length) aturNamaPertama();
+            // Dibuka dari Pengajuan UJ: kursor langsung ke data penerima transfer.
+            if (document.getElementById('petunjuk-pengajuan')) {
+                const tuju = nama.value.trim() ? document.getElementById('no_rek') : nama;
+                tuju?.focus();
+            }
             nama.addEventListener('input', aturNamaPertama);
 
             // Rekening tujuan yang pernah dipakai, dua arah: ketik nama → pilih bank & nomor; ketik nomor → nama & bank.

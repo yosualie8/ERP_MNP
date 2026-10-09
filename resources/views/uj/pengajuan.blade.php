@@ -14,6 +14,11 @@
         .info-beda.dialihkan { border-left-color: #c77dff; background: #1d1426; }
         .info-beda del { color: var(--redup); }
         .label.ungu { background: #3b2350; color: #dcb3ff; }
+        input.pilih-real, input.pilih-semua-pj { width: 17px; height: 17px; cursor: pointer; vertical-align: middle; }
+        table.kas tr.b.dipilih td { background: rgba(76, 195, 138, .14); }
+        .bar-realisasi { position: sticky; bottom: 0; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 12px 16px; margin-top: 12px;
+            background: var(--kartu); border: 1px solid var(--aksen); border-radius: 10px; z-index: 2; }
+        .bar-realisasi[hidden] { display: none; }
     </style>
     <div class="ringkas">
         <div class="kartu"><span class="redup">Menunggu realisasi</span><b>{{ rp((int) $menunggu->s) }}</b></div>
@@ -49,7 +54,7 @@
                 @php($nBeda = $p->detail->filter(fn ($d) => $d->berbeda())->count())
                 <tbody @class(['grup', 'buka' => $beda || in_array($p->status, ['diajukan', 'sebagian'], true)])>
                     <tr class="t ada-bon">
-                        <td><span class="panah">▸</span> <b>{{ $p->kode() }}</b> <span class="jumlah-bon">{{ $p->detail->count() }}</span></td>
+                        <td>@if ($bolehRealisasi && $p->detail->where('status', 'menunggu')->isNotEmpty())<input type="checkbox" class="pilih-semua-pj" data-pj="{{ $p->id }}" title="Pilih semua detail {{ $p->kode() }} yang masih menunggu"> @endif<span class="panah">▸</span> <b>{{ $p->kode() }}</b> <span class="jumlah-bon">{{ $p->detail->count() }}</span></td>
                         <td>{{ $p->tanggal->translatedFormat('j M Y') }}</td>
                         <td><b>{{ $p->detail->pluck('nama')->filter()->unique()->take(4)->implode(', ') }}</b>@if ($p->detail->pluck('nama')->filter()->unique()->count() > 4) …@endif</td>
                         <td class="ringkas-gl">{{ $p->detail->pluck('kategori')->unique()->take(3)->implode(', ') }}</td>
@@ -69,7 +74,8 @@
                     <tr class="bh"><td>Detail</td><td>Nama</td><td>Keterangan</td><td>Kategori · Mobil · DO</td><td class="angka">Nominal</td><td>Status</td><td>Realisasi</td><td></td></tr>
                     @foreach ($p->detail as $d)
                         <tr @class(['b', $d->status, 'berbeda' => $d->jenis_realisasi === 'penyesuaian'])>
-                            <td></td><td class="p">{{ $d->nama }}</td><td>{{ $d->keterangan }}@if ($d->temuan)<i title="{{ collect($d->temuan)->pluck('pesan')->implode(' · ') }} — konfirmasi: {{ $d->konfirmasi }}"> ⚠ FLAG dikonfirmasi</i>@endif</td>
+                            <td>@if ($bolehRealisasi && $d->status === 'menunggu')<input type="checkbox" class="pilih-real" value="{{ $d->id }}" data-pj="{{ $p->id }}" data-nominal="{{ (int) $d->nominal }}"
+                                data-nama="{{ $d->nama }}" title="Pilih untuk direalisasikan bersama (satu transfer)">@endif</td><td class="p">{{ $d->nama }}</td><td>{{ $d->keterangan }}@if ($d->temuan)<i title="{{ collect($d->temuan)->pluck('pesan')->implode(' · ') }} — konfirmasi: {{ $d->konfirmasi }}"> ⚠ FLAG dikonfirmasi</i>@endif</td>
                             <td>{{ $d->kategori }} @if ($d->no_mobil)<i>{{ $d->no_mobil }}</i>@endif @if ($d->no_do)<span class="redup">DO {{ $d->no_do }}</span>@endif</td>
                             <td class="angka">{{ rp($d->nominal) }}</td>
                             <td>{{ $d->jenis_realisasi === 'penyesuaian' ? '✓ Terealisasi (berbeda)' : \App\Models\UjPengajuanDetail::STATUS[$d->status] ?? $d->status }}</td>
@@ -96,10 +102,48 @@
             @endforelse
         </table>
     </div>
+    @if ($bolehRealisasi)
+        {{-- Pilih beberapa detail (boleh lintas pengajuan & driver) → satu transfer: Input UJ terisi semua detail itu, admin tinggal isi rekening penerima. --}}
+        <div class="bar-realisasi" id="bar-realisasi" hidden>
+            <b id="jumlah-pilih">0 transaksi dipilih</b>
+            <span class="redup" id="ringkas-pilih"></span>
+            <span style="margin-left: auto; display: flex; gap: 8px;">
+                <button type="button" class="tombol polos" id="batal-pilih">Batal pilih</button>
+                <a href="#" class="tombol" id="realisasi-pilih">➜ Realisasikan terpilih (1 transfer)</a>
+            </span>
+        </div>
+    @endif
     <script>
-        document.querySelectorAll('tbody.grup tr.t').forEach(tr => tr.addEventListener('click', e => {
-            if (e.target.closest('button, a, form')) return;
-            tr.parentElement.classList.toggle('buka');
-        }));
+        (() => {
+            document.querySelectorAll('tbody.grup tr.t').forEach(tr => tr.addEventListener('click', e => {
+                if (e.target.closest('button, a, form, input')) return;
+                tr.parentElement.classList.toggle('buka');
+            }));
+            const bar = document.getElementById('bar-realisasi');
+            if (!bar) return;
+            const fmt = n => new Intl.NumberFormat('id-ID').format(n || 0);
+            const semua = [...document.querySelectorAll('input.pilih-real')];
+            const dasar = @json(route('uj.input'));
+            const hitung = () => {
+                const pilih = semua.filter(c => c.checked);
+                semua.forEach(c => c.closest('tr').classList.toggle('dipilih', c.checked));
+                document.querySelectorAll('input.pilih-semua-pj').forEach(m => {
+                    const anak = semua.filter(c => c.dataset.pj === m.dataset.pj);
+                    m.checked = anak.length > 0 && anak.every(c => c.checked); m.indeterminate = !m.checked && anak.some(c => c.checked);
+                });
+                bar.hidden = !pilih.length;
+                const driver = [...new Set(pilih.map(c => c.dataset.nama).filter(Boolean))];
+                document.getElementById('jumlah-pilih').textContent = `${pilih.length} transaksi dipilih · Rp ${fmt(pilih.reduce((s, c) => s + +c.dataset.nominal, 0))}`;
+                document.getElementById('ringkas-pilih').textContent = driver.length ? `driver: ${driver.join(', ')}` : '';
+                document.getElementById('realisasi-pilih').href = dasar + '?pengajuan=' + pilih.map(c => c.value).join(',');
+            };
+            semua.forEach(c => c.addEventListener('change', hitung));
+            document.querySelectorAll('input.pilih-semua-pj').forEach(m => m.addEventListener('change', () => {
+                semua.filter(c => c.dataset.pj === m.dataset.pj).forEach(c => c.checked = m.checked);
+                hitung();
+            }));
+            document.getElementById('batal-pilih').addEventListener('click', () => { semua.forEach(c => c.checked = false); hitung(); });
+            hitung();
+        })();
     </script>
 @endsection
