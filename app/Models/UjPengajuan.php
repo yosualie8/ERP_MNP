@@ -22,6 +22,12 @@ class UjPengajuan extends Model
         return $this->hasMany(UjPengajuanDetail::class)->orderBy('urut');
     }
 
+    /** Transfer Kas Harian yang membiayai pengajuan ini (dipilih admin). */
+    public function transfer(): HasMany
+    {
+        return $this->hasMany(UjPengajuanTransfer::class)->orderBy('kas_tanggal')->orderBy('kas_no_id');
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);

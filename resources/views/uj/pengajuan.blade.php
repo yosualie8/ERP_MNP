@@ -19,6 +19,23 @@
         .bar-realisasi { position: sticky; bottom: 0; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; padding: 12px 16px; margin-top: 12px;
             background: var(--kartu); border: 1px solid var(--aksen); border-radius: 10px; z-index: 2; }
         .bar-realisasi[hidden] { display: none; }
+        td.sel-transfer { font-size: 12px; min-width: 220px; }
+        td.sel-transfer .tf-baris { margin: 3px 0; white-space: nowrap; }
+        td.sel-transfer .lepas-tf { background: none; border: none; color: var(--redup); cursor: pointer; padding: 0 3px; font-size: 12px; }
+        td.sel-transfer .lepas-tf:hover { color: var(--aksen); }
+        td.sel-transfer .pilih-transfer { margin-top: 4px; }
+        dialog#dialog-transfer { width: min(1100px, 96vw); max-height: 86vh; padding: 0; border: 1px solid var(--garis); border-radius: 12px; background: var(--kartu); color: var(--teks); }
+        dialog#dialog-transfer::backdrop { background: rgba(0, 0, 0, .6); }
+        #dialog-transfer .kepala-dt { padding: 12px 16px; border-bottom: 1px solid var(--garis); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+        #dialog-transfer .kepala-dt input { flex: 1; min-width: 220px; padding: 6px 9px; border-radius: 6px; border: 2px solid #4a5160; font-size: 13px; }
+        #dialog-transfer .isi-dt { max-height: 58vh; overflow: auto; }
+        #dialog-transfer table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        #dialog-transfer th { position: sticky; top: 0; background: var(--kartu-2); text-align: left; padding: 6px 8px; font-size: 12px; color: var(--redup); }
+        #dialog-transfer td { padding: 5px 8px; border-top: 1px solid var(--garis); cursor: pointer; }
+        #dialog-transfer td.angka, #dialog-transfer th.angka { text-align: right; font-variant-numeric: tabular-nums; }
+        #dialog-transfer tr.dipilih td { background: rgba(76, 195, 138, .14); }
+        #dialog-transfer tr.terpasang td { color: var(--redup); }
+        #dialog-transfer .kaki-dt { padding: 10px 16px; border-top: 1px solid var(--garis); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
         .saring-pj { padding: 10px 14px; margin-bottom: 12px; }
         .saring-pj .kolom-saring { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px 12px; }
         .saring-pj .kolom-saring label { display: flex; flex-direction: column; gap: 3px; margin: 0; min-width: 0; }
@@ -75,7 +92,7 @@
     @endif
     <div class="kartu gulir" style="padding: 0;">
         <table class="kas">
-            <thead><tr><th>Kode</th><th>Tanggal pengajuan</th><th>Driver</th><th>Kategori</th><th class="angka">Total</th><th>Status</th><th>Diajukan</th><th></th></tr></thead>
+            <thead><tr><th>Kode</th><th>Tanggal pengajuan</th><th>Driver</th><th>Kategori</th><th class="angka">Total</th><th>Status</th><th>Transfer (Kas Harian)</th><th>Diajukan</th><th></th></tr></thead>
             @forelse ($pengajuan as $p)
                 @php($real = $p->detail->whereIn('status', ['terealisasi', 'dialihkan']))
                 @php($nBeda = $p->detail->filter(fn ($d) => $d->berbeda())->count())
@@ -89,6 +106,28 @@
                         <td><span @class(['label', 'kuning' => $p->status === 'sebagian', 'hijau' => $p->status === 'selesai', 'merah' => $p->status === 'batal'])>{{ \App\Models\UjPengajuan::STATUS[$p->status] }}</span>
                             @if ($nBeda)<span class="label kuning" title="Realisasi tidak sama dengan pengajuan">⚠ {{ $nBeda }} tidak sesuai</span>@endif
                             @if ($real->count())<span class="redup" style="font-size: 12px;">{{ $real->count() }}/{{ $p->detail->count() }} · {{ rp($real->sum('nominal')) }}</span>@endif</td>
+                        @php($totalTf = (int) $p->transfer->sum('nominal'))
+                        <td class="sel-transfer">
+                            @if ($p->transfer->isEmpty())
+                                <span class="label">Belum ditransfer</span>
+                            @else
+                                <span @class(['label', 'hijau' => $totalTf >= $p->nominal, 'kuning' => $totalTf < $p->nominal])>{{ $totalTf >= $p->nominal ? 'Sudah ditransfer' : 'Kurang '.rp($p->nominal - $totalTf) }}</span>
+                                @if ($totalTf > $p->nominal)<span class="redup" style="font-size: 11px;">lebih {{ rp($totalTf - $p->nominal) }}</span>@endif
+                                @foreach ($p->transfer as $tf)
+                                    @php($kini = $kasKini[$tf->kas_no_id] ?? null)
+                                    @php($berubah = ! $kini || ! $kini->tanggal->isSameDay($tf->kas_tanggal) || (int) $kini->kredit !== (int) $tf->nominal)
+                                    <div class="tf-baris" title="{{ $tf->nama_tujuan }} · {{ $tf->keterangan }}{{ $tf->user ? ' · ditautkan '.($tf->user->name ?? $tf->user->email) : '' }}">
+                                        {{ $tf->kas_tanggal->translatedFormat('j M') }} · <b>{{ rp($tf->nominal) }}</b> · <span class="redup">{{ $tf->idKas() }}</span>
+                                        @if ($berubah)<span class="label merah" title="{{ $kini ? 'Transaksi Kas Harian ini sekarang '.$kini->tanggal->translatedFormat('j M Y').' '.rp((int) $kini->kredit) : 'Transaksi Kas Harian ini tidak ditemukan lagi (dihapus / NO ID berubah)' }}">⚠ {{ $kini ? 'berubah' : 'hilang' }}</span>@endif
+                                        <form method="POST" action="{{ route('pengajuan-uj.transfer-lepas', $tf) }}" style="display: inline;" onsubmit="return confirm('Lepas tautan transfer {{ $tf->idKas() }} dari {{ $p->kode() }}?')">
+                                            @csrf @method('DELETE')<button type="submit" class="lepas-tf" title="Lepas tautan">✕</button></form>
+                                    </div>
+                                @endforeach
+                            @endif
+                            <button type="button" class="tombol-edit pilih-transfer" data-pj="{{ $p->id }}" data-kode="{{ $p->kode() }}" data-nominal="{{ (int) $p->nominal }}"
+                                data-tgl="{{ $p->tanggal->translatedFormat('j M Y') }}" data-ditransfer="{{ $totalTf }}"
+                                data-url="{{ route('pengajuan-uj.transfer-kandidat', $p) }}" data-simpan="{{ route('pengajuan-uj.transfer-tautkan', $p) }}">🔗 {{ $p->transfer->isEmpty() ? 'Pilih transfer' : 'Tambah' }}</button>
+                        </td>
                         <td class="redup" style="font-size: 12px;">{{ $p->user?->name ?? $p->user?->email }} · {{ $p->created_at->translatedFormat('j M H:i') }}</td>
                         <td style="white-space: nowrap;">
                             @if ($p->status === 'diajukan')<a href="{{ route('pengajuan-uj.ubah', $p) }}" class="tombol-edit">Edit</a>@endif
@@ -98,7 +137,7 @@
                             @endif
                         </td>
                     </tr>
-                    <tr class="bh"><td>Detail</td><td>No Mobil</td><td>Driver</td><td class="angka">Nominal</td><td>Kategori</td><td>No DO</td><td></td><td></td></tr>
+                    <tr class="bh"><td>Detail</td><td>No Mobil</td><td>Driver</td><td class="angka">Nominal</td><td>Kategori</td><td>No DO</td><td></td><td></td><td></td></tr>
                     @foreach ($p->detail as $d)
                         @php($teksStatus = $d->jenis_realisasi === 'penyesuaian' ? 'Terealisasi (berbeda)' : ['menunggu' => 'Menunggu', 'terealisasi' => 'Terealisasi', 'dialihkan' => 'Dialihkan', 'batal' => 'Dibatalkan'][$d->status] ?? $d->status)
                         <tr @class(['b', $d->status, 'berbeda' => $d->jenis_realisasi === 'penyesuaian']) data-detail
@@ -113,11 +152,11 @@
                             <td class="angka">{{ rp($d->nominal) }}</td>
                             <td>{{ $d->kategori }}</td>
                             <td>{{ $d->no_do ?: '–' }}</td>
-                            <td></td><td></td>
+                            <td></td><td></td><td></td>
                         </tr>
                         @if ($d->berbeda() && $d->realisasi)
                             @php($r = $d->realisasi)
-                            <tr class="realisasi"><td></td><td colspan="7">
+                            <tr class="realisasi"><td></td><td colspan="8">
                                 <div @class(['info-beda', 'dialihkan' => $d->jenis_realisasi === 'dialihkan'])>
                                     <span @class(['label', 'ungu' => $d->jenis_realisasi === 'dialihkan', 'kuning' => $d->jenis_realisasi !== 'dialihkan'])>{{ $d->jenis_realisasi === 'dialihkan' ? '↪ Dialihkan' : '≠ Penyesuaian' }}</span>
                                     <b>Realisasi {{ $r['id_uj'] ?? $d->id_uj }}:</b> {{ $r['keterangan'] ?? '' }} · {{ $r['kategori'] ?? '' }}@if (! empty($r['no_mobil'])) · {{ $r['no_mobil'] }}@endif @if (! empty($r['no_do'])) · DO {{ $r['no_do'] }}@endif · <b>{{ rp((int) ($r['nominal'] ?? 0)) }}</b>
@@ -130,7 +169,7 @@
                     @endforeach
                 </tbody>
             @empty
-                <tbody><tr><td colspan="8" class="redup" style="padding: 20px 14px;">{{ $beda ? 'Belum ada realisasi yang tidak sesuai dengan pengajuannya.' : 'Belum ada pengajuan uang jalan.' }}</td></tr></tbody>
+                <tbody><tr><td colspan="9" class="redup" style="padding: 20px 14px;">{{ $beda ? 'Belum ada realisasi yang tidak sesuai dengan pengajuannya.' : 'Belum ada pengajuan uang jalan.' }}</td></tr></tbody>
             @endforelse
         </table>
     </div>
@@ -145,6 +184,76 @@
             </span>
         </div>
     @endif
+    {{-- Pilih transfer Kas Harian yang membiayai sebuah pengajuan. --}}
+    <dialog id="dialog-transfer">
+        <form method="POST" id="form-transfer">
+            @csrf
+            <div class="kepala-dt">
+                <b id="judul-dt">Pilih transfer Kas Harian</b>
+                <input type="search" id="cari-dt" placeholder="Cari keterangan, tujuan, NO ID atau nominal (kosong = sekitar tanggal pengajuan)" autocomplete="off">
+                <button type="button" class="tombol polos" id="tutup-dt">Tutup</button>
+            </div>
+            <div class="isi-dt"><table>
+                <thead><tr><th style="width: 30px;"></th><th>Tanggal</th><th>ID Kas Harian</th><th>Tujuan</th><th>Keterangan</th><th class="angka">Nominal</th><th>Sudah ditautkan ke</th></tr></thead>
+                <tbody id="daftar-dt"></tbody>
+            </table></div>
+            <div class="kaki-dt">
+                <span id="info-dt" class="redup"></span>
+                <button type="submit" class="tombol" id="simpan-dt" style="margin-left: auto;" disabled>🔗 Tautkan transfer terpilih</button>
+            </div>
+        </form>
+    </dialog>
+    <script>
+        (() => {
+            const dlg = document.getElementById('dialog-transfer');
+            if (!dlg) return;
+            const fmtRp = n => 'Rp ' + new Intl.NumberFormat('id-ID').format(n || 0);
+            const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+            const daftar = document.getElementById('daftar-dt');
+            const cari = document.getElementById('cari-dt');
+            const info = document.getElementById('info-dt');
+            const simpan = document.getElementById('simpan-dt');
+            let aktif = null, data = [], jeda = null;
+            const hitung = () => {
+                const pilih = [...daftar.querySelectorAll('input:checked')].map(c => data.find(t => t.no_id === +c.value));
+                daftar.querySelectorAll('tr').forEach(tr => tr.classList.toggle('dipilih', !!tr.querySelector('input:checked')));
+                const total = pilih.reduce((s, t) => s + t.nominal, 0) + aktif.ditransfer;
+                info.textContent = `${pilih.length} transfer dipilih · ${fmtRp(pilih.reduce((s, t) => s + t.nominal, 0))} — pengajuan ${fmtRp(aktif.nominal)}`
+                    + (aktif.ditransfer ? `, sudah tertaut ${fmtRp(aktif.ditransfer)}` : '')
+                    + (pilih.length ? (total === aktif.nominal ? ' · ✓ pas' : total < aktif.nominal ? ` · kurang ${fmtRp(aktif.nominal - total)}` : ` · lebih ${fmtRp(total - aktif.nominal)}`) : '');
+                simpan.disabled = !pilih.length;
+            };
+            const muat = async () => {
+                daftar.innerHTML = '<tr><td colspan="7" class="redup">Memuat…</td></tr>';
+                const q = cari.value.trim();
+                data = (await (await fetch(aktif.url + (q ? '?q=' + encodeURIComponent(q) : ''), {headers: {Accept: 'application/json'}})).json()).transfer;
+                daftar.innerHTML = data.length ? data.map(t => `<tr class="${t.terpasang ? 'terpasang' : ''}">
+                    <td>${t.terpasang ? '✓' : `<input type="checkbox" name="no_id[]" value="${t.no_id}">`}</td>
+                    <td>${esc(t.tgl)}</td><td>${esc(t.id_kas)}</td><td>${esc(t.nama || '')}${t.bank ? ' <span class="redup">· ' + esc(t.bank) + '</span>' : ''}</td>
+                    <td>${esc(t.keterangan || '')}</td><td class="angka"><b>${fmtRp(t.nominal).replace('Rp ', '')}</b></td>
+                    <td class="redup">${esc(t.dipakai.join(', '))}</td></tr>`).join('')
+                    : `<tr><td colspan="7" class="redup">${q ? 'Tidak ada transaksi Kas Harian yang cocok.' : 'Tidak ada transaksi keluar Kas Harian di sekitar tanggal pengajuan — coba cari.'}</td></tr>`;
+                daftar.querySelectorAll('tr').forEach(tr => tr.addEventListener('click', e => {
+                    const c = tr.querySelector('input'); if (!c) return;
+                    if (!e.target.matches('input')) c.checked = !c.checked;
+                    hitung();
+                }));
+                hitung();
+            };
+            document.querySelectorAll('button.pilih-transfer').forEach(b => b.addEventListener('click', e => {
+                e.stopPropagation();
+                aktif = {url: b.dataset.url, nominal: +b.dataset.nominal, ditransfer: +b.dataset.ditransfer};
+                document.getElementById('form-transfer').action = b.dataset.simpan;
+                document.getElementById('judul-dt').textContent = `Transfer Kas Harian untuk ${b.dataset.kode} (${fmtRp(+b.dataset.nominal)}, diajukan ${b.dataset.tgl})`;
+                cari.value = '';
+                dlg.showModal();
+                muat();
+            }));
+            cari.addEventListener('input', () => { clearTimeout(jeda); jeda = setTimeout(muat, 350); });
+            cari.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(jeda); muat(); } });
+            document.getElementById('tutup-dt').addEventListener('click', () => dlg.close());
+        })();
+    </script>
     <script>
         (() => {
             document.querySelectorAll('tbody.grup tr.t').forEach(tr => tr.addEventListener('click', e => {

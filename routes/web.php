@@ -74,6 +74,9 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/uj/pengajuan/{pengajuan}/edit', [PengajuanUjController::class, 'ubah'])->whereNumber('pengajuan')->name('pengajuan-uj.ubah');
     Route::put('/uj/pengajuan/{pengajuan}', [PengajuanUjController::class, 'simpanUbah'])->whereNumber('pengajuan')->name('pengajuan-uj.simpan-ubah');
     Route::post('/uj/pengajuan/{pengajuan}/batal', [PengajuanUjController::class, 'batal'])->whereNumber('pengajuan')->name('pengajuan-uj.batal');
+    Route::get('/uj/pengajuan/{pengajuan}/transfer', [PengajuanUjController::class, 'kandidatTransfer'])->whereNumber('pengajuan')->name('pengajuan-uj.transfer-kandidat');
+    Route::post('/uj/pengajuan/{pengajuan}/transfer', [PengajuanUjController::class, 'tautkanTransfer'])->whereNumber('pengajuan')->name('pengajuan-uj.transfer-tautkan');
+    Route::delete('/uj/pengajuan/transfer/{transfer}', [PengajuanUjController::class, 'lepasTransfer'])->whereNumber('transfer')->name('pengajuan-uj.transfer-lepas');
     // Ritasi dump truck (lembar "Ritasi").
     Route::get('/ritasi', [RitasiController::class, 'index'])->name('ritasi.index');
     Route::get('/ritasi/monitor', [RitasiController::class, 'monitor'])->name('ritasi.monitor');
