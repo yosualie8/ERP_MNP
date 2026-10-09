@@ -78,6 +78,15 @@
                 <div class="pesan galat"><b>Belum tersimpan — perbaiki dulu:</b>
                     <ul style="margin: 6px 0 0; padding-left: 18px;">@foreach ($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul></div>
             @endif
+            @if ($daftar->isNotEmpty())
+                <div class="cari-monitor isi-massal">
+                    <span class="redup">Tanggal bongkar untuk {{ $daftar->count() }} DO yang tampil:</span>
+                    <input type="date" id="tanggal-massal" value="{{ now()->toDateString() }}" max="{{ now()->toDateString() }}" style="padding: 7px 9px; border-radius: 7px;">
+                    <button type="button" class="tombol polos" id="isi-tanggal-massal">Isi tanggal bongkar ke semua DO yang tampil</button>
+                    <button type="button" class="tombol polos" id="kosongkan-tanggal-massal" style="padding: 7px 12px;">Kosongkan tanggal</button>
+                    <span class="redup" style="font-size: 12px;">DO yang hanya berisi tanggal ini tidak ikut disimpan — lengkapi Tujuan, Jenis Tanah & No Surat Jalan untuk DO yang sudah bongkar.</span>
+                </div>
+            @endif
             <div class="kartu gulir" style="padding: 0;">
                 <table class="kas bongkar">
                     <thead><tr><th>No DO</th><th>Nomor Mobil</th><th>Jenis Mobil</th><th>Nama Supir</th><th>Tanggal UJ</th><th>Galian</th>
@@ -188,8 +197,9 @@
             const info = document.getElementById('info-bongkar');
             const awal = info.textContent;
             const baris = [...form.querySelectorAll('tr.t[data-do]')];
-            // Baris terisi = salah satu kolom bongkar/keterangan diisi (galian terisi otomatis, tidak dihitung).
-            const terisi = tr => [...tr.querySelectorAll('.isi-bongkar')].some(i => i.name.endsWith('[galian]') ? false : i.value.trim());
+            // Baris terisi = salah satu kolom bongkar/keterangan diisi. Galian (terisi otomatis) dan tanggal hasil "isi massal"
+            // tidak dihitung, supaya DO yang hanya berisi tanggal massal tidak ikut disimpan.
+            const terisi = tr => [...tr.querySelectorAll('.isi-bongkar')].some(i => i.name.endsWith('[galian]') || i.dataset.massal === '1' ? false : i.value.trim());
             const kurang = tr => [...tr.querySelectorAll('.isi-bongkar.wajib')].filter(i => !i.value.trim()).length + (tr.querySelector('[name$="[galian]"]').value.trim() ? 0 : 1);
             const hitung = () => {
                 const isi = baris.filter(terisi);
@@ -201,7 +211,31 @@
                     ? `${isi.length} DO diisi · ${belum.length} belum lengkap (DO ${belum.map(tr => tr.dataset.do).join(', ')}) — lengkapi Tanggal, Tujuan, Galian, Jenis Tanah & No Surat Jalan.`
                     : `${isi.length} DO siap disimpan sebagai bongkar: ${isi.map(tr => tr.dataset.do).join(', ')}.`;
             };
-            form.addEventListener('input', hitung);
+            form.addEventListener('input', e => {
+                if (e.target.name?.endsWith('[tanggal]')) delete e.target.dataset.massal; // diubah sendiri = isian biasa
+                hitung();
+            });
+            // Isi Tanggal Bongkar semua DO yang tampil (hasil saringan) sekaligus.
+            const tanggalBaris = () => baris.map(tr => tr.querySelector('[name$="[tanggal]"]'));
+            document.getElementById('isi-tanggal-massal')?.addEventListener('click', () => {
+                const tgl = document.getElementById('tanggal-massal').value;
+                if (!tgl) { alert('Pilih tanggalnya dulu.'); return; }
+                const ada = tanggalBaris().filter(i => i.value && i.value !== tgl && i.dataset.massal !== '1');
+                const timpa = ada.length ? confirm(`${ada.length} DO sudah punya tanggal bongkar lain. Timpa juga dengan tanggal ini?\n\nOK = timpa semua · Batal = isi yang masih kosong saja`) : false;
+                // Kolom lain (tujuan, jenis tanah, no surat jalan, keterangan) sudah diisi = baris memang sedang dicatat.
+                const lainTerisi = tr => [...tr.querySelectorAll('.isi-bongkar')].some(x => !x.name.endsWith('[galian]') && !x.name.endsWith('[tanggal]') && x.value.trim());
+                tanggalBaris().forEach(i => {
+                    if (i.value && i.dataset.massal !== '1' && !timpa) return;
+                    i.value = tgl;
+                    if (lainTerisi(i.closest('tr'))) delete i.dataset.massal; else i.dataset.massal = '1';
+                });
+                hitung();
+            });
+            // Kosongkan tanggal hasil isi massal (tanggal yang diketik sendiri tidak disentuh).
+            document.getElementById('kosongkan-tanggal-massal')?.addEventListener('click', () => {
+                tanggalBaris().forEach(i => { if (i.dataset.massal === '1') { i.value = ''; delete i.dataset.massal; } });
+                hitung();
+            });
             // Baris yang tidak diisi tidak ikut dikirim.
             form.addEventListener('submit', e => {
                 if (!confirm(`Simpan ${baris.filter(terisi).length} DO sebagai sudah bongkar? Data masuk ke Ritasi (aplikasi & sheet).`)) { e.preventDefault(); return; }
