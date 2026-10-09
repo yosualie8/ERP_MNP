@@ -124,6 +124,9 @@
             </div>
         @endif
 
+        @if ($pesanPengajuan ?? null)
+            <div class="pesan galat">{{ $pesanPengajuan }}</div>
+        @endif
         <div class="kartu">
             <div class="mode-rui" id="mode-pengajuan" hidden>
                 <span>📝 <b>Realisasi pengajuan</b> · <span id="mode-pengajuan-isi"></span> — setelah disimpan, detail itu tercatat terealisasi dengan ID UJ-nya.</span>
@@ -148,7 +151,7 @@
                 {{-- Pengajuan = daftar transaksi yang diajukan: belum ada penerima transfer, rekening, maupun nominal master. --}}
                 <div style="grid-column: span 2;{{ $ajukan ? ' display: none;' : '' }}" class="isian-saran">
                     <label for="nama_tujuan">Nama penerima transfer</label>
-                    <input type="text" name="nama" id="nama_tujuan" value="{{ old('nama', $edit['nama'] ?? '') }}" autocomplete="off" required placeholder="Ketik nama, pilih rekeningnya dari daftar">
+                    <input type="text" name="nama" id="nama_tujuan" value="{{ old('nama', $edit['nama'] ?? (count($driverPengajuan = collect($dariPengajuan ?? [])->pluck('nama')->filter()->unique()) === 1 ? $driverPengajuan->first() : '')) }}" autocomplete="off" required placeholder="Ketik nama, pilih rekeningnya dari daftar">
                     <div class="saran" id="saran-nama" hidden></div>
                 </div>
             </div>
@@ -165,7 +168,7 @@
             </div>
             <div style="max-width: 260px;{{ $ajukan ? ' display: none;' : '' }}">
                 <label for="nominal_transfer">Nominal master <span class="redup">(yang ditransfer, tanpa biaya transfer)</span></label>
-                <input type="text" name="nominal" id="nominal_transfer" class="angka-input rupiah" inputmode="numeric" autocomplete="off" value="{{ old('nominal', $edit['nominal'] ?? '') }}" required>
+                <input type="text" name="nominal" id="nominal_transfer" class="angka-input rupiah" inputmode="numeric" autocomplete="off" value="{{ old('nominal', $edit['nominal'] ?? (($dariPengajuan ?? []) ? array_sum(array_column($dariPengajuan, 'nominal')) : '')) }}" required>
             </div>
         </div>
 
@@ -264,7 +267,8 @@
         (() => {
             const rekening = @json($rekening);
             const jenisMobil = @json($mobil);
-            const awal = @json(old('detail', $edit['detail'] ?? []));
+            // Isian awal: input lama (bila gagal simpan) → data edit → detail pengajuan dari tombol "Input UJ" di menu Pengajuan UJ.
+            const awal = @json(old('detail', $edit['detail'] ?? ($dariPengajuan ?? [])));
             const AJUKAN = @json($ajukan);
             const daftar = document.getElementById('daftar-bon');
             const templat = document.getElementById('templat-bon');

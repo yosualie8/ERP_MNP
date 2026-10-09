@@ -95,7 +95,32 @@ class UjController extends Controller
             'jenis' => $hitung('jenis_kendaraan', 10),
             'bank' => $bank,
             'modelKategori' => $this->modelKategori(),
+            ...$this->dariPengajuan(),
         ]);
+    }
+
+    /**
+     * Menu Pengajuan UJ → tombol "Input UJ" per detail: /uj/input?pengajuan=12 (bisa beberapa, dipisah koma) membuka form
+     * yang sudah berisi detail itu persis seperti pengajuannya dan sudah tertaut (setelah disimpan tercatat terealisasi).
+     *
+     * @return array{dariPengajuan: array, pesanPengajuan: ?string}
+     */
+    private function dariPengajuan(): array
+    {
+        $ids = collect(explode(',', (string) request()->query('pengajuan')))->map(fn ($v) => (int) $v)->filter()->unique()->values();
+        if ($ids->isEmpty()) {
+            return ['dariPengajuan' => [], 'pesanPengajuan' => null];
+        }
+        $detail = UjPengajuanDetail::with('pengajuan')->whereIn('id', $ids)->where('status', 'menunggu')->orderBy('uj_pengajuan_id')->orderBy('urut')->get();
+        $baris = $detail->map(fn ($d) => [
+            'pengajuan' => $d->id, 'kode' => $d->pengajuan->kode(), 'nama' => $d->nama, 'keterangan' => $d->keterangan, 'nominal' => (int) $d->nominal,
+            'kategori' => $d->kategori, 'jenis_kendaraan' => $d->jenis_kendaraan, 'no_mobil' => $d->no_mobil, 'no_do' => $d->no_do,
+        ])->values()->all();
+        $hilang = $ids->count() - $detail->count();
+
+        return ['dariPengajuan' => $baris, 'pesanPengajuan' => $hilang
+            ? ($detail->isEmpty() ? 'Detail pengajuan itu sudah direalisasikan atau dibatalkan — tidak ada yang dimasukkan ke form.' : "{$hilang} detail pengajuan sudah direalisasikan/dibatalkan dan tidak dimasukkan.")
+            : null];
     }
 
     /**
