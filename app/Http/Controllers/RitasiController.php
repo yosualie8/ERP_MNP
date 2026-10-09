@@ -290,7 +290,8 @@ class RitasiController extends Controller
         if ($v === '') {
             return null;
         }
-        if (preg_match('/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2}|\d{4})$/', $v, $m)) {
+        // Angka saja: ddmmyyyy / ddmmyy (mis. 08102026) — sama dengan isian tanggal di form.
+        if (preg_match('/^(\d{2})(\d{2})(\d{4}|\d{2})$/', $v, $m) || preg_match('/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2}|\d{4})$/', $v, $m)) {
             $th = strlen($m[3]) === 2 ? 2000 + (int) $m[3] : (int) $m[3];
 
             return checkdate((int) $m[2], (int) $m[1], $th) ? Carbon::create($th, (int) $m[2], (int) $m[1]) : null;

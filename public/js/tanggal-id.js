@@ -16,7 +16,9 @@ window.TanggalId = (() => {
     const urai = v => {
         v = String(v || '').trim();
         let m, d, b, t;
-        if ((m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/))) [t, b, d] = [+m[1], +m[2], +m[3]];
+        // Angka saja: ddmmyyyy (08102026), ddmmyy (081026), ddmm (0810 = tahun ini).
+        if ((m = v.match(/^(\d{2})(\d{2})(\d{4}|\d{2})?$/))) [d, b, t] = [+m[1], +m[2], m[3] ? +m[3] : new Date().getFullYear()];
+        else if ((m = v.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/))) [t, b, d] = [+m[1], +m[2], +m[3]];
         else if ((m = v.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{2}|\d{4})$/))) [d, b, t] = [+m[1], +m[2], +m[3]];
         else if ((m = v.match(/^(\d{1,2})[\s.\/-]*([a-z]{3})[a-z]*[\s.\/-]*(\d{2}|\d{4})$/i)) && KENAL[m[2].toLowerCase()]) [d, b, t] = [+m[1], KENAL[m[2].toLowerCase()], +m[3]];
         else return null;
