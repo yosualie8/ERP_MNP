@@ -133,6 +133,9 @@ class KasInputController extends Controller
             'bon.*.uj' => ['nullable', 'string', 'max:40'],
             'bon.*.no_mobil' => ['nullable', 'string', 'max:20'],
             'reimburse_uj' => ['nullable', 'date'],
+            // Transaksi yang baru diinput/diedit tetapi kenyataannya sudah direimburse.
+            'sudah_reimburse' => ['nullable', 'boolean'],
+            'tanggal_reimburse' => ['exclude_unless:sudah_reimburse,1', 'required', 'date', 'before_or_equal:today'],
             'foto' => ['nullable', 'array', 'max:'.KasFotoController::MAKS_FOTO],
             'foto.*' => KasFotoController::ATURAN['foto.*'],
         ], [
@@ -144,6 +147,8 @@ class KasInputController extends Controller
             'nominal_transfer.required_if' => 'Nominal transfer wajib diisi.',
             'nominal_biaya.required' => 'Isi nominal biaya transfer, atau hilangkan centangnya.',
             'nominal_biaya.max' => 'Biaya transfer maksimal '.rp(TulisKasSheet::BIAYA_TRANSFER_MAKS).'.',
+            'tanggal_reimburse.required' => 'Isi tanggal reimburse, atau hilangkan centang "Sudah reimburse".',
+            'tanggal_reimburse.before_or_equal' => 'Tanggal reimburse tidak boleh setelah hari ini.',
         ]);
 
         // Jumlah bon wajib sama persis dengan nominal transfer; bila tidak, transaksi ditolak dan tidak ditulis ke sheet.
@@ -185,6 +190,7 @@ class KasInputController extends Controller
             'biaya_transfer' => $data['arah'] === 'keluar' && $request->boolean('biaya_transfer'),
             'nominal_biaya' => (int) ($data['nominal_biaya'] ?? TulisKasSheet::BIAYA_TRANSFER),
             'reimburse_uj' => $data['arah'] === 'keluar' ? ($data['reimburse_uj'] ?? null) : null,
+            'tanggal_reimburse' => $data['arah'] === 'keluar' && $request->boolean('sudah_reimburse') ? Carbon::parse($data['tanggal_reimburse']) : null,
         ];
 
         return $input;
@@ -240,6 +246,7 @@ class KasInputController extends Controller
             ->map(fn ($k) => UraiKodeGl::urai($k)['akun'])->filter()
             ->reject(fn ($a) => AkunGl::where('nama', $a)->exists())->unique();
         $pesanImpor = $this->imporUlang($hasil['lembar']);
+        $pesanImpor .= $this->tandaiSudahReimburse($input, $hasil['no_id'][0], $request->user()->id);
 
         return redirect()->route('kas.index', ['lembar' => $hasil['lembar'], 'tgl' => $tanggal->day])->with(
             $pesanImpor ? 'error' : 'success',
@@ -410,6 +417,7 @@ class KasInputController extends Controller
         if ($hasil['lembar_lama'] !== $hasil['lembar']) {
             $pesanImpor .= $this->imporUlang($hasil['lembar_lama']);
         }
+        $pesanImpor .= $this->tandaiSudahReimburse($input, $noIdBaru, $request->user()->id);
 
         return redirect()->route('kas.index', ['lembar' => $hasil['lembar'], 'tgl' => $input['tanggal']->day])->with(
             $pesanImpor ? 'error' : 'success',
@@ -420,6 +428,30 @@ class KasInputController extends Controller
             .($jumlahFoto ? " {$jumlahFoto} foto bon ditambahkan." : '')
             .$pesanImpor
         );
+    }
+
+    /**
+     * Centang "Sudah reimburse" di Input/Edit Kas: semua detail transfer ini (termasuk baris biaya transfernya) ditandai
+     * Sudah Reimburse pada tanggal yang dipilih — jalur yang sama dengan menu reimburse (aplikasi + lembar "Sudah Reimburse").
+     * Dipanggil sesudah impor ulang lembarnya (ID transaksi baru terbentuk). Mengembalikan teks untuk pesan hasil.
+     */
+    private function tandaiSudahReimburse(array $input, int $noIdTransfer, int $userId): string
+    {
+        if (! $input['tanggal_reimburse']) {
+            return '';
+        }
+        $t = KasTransfer::where('no_id', $noIdTransfer)->with('bon')->first();
+        if (! $t) {
+            return ' ⚠ Status Sudah Reimburse belum bisa ditandai karena transaksi belum terbaca dari sheet — tandai lewat Validasi Reimburse setelah sinkron.';
+        }
+        $biaya = HapusKasSheet::biayaTransferMilik($t);
+        $ids = array_values(array_unique([...CerminReimburse::idMilik($t), ...($biaya ? CerminReimburse::idMilik($biaya) : [])]));
+        $n = StatusReimburse::tandai($ids, $input['tanggal_reimburse'], $userId);
+        KasRiwayat::create(['aksi' => 'tandai-reimburse', 'lembar' => $t->kasBulan?->lembar ?? 'Kas', 'baris_awal' => (int) $t->baris, 'baris_akhir' => (int) $t->baris,
+            'ringkasan' => "NO ID {$noIdTransfer}: {$n} detail ditandai Sudah Reimburse tgl ".$input['tanggal_reimburse']->translatedFormat('j M Y').' dari form Input/Edit Kas',
+            'isi' => ['id_transaksi' => $ids], 'user_id' => $userId]);
+
+        return " {$n} detail ditandai Sudah Reimburse tanggal ".$input['tanggal_reimburse']->translatedFormat('j M Y').'.';
     }
 
     /** Pesan penolakan bila ada baris transaksi ini yang sudah direimburse (status milik aplikasi). */

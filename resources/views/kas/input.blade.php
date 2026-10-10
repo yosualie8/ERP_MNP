@@ -240,6 +240,15 @@
             </div>
             @error('nominal_biaya')<p class="galat-isian">{{ $message }}</p>@enderror
             <p class="redup" id="catatan-biaya" style="margin: 4px 0 0 24px;"></p>
+
+            {{-- Transaksi yang baru dicatat tetapi kenyataannya sudah direimburse: langsung ditandai Sudah Reimburse. --}}
+            <div class="biaya-transfer" style="margin-top: 10px;">
+                <input type="hidden" name="sudah_reimburse" value="0" id="sudah_reimburse_0">
+                <label><input type="checkbox" name="sudah_reimburse" id="sudah_reimburse" value="1" @checked(old('sudah_reimburse') === '1')> Sudah reimburse</label>
+                <input type="date" name="tanggal_reimburse" id="tanggal_reimburse" value="{{ old('tanggal_reimburse', now()->toDateString()) }}" max="{{ now()->toDateString() }}" title="Tanggal reimburse" style="width: 170px;">
+                <span class="redup">semua detail transaksi ini (termasuk biaya transfernya) langsung ditandai Sudah Reimburse pada tanggal ini</span>
+            </div>
+            @error('tanggal_reimburse')<p class="galat-isian">{{ $message }}</p>@enderror
         </div>
 
         <div style="display: flex; gap: 12px; align-items: center;">
@@ -613,6 +622,18 @@
             bank.addEventListener('input', aturBiaya);
             aturBiaya();
 
+            // "Sudah reimburse": tanggal hanya aktif & wajib saat dicentang (dan hanya untuk transfer keluar).
+            const sudahReimburse = document.getElementById('sudah_reimburse');
+            const tanggalReimburse = document.getElementById('tanggal_reimburse');
+            const aturReimburse = () => {
+                const masuk = document.getElementById('arah-masuk').checked;
+                sudahReimburse.disabled = masuk;
+                document.getElementById('sudah_reimburse_0').disabled = masuk;
+                tanggalReimburse.disabled = masuk || !sudahReimburse.checked;
+                tanggalReimburse.required = !tanggalReimburse.disabled;
+            };
+            sudahReimburse.addEventListener('change', aturReimburse);
+
             // Tampilkan bagian sesuai arah (keluar = bon, masuk = nominal).
             const aturArah = () => {
                 const masuk = document.getElementById('arah-masuk').checked;
@@ -621,6 +642,7 @@
                 daftar.querySelectorAll('input').forEach(el => el.disabled = masuk);
                 biaya.disabled = masuk;
                 nominalTransfer.disabled = masuk;
+                aturReimburse();
                 document.getElementById('nominal_masuk').required = masuk;
                 hitung();
             };
