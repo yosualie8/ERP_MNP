@@ -64,12 +64,12 @@ class DashboardKasController extends Controller
 
         // Kapan terakhir diperbarui.
         $inputTerakhir = KasRiwayat::whereIn('aksi', ['tambah', 'ubah', 'hapus'])->latest('id')->first();
-        $reimburseTerakhir = DB::table('kas_sudah_reimburse')->where('sumber', 'aplikasi')->orderByDesc('created_at')->first();
 
         // 5 pencatatan reimburse terakhir (bulan terbaru; ditambah bulan sebelumnya bila kurang dari 5).
         $riwayat = collect();
         foreach (RiwayatReimburse::bulan()->keys()->take(3) as $bln) {
-            $riwayat = $riwayat->concat(RiwayatReimburse::grup($bln));
+            // Penyesuaian data lama bukan reimburse sungguhan: tidak ikut dihitung.
+            $riwayat = $riwayat->concat(RiwayatReimburse::grup($bln)->reject(fn ($g) => $g['penyesuaian']));
             if ($riwayat->count() >= 5) {
                 break;
             }
@@ -84,7 +84,6 @@ class DashboardKasController extends Controller
             'inputTerakhir' => $inputTerakhir ? ['waktu' => $inputTerakhir->created_at, 'oleh' => $nama[$inputTerakhir->user_id] ?? '?', 'ringkasan' => $inputTerakhir->ringkasan, 'aksi' => $inputTerakhir->aksi] : null,
             'sinkronTerakhir' => ($w = KasBulan::max('diimpor_pada')) ? Carbon::parse($w) : null,
             'transaksiTerbaru' => KasTransfer::max('tanggal'),
-            'reimburseTerakhir' => $reimburseTerakhir ? ['waktu' => Carbon::parse($reimburseTerakhir->created_at), 'tanggal' => Carbon::parse(DB::table('kas_sudah_reimburse')->max('tanggal_reimburse')), 'oleh' => $nama[$reimburseTerakhir->user_id] ?? '?'] : null,
             'riwayat' => $riwayat->take(5),
         ]);
     }

@@ -43,14 +43,19 @@
         </div>
 
         <div class="kartu">
-            <h4>Reimburse terakhir dicatat</h4>
-            @if ($reimburseTerakhir)
-                <div style="font-size: 20px; font-weight: 700;">{{ $lalu($reimburseTerakhir['waktu']) }}</div>
-                <div class="redup" style="font-size: 13px; margin-bottom: 8px;">{{ $waktu($reimburseTerakhir['waktu']) }} oleh {{ $reimburseTerakhir['oleh'] }}</div>
-                <div class="dash-baris"><span>Tanggal reimburse terakhir</span><b>{{ $tgl($reimburseTerakhir['tanggal']) }}</b></div>
-            @else
-                <div class="redup">Belum ada reimburse yang dicatat lewat aplikasi.</div>
-            @endif
+            <h4>5 reimburse terakhir</h4>
+            @forelse ($riwayat as $g)
+                <div class="dash-baris" style="align-items: flex-start;">
+                    <span>
+                        <b>{{ $g['tanggal'] ? $g['tanggal']->translatedFormat('d-M-Y') : 'Tanpa tanggal' }}</b> <span class="redup">· {{ number_format($g['jumlah'], 0, ',', '.') }} transaksi</span>
+                        <br><span class="redup" style="font-size: 12px;">@if ($g['oleh']){{ implode(', ', $g['oleh']) }} · {{ $waktu($g['dicatat']) }} ({{ $lalu($g['dicatat']) }})@else Dari lembar Sudah Reimburse (data awal)@endif</span>
+                    </span>
+                    <b style="white-space: nowrap;">{{ rp($g['total']) }}</b>
+                </div>
+            @empty
+                <div class="redup">Belum ada data reimburse.</div>
+            @endforelse
+            @if (auth()->user()->bolehMenu('riwayat-reimburse'))<div style="margin: 6px 0 4px;"><a href="{{ route('kas.riwayat-reimburse') }}" class="redup" style="font-size: 13px;">Buka History Reimburse →</a></div>@endif
             <div class="dash-baris"><span>Status menunggu ditulis ke sheet</span><span>{{ $antreanSheet ? '⏳ '.$antreanSheet : '✓ semua sudah tertulis' }}</span></div>
         </div>
     </div>
@@ -95,32 +100,4 @@
         </table>
     </div>
 
-    <div class="kartu gulir" style="padding: 0;">
-        <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px 4px;">
-            <h3 style="margin: 0;">5 history reimburse terakhir</h3>
-            @if (auth()->user()->bolehMenu('riwayat-reimburse'))<a href="{{ route('kas.riwayat-reimburse') }}" class="redup" style="margin-left: auto; font-size: 13px;">Buka History Reimburse →</a>@endif
-        </div>
-        <table style="font-size: 13px;">
-            <thead>
-                <tr><th style="padding-left: 14px;">Tanggal reimburse</th><th>Transaksi</th><th class="angka">Total</th><th style="padding-right: 14px;">Dicatat</th></tr>
-            </thead>
-            <tbody>
-                @forelse ($riwayat as $g)
-                    <tr @if ($g['penyesuaian']) style="opacity: .7;" @endif>
-                        <td style="padding-left: 14px; white-space: nowrap;"><b>{{ $g['tanggal'] ? $g['tanggal']->translatedFormat('d-M-Y') : 'Tanpa tanggal' }}</b>
-                            @if ($g['penyesuaian'])<span class="label kuning">Penyesuaian data lama</span>@endif</td>
-                        <td>{{ number_format($g['jumlah'], 0, ',', '.') }}</td>
-                        <td class="angka"><b>{{ rp($g['total']) }}</b></td>
-                        <td style="padding-right: 14px;">
-                            @if ($g['oleh']){{ implode(', ', $g['oleh']) }} <span class="redup">{{ $waktu($g['dicatat']) }}</span>
-                            @else<span class="redup">Dari lembar Sudah Reimburse (data awal)</span>@endif
-                            @if ($g['catatan'])<br><span class="redup">{{ \Illuminate\Support\Str::limit($g['catatan'], 120) }}</span>@endif
-                        </td>
-                    </tr>
-                @empty
-                    <tr><td colspan="4" class="redup" style="padding: 16px 14px;">Belum ada data reimburse.</td></tr>
-                @endforelse
-            </tbody>
-        </table>
-    </div>
 @endsection
