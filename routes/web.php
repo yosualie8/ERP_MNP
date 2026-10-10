@@ -12,6 +12,7 @@ use App\Http\Controllers\PenggunaController;
 use App\Http\Controllers\RapikanUjController;
 use App\Http\Controllers\ReimburseKasController;
 use App\Http\Controllers\ReimburseUjController;
+use App\Http\Controllers\RiwayatReimburseController;
 use App\Http\Controllers\RitasiController;
 use App\Http\Controllers\TransferBcaController;
 use App\Http\Controllers\UjController;
@@ -56,6 +57,7 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/kas/validasi-reimburse', [ReimburseKasController::class, 'validasi'])->name('kas.validasi-reimburse');
     Route::post('/kas/validasi-reimburse', [ReimburseKasController::class, 'periksaValidasi'])->name('kas.validasi-reimburse.periksa');
     Route::post('/kas/validasi-reimburse/tandai', [ReimburseKasController::class, 'tandaiValidasi'])->name('kas.validasi-reimburse.tandai');
+    Route::get('/kas/history-reimburse', [RiwayatReimburseController::class, 'index'])->name('kas.riwayat-reimburse');
     Route::get('/kas/transfer-bca', [TransferBcaController::class, 'index'])->name('kas.transfer-bca');
     Route::post('/kas/transfer-bca/rekening', [TransferBcaController::class, 'simpanRekening'])->name('kas.transfer-bca.rekening');
     Route::post('/kas/transfer-bca', [TransferBcaController::class, 'buat'])->name('kas.transfer-bca.buat');
