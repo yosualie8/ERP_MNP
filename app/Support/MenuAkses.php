@@ -12,6 +12,7 @@ class MenuAkses
 {
     /** kunci => [label di navigasi, rute tujuan, pola nama rute yang termasuk menu ini, keterangan] */
     public const DAFTAR = [
+        'dashboard-kas' => ['Dashboard Kas Harian', 'dashboard.kas', ['dashboard.kas'], 'Jumlah belum reimburse, transaksi Kas Harian terakhir & 5 history reimburse terakhir (kapan data terakhir diperbarui)'],
         'input-kas' => ['Input Kas', 'kas.input', ['kas.input', 'kas.input.*', 'kas.edit', 'kas.update', 'kas.hapus', 'kas.bon', 'kas.bon.*'], 'Input, edit & hapus transaksi Kas Harian (Bank Jago), foto bon'],
         'kas-harian' => ['Kas Harian', 'kas.index', ['kas.index', 'kas.sinkron'], 'Melihat buku Kas Harian per bulan'],
         'pengajuan-uj' => ['Pengajuan UJ', 'pengajuan-uj.daftar', ['pengajuan-uj.*'], 'Mengajukan uang jalan (divalidasi seperti Input UJ), lihat & batalkan pengajuan'],
@@ -36,6 +37,7 @@ class MenuAkses
 
     /** Kelompok menu di sidebar: kunci => [judul, ikon, menu di dalamnya]. */
     public const KATEGORI = [
+        'dashboard' => ['Dashboard', '📊', ['dashboard-kas']],
         'kas' => ['Kas Harian', '🏦', ['input-kas', 'kas-harian', 'validasi-reimburse', 'riwayat-reimburse', 'transfer-bca', 'kas-belum-reimburse', 'rekap', 'kode-gl']],
         'uj' => ['Uang Jalan', '🚚', ['pengajuan-uj', 'input-uj', 'kas-uj', 'reimburse-uj', 'rapikan-uj']],
         'ritasi' => ['Ritasi', '⛰️', ['input-ritasi', 'ritasi', 'buangan-truk', 'monitor-ritasi', 'bayar-tanah', 'performa-ritasi']],
