@@ -11,7 +11,9 @@
     <style>
         .dash-kartu { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; margin-bottom: 14px; }
         .dash-kartu .kartu { margin: 0; }
-        .dash-kartu h4 { margin: 0 0 8px; font-size: 13px; color: var(--redup); text-transform: uppercase; letter-spacing: .04em; }
+        /* Judul kartu & tabel merah supaya mudah dibedakan dari isinya. */
+        .dash-kartu h4 { margin: 0 0 10px; padding-bottom: 6px; font-size: 13px; color: var(--aksen-terang); text-transform: uppercase; letter-spacing: .04em; border-bottom: 1px solid var(--aksen); }
+        .kartu .dash-judul { color: var(--aksen-terang); }
         .angka-besar { font-size: 30px; font-weight: 700; line-height: 1.1; }
         .dash-baris { display: flex; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--garis); font-size: 13px; }
         .dash-baris:last-child { border-bottom: 0; }
@@ -63,7 +65,7 @@
 
     <div class="kartu gulir" style="padding: 0;">
         <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px 4px;">
-            <h3 style="margin: 0;">Transaksi Kas Harian terakhir diinput</h3>
+            <h3 class="dash-judul" style="margin: 0;">Transaksi Kas Harian terakhir diinput</h3>
             <span class="redup" style="font-size: 13px;">urut NO ID terbaru — termasuk yang diketik langsung di sheet</span>
             @if (auth()->user()->bolehMenu('kas-harian'))<a href="{{ route('kas.index') }}" class="redup" style="margin-left: auto; font-size: 13px;">Buka Kas Harian →</a>@endif
         </div>
