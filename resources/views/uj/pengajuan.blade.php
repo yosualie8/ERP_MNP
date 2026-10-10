@@ -23,7 +23,11 @@
         td.sel-transfer .tf-baris { margin: 3px 0; white-space: nowrap; }
         td.sel-transfer .lepas-tf { background: none; border: none; color: var(--redup); cursor: pointer; padding: 0 3px; font-size: 12px; }
         td.sel-transfer .lepas-tf:hover { color: var(--aksen); }
-        td.sel-transfer .pilih-transfer { margin-top: 4px; }
+        td.sel-transfer .pilih-tf-label { float: left; margin: 1px 6px 0 0; cursor: pointer; }
+        input.pilih-tf { width: 17px; height: 17px; cursor: pointer; vertical-align: middle; }
+        table.kas tr.t.dipilih-tf td { background: rgba(229, 72, 77, .12); }
+        .bar-bawah { position: sticky; bottom: 0; z-index: 2; }
+        .bar-bawah .bar-realisasi { position: static; }
         dialog#dialog-transfer { width: min(1100px, 96vw); max-height: 86vh; padding: 0; border: 1px solid var(--garis); border-radius: 12px; background: var(--kartu); color: var(--teks); }
         dialog#dialog-transfer::backdrop { background: rgba(0, 0, 0, .6); }
         #dialog-transfer .kepala-dt { padding: 12px 16px; border-bottom: 1px solid var(--garis); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
@@ -111,13 +115,23 @@
                         <td><span @class(['label', 'kuning' => $p->status === 'sebagian', 'hijau' => $p->status === 'selesai', 'merah' => $p->status === 'batal'])>{{ \App\Models\UjPengajuan::STATUS[$p->status] }}</span>
                             @if ($nBeda)<span class="label kuning" title="Realisasi tidak sama dengan pengajuan">⚠ {{ $nBeda }} tidak sesuai</span>@endif
                             @if ($real->count())<span class="redup" style="font-size: 12px;">{{ $real->count() }}/{{ $p->detail->count() }} · {{ rp($real->sum('nominal')) }}</span>@endif</td>
-                        @php($totalTf = (int) $p->transfer->sum('nominal'))
+                        @php($kel = $kelompokTf[$p->id] ?? null)
+                        @php($totalTf = $kel['total_tf'] ?? 0)
+                        @php($totalPj = $kel['total_pj'] ?? (int) $p->nominal)
                         <td class="sel-transfer">
+                            @if ($p->status !== 'batal')
+                                <label class="pilih-tf-label" title="Pilih untuk ditautkan ke transfer Kas Harian (beberapa pengajuan bisa satu transfer)">
+                                    <input type="checkbox" class="pilih-tf" value="{{ $p->id }}" data-kode="{{ $p->kode() }}" data-nominal="{{ (int) $p->nominal }}"
+                                        data-tanggal="{{ $p->tanggal->toDateString() }}" data-tf="{{ $p->transfer->map(fn ($tf) => $tf->kas_no_id.':'.(int) $tf->nominal)->implode(',') }}"></label>
+                            @endif
                             @if ($p->transfer->isEmpty())
                                 <span class="label">Belum ditransfer</span>
                             @else
-                                <span @class(['label', 'hijau' => $totalTf >= $p->nominal, 'kuning' => $totalTf < $p->nominal])>{{ $totalTf >= $p->nominal ? 'Sudah ditransfer' : 'Kurang '.rp($p->nominal - $totalTf) }}</span>
-                                @if ($totalTf > $p->nominal)<span class="redup" style="font-size: 11px;">lebih {{ rp($totalTf - $p->nominal) }}</span>@endif
+                                <span @class(['label', 'hijau' => $totalTf >= $totalPj, 'kuning' => $totalTf < $totalPj])>{{ $totalTf >= $totalPj ? 'Sudah ditransfer' : 'Kurang '.rp($totalPj - $totalTf) }}</span>
+                                @if ($totalTf > $totalPj)<span class="redup" style="font-size: 11px;">lebih {{ rp($totalTf - $totalPj) }}</span>@endif
+                                @if (count($kel['kode'] ?? []) > 1)
+                                    <div class="redup" style="font-size: 11px; white-space: normal;" title="Total transfer {{ rp($totalTf) }} untuk total pengajuan {{ rp($totalPj) }}">Ditransfer bersama {{ implode(', ', array_diff($kel['kode'], [$p->kode()])) }} · total {{ rp($totalPj) }}</div>
+                                @endif
                                 @foreach ($p->transfer as $tf)
                                     @php($kini = $kasKini[$tf->kas_no_id] ?? null)
                                     @php($berubah = ! $kini || ! $kini->tanggal->isSameDay($tf->kas_tanggal) || (int) $kini->kredit !== (int) $tf->nominal)
@@ -125,13 +139,10 @@
                                         {{ $tf->kas_tanggal->translatedFormat('j M') }} · <b>{{ rp($tf->nominal) }}</b> · <span class="redup">{{ $tf->idKas() }}</span>
                                         @if ($berubah)<span class="label merah" title="{{ $kini ? 'Transaksi Kas Harian ini sekarang '.$kini->tanggal->translatedFormat('j M Y').' '.rp((int) $kini->kredit) : 'Transaksi Kas Harian ini tidak ditemukan lagi (dihapus / NO ID berubah)' }}">⚠ {{ $kini ? 'berubah' : 'hilang' }}</span>@endif
                                         <form method="POST" action="{{ route('pengajuan-uj.transfer-lepas', $tf) }}" style="display: inline;" onsubmit="return confirm('Lepas tautan transfer {{ $tf->idKas() }} dari {{ $p->kode() }}?')">
-                                            @csrf @method('DELETE')<button type="submit" class="lepas-tf" title="Lepas tautan">✕</button></form>
+                                            @csrf @method('DELETE')<button type="submit" class="lepas-tf" title="Lepas tautan dari {{ $p->kode() }}">✕</button></form>
                                     </div>
                                 @endforeach
                             @endif
-                            <button type="button" class="tombol-edit pilih-transfer" data-pj="{{ $p->id }}" data-kode="{{ $p->kode() }}" data-nominal="{{ (int) $p->nominal }}"
-                                data-tgl="{{ $p->tanggal->translatedFormat('j M Y') }}" data-ditransfer="{{ $totalTf }}"
-                                data-url="{{ route('pengajuan-uj.transfer-kandidat', $p) }}" data-simpan="{{ route('pengajuan-uj.transfer-tautkan', $p) }}">🔗 {{ $p->transfer->isEmpty() ? 'Pilih transfer' : 'Tambah' }}</button>
                         </td>
                         <td class="redup" style="font-size: 12px;">{{ $p->user?->name ?? $p->user?->email }} · {{ $p->created_at->translatedFormat('j M H:i') }}</td>
                         <td style="white-space: nowrap;">
@@ -178,6 +189,16 @@
             @endforelse
         </table>
     </div>
+    <div class="bar-bawah">
+    {{-- Pilih beberapa pengajuan → satu transfer Kas Harian untuk semuanya. --}}
+    <div class="bar-realisasi" id="bar-transfer" hidden>
+        <b id="jumlah-pilih-tf">0 pengajuan dipilih</b>
+        <span class="redup" id="ringkas-pilih-tf"></span>
+        <span style="margin-left: auto; display: flex; gap: 8px;">
+            <button type="button" class="tombol polos" id="batal-pilih-tf">Batal pilih</button>
+            <button type="button" class="tombol" id="buka-transfer">🔗 Transfer (Kas Harian)</button>
+        </span>
+    </div>
     @if ($bolehRealisasi)
         {{-- Pilih beberapa detail (boleh lintas pengajuan & driver) → satu transfer: Input UJ terisi semua detail itu, admin tinggal isi rekening penerima. --}}
         <div class="bar-realisasi" id="bar-realisasi" hidden>
@@ -189,10 +210,12 @@
             </span>
         </div>
     @endif
-    {{-- Pilih transfer Kas Harian yang membiayai sebuah pengajuan. --}}
+    </div>
+    {{-- Pilih transfer Kas Harian yang membiayai pengajuan-pengajuan terpilih. --}}
     <dialog id="dialog-transfer">
-        <form method="POST" id="form-transfer">
+        <form method="POST" id="form-transfer" action="{{ route('pengajuan-uj.transfer-tautkan') }}">
             @csrf
+            <span id="pj-dt"></span>
             <div class="kepala-dt">
                 <b id="judul-dt">Pilih transfer Kas Harian</b>
                 <input type="search" id="cari-dt" placeholder="Cari keterangan, tujuan, NO ID atau nominal (kosong = sekitar tanggal pengajuan)" autocomplete="off">
@@ -231,7 +254,7 @@
             const muat = async () => {
                 daftar.innerHTML = '<tr><td colspan="7" class="redup">Memuat…</td></tr>';
                 const q = cari.value.trim();
-                data = (await (await fetch(aktif.url + (q ? '?q=' + encodeURIComponent(q) : ''), {headers: {Accept: 'application/json'}})).json()).transfer;
+                data = (await (await fetch(aktif.url + (q ? '&q=' + encodeURIComponent(q) : ''), {headers: {Accept: 'application/json'}})).json()).transfer;
                 daftar.innerHTML = data.length ? data.map(t => `<tr class="${t.terpasang ? 'terpasang' : ''}">
                     <td>${t.terpasang ? '✓' : `<input type="checkbox" name="no_id[]" value="${t.no_id}">`}</td>
                     <td>${esc(t.tgl)}</td><td>${esc(t.id_kas)}</td><td>${esc(t.nama || '')}${t.bank ? ' <span class="redup">· ' + esc(t.bank) + '</span>' : ''}</td>
@@ -245,15 +268,35 @@
                 }));
                 hitung();
             };
-            document.querySelectorAll('button.pilih-transfer').forEach(b => b.addEventListener('click', e => {
-                e.stopPropagation();
-                aktif = {url: b.dataset.url, nominal: +b.dataset.nominal, ditransfer: +b.dataset.ditransfer};
-                document.getElementById('form-transfer').action = b.dataset.simpan;
-                document.getElementById('judul-dt').textContent = `Transfer Kas Harian untuk ${b.dataset.kode} (${fmtRp(+b.dataset.nominal)}, diajukan ${b.dataset.tgl})`;
+            // Pilih beberapa pengajuan (kolom Transfer) → tombol "Transfer (Kas Harian)" → satu/lebih transfer untuk semuanya.
+            const pilihTf = [...document.querySelectorAll('input.pilih-tf')];
+            const barTf = document.getElementById('bar-transfer');
+            const terpilihTf = () => pilihTf.filter(c => c.checked);
+            const hitungPilihTf = () => {
+                const p = terpilihTf();
+                pilihTf.forEach(c => c.closest('tr').classList.toggle('dipilih-tf', c.checked));
+                barTf.hidden = !p.length;
+                document.getElementById('jumlah-pilih-tf').textContent = `${p.length} pengajuan dipilih · ${fmtRp(p.reduce((s, c) => s + +c.dataset.nominal, 0))}`;
+                document.getElementById('ringkas-pilih-tf').textContent = p.map(c => c.dataset.kode).join(', ');
+            };
+            pilihTf.forEach(c => c.addEventListener('change', hitungPilihTf));
+            pilihTf.forEach(c => c.closest('label').addEventListener('click', e => e.stopPropagation()));
+            document.getElementById('batal-pilih-tf').addEventListener('click', () => { pilihTf.forEach(c => c.checked = false); hitungPilihTf(); });
+            document.getElementById('buka-transfer').addEventListener('click', () => {
+                const p = terpilihTf();
+                if (!p.length) return;
+                // Transfer yang sudah tertaut ke pengajuan terpilih (tiap NO ID sekali).
+                const tertaut = new Map();
+                p.forEach(c => (c.dataset.tf || '').split(',').filter(Boolean).forEach(x => { const [no, nom] = x.split(':'); tertaut.set(no, +nom); }));
+                aktif = {url: @json(route('pengajuan-uj.transfer-kandidat')) + '?pj=' + p.map(c => c.value).join(','),
+                    nominal: p.reduce((s, c) => s + +c.dataset.nominal, 0), ditransfer: [...tertaut.values()].reduce((s, n) => s + n, 0)};
+                document.getElementById('pj-dt').innerHTML = p.map(c => `<input type="hidden" name="pj[]" value="${c.value}">`).join('');
+                document.getElementById('judul-dt').textContent = `Transfer Kas Harian untuk ${p.length > 1 ? p.length + ' pengajuan: ' : ''}${p.map(c => c.dataset.kode).join(', ')} (${fmtRp(aktif.nominal)})`;
                 cari.value = '';
                 dlg.showModal();
                 muat();
-            }));
+            });
+            hitungPilihTf();
             cari.addEventListener('input', () => { clearTimeout(jeda); jeda = setTimeout(muat, 350); });
             cari.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(jeda); muat(); } });
             document.getElementById('tutup-dt').addEventListener('click', () => dlg.close());

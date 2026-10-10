@@ -27,6 +27,26 @@ class PengajuanUjController extends UjController
         $semua = UjPengajuan::with(['detail', 'user', 'transfer'])->orderByDesc('tanggal')->orderByDesc('id')->get();
         // Keabsahan tautan transfer: transaksi Kas Harian dengan NO ID itu saat ini (untuk menandai yang berubah/terhapus).
         $kasKini = KasTransfer::whereIn('no_id', $semua->flatMap->transfer->pluck('kas_no_id')->unique())->get()->keyBy('no_id');
+        // Pengajuan yang dibayar dalam satu transfer yang sama (berbagi NO ID Kas Harian) dihitung bersama:
+        // total transfer (tiap NO ID sekali) dibandingkan total semua pengajuan dalam kelompok itu.
+        $induk = [];
+        $akar = function ($x) use (&$induk, &$akar) {
+            return ($induk[$x] ?? $x) === $x ? $x : ($induk[$x] = $akar($induk[$x]));
+        };
+        foreach ($semua->flatMap->transfer->groupBy('kas_no_id') as $tf) {
+            $pjIds = $tf->pluck('uj_pengajuan_id')->unique()->values();
+            foreach ($pjIds as $id) {
+                $induk[$akar($id)] = $akar($pjIds[0]);
+            }
+        }
+        $kelompokTf = [];
+        foreach ($semua->filter(fn ($p) => $p->transfer->isNotEmpty())->groupBy(fn ($p) => $akar($p->id)) as $g) {
+            $info = ['kode' => $g->map->kode()->values()->all(), 'total_pj' => (int) $g->sum('nominal'),
+                'total_tf' => (int) $g->flatMap->transfer->unique('kas_no_id')->sum('nominal')];
+            foreach ($g as $p) {
+                $kelompokTf[$p->id] = $info;
+            }
+        }
         $terbuka = fn ($p) => in_array($p->status, ['diajukan', 'sebagian'], true);
         $adaBeda = fn ($p) => $p->detail->contains(fn ($d) => $d->berbeda());
         $detailBeda = $semua->flatMap->detail->filter(fn ($d) => $d->berbeda());
@@ -37,7 +57,7 @@ class PengajuanUjController extends UjController
                 (bool) $status => $semua->where('status', $status)->values(),
                 default => $semua->filter($terbuka)->merge($semua->reject($terbuka)->take(50))->values(),
             },
-            'semua' => $semua, 'status' => $status, 'beda' => $beda, 'detailBeda' => $detailBeda, 'kasKini' => $kasKini,
+            'semua' => $semua, 'status' => $status, 'beda' => $beda, 'detailBeda' => $detailBeda, 'kasKini' => $kasKini, 'kelompokTf' => $kelompokTf,
             'menunggu' => UjPengajuanDetail::where('status', 'menunggu')->selectRaw('COUNT(*) n, SUM(nominal) s')->first(),
             'bolehRealisasi' => $request->user()->bolehMenu('input-uj'),
         ]);
@@ -128,15 +148,17 @@ class PengajuanUjController extends UjController
     }
 
     /**
-     * Kandidat transfer Kas Harian untuk sebuah pengajuan: transaksi keluar (tanpa baris biaya transfer) di sekitar tanggal
-     * pengajuan (7 hari sebelum s.d. 30 hari sesudah), atau hasil pencarian (keterangan, tujuan, NO ID, nominal) di semua tanggal.
+     * Kandidat transfer Kas Harian untuk pengajuan-pengajuan terpilih (?pj=1,2,3): transaksi keluar (tanpa baris biaya transfer)
+     * di sekitar tanggal pengajuan, atau hasil pencarian (keterangan, tujuan, NO ID, nominal).
      */
-    public function kandidatTransfer(Request $request, UjPengajuan $pengajuan): JsonResponse
+    public function kandidatTransfer(Request $request): JsonResponse
     {
+        $pj = UjPengajuan::whereIn('id', $this->idPengajuan($request->query('pj')))->get();
+        abort_if($pj->isEmpty(), 422, 'Pilih pengajuan dulu.');
         $q = trim((string) $request->query('q'));
         $angka = preg_replace('/\D/', '', $q);
         $data = KasTransfer::where('kredit', '>', 0)->where(fn ($w) => $w->whereNull('keterangan')->orWhere('keterangan', 'not like', 'biaya transfer%'))
-            ->when($q === '', fn ($w) => $w->whereBetween('tanggal', [$pengajuan->tanggal->copy()->subDays(7), $pengajuan->tanggal->copy()->addDays(30)]))
+            ->when($q === '', fn ($w) => $w->whereBetween('tanggal', [$pj->min('tanggal')->copy()->subDays(7), $pj->max('tanggal')->copy()->addDays(30)]))
             ->when($q !== '', fn ($w) => $w->where(fn ($x) => $x->where('keterangan', 'like', "%{$q}%")->orWhere('nama_tujuan', 'like', "%{$q}%")
                 ->when($angka !== '', fn ($y) => $y->orWhere('no_id', $angka)->orWhere('kredit', $angka))))
             ->orderByDesc('tanggal')->orderByDesc('baris')->limit(200)->get();
@@ -147,33 +169,49 @@ class PengajuanUjController extends UjController
             'id_kas' => $t->tanggal->format('ymd').'-Jago-'.$t->no_id, 'nama' => $t->nama_tujuan, 'bank' => $t->bank_tujuan,
             'keterangan' => $t->keterangan, 'nominal' => (int) $t->kredit,
             'dipakai' => ($dipakai[$t->no_id] ?? collect())->map(fn ($x) => $x->pengajuan->kode())->values(),
-            'terpasang' => ($dipakai[$t->no_id] ?? collect())->contains('uj_pengajuan_id', $pengajuan->id),
+            // Sudah tertaut ke SEMUA pengajuan terpilih → tidak perlu dipilih lagi.
+            'terpasang' => $pj->every(fn ($p) => ($dipakai[$t->no_id] ?? collect())->contains('uj_pengajuan_id', $p->id)),
         ])->values()]);
     }
 
-    /** Tautkan transfer Kas Harian (NO ID) ke pengajuan; data transfernya disalin dari Kas Harian saat ini. */
-    public function tautkanTransfer(Request $request, UjPengajuan $pengajuan): RedirectResponse
+    /**
+     * Tautkan transfer Kas Harian (NO ID) ke satu atau beberapa pengajuan sekaligus (beberapa pengajuan bisa dibayar dalam
+     * satu kali transfer); data transfernya disalin dari Kas Harian saat ini.
+     */
+    public function tautkanTransfer(Request $request): RedirectResponse
     {
-        $data = $request->validate(['no_id' => ['required', 'array', 'min:1'], 'no_id.*' => ['integer']],
-            ['no_id.required' => 'Pilih minimal satu transaksi Kas Harian.']);
+        $data = $request->validate([
+            'pj' => ['required', 'array', 'min:1'], 'pj.*' => ['integer'],
+            'no_id' => ['required', 'array', 'min:1'], 'no_id.*' => ['integer'],
+        ], ['pj.required' => 'Pilih minimal satu pengajuan.', 'no_id.required' => 'Pilih minimal satu transaksi Kas Harian.']);
+        $pj = UjPengajuan::whereIn('id', $data['pj'])->orderBy('tanggal')->orderBy('id')->get();
         $kas = KasTransfer::where('kredit', '>', 0)->whereIn('no_id', $data['no_id'])->get()->keyBy('no_id');
-        $baru = [];
-        foreach (array_unique($data['no_id']) as $no) {
-            if (! ($t = $kas[$no] ?? null) || UjPengajuanTransfer::where('uj_pengajuan_id', $pengajuan->id)->where('kas_no_id', $no)->exists()) {
-                continue;
+        $baru = collect();
+        foreach ($pj as $p) {
+            foreach (array_unique($data['no_id']) as $no) {
+                if (! ($t = $kas[$no] ?? null) || UjPengajuanTransfer::where('uj_pengajuan_id', $p->id)->where('kas_no_id', $no)->exists()) {
+                    continue;
+                }
+                $baru->push(UjPengajuanTransfer::create(['uj_pengajuan_id' => $p->id, 'kas_no_id' => $no, 'kas_tanggal' => $t->tanggal->toDateString(),
+                    'nominal' => (int) $t->kredit, 'nama_tujuan' => $t->nama_tujuan, 'keterangan' => mb_substr((string) $t->keterangan, 0, 500), 'user_id' => $request->user()->id]));
             }
-            $baru[] = UjPengajuanTransfer::create(['uj_pengajuan_id' => $pengajuan->id, 'kas_no_id' => $no, 'kas_tanggal' => $t->tanggal->toDateString(),
-                'nominal' => (int) $t->kredit, 'nama_tujuan' => $t->nama_tujuan, 'keterangan' => mb_substr((string) $t->keterangan, 0, 500), 'user_id' => $request->user()->id]);
         }
-        if (! $baru) {
+        if ($baru->isEmpty()) {
             return back()->with('error', 'Tidak ada transfer baru yang ditautkan (sudah tertaut atau tidak ditemukan di Kas Harian).');
         }
-        $ringkas = collect($baru)->map(fn ($x) => $x->idKas().' '.rp($x->nominal))->implode(', ');
+        $kode = $pj->filter(fn ($p) => $baru->contains('uj_pengajuan_id', $p->id))->map->kode()->implode(', ');
+        $ringkas = $baru->unique('kas_no_id')->map(fn ($x) => $x->idKas().' '.rp($x->nominal))->implode(', ');
         KasRiwayat::create(['aksi' => 'uj-ajukan-transfer', 'lembar' => 'Pengajuan', 'baris_awal' => 0, 'baris_akhir' => 0,
-            'ringkasan' => mb_strimwidth($pengajuan->kode().' ← transfer Kas Harian '.$ringkas, 0, 490, '…'),
-            'isi' => ['pengajuan_id' => $pengajuan->id, 'kas_no_id' => collect($baru)->pluck('kas_no_id')->all()], 'user_id' => $request->user()->id]);
+            'ringkasan' => mb_strimwidth($kode.' ← transfer Kas Harian '.$ringkas, 0, 490, '…'),
+            'isi' => ['pengajuan_id' => $pj->pluck('id')->all(), 'kas_no_id' => $baru->pluck('kas_no_id')->unique()->values()->all()], 'user_id' => $request->user()->id]);
 
-        return back()->with('success', "{$pengajuan->kode()} ditautkan ke transfer Kas Harian: {$ringkas}.");
+        return back()->with('success', "{$kode} ditautkan ke transfer Kas Harian: {$ringkas}.");
+    }
+
+    /** "1,2,3" / [1, 2] → id pengajuan. @return int[] */
+    private function idPengajuan(mixed $v): array
+    {
+        return array_values(array_unique(array_filter(array_map('intval', is_array($v) ? $v : explode(',', (string) $v)))));
     }
 
     public function lepasTransfer(Request $request, UjPengajuanTransfer $transfer): RedirectResponse
