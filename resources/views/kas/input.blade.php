@@ -165,6 +165,15 @@
                 <label for="nominal_masuk">Nominal masuk</label>
                 <input type="text" name="nominal_masuk" id="nominal_masuk" class="angka-input rupiah" inputmode="numeric" autocomplete="off" value="{{ old('nominal_masuk', $edit['nominal_masuk'] ?? '') }}">
             </div>
+            <div data-masuk hidden style="margin-top: 12px; max-width: 360px;">
+                <label for="kode_gl_masuk">Kode GL <span class="redup">(boleh kosong)</span></label>
+                <input type="text" name="kode_gl_masuk" id="kode_gl_masuk" list="daftar-kode-masuk" autocomplete="off" value="{{ old('kode_gl_masuk', $edit['kode_gl_masuk'] ?? '') }}" placeholder="mis. {{ \App\Support\TebakKodeGl::TERIMA_TALANGAN }}">
+                <datalist id="daftar-kode-masuk">
+                    <option value="{{ \App\Support\TebakKodeGl::TERIMA_TALANGAN }}">uang talangan masuk ke kas (pasangan Pengembalian Talangan)</option>
+                    <option value="{{ \App\Support\TebakKodeGl::SALAH_TRANSFER }}"></option>
+                    <option value="Pindah Uang Antar Kantong"></option>
+                </datalist>
+            </div>
             <div data-keluar style="margin-top: 12px; max-width: 260px;">
                 <label for="nominal_transfer">Nominal transfer <span class="redup">(sesuai mutasi bank)</span></label>
                 <input type="text" name="nominal_transfer" id="nominal_transfer" class="angka-input rupiah" inputmode="numeric" autocomplete="off" value="{{ old('nominal_transfer', $edit['nominal_transfer'] ?? '') }}" required>
@@ -621,6 +630,12 @@
             };
             bank.addEventListener('input', aturBiaya);
             aturBiaya();
+
+            // Uang masuk berketerangan "talangan" → Kode GL Penerimaan Talangan (bila belum diisi).
+            const kodeMasuk = document.getElementById('kode_gl_masuk');
+            document.getElementById('keterangan').addEventListener('input', e => {
+                if (!kodeMasuk.value.trim() && /talang/i.test(e.target.value)) kodeMasuk.value = @json(\App\Support\TebakKodeGl::TERIMA_TALANGAN);
+            });
 
             // "Sudah reimburse": tanggal hanya aktif & wajib saat dicentang (dan hanya untuk transfer keluar).
             const sudahReimburse = document.getElementById('sudah_reimburse');

@@ -10,6 +10,7 @@ use App\Models\KasFoto;
 use App\Models\KodeGl;
 use App\Support\Periode;
 use App\Support\StatusReimburse;
+use App\Support\TebakKodeGl;
 use App\Support\TulisKasSheet;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -164,12 +165,21 @@ class KasController extends Controller
         $kode = KodeGl::with(['akun', 'costCenter'])
             ->withCount('bon')
             ->withSum('bon', 'nominal')
+            ->withCount('transferMasuk')
+            ->withSum('transferMasuk', 'debet')
             ->when($saring === 'tanpa-cc', fn ($q) => $q->whereNull('cost_center_id'))
             ->get()
             ->sortBy([['akun.kelompok', 'asc'], ['akun.nama', 'asc'], ['costCenter.kode', 'asc'], ['bon_sum_nominal', 'desc']]);
 
         $tanpaKode = DB::table('kas_bon')->whereNull('kode_gl_id')->selectRaw('COUNT(*) as jumlah, COALESCE(SUM(nominal),0) as total')->first();
 
-        return view('kas.kode-gl', compact('kode', 'saring', 'tanpaKode'));
+        // Talangan: uang masuk Penerimaan Talangan dikurangi Pengembalian Talangan = sisa yang belum dikembalikan kas.
+        $talangan = [
+            'terima' => (int) KasTransfer::whereHas('kodeGl.akun', fn ($q) => $q->where('nama', TebakKodeGl::TERIMA_TALANGAN))->sum('debet'),
+            'kembali' => (int) DB::table('kas_bon')->join('kode_gl', 'kode_gl.id', '=', 'kas_bon.kode_gl_id')->join('akun_gl', 'akun_gl.id', '=', 'kode_gl.akun_gl_id')
+                ->where('akun_gl.nama', TebakKodeGl::TALANGAN)->sum('kas_bon.nominal'),
+        ];
+
+        return view('kas.kode-gl', compact('kode', 'saring', 'tanpaKode', 'talangan'));
     }
 }

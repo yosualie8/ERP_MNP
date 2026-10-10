@@ -269,7 +269,7 @@ class TulisKasSheet
         $kepala = [1 => $tgl, 2 => $teks($input['nama_tujuan']), 3 => $input['no_rek'] ? "'".$input['no_rek'] : '', 4 => $teks($input['bank']), 5 => $teks($input['keterangan'])];
 
         if ($input['arah'] === 'masuk') {
-            return [$kepala + [6 => (int) $input['nominal_masuk']]];
+            return [$kepala + [6 => (int) $input['nominal_masuk'], 14 => $teks($input['kode_gl_masuk'] ?? null)]];
         }
 
         $bon = array_values($input['bon']);

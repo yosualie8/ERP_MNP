@@ -76,6 +76,8 @@ class BacaLembarKas
                     'kredit' => $kredit,
                     'saldo' => self::rupiah($sel($r, 'saldo')),
                     'no_id' => TulisKasSheet::angkaNoId($sel($r, 'no_id')),
+                    // Uang masuk: Kode GL di baris transfer itu sendiri (tidak punya transaksi detail).
+                    'kode_gl' => $debet && $bon === null ? ($sel($r, 'kode_gl') ?: null) : null,
                     'bon' => [],
                 ];
             }

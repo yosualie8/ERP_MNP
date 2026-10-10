@@ -72,7 +72,7 @@ class UraiKodeGl
     public static function kelompok(string $akun): string
     {
         return match (true) {
-            in_array($akun, [TebakKodeGl::TALANGAN, TebakKodeGl::SALAH_TRANSFER, 'Pindah Uang Antar Kantong'], true) => 'Non-biaya',
+            in_array($akun, [TebakKodeGl::TALANGAN, TebakKodeGl::TERIMA_TALANGAN, TebakKodeGl::SALAH_TRANSFER, 'Pindah Uang Antar Kantong'], true) => 'Non-biaya',
             str_starts_with($akun, 'HPP') => 'HPP',
             str_starts_with($akun, 'Gaji'), in_array($akun, ['Biaya THR', 'Biaya Lembur', 'Biaya BPJS', 'Biaya Komisi'], true) => 'Gaji & Tunjangan',
             str_starts_with($akun, 'Piutang') => 'Piutang',

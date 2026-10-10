@@ -122,6 +122,7 @@ class KasInputController extends Controller
             'bank' => ['nullable', 'string', 'max:60', DaftarBank::aturan()],
             'keterangan' => ['nullable', 'string', 'max:300'],
             'nominal_masuk' => ['required_if:arah,masuk', 'nullable', 'integer', 'min:1'],
+            'kode_gl_masuk' => ['nullable', 'string', 'max:120'],
             'nominal_transfer' => ['required_if:arah,keluar', 'nullable', 'integer', 'min:1'],
             'biaya_transfer' => ['nullable', 'boolean'],
             'nominal_biaya' => ['exclude_unless:biaya_transfer,1', 'required', 'integer', 'min:1', 'max:'.TulisKasSheet::BIAYA_TRANSFER_MAKS],
@@ -185,6 +186,7 @@ class KasInputController extends Controller
             'bank' => DaftarBank::kode($data['bank'] ?? null),
             'keterangan' => $data['keterangan'] ?? null,
             'nominal_masuk' => (int) ($data['nominal_masuk'] ?? 0),
+            'kode_gl_masuk' => $data['arah'] === 'masuk' ? (trim(preg_replace('/\s+/', ' ', (string) ($data['kode_gl_masuk'] ?? ''))) ?: null) : null,
             'nominal_transfer' => $data['arah'] === 'keluar' ? (int) $data['nominal_transfer'] : null,
             'bon' => $data['arah'] === 'keluar' ? array_values($data['bon']) : [],
             'biaya_transfer' => $data['arah'] === 'keluar' && $request->boolean('biaya_transfer'),
@@ -323,7 +325,7 @@ class KasInputController extends Controller
     /** Form Input Kas berisi transaksi yang sudah ada (dicari lewat NO ID, kunci yang tidak berubah saat impor ulang). */
     public function edit(int $noId): View|RedirectResponse
     {
-        $t = KasTransfer::where('no_id', $noId)->with('bon.kodeGl', 'kasBulan')->first();
+        $t = KasTransfer::where('no_id', $noId)->with('bon.kodeGl', 'kodeGl', 'kasBulan')->first();
         if (! $t) {
             return redirect()->route('kas.index')->with('error', "Transaksi NO ID {$noId} tidak ditemukan. Mungkin sudah dihapus atau sheet berubah — klik \"Sinkron dari sheet\".");
         }
@@ -345,6 +347,7 @@ class KasInputController extends Controller
             'bank' => $t->bank_tujuan,
             'keterangan' => $t->keterangan,
             'nominal_masuk' => $t->debet ?: null,
+            'kode_gl_masuk' => $t->debet ? $t->kodeGl?->kode_asli : null,
             'nominal_transfer' => $t->kredit ?: null,
             'biaya_transfer' => $biaya ? '1' : '0',
             'nominal_biaya' => $biaya?->kredit ?: TulisKasSheet::BIAYA_TRANSFER,

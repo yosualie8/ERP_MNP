@@ -113,7 +113,9 @@ class ImporKas
         ]);
 
         foreach ($h['transfer'] as $t) {
-            $transfer = $bulan->transfer()->create([...collect($t)->except('bon')->all(), 'saldo' => $t['saldo'] ?? 0]);
+            $tebakMasuk = $t['debet'] && ! $t['kode_gl'] ? TebakKodeGl::masuk($t['keterangan']) : null;
+            $transfer = $bulan->transfer()->create([...collect($t)->except('bon', 'kode_gl')->all(), 'saldo' => $t['saldo'] ?? 0,
+                'kode_gl_id' => $this->kodeGl($t['kode_gl'] ?? $tebakMasuk), 'kode_gl_ditebak' => $tebakMasuk !== null]);
             $bon = [];
             foreach ($t['bon'] as $b) {
                 $tebakan = $b['kode_gl'] ? null : TebakKodeGl::dari($b['keterangan'] ?? $t['keterangan'], $b['gl']);

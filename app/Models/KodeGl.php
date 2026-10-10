@@ -28,4 +28,10 @@ class KodeGl extends Model
     {
         return $this->hasMany(KasBon::class);
     }
+
+    /** Uang masuk ber-Kode GL ini (mis. Penerimaan Talangan). */
+    public function transferMasuk(): HasMany
+    {
+        return $this->hasMany(KasTransfer::class);
+    }
 }

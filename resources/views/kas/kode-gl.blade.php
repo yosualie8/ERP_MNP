@@ -11,6 +11,8 @@
             @if ($tanpaKode->jumlah)
                 <br><span class="label merah">{{ $tanpaKode->jumlah }} transaksi detail tanpa Kode GL, total {{ rp($tanpaKode->total) }}</span>
             @endif
+            <br>Talangan kas: diterima {{ rp($talangan['terima']) }} − dikembalikan {{ rp($talangan['kembali']) }} =
+            <b>{{ $talangan['terima'] >= $talangan['kembali'] ? 'sisa belum dikembalikan '.rp($talangan['terima'] - $talangan['kembali']) : 'pengembalian lebih '.rp($talangan['kembali'] - $talangan['terima']) }}</b>
         </p>
         <a href="{{ route('kas.kode-gl') }}" @class(['chip', 'aktif' => ! $saring])>Semua</a>
         <a href="{{ route('kas.kode-gl', ['saring' => 'tanpa-cc']) }}" @class(['chip', 'aktif' => $saring === 'tanpa-cc'])>Tanpa cost center</a>
@@ -48,8 +50,8 @@
                                 <span class="label" title="Tulisan di sheet berbeda dari akun baku">dirapikan</span>
                             @endif
                         </td>
-                        <td class="angka">{{ rp($k->bon_count) }}</td>
-                        <td class="angka" style="padding-right: 14px;">{{ rp($k->bon_sum_nominal) }}</td>
+                        <td class="angka" title="{{ $k->transfer_masuk_count ? $k->transfer_masuk_count.' uang masuk' : '' }}">{{ rp($k->bon_count + $k->transfer_masuk_count) }}</td>
+                        <td class="angka" style="padding-right: 14px;">{{ rp($k->bon_sum_nominal + $k->transfer_masuk_sum_debet) }}</td>
                     </tr>
                 @endforeach
             </tbody>
