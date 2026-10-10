@@ -64,7 +64,8 @@ class DashboardUjController extends Controller
             'terakhir' => $terakhir,
             'lewatAplikasi' => $lewatAplikasi,
             'inputTerakhir' => $inputTerakhir ? ['waktu' => $inputTerakhir->created_at, 'oleh' => $nama[$inputTerakhir->user_id] ?? '?', 'ringkasan' => $inputTerakhir->ringkasan, 'aksi' => $inputTerakhir->aksi] : null,
-            'sinkronTerakhir' => ($w = Cache::get('uj-diimpor-pada')) ? Carbon::parse($w) : null,
+            // Waktu impor terakhir (cache; hilang saat deploy → waktu baris Kas Seabank terakhir ditulis ulang).
+            'sinkronTerakhir' => ($w = Cache::get('uj-diimpor-pada') ?? UjTransaksi::max('created_at')) ? Carbon::parse($w) : null,
             'transaksiTerbaru' => UjTransaksi::max('tanggal'),
             'pengajuanMenunggu' => UjPengajuanDetail::where('status', 'menunggu')->selectRaw('COUNT(*) n, COALESCE(SUM(nominal), 0) s')->first(),
             'riwayat' => $riwayat,
