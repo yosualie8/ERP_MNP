@@ -32,6 +32,7 @@ class AktivitasAdmin
         'truk-buangan' => ['Ritasi', 'Ubah Tujuan Buangan'],
         'aset-tambah' => ['Aset', 'Tambah Aset'],
         'aset-ubah' => ['Aset', 'Edit Aset'],
+        'mcp-chatgpt' => ['ChatGPT', 'ChatGPT membaca data (MCP)'],
     ];
 
     public static function nama(string $aksi): string

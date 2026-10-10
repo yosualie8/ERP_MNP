@@ -53,7 +53,7 @@
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px;">
             <span class="redup">Area:</span>
             <a href="{{ $saring(['area' => null]) }}" @class(['chip', 'aktif' => ! $area])>Semua · {{ $perArea->sum() }}</a>
-            @foreach (['Kas Harian', 'Uang Jalan', 'Ritasi', 'Aset'] as $a)
+            @foreach (['Kas Harian', 'Uang Jalan', 'Ritasi', 'Aset', 'ChatGPT'] as $a)
                 <a href="{{ $saring(['area' => $a]) }}" @class(['chip', 'aktif' => $area === $a])>{{ $a }} · {{ $perArea[$a] ?? 0 }}</a>
             @endforeach
         </div>
@@ -75,7 +75,7 @@
                     @php($ar = \App\Support\AktivitasAdmin::area($r->aksi))
                     <tr>
                         <td style="padding-left: 14px; white-space: nowrap;">{{ $waktu($r->created_at) }}<br><span class="redup" style="font-size: 11px;">{{ $lalu($r->created_at) }}</span></td>
-                        <td style="white-space: nowrap;">{{ $r->user?->name ?? $r->user?->email ?? '—' }}</td>
+                        <td style="white-space: nowrap;">{{ $r->user?->name ?? $r->user?->email ?? ($r->aksi === 'mcp-chatgpt' ? '🤖 ChatGPT' : '—') }}</td>
                         <td style="white-space: nowrap;"><span class="label {{ $warnaArea[$ar] ?? '' }}">{{ $ar }}</span><br><b>{{ \App\Support\AktivitasAdmin::nama($r->aksi) }}</b></td>
                         <td style="padding-right: 14px;">{{ $r->ringkasan }}
                             @if ($r->baris_awal)<br><span class="redup" style="font-size: 11px;">lembar {{ $r->lembar }} · baris {{ $r->baris_awal }}{{ $r->baris_akhir && $r->baris_akhir !== $r->baris_awal ? '–'.$r->baris_akhir : '' }}</span>@endif</td>
