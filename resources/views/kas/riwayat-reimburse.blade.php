@@ -26,7 +26,10 @@
             @endif
             <span class="redup">
                 {{ $cari !== '' ? 'Hasil pencarian "'.$cari.'"' : $namaBulan($bulan) }}:
-                {{ $grup->count() }} tanggal reimburse · {{ number_format($grup->sum('jumlah'), 0, ',', '.') }} transaksi · <b>{{ rp($grup->sum('total')) }}</b>
+                @php($asli = $grup->reject(fn ($g) => $g['penyesuaian']))
+                @php($sesuai = $grup->filter(fn ($g) => $g['penyesuaian']))
+                {{ $asli->count() }} pencatatan reimburse · {{ number_format($asli->sum('jumlah'), 0, ',', '.') }} transaksi · <b>{{ rp($asli->sum('total')) }}</b>
+                @if ($sesuai->isNotEmpty())<span title="Penandaan data lama, bukan reimburse baru — tidak ikut dijumlah"> · penyesuaian data lama {{ number_format($sesuai->sum('jumlah'), 0, ',', '.') }} transaksi ({{ rp($sesuai->sum('total')) }}) tidak dijumlah</span>@endif
             </span>
             <button type="button" class="tombol polos" id="buka-semua" style="margin-left: auto;">Buka semua</button>
         </form>
@@ -46,16 +49,17 @@
             </thead>
             @forelse ($grup as $g)
                 <tbody @class(['grup', 'buka' => $cari !== ''])>
-                    <tr class="t ada-bon">
+                    <tr class="t ada-bon" @if ($g['penyesuaian']) style="opacity: .7;" @endif>
                         <td><span class="panah" aria-hidden="true">▸</span> <b>{{ $g['tanggal'] ? $g['tanggal']->translatedFormat('d-M-Y') : 'Tanpa tanggal' }}</b>
-                            @if ($g['tanggal'])<span class="redup" style="font-size: 12px;">{{ $g['tanggal']->translatedFormat('l') }}</span>@endif</td>
+                            @if ($g['tanggal'])<span class="redup" style="font-size: 12px;">{{ $g['tanggal']->translatedFormat('l') }}</span>@endif
+                            @if ($g['penyesuaian'])<br><span class="label kuning" title="Penandaan data lama yang dicatat pada tanggal ini — bukan reimburse baru; tidak ikut dijumlah di atas">Penyesuaian data lama</span>@endif</td>
                         <td>{{ number_format($g['jumlah'], 0, ',', '.') }} transaksi
                             @if ($g['tanpa_data'])<span class="label" title="ID ini tidak ada di Kas Harian aplikasi (lembar 2025 belum diimpor), jadi nominalnya tidak ikut dijumlah">{{ $g['tanpa_data'] }} tanpa data</span>@endif</td>
                         <td class="ringkas-gl">{{ $g['per_akun']->keys()->take(3)->implode(', ') }}@if ($g['per_akun']->count() > 3) +{{ $g['per_akun']->count() - 3 }}@endif</td>
                         <td style="font-size: 12px;">
                             @if ($g['oleh'])
                                 Aplikasi · {{ implode(', ', $g['oleh']) }}@if ($g['dicatat']) <span class="redup">{{ $tgl($g['dicatat']) }} {{ \Illuminate\Support\Carbon::parse($g['dicatat'])->format('H:i') }}</span>@endif
-                                @foreach ($g['file'] as $f)<br><span class="redup">📄 {{ $f }}</span>@endforeach
+                                @if ($g['catatan'])<br><span class="redup">{{ \Illuminate\Support\Str::limit($g['catatan'], 140) }}</span>@endif
                             @endif
                             @if ($g['dari_sheet'])
                                 @if ($g['oleh'])<br>@endif<span class="redup">{{ $g['oleh'] ? $g['dari_sheet'].' dari' : 'Dari' }} lembar Sudah Reimburse (data awal)</span>

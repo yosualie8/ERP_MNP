@@ -45,18 +45,25 @@ class RiwayatReimburse
             $baris = $baris->filter(fn ($r) => str_contains(mb_strtolower($r['status']->id_transaksi.' '.implode(' ', array_map('strval', $r['kas'] ?? []))), $kecil));
         }
 
-        $tanggal = $baris->pluck('status.tanggal_reimburse')->filter()->unique()->all();
-        $sumberFile = KasRiwayat::where('aksi', 'reimburse-validasi')->get(['isi'])
-            ->filter(fn ($r) => in_array($r->isi['tanggal'] ?? null, $tanggal, true))
-            ->groupBy(fn ($r) => $r->isi['tanggal'])->map(fn ($g) => $g->pluck('isi.sumber')->filter()->unique()->values()->all());
+        // Pencatatan di aplikasi (menu Reimburse Kas lama, Validasi Reimburse, centang di Input/Edit Kas): ID → riwayatnya.
+        $riwayat = [];
+        foreach (KasRiwayat::whereIn('aksi', ['kas-reimburse', 'reimburse-validasi', 'tandai-reimburse'])->orderBy('id')->get(['ringkasan', 'isi']) as $k) {
+            foreach ((array) ($k->isi['id_transaksi'] ?? []) as $id) {
+                $riwayat[$id] = $k->ringkasan;
+            }
+        }
 
-        return $baris->groupBy(fn ($r) => $r['status']->tanggal_reimburse ?? '')
-            ->map(function (Collection $g, string $tgl) use ($nama, $sumberFile) {
+        // Satu grup = satu pencatatan: tanggal reimburse yang sama bisa berisi beberapa pencatatan (mis. reimburse sungguhan
+        // dan penyesuaian data lama), jadi dipisah per waktu pencatatan. Data awal dari sheet = satu grup per tanggal.
+        return $baris->groupBy(fn ($r) => ($r['status']->tanggal_reimburse ?? '').'|'.($r['status']->sumber === 'aplikasi' ? 'a|'.$r['status']->created_at : 's'))
+            ->map(function (Collection $g, string $kunci) use ($nama, $riwayat) {
+                $tgl = explode('|', $kunci)[0];
                 $rinci = $g->sortBy(fn ($r) => ($r['kas']['tanggal'] ?? '0').sprintf('%08d', $r['kas']['no_id'] ?? 0).$r['status']->id_transaksi)
                     ->map(fn ($r) => ['id' => $r['status']->id_transaksi, ...($r['kas'] ?? [])])->values();
                 $aplikasi = $g->filter(fn ($r) => $r['status']->sumber === 'aplikasi');
                 $gl = $rinci->filter(fn ($r) => isset($r['nominal']))->groupBy(fn ($r) => $r['akun'] ?: 'tanpa Kode GL')
                     ->map->sum('nominal')->sortDesc();
+                $catatan = $aplikasi->isNotEmpty() ? $g->map(fn ($r) => $riwayat[$r['status']->id_transaksi] ?? null)->filter()->first() : null;
 
                 return [
                     'tanggal' => $tgl !== '' ? Carbon::parse($tgl) : null,
@@ -67,11 +74,13 @@ class RiwayatReimburse
                     'dari_sheet' => $g->count() - $aplikasi->count(),
                     'oleh' => $aplikasi->pluck('status.user_id')->filter()->unique()->map(fn ($id) => $nama[$id] ?? '?')->values()->all(),
                     'dicatat' => $aplikasi->pluck('status.created_at')->filter()->max(),
-                    'file' => $tgl !== '' ? ($sumberFile[$tgl] ?? []) : [],
+                    'catatan' => $catatan,
+                    // Penandaan data lama (bukan uang reimburse yang diterima pada tanggal itu): tampil terpisah, tidak ikut dijumlah.
+                    'penyesuaian' => $catatan !== null && str_contains($catatan, 'Penyesuaian'),
                     'menunggu_sheet' => $g->filter(fn ($r) => ! $r['status']->di_sheet)->count(),
                     'rinci' => $rinci->all(),
                 ];
-            })->values();
+            })->sortByDesc(fn ($g) => ($g['tanggal']?->format('Ymd') ?? '0').($g['dicatat'] ?? ''))->values();
     }
 
     /**
