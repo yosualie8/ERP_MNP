@@ -59,7 +59,7 @@
                         <td style="font-size: 12px;">
                             @if ($g['oleh'])
                                 Aplikasi · {{ implode(', ', $g['oleh']) }}@if ($g['dicatat']) <span class="redup">{{ $tgl($g['dicatat']) }} {{ \Illuminate\Support\Carbon::parse($g['dicatat'])->format('H:i') }}</span>@endif
-                                @if ($g['catatan'])<br><span class="redup">{{ \Illuminate\Support\Str::limit($g['catatan'], 140) }}</span>@endif
+                                @if ($g['catatan'])<br><span class="redup">{{ $g['catatan'] }}</span>@endif
                             @endif
                             @if ($g['dari_sheet'])
                                 @if ($g['oleh'])<br>@endif<span class="redup">{{ $g['oleh'] ? $g['dari_sheet'].' dari' : 'Dari' }} lembar Sudah Reimburse (data awal)</span>

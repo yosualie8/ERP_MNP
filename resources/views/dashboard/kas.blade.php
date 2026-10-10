@@ -49,6 +49,7 @@
                     <span>
                         <b>{{ $g['tanggal'] ? $g['tanggal']->translatedFormat('d-M-Y') : 'Tanpa tanggal' }}</b> <span class="redup">· {{ number_format($g['jumlah'], 0, ',', '.') }} transaksi</span>
                         <br><span class="redup" style="font-size: 12px;">@if ($g['oleh']){{ implode(', ', $g['oleh']) }} · {{ $waktu($g['dicatat']) }} ({{ $lalu($g['dicatat']) }})@else Dari lembar Sudah Reimburse (data awal)@endif</span>
+                        @if ($g['catatan'])<br><span style="font-size: 12px;">{{ $g['catatan'] }}</span>@endif
                     </span>
                     <b style="white-space: nowrap;">{{ rp($g['total']) }}</b>
                 </div>
