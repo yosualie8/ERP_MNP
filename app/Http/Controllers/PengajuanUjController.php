@@ -60,6 +60,8 @@ class PengajuanUjController extends UjController
             'semua' => $semua, 'status' => $status, 'beda' => $beda, 'detailBeda' => $detailBeda, 'kasKini' => $kasKini, 'kelompokTf' => $kelompokTf,
             'menunggu' => UjPengajuanDetail::where('status', 'menunggu')->selectRaw('COUNT(*) n, SUM(nominal) s')->first(),
             'bolehRealisasi' => $request->user()->bolehMenu('input-uj'),
+            // Menautkan transfer Kas Harian ke pengajuan hanya untuk Super Admin (rutenya juga dijaga can:super-admin).
+            'bolehTautkan' => $request->user()->isSuperAdmin(),
         ]);
     }
 

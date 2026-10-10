@@ -119,7 +119,8 @@
                         @php($totalTf = $kel['total_tf'] ?? 0)
                         @php($totalPj = $kel['total_pj'] ?? (int) $p->nominal)
                         <td class="sel-transfer">
-                            @if ($p->status !== 'batal')
+                            {{-- Menautkan / melepas transfer Kas Harian hanya untuk Super Admin. --}}
+                            @if ($bolehTautkan && $p->status !== 'batal')
                                 <label class="pilih-tf-label" title="Pilih untuk ditautkan ke transfer Kas Harian (beberapa pengajuan bisa satu transfer)">
                                     <input type="checkbox" class="pilih-tf" value="{{ $p->id }}" data-kode="{{ $p->kode() }}" data-nominal="{{ (int) $p->nominal }}"
                                         data-tanggal="{{ $p->tanggal->toDateString() }}" data-tf="{{ $p->transfer->map(fn ($tf) => $tf->kas_no_id.':'.(int) $tf->nominal)->implode(',') }}"></label>
@@ -138,8 +139,8 @@
                                     <div class="tf-baris" title="{{ $tf->nama_tujuan }} · {{ $tf->keterangan }}{{ $tf->user ? ' · ditautkan '.($tf->user->name ?? $tf->user->email) : '' }}">
                                         {{ $tf->kas_tanggal->translatedFormat('j M') }} · <b>{{ rp($tf->nominal) }}</b> · <span class="redup">{{ $tf->idKas() }}</span>
                                         @if ($berubah)<span class="label merah" title="{{ $kini ? 'Transaksi Kas Harian ini sekarang '.$kini->tanggal->translatedFormat('j M Y').' '.rp((int) $kini->kredit) : 'Transaksi Kas Harian ini tidak ditemukan lagi (dihapus / NO ID berubah)' }}">⚠ {{ $kini ? 'berubah' : 'hilang' }}</span>@endif
-                                        <form method="POST" action="{{ route('pengajuan-uj.transfer-lepas', $tf) }}" style="display: inline;" onsubmit="return confirm('Lepas tautan transfer {{ $tf->idKas() }} dari {{ $p->kode() }}?')">
-                                            @csrf @method('DELETE')<button type="submit" class="lepas-tf" title="Lepas tautan dari {{ $p->kode() }}">✕</button></form>
+                                        @if ($bolehTautkan)<form method="POST" action="{{ route('pengajuan-uj.transfer-lepas', $tf) }}" style="display: inline;" onsubmit="return confirm('Lepas tautan transfer {{ $tf->idKas() }} dari {{ $p->kode() }}?')">
+                                            @csrf @method('DELETE')<button type="submit" class="lepas-tf" title="Lepas tautan dari {{ $p->kode() }}">✕</button></form>@endif
                                     </div>
                                 @endforeach
                             @endif
@@ -190,7 +191,8 @@
         </table>
     </div>
     <div class="bar-bawah">
-    {{-- Pilih beberapa pengajuan → satu transfer Kas Harian untuk semuanya. --}}
+    {{-- Pilih beberapa pengajuan → satu transfer Kas Harian untuk semuanya (Super Admin). --}}
+    @if ($bolehTautkan)
     <div class="bar-realisasi" id="bar-transfer" hidden>
         <b id="jumlah-pilih-tf">0 pengajuan dipilih</b>
         <span class="redup" id="ringkas-pilih-tf"></span>
@@ -199,6 +201,7 @@
             <button type="button" class="tombol" id="buka-transfer">🔗 Transfer (Kas Harian)</button>
         </span>
     </div>
+    @endif
     @if ($bolehRealisasi)
         {{-- Pilih beberapa detail (boleh lintas pengajuan & driver) → satu transfer: Input UJ terisi semua detail itu, admin tinggal isi rekening penerima. --}}
         <div class="bar-realisasi" id="bar-realisasi" hidden>
@@ -212,6 +215,7 @@
     @endif
     </div>
     {{-- Pilih transfer Kas Harian yang membiayai pengajuan-pengajuan terpilih. --}}
+    @if ($bolehTautkan)
     <dialog id="dialog-transfer">
         <form method="POST" id="form-transfer" action="{{ route('pengajuan-uj.transfer-tautkan') }}">
             @csrf
@@ -231,6 +235,7 @@
             </div>
         </form>
     </dialog>
+    @endif
     <script>
         (() => {
             const dlg = document.getElementById('dialog-transfer');
