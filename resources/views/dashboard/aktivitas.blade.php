@@ -44,6 +44,13 @@
             @endforeach
         </div>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px;">
+            <span class="redup">Admin:</span>
+            <a href="{{ $saring(['pengguna' => null]) }}" @class(['chip', 'aktif' => ! $pengguna])>Semua · {{ $perOrang->sum() }}</a>
+            @foreach ($orang->sortBy('nama') as $o)
+                <a href="{{ $saring(['pengguna' => $o['id']]) }}" @class(['chip', 'aktif' => $pengguna === $o['id']])>{{ $o['nama'] }} · {{ $perOrang[$o['id']] ?? 0 }}</a>
+            @endforeach
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px;">
             <span class="redup">Area:</span>
             <a href="{{ $saring(['area' => null]) }}" @class(['chip', 'aktif' => ! $area])>Semua · {{ $perArea->sum() }}</a>
             @foreach (['Kas Harian', 'Uang Jalan', 'Ritasi', 'Aset'] as $a)

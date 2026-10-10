@@ -46,6 +46,11 @@ class AktivitasAdminController extends Controller
             ->select('aksi', DB::raw('COUNT(*) as n'))->groupBy('aksi')->get()
             ->groupBy(fn ($r) => AktivitasAdmin::area($r->aksi))->map->sum('n');
 
-        return view('dashboard.aktivitas', compact('log', 'orang', 'perArea', 'periode', 'pengguna', 'area', 'cari'));
+        // Jumlah aktivitas per pengguna pada periode & area terpilih (untuk saringan nama admin).
+        $perOrang = KasRiwayat::when($sejak, fn ($q) => $q->where('created_at', '>=', $sejak))
+            ->when($area, fn ($q) => $q->whereIn('aksi', AktivitasAdmin::aksiArea($area)))
+            ->select('user_id', DB::raw('COUNT(*) as n'))->groupBy('user_id')->pluck('n', 'user_id');
+
+        return view('dashboard.aktivitas', compact('log', 'orang', 'perArea', 'perOrang', 'periode', 'pengguna', 'area', 'cari'));
     }
 }
