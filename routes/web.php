@@ -1,10 +1,12 @@
 <?php
 
+use App\Http\Controllers\AktivitasAdminController;
 use App\Http\Controllers\AsetController;
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\BuanganTrukController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DashboardKasController;
+use App\Http\Controllers\DashboardUjController;
 use App\Http\Controllers\KasController;
 use App\Http\Controllers\KasFotoController;
 use App\Http\Controllers\KasInputController;
@@ -35,6 +37,8 @@ Route::get('/auth/google/callback', [GoogleController::class, 'callback'])->name
 Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/beranda', DashboardController::class)->name('dashboard');
     Route::get('/dashboard/kas', DashboardKasController::class)->name('dashboard.kas');
+    Route::get('/dashboard/uj', DashboardUjController::class)->name('dashboard.uj');
+    Route::get('/dashboard/aktivitas', AktivitasAdminController::class)->name('dashboard.aktivitas')->middleware('can:super-admin');
     Route::get('/kas', [KasController::class, 'index'])->name('kas.index');
     Route::get('/kas/input', [KasInputController::class, 'create'])->name('kas.input');
     Route::post('/kas/input', [KasInputController::class, 'store'])->name('kas.input.store');

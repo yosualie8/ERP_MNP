@@ -55,7 +55,7 @@
                                     <div class="grup"><b>Umum</b><label title="Selalu tampil"><input type="checkbox" checked disabled> Beranda</label></div>
                                     @foreach (\App\Support\MenuAkses::KATEGORI as [$judul, $ikon, $isi])
                                         <div class="grup"><b>{{ $ikon }} {{ $judul }}</b>
-                                            @foreach ($isi as $kunci)
+                                            @foreach (array_diff($isi, \App\Support\MenuAkses::KHUSUS_SUPER) as $kunci)
                                                 @php([$nama, , , $ket] = \App\Support\MenuAkses::DAFTAR[$kunci])
                                                 <label title="{{ $ket }}"><input type="checkbox" name="menu[]" value="{{ $kunci }}" @checked($u->bolehMenu($kunci))> {{ $nama }}</label>
                                             @endforeach
