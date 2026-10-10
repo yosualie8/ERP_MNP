@@ -101,10 +101,22 @@ class TanyaAiController extends Controller
             }
             session()->flash('model_tersedia', $model);
         }
-        if (! empty($data['model'])) {
-            PengaturanApp::simpan(OpenAi::KUNCI_MODEL, trim($data['model']), $request->user()->id);
+        if (! empty($data['model']) && trim($data['model']) !== OpenAi::model()) {
+            $m = trim($data['model']);
+            if (! OpenAi::modelPenjawab($m)) {
+                return back()->with('error', "{$m} adalah model suara/gambar, bukan model untuk menjawab. Pilih model chat, mis. gpt-6-luna atau gpt-5.4-mini.");
+            }
+            try {
+                OpenAi::ujiModel($m);
+            } catch (\Throwable $e) {
+                return back()->with('error', $e->getMessage());
+            }
+            PengaturanApp::simpan(OpenAi::KUNCI_MODEL, $m, $request->user()->id);
         }
         if (! empty($data['model_suara'])) {
+            if (! OpenAi::modelTranskripsi(trim($data['model_suara']))) {
+                return back()->with('error', 'Model speech to text harus model transkripsi, mis. gpt-4o-transcribe.');
+            }
             PengaturanApp::simpan(OpenAi::KUNCI_MODEL_SUARA, trim($data['model_suara']), $request->user()->id);
         }
 
@@ -115,7 +127,10 @@ class TanyaAiController extends Controller
     {
         abort_unless($request->user()->isSuperAdmin(), 403);
         try {
-            return response()->json(['model' => OpenAi::daftarModel()]);
+            $semua = OpenAi::daftarModel();
+
+            return response()->json(['model' => array_values(array_filter($semua, [OpenAi::class, 'modelPenjawab'])),
+                'suara' => array_values(array_filter($semua, [OpenAi::class, 'modelTranskripsi']))]);
         } catch (\Throwable $e) {
             return response()->json(['galat' => $e->getMessage()], 422);
         }

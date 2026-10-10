@@ -60,6 +60,28 @@ class OpenAi
         return Http::withToken($kunci)->baseUrl('https://api.openai.com/v1')->timeout(150)->connectTimeout(10);
     }
 
+    private const BUKAN_PENJAWAB = '/transcribe|whisper|tts|embedding|dall-e|image|moderation|realtime|audio|search|sora|babbage|davinci|instruct/';
+
+    /** Model untuk menjawab (bukan model suara/gambar/embedding). */
+    public static function modelPenjawab(string $m): bool
+    {
+        return ! preg_match(self::BUKAN_PENJAWAB, $m);
+    }
+
+    public static function modelTranskripsi(string $m): bool
+    {
+        return (bool) preg_match('/transcribe|whisper/', $m);
+    }
+
+    /** Coba model dengan satu permintaan kecil; lempar galat bila OpenAI menolak. */
+    public static function ujiModel(string $model): void
+    {
+        $r = self::http()->post('/responses', ['model' => $model, 'input' => 'Balas: OK', 'max_output_tokens' => 64, 'store' => false]);
+        if ($r->failed()) {
+            throw new RuntimeException("Model {$model} tidak bisa dipakai: ".($r->json('error.message') ?? 'HTTP '.$r->status()));
+        }
+    }
+
     /** Model yang tersedia untuk API key ini (untuk pilihan di pengaturan). @return string[] */
     public static function daftarModel(): array
     {

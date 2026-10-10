@@ -43,11 +43,12 @@
                 <label>API key OpenAI <span class="redup">(disimpan terenkripsi; kosongkan bila tidak diganti)</span>
                     <input type="password" name="api_key" autocomplete="off" placeholder="{{ $pengaturan['ada_kunci'] ? '•••••• (tersimpan)' : 'sk-…' }}"></label>
                 <label>Model untuk menjawab
-                    <input type="text" name="model" list="daftar-model" value="{{ $pengaturan['model'] }}" placeholder="pilih setelah API key disimpan"></label>
+                    <input type="text" name="model" list="daftar-model-jawab" value="{{ $pengaturan['model'] }}" placeholder="pilih setelah API key disimpan"></label>
                 <label>Model speech to text
-                    <input type="text" name="model_suara" list="daftar-model" value="{{ $pengaturan['model_suara'] }}"></label>
+                    <input type="text" name="model_suara" list="daftar-model-suara" value="{{ $pengaturan['model_suara'] }}"></label>
                 <button type="submit" class="tombol">Simpan</button>
-                <datalist id="daftar-model">@foreach (session('model_tersedia', []) as $m)<option value="{{ $m }}">@endforeach</datalist>
+                <datalist id="daftar-model-jawab">@foreach (array_filter(session('model_tersedia', []), [\App\Support\Ai\OpenAi::class, 'modelPenjawab']) as $m)<option value="{{ $m }}">@endforeach</datalist>
+                <datalist id="daftar-model-suara">@foreach (array_filter(session('model_tersedia', []), [\App\Support\Ai\OpenAi::class, 'modelTranskripsi']) as $m)<option value="{{ $m }}">@endforeach</datalist>
             </form>
             @if ($pengaturan['ada_kunci'])
                 <button type="button" class="tombol polos" id="muat-model" style="margin-top: 8px; font-size: 12px; padding: 4px 10px;">Tampilkan model yang tersedia</button>
@@ -136,8 +137,9 @@
                 info.textContent = 'Memuat…';
                 const r = await (await fetch(@json(route('tanya-ai.model')), {headers: {Accept: 'application/json'}})).json();
                 if (r.galat) { info.textContent = r.galat; return; }
-                document.getElementById('daftar-model').innerHTML = r.model.map(m => `<option value="${m}">`).join('');
-                info.textContent = r.model.length + ' model — klik isian model untuk memilih.';
+                document.getElementById('daftar-model-jawab').innerHTML = r.model.map(m => `<option value="${m}">`).join('');
+                document.getElementById('daftar-model-suara').innerHTML = r.suara.map(m => `<option value="${m}">`).join('');
+                info.textContent = r.model.length + ' model penjawab & ' + r.suara.length + ' model suara — klik isiannya untuk memilih (kosongkan dulu isian agar semua pilihan tampil).';
             });
 
             const kotak = document.getElementById('ai-pesan');
