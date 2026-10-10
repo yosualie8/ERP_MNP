@@ -18,6 +18,7 @@ use App\Http\Controllers\ReimburseKasController;
 use App\Http\Controllers\ReimburseUjController;
 use App\Http\Controllers\RiwayatReimburseController;
 use App\Http\Controllers\RitasiController;
+use App\Http\Controllers\TanyaAiController;
 use App\Http\Controllers\TransferBcaController;
 use App\Http\Controllers\UjController;
 use Illuminate\Support\Facades\Route;
@@ -115,6 +116,12 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::post('/uj/reimburse', [ReimburseUjController::class, 'simpan'])->name('reimburse.simpan');
     Route::get('/uj/reimburse/{reimburse}/excel', [ReimburseUjController::class, 'unduh'])->name('reimburse.unduh');
     Route::post('/logout', [GoogleController::class, 'logout'])->name('logout');
+    // Tanya AI (OpenAI): chat data ERP hanya baca + speech to text; log lengkap per pengguna.
+    Route::get('/tanya-ai', [TanyaAiController::class, 'index'])->name('tanya-ai');
+    Route::post('/tanya-ai/kirim', [TanyaAiController::class, 'kirim'])->name('tanya-ai.kirim');
+    Route::post('/tanya-ai/transkripsi', [TanyaAiController::class, 'transkripsi'])->name('tanya-ai.transkripsi');
+    Route::post('/tanya-ai/pengaturan', [TanyaAiController::class, 'pengaturan'])->name('tanya-ai.pengaturan');
+    Route::get('/tanya-ai/model', [TanyaAiController::class, 'modelTersedia'])->name('tanya-ai.model');
     // Halaman izin OAuth MCP (ChatGPT): wajib login dengan email terdaftar.
     Route::get('/oauth/authorize', [OAuthMcpController::class, 'izin'])->name('oauth.izin');
     Route::post('/oauth/authorize', [OAuthMcpController::class, 'putuskan'])->name('oauth.putuskan');

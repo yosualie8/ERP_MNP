@@ -18,7 +18,7 @@ class AktivitasAdminController extends Controller
     {
         $periode = array_key_exists($request->query('periode'), self::PERIODE) ? $request->query('periode') : '7-hari';
         $pengguna = (int) $request->query('pengguna') ?: null;
-        $area = in_array($request->query('area'), ['Kas Harian', 'Uang Jalan', 'Ritasi', 'Aset', 'ChatGPT'], true) ? $request->query('area') : null;
+        $area = in_array($request->query('area'), ['Kas Harian', 'Uang Jalan', 'Ritasi', 'Aset', 'AI'], true) ? $request->query('area') : null;
         $cari = trim((string) $request->query('q', ''));
         $sejak = match ($periode) {
             'hari-ini' => today(), '7-hari' => today()->subDays(6), '30-hari' => today()->subDays(29), default => null,

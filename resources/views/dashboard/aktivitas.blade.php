@@ -53,7 +53,7 @@
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px;">
             <span class="redup">Area:</span>
             <a href="{{ $saring(['area' => null]) }}" @class(['chip', 'aktif' => ! $area])>Semua · {{ $perArea->sum() }}</a>
-            @foreach (['Kas Harian', 'Uang Jalan', 'Ritasi', 'Aset', 'ChatGPT'] as $a)
+            @foreach (['Kas Harian', 'Uang Jalan', 'Ritasi', 'Aset', 'AI'] as $a)
                 <a href="{{ $saring(['area' => $a]) }}" @class(['chip', 'aktif' => $area === $a])>{{ $a }} · {{ $perArea[$a] ?? 0 }}</a>
             @endforeach
         </div>
