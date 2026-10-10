@@ -26,6 +26,27 @@ class AlatMnp
 {
     private const MAKS = 200;
 
+    /** Pengguna yang sedang memakai MCP (diisi McpController); hasil search ikut disaring menunya. */
+    public static ?\App\Models\User $pengguna = null;
+
+    /** Menu aplikasi yang wajib boleh dibuka untuk memakai tool ini (search/fetch: disaring per jenis data). */
+    private const MENU = [
+        'ringkasan_kas_harian' => 'kas-harian', 'cari_transaksi_kas' => 'kas-harian', 'daftar_belum_reimburse_kas' => 'kas-harian',
+        'riwayat_reimburse_kas' => 'riwayat-reimburse', 'rekap_biaya' => 'rekap', 'ringkasan_uj' => 'kas-uj', 'cari_transaksi_uj' => 'kas-uj',
+        'pengajuan_uj' => 'pengajuan-uj', 'cari_ritasi' => 'ritasi', 'data_aset_truk' => 'aset', 'aktivitas_admin' => 'dashboard-aktivitas',
+    ];
+
+    /** Tool yang boleh dipakai pengguna ini (mengikuti menu yang boleh dibukanya di aplikasi). */
+    public static function untuk(\App\Models\User $u): array
+    {
+        return array_filter(self::daftar(), fn ($t, $nama) => ! isset(self::MENU[$nama]) || $u->bolehMenu(self::MENU[$nama]), ARRAY_FILTER_USE_BOTH);
+    }
+
+    private static function boleh(string $menu): bool
+    {
+        return ! self::$pengguna || self::$pengguna->bolehMenu($menu);
+    }
+
     /** @return array<string, array{judul: string, deskripsi: string, skema: array, jalankan: callable}> */
     public static function daftar(): array
     {
@@ -364,15 +385,15 @@ class AlatMnp
             return ['results' => []];
         }
         $hasil = [];
-        foreach (self::cariKas(['kata' => $q, 'batas' => 10])['transaksi'] as $t) {
+        foreach (self::boleh('kas-harian') ? self::cariKas(['kata' => $q, 'batas' => 10])['transaksi'] : [] as $t) {
             $hasil[] = ['id' => 'kas:'.$t['no_id'], 'title' => "Kas Harian {$t['tanggal']} · ".($t['tujuan'] ?? '-').' · '.($t['keterangan'] ?? '').' · Rp '.number_format($t['keluar'] ?: $t['masuk'], 0, ',', '.'),
                 'url' => route('kas.index', ['lembar' => $t['lembar'], 'q' => $t['no_id']])];
         }
-        foreach (self::cariUj(['kata' => $q, 'batas' => 10])['transaksi'] as $d) {
+        foreach (self::boleh('kas-uj') ? self::cariUj(['kata' => $q, 'batas' => 10])['transaksi'] : [] as $d) {
             $hasil[] = ['id' => 'uj:'.$d['id_uj'], 'title' => "UJ {$d['id_uj']} {$d['tanggal']} · ".($d['driver'] ?? '').' · '.($d['keterangan'] ?? '').' · Rp '.number_format($d['nominal'], 0, ',', '.'),
                 'url' => route('uj.index', ['q' => $d['id_uj']])];
         }
-        foreach (self::pengajuanUj(['kata' => $q, 'batas' => 5])['pengajuan'] as $p) {
+        foreach (self::boleh('pengajuan-uj') ? self::pengajuanUj(['kata' => $q, 'batas' => 5])['pengajuan'] : [] as $p) {
             $hasil[] = ['id' => 'pengajuan:'.$p['id'], 'title' => "Pengajuan {$p['kode']} {$p['tanggal']} · {$p['status']} · Rp ".number_format($p['nominal'], 0, ',', '.'),
                 'url' => route('pengajuan-uj.daftar')];
         }
@@ -383,6 +404,9 @@ class AlatMnp
     private static function fetch(array $a): array
     {
         [$jenis, $kunci] = array_pad(explode(':', (string) ($a['id'] ?? ''), 2), 2, '');
+        if (! self::boleh(['kas' => 'kas-harian', 'uj' => 'kas-uj', 'pengajuan' => 'pengajuan-uj'][$jenis] ?? 'kas-harian')) {
+            throw new InvalidArgumentException('Akun Anda tidak punya akses ke data ini.');
+        }
         $isi = match ($jenis) {
             'kas' => ($t = KasTransfer::with('bon.kodeGl', 'kasBulan')->where('no_id', (int) $kunci)->first())
                 ? self::transferKas($t, StatusReimburse::untuk($t->bon->map(fn ($b) => StatusReimburse::idBon($b, $t))->all())) : null,

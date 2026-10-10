@@ -83,7 +83,8 @@ class GoogleController extends Controller
 
         Auth::login($user, remember: true);
 
-        return redirect()->route('dashboard');
+        // Kembali ke halaman yang tadinya diminta (mis. halaman izin ChatGPT/MCP), atau Beranda.
+        return redirect()->intended(route('dashboard'));
     }
 
     private function simpanIntegrasi(Request $request, GoogleUser $googleUser): RedirectResponse

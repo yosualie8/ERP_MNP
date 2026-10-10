@@ -10,6 +10,7 @@ use App\Http\Controllers\DashboardUjController;
 use App\Http\Controllers\KasController;
 use App\Http\Controllers\KasFotoController;
 use App\Http\Controllers\KasInputController;
+use App\Http\Controllers\OAuthMcpController;
 use App\Http\Controllers\PengajuanUjController;
 use App\Http\Controllers\PenggunaController;
 use App\Http\Controllers\RapikanUjController;
@@ -20,6 +21,11 @@ use App\Http\Controllers\RitasiController;
 use App\Http\Controllers\TransferBcaController;
 use App\Http\Controllers\UjController;
 use Illuminate\Support\Facades\Route;
+
+// Metadata OAuth untuk MCP server (ChatGPT).
+Route::get('/.well-known/oauth-protected-resource/{jalur?}', [OAuthMcpController::class, 'metadataResource'])->where('jalur', '.*');
+Route::get('/.well-known/oauth-authorization-server', [OAuthMcpController::class, 'metadataServer']);
+Route::get('/.well-known/openid-configuration', [OAuthMcpController::class, 'metadataServer']);
 
 // Halaman publik (tanpa login): dipakai sebagai Homepage, Privacy policy & Terms of service URL di Google Cloud.
 Route::get('/', fn () => auth()->check() ? redirect()->route('dashboard') : view('publik.beranda'))->name('beranda');
@@ -109,6 +115,9 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::post('/uj/reimburse', [ReimburseUjController::class, 'simpan'])->name('reimburse.simpan');
     Route::get('/uj/reimburse/{reimburse}/excel', [ReimburseUjController::class, 'unduh'])->name('reimburse.unduh');
     Route::post('/logout', [GoogleController::class, 'logout'])->name('logout');
+    // Halaman izin OAuth MCP (ChatGPT): wajib login dengan email terdaftar.
+    Route::get('/oauth/authorize', [OAuthMcpController::class, 'izin'])->name('oauth.izin');
+    Route::post('/oauth/authorize', [OAuthMcpController::class, 'putuskan'])->name('oauth.putuskan');
 
     // Khusus super admin.
     Route::middleware('can:super-admin')->group(function () {

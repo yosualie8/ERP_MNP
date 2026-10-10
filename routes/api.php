@@ -18,6 +18,8 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
-// MCP server untuk ChatGPT (hanya baca); token rahasia di URL, lihat McpController & `php artisan mnp:mcp-token`.
-Route::match(['get', 'post', 'delete'], '/mcp/{token}', \App\Http\Controllers\McpController::class)
+// MCP server untuk ChatGPT (hanya baca), dilindungi OAuth: hanya email terdaftar (lihat McpController & OAuthMcpController).
+Route::match(['get', 'post', 'delete'], '/mcp', \App\Http\Controllers\McpController::class)
     ->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class.':api')->middleware('throttle:240,1')->name('mcp');
+Route::post('/oauth/register', [\App\Http\Controllers\OAuthMcpController::class, 'daftar'])->name('oauth.daftar');
+Route::post('/oauth/token', [\App\Http\Controllers\OAuthMcpController::class, 'token'])->name('oauth.token');

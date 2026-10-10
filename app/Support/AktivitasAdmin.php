@@ -33,6 +33,7 @@ class AktivitasAdmin
         'aset-tambah' => ['Aset', 'Tambah Aset'],
         'aset-ubah' => ['Aset', 'Edit Aset'],
         'mcp-chatgpt' => ['ChatGPT', 'ChatGPT membaca data (MCP)'],
+        'mcp-izin' => ['ChatGPT', 'Mengizinkan ChatGPT (MCP)'],
     ];
 
     public static function nama(string $aksi): string

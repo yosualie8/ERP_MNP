@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\KasRiwayat;
-use App\Models\PengaturanApp;
+use App\Models\User;
 use App\Support\Mcp\AlatMnp;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -11,22 +11,27 @@ use Illuminate\Http\Response;
 use InvalidArgumentException;
 
 /**
- * MCP server (Model Context Protocol, transport Streamable HTTP tanpa sesi) untuk ChatGPT: HANYA BACA.
- * Alamat: /api/mcp/{token} — token rahasia dibuat dengan `php artisan mnp:mcp-token` (yang disimpan hanya hash-nya).
- * Setiap pemanggilan tool dicatat di log aktivitas (aksi "mcp-chatgpt").
+ * MCP server (Model Context Protocol, transport Streamable HTTP tanpa sesi) untuk ChatGPT: HANYA BACA, di /api/mcp.
+ * Akses wajib token OAuth (OAuthMcpController): hanya email yang terdaftar di menu Pengguna yang bisa login & memberi izin.
+ * Tool yang tampil mengikuti menu yang boleh dibuka pengguna itu; setiap pemanggilan dicatat atas namanya (aksi "mcp-chatgpt").
  */
 class McpController extends Controller
 {
-    public const KUNCI_TOKEN = 'mcp_token_hash';
-
     private const VERSI = ['2025-06-18', '2025-03-26', '2024-11-05'];
 
-    public function __invoke(Request $request, string $token): JsonResponse|Response
+    private ?User $pengguna = null;
+
+    public function __invoke(Request $request): JsonResponse|Response
     {
-        $hash = PengaturanApp::ambil(self::KUNCI_TOKEN);
-        if (! $hash || ! hash_equals($hash, hash('sha256', $token))) {
-            abort(404);
+        $userId = OAuthMcpController::penggunaDariToken($request->bearerToken());
+        $this->pengguna = $userId ? User::find($userId) : null;
+        if (! $this->pengguna) {
+            return response()->json(['error' => 'invalid_token', 'error_description' => 'Login dengan akun ERP MNP yang terdaftar.'], 401, [
+                'WWW-Authenticate' => 'Bearer resource_metadata="'.OAuthMcpController::urlMetadataResource().'", scope="'.OAuthMcpController::SCOPE.'"'
+                    .($request->bearerToken() ? ', error="invalid_token"' : ''),
+            ]);
         }
+        AlatMnp::$pengguna = $this->pengguna;
         // Tanpa aliran SSE dari server: GET/DELETE tidak didukung (spesifikasi MCP membolehkan 405).
         if (! $request->isMethod('post')) {
             return response('', 405, ['Allow' => 'POST']);
@@ -65,7 +70,7 @@ class McpController extends Controller
                     .'Mulai dari ringkasan_kas_harian / ringkasan_uj untuk gambaran umum.',
             ]),
             'ping' => self::hasil($id, (object) []),
-            'tools/list' => self::hasil($id, ['tools' => collect(AlatMnp::daftar())->map(fn ($t, $nama) => [
+            'tools/list' => self::hasil($id, ['tools' => collect(AlatMnp::untuk($this->pengguna))->map(fn ($t, $nama) => [
                 'name' => $nama, 'title' => $t['judul'], 'description' => $t['deskripsi'], 'inputSchema' => $t['skema'],
                 'annotations' => ['title' => $t['judul'], 'readOnlyHint' => true, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false],
             ])->values()]),
@@ -78,12 +83,13 @@ class McpController extends Controller
 
     private function panggil(mixed $id, string $nama, array $arg): array
     {
-        $alat = AlatMnp::daftar()[$nama] ?? null;
+        $alat = AlatMnp::untuk($this->pengguna)[$nama] ?? null;
         if (! $alat) {
-            return self::galat($id, -32602, "Tool tidak dikenal: {$nama}");
+            return self::galat($id, -32602, "Tool tidak dikenal atau tidak boleh dipakai akun ini: {$nama}");
         }
         KasRiwayat::create(['aksi' => 'mcp-chatgpt', 'lembar' => 'MCP', 'baris_awal' => 0, 'baris_akhir' => 0,
-            'ringkasan' => mb_strimwidth("ChatGPT memakai {$nama}".($arg ? ' '.json_encode($arg, JSON_UNESCAPED_UNICODE) : ''), 0, 490, '…'), 'isi' => ['tool' => $nama, 'argumen' => $arg]]);
+            'ringkasan' => mb_strimwidth("ChatGPT memakai {$nama}".($arg ? ' '.json_encode($arg, JSON_UNESCAPED_UNICODE) : ''), 0, 490, '…'), 'isi' => ['tool' => $nama, 'argumen' => $arg],
+            'user_id' => $this->pengguna->id]);
         try {
             $data = ($alat['jalankan'])($arg);
         } catch (InvalidArgumentException $e) {
