@@ -15,6 +15,8 @@ class AktivitasAdmin
         'reimburse-validasi' => ['Kas Harian', 'Validasi Reimburse'],
         'tandai-reimburse' => ['Kas Harian', 'Tandai Sudah Reimburse'],
         'transfer-bca' => ['Kas Harian', 'Transfer Massal BCA'],
+        'bca-input' => ['Kas Harian', 'Input Transfer BCA'],
+        'bca-skrip' => ['Kas Harian', 'Skrip input KlikBCA'],
         'uj-tambah' => ['Uang Jalan', 'Input UJ'],
         'uj-ubah' => ['Uang Jalan', 'Edit UJ'],
         'uj-hapus' => ['Uang Jalan', 'Hapus UJ'],

@@ -35,7 +35,7 @@ class TransferBcaController extends Controller
             'rekening' => PengaturanApp::ambil(self::KUNCI_REKENING),
             'riwayat' => TransferBca::with('user')->latest('id')->limit(20)->get(),
             'bank' => collect(DaftarBank::untukForm())->filter(fn ($b) => BankBca::untuk($b['kode']))->values(),
-            'penerima' => $this->penerimaDikenal(),
+            'penerima' => self::penerimaDikenal(),
         ]);
     }
 
@@ -158,7 +158,7 @@ class TransferBcaController extends Controller
      *
      * @return array<int, array{nama: string, bank: string, rekening: string}>
      */
-    private function penerimaDikenal(): array
+    public static function penerimaDikenal(): array
     {
         $hasil = [];
         $tambah = function ($nama, $bank, $rek, $tgl) use (&$hasil) {

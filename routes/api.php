@@ -21,5 +21,9 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 // MCP server untuk ChatGPT (hanya baca), dilindungi OAuth: hanya email terdaftar (lihat McpController & OAuthMcpController).
 Route::match(['get', 'post', 'delete'], '/mcp', \App\Http\Controllers\McpController::class)
     ->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class.':api')->middleware('throttle:240,1')->name('mcp');
+// Skrip Playwright input KlikBCA Bisnis (laptop): token Bearer dari menu Input Transfer BCA.
+Route::get('/bca-input/antrean', [\App\Http\Controllers\InputBcaController::class, 'apiAntrean']);
+Route::post('/bca-input/{item}/mulai', [\App\Http\Controllers\InputBcaController::class, 'apiMulai'])->whereNumber('item');
+Route::post('/bca-input/{item}/hasil', [\App\Http\Controllers\InputBcaController::class, 'apiHasil'])->whereNumber('item');
 Route::post('/oauth/register', [\App\Http\Controllers\OAuthMcpController::class, 'daftar'])->name('oauth.daftar');
 Route::post('/oauth/token', [\App\Http\Controllers\OAuthMcpController::class, 'token'])->name('oauth.token');
