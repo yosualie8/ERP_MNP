@@ -9,7 +9,6 @@ use App\Http\Controllers\DashboardKasController;
 use App\Http\Controllers\DashboardUjController;
 use App\Http\Controllers\KasController;
 use App\Http\Controllers\KasFotoController;
-use App\Http\Controllers\InputBcaController;
 use App\Http\Controllers\KasInputController;
 use App\Http\Controllers\OAuthMcpController;
 use App\Http\Controllers\PengajuanUjController;
@@ -20,7 +19,6 @@ use App\Http\Controllers\ReimburseUjController;
 use App\Http\Controllers\RiwayatReimburseController;
 use App\Http\Controllers\RitasiController;
 use App\Http\Controllers\TanyaAiController;
-use App\Http\Controllers\TransferBcaController;
 use App\Http\Controllers\UjController;
 use Illuminate\Support\Facades\Route;
 
@@ -72,14 +70,6 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::post('/kas/validasi-reimburse', [ReimburseKasController::class, 'periksaValidasi'])->name('kas.validasi-reimburse.periksa');
     Route::post('/kas/validasi-reimburse/tandai', [ReimburseKasController::class, 'tandaiValidasi'])->name('kas.validasi-reimburse.tandai');
     Route::get('/kas/history-reimburse', [RiwayatReimburseController::class, 'index'])->name('kas.riwayat-reimburse');
-    Route::get('/kas/input-bca', [InputBcaController::class, 'index'])->name('kas.input-bca');
-    Route::post('/kas/input-bca', [InputBcaController::class, 'simpan'])->name('kas.input-bca.simpan');
-    Route::post('/kas/input-bca/{item}/status', [InputBcaController::class, 'ubahStatus'])->whereNumber('item')->name('kas.input-bca.status');
-    Route::post('/kas/input-bca/token', [InputBcaController::class, 'token'])->name('kas.input-bca.token');
-    Route::get('/kas/transfer-bca', [TransferBcaController::class, 'index'])->name('kas.transfer-bca');
-    Route::post('/kas/transfer-bca/rekening', [TransferBcaController::class, 'simpanRekening'])->name('kas.transfer-bca.rekening');
-    Route::post('/kas/transfer-bca', [TransferBcaController::class, 'buat'])->name('kas.transfer-bca.buat');
-    Route::get('/kas/transfer-bca/{transfer}/excel', [TransferBcaController::class, 'unduh'])->whereNumber('transfer')->name('kas.transfer-bca.unduh');
     Route::get('/kas/belum-reimburse.xlsx', [ReimburseKasController::class, 'unduhBelum'])->name('kas.belum-reimburse');
     Route::get('/kas/kode-gl', [KasController::class, 'kodeGl'])->name('kas.kode-gl');
     // Kas uang jalan dump truck (lembar "Kas Seabank").
