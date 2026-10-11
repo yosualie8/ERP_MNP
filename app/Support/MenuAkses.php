@@ -42,7 +42,8 @@ class MenuAkses
     public const KATEGORI = [
         'asisten' => ['Asisten AI', '🤖', ['tanya-ai']],
         'dashboard' => ['Dashboard', '📊', ['dashboard-kas', 'dashboard-uj', 'dashboard-aktivitas']],
-        'kas' => ['Kas Harian', '🏦', ['input-kas', 'kas-harian', 'validasi-reimburse', 'riwayat-reimburse', 'transfer-bca', 'kas-belum-reimburse', 'rekap', 'kode-gl']],
+        'kas' => ['Kas Harian', '🏦', ['input-kas', 'kas-harian', 'validasi-reimburse', 'riwayat-reimburse', 'kas-belum-reimburse', 'rekap', 'kode-gl']],
+        'transfer' => ['Transfer Massal', '💸', ['transfer-bca']],
         'uj' => ['Uang Jalan', '🚚', ['pengajuan-uj', 'input-uj', 'kas-uj', 'reimburse-uj', 'rapikan-uj']],
         'ritasi' => ['Ritasi', '⛰️', ['input-ritasi', 'ritasi', 'buangan-truk', 'monitor-ritasi', 'bayar-tanah', 'performa-ritasi']],
         'aset' => ['Aset', '🚛', ['aset']],
