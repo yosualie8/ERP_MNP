@@ -102,7 +102,7 @@
                     @php($t = $x->t)
                     <tr class="m">
                         <td class="angka redup">{{ $i + 1 }}</td>
-                        <td data-v="{{ $t->nama }} {{ $t->proyek->nama }}"><span class="panah">▸</span> <b>{{ $t->nama }}</b> <span class="redup" style="font-size: 11px;">· {{ $t->proyek->nama }}</span>@if ($t->tipe !== 'luas') <span class="label">{{ \App\Models\ProyekTahap::TIPE[$t->tipe] }}</span>@endif</td>
+                        <td data-v="{{ $t->nama }} {{ $t->proyek->nama }}"><span class="panah">▸</span> <a href="{{ route('proyek.show', $t) }}" title="Lihat transaksi Kas Harian tahap ini"><b>{{ $t->nama }}</b></a> <span class="redup" style="font-size: 11px;">· {{ $t->proyek->nama }}</span>@if ($t->tipe !== 'luas') <span class="label">{{ \App\Models\ProyekTahap::TIPE[$t->tipe] }}</span>@endif</td>
                         <td data-v="{{ \App\Models\ProyekTahap::STATUS[$t->status] }}"><span class="label {{ $warnaStatus[$t->status] ?? '' }}">{{ \App\Models\ProyekTahap::STATUS[$t->status] }}</span></td>
                         <td>{{ $t->lokasi }}</td>
                         <td data-v="{{ $x->mulai }} {{ $tgl($x->mulai) }}" data-n="{{ $x->mulai }}" style="white-space: nowrap;">{{ $tgl($x->mulai) }}</td>
@@ -116,7 +116,7 @@
                                 <tr><th style="text-align: left;">Biaya</th><th class="angka">Jumlah</th>@if ($super)<th class="angka">Nominal</th><th style="text-align: left;">Dasar hitung</th>@endif</tr>
                                 @foreach ($rincian as $k => [$label, $satuan])
                                     @php([$n, $rp] = $x->biaya[$k])
-                                    <tr><td>{{ $label }}</td><td class="angka">{{ $ang($n, $k === 'solar' || $k === 'rental' ? 1 : 0) }} {{ $satuan }}</td>
+                                    <tr><td>{{ $label }}@if ($k === 'kas' && $n) <a href="{{ route('proyek.show', $t) }}" style="font-size: 12px;">lihat transaksi →</a>@endif</td><td class="angka">{{ $ang($n, $k === 'solar' || $k === 'rental' ? 1 : 0) }} {{ $satuan }}</td>
                                         @if ($super)<td class="angka">{{ rp($rp) }}</td>
                                             <td class="redup">{{ match ($k) {
                                                 'rit', 'ngepok' => 'Harga Jual di lembar Ritasi',

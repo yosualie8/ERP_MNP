@@ -66,6 +66,7 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/proyek', [DaftarProyekController::class, 'index'])->name('proyek.index');
     Route::get('/proyek/tahap/baru', [DaftarProyekController::class, 'create'])->name('proyek.create');
     Route::post('/proyek/tahap', [DaftarProyekController::class, 'store'])->name('proyek.store');
+    Route::get('/proyek/tahap/{tahap}', [DaftarProyekController::class, 'show'])->whereNumber('tahap')->name('proyek.show');
     Route::get('/proyek/tahap/{tahap}/edit', [DaftarProyekController::class, 'edit'])->whereNumber('tahap')->name('proyek.edit');
     Route::put('/proyek/tahap/{tahap}', [DaftarProyekController::class, 'update'])->whereNumber('tahap')->name('proyek.update');
     Route::post('/proyek/alias', [DaftarProyekController::class, 'petakan'])->name('proyek.petakan');

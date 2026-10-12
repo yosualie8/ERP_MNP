@@ -9,6 +9,7 @@ use App\Models\ProyekTahap;
 use App\Support\DaftarProyek;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -50,6 +51,23 @@ class DaftarProyekController extends Controller
             'baris' => $baris,
             'lepasRitasi' => $ritasi['lepas'], 'lepasKas' => $kas['lepas'], 'lepasBbm' => $bbm['lepas'], 'waktuBbm' => $bbm['waktu'],
             'semuaTahap' => ProyekTahap::with('proyek')->get()->sortBy(fn ($t) => [$t->proyek->urutan, (int) preg_replace('/\D/', '', $t->nama) ?: 99999, $t->nama]),
+            'super' => $request->user()->isSuperAdmin(),
+        ]);
+    }
+
+    /** Detail satu tahap: transaksi detail Kas Harian yang terpetakan ke tahap ini (aturan sama dengan ringkasan grid). */
+    public function show(Request $request, ProyekTahap $tahap): View
+    {
+        $transaksi = DB::table('kas_bon as b')->leftJoin('kode_gl as k', 'k.id', '=', 'b.kode_gl_id')
+            ->leftJoin('cost_center as c', 'c.id', '=', 'k.cost_center_id')->leftJoin('akun_gl as a', 'a.id', '=', 'k.akun_gl_id')
+            ->select('b.no_id', 'b.tanggal', 'b.nominal', 'b.pic', 'b.keterangan', 'k.kode_asli', 'c.kode as cc', 'k.ref', 'a.nama as akun')
+            ->orderByDesc('b.tanggal')->orderByDesc('b.no_id')->get()
+            ->filter(fn ($r) => DaftarProyek::tahapKas($r->cc, $r->ref, $r->akun, substr((string) $r->tanggal, 0, 10)) === $tahap->id)->values();
+
+        return view('proyek.show', [
+            'tahap' => $tahap->load('proyek'),
+            'transaksi' => $transaksi,
+            'perAkun' => $transaksi->groupBy(fn ($r) => $r->akun ?? '(tanpa akun)')->map(fn ($g) => ['n' => $g->count(), 'rp' => $g->sum('nominal')])->sortByDesc('rp'),
             'super' => $request->user()->isSuperAdmin(),
         ]);
     }
