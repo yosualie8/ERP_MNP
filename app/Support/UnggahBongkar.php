@@ -133,7 +133,7 @@ class UnggahBongkar
         }
 
         foreach (collect($sj)->groupBy('dt') as $dt => $daftarSj) {
-            $daftarSj = $daftarSj->sortBy(fn ($s) => $s['tanggal']->format('Ymd').($s['jam'] ?? '99:99').str_pad((string) LembarRitasi::kunciAngka($s['no_seri']), 10, '0', STR_PAD_LEFT))->values();
+            $daftarSj = $daftarSj->sortBy(fn ($s) => $s['tanggal']->format('Ymd').($s['jam'] ? str_pad($s['jam'], 5, '0', STR_PAD_LEFT) : '99:99').str_pad((string) LembarRitasi::kunciAngka($s['no_seri']), 10, '0', STR_PAD_LEFT))->values();
             $doDt = $belum->filter(fn ($d) => in_array($dt, $d['mobil'], true))
                 ->sortBy(fn ($d) => ($d['pertama']?->format('Ymd') ?? '0').str_pad($d['do'], 10, '0', STR_PAD_LEFT))->values();
             $info = ['dt' => $dt, 'sj' => $daftarSj->count(), 'do_belum' => $doDt->count(), 'pasangan' => [], 'galat' => null, 'catatan' => []];
@@ -157,7 +157,12 @@ class UnggahBongkar
                     'tanggal' => $s['tanggal']->toDateString(), 'jam' => $s['jam'], 'tahap' => $s['tahap'], 'galian' => $s['galian'],
                     'jenis_tanah' => $s['jenis_tanah'], 'no_seri' => $s['no_seri'], 'keterangan' => $s['keterangan'],
                 ];
-                $catatan = $d['pertama'] && $d['pertama']->gt($s['tanggal']) ? 'UJ '.$d['pertama']->translatedFormat('j M').' sesudah tanggal bongkar' : null;
+                // Galian wajib saat simpan: dari Excel, atau tebakan dari keterangan UJ DO itu.
+                $galian = $s['galian'] ?? TebakGalian::galian($d['tujuan'], null) ?? ($d['tujuan'] ? ucwords($d['tujuan']) : null);
+                $catatan = implode(' · ', array_filter([
+                    $d['pertama'] && $d['pertama']->gt($s['tanggal']) ? 'UJ '.$d['pertama']->translatedFormat('j M').' sesudah tanggal bongkar' : null,
+                    $galian ? null : 'Galian belum diketahui — isi di form',
+                ])) ?: null;
                 $info['pasangan'][] = ['baris' => $s['baris'], 'no_seri' => $s['no_seri'], 'tanggal' => $s['tanggal'], 'jam' => $s['jam'], 'do' => $d['do'], 'uj' => $d['pertama'], 'catatan' => $catatan];
             }
             $sisa = $doDt->pluck('do')->diff($pakai->pluck('do'));

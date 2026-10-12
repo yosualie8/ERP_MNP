@@ -169,7 +169,7 @@ class RitasiController extends Controller
         // Isian dikirim sebagai old input form bongkar; laporan per DT untuk ditinjau.
         return redirect()->route('ritasi.monitor', ['unggah' => 1])
             ->withInput(['bongkar' => $hasil['isian']])
-            ->with('unggah_bongkar', ['file' => $nama, 'jumlah' => count($sj), 'per_dt' => $hasil['per_dt'], 'do' => array_keys($hasil['isian'])]);
+            ->with('unggah_bongkar', ['file' => $nama, 'jumlah' => count($sj), 'per_dt' => $hasil['per_dt'], 'do' => array_map('strval', array_keys($hasil['isian']))]);
     }
 
     /** Templat Excel upload surat jalan. */
