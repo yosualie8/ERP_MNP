@@ -142,18 +142,20 @@ class ImporKas
     }
 
     /**
-     * Kode GL dua tahap sekaligus ("Biaya Operasional ASG T4-T5") dipecah jadi dua transaksi detail sama rata
-     * (keputusan user 12 Okt 2026, sama dengan baris BBM gabungan). Sisa pembulatan masuk ke tahap pertama.
+     * Kode GL beberapa tahap sekaligus ("Biaya Operasional ASG T4-T5", "ASG T1-T4" = T1 s/d T4) dipecah sama rata ke tiap
+     * tahap (keputusan user 12 Okt 2026, sama dengan baris BBM gabungan). Sisa pembulatan masuk ke tahap pertama.
      */
     private static function pecahGabungan(array $h): array
     {
         foreach ($h['transfer'] as &$t) {
             $bon = [];
             foreach ($t['bon'] as $b) {
-                if (preg_match('/^(.*\S)\s+T(\d+)\s*-\s*T(\d+)$/', trim((string) $b['kode_gl']), $m)) {
-                    $separuh = intdiv($b['nominal'], 2);
-                    $bon[] = ['kode_gl' => "{$m[1]} T{$m[2]}", 'nominal' => $b['nominal'] - $separuh] + $b;
-                    $bon[] = ['kode_gl' => "{$m[1]} T{$m[3]}", 'nominal' => $separuh] + $b;
+                if (preg_match('/^(.*\S)\s+T(\d+)\s*-\s*T(\d+)$/', trim((string) $b['kode_gl']), $m) && $m[3] > $m[2] && $m[3] - $m[2] < 10) {
+                    $tahap = range((int) $m[2], (int) $m[3]);
+                    $bagian = intdiv($b['nominal'], count($tahap));
+                    foreach ($tahap as $i => $no) {
+                        $bon[] = ['kode_gl' => "{$m[1]} T{$no}", 'nominal' => $i ? $bagian : $b['nominal'] - $bagian * (count($tahap) - 1)] + $b;
+                    }
                 } else {
                     $bon[] = $b;
                 }

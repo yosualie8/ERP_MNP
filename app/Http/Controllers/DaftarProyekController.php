@@ -68,9 +68,9 @@ class DaftarProyekController extends Controller
     public function show(Request $request, ProyekTahap $tahap): View
     {
         $transaksi = DaftarProyek::queryKas()
-            ->select('b.no_id', 'b.tanggal', 'b.nominal', 'b.pic', 'b.keterangan', 'k.kode_asli', 'c.kode as cc', 'k.ref', 'a.nama as akun')
+            ->select('b.no_id', 'b.tanggal', 'b.nominal', 'b.pic', 'b.keterangan', 'k.kode_asli', 'c.kode as cc', 'k.ref', 'a.nama as akun', 'al.proyek_tahap_id as alokasi')
             ->orderByDesc('b.tanggal')->orderByDesc('b.no_id')->get()
-            ->filter(fn ($r) => DaftarProyek::tahapKas($r->cc, $r->ref, $r->akun, substr((string) $r->tanggal, 0, 10)) === $tahap->id)->values();
+            ->filter(fn ($r) => ($r->alokasi ?: DaftarProyek::tahapKas($r->cc, $r->ref, $r->akun, substr((string) $r->tanggal, 0, 10))) === $tahap->id)->values();
 
         return view('proyek.show', [
             'tahap' => $tahap->load('proyek', 'alias'),
