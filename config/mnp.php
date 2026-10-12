@@ -20,4 +20,6 @@ return [
     'uj_impor_sampai_id' => env('MNP_UJ_IMPOR_SAMPAI_ID', 13034),
     // Spreadsheet "Proyek ASG - Gsheet": lembar "Ritasi" = satu baris per rit dump truck.
     'sheet_ritasi' => env('MNP_SHEET_RITASI', '15yDqd39eaY1hm4GuYxH0gOQWju-VQUGiv235OTvZfF0'),
+    // Spreadsheet "Progress ASG - Update": lembar "Cost Project" (asli) & "Cost Project ERP" (daftar proyek baku, data awal menu Daftar Proyek).
+    'sheet_cost_project' => env('MNP_SHEET_COST_PROJECT', '1q2k6v3IRgGUktYCmptkgZCS22ZA4oVI5k7m0fRl_FqU'),
 ];

@@ -4,6 +4,7 @@ use App\Http\Controllers\AktivitasAdminController;
 use App\Http\Controllers\AsetController;
 use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\BuanganTrukController;
+use App\Http\Controllers\DaftarProyekController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DashboardKasController;
 use App\Http\Controllers\DashboardUjController;
@@ -61,6 +62,14 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/kas/rekap', [KasController::class, 'rekap'])->name('kas.rekap');
     Route::get('/uj/rapikan', [RapikanUjController::class, 'index'])->name('uj.rapikan');
     Route::post('/uj/rapikan', [RapikanUjController::class, 'simpan'])->name('uj.rapikan.simpan');
+    // Daftar Proyek: proyek → tahap → alias (nama lama di Ritasi/BBM/Cost Project/Kas).
+    Route::get('/proyek', [DaftarProyekController::class, 'index'])->name('proyek.index');
+    Route::get('/proyek/tahap/baru', [DaftarProyekController::class, 'create'])->name('proyek.create');
+    Route::post('/proyek/tahap', [DaftarProyekController::class, 'store'])->name('proyek.store');
+    Route::get('/proyek/tahap/{tahap}/edit', [DaftarProyekController::class, 'edit'])->whereNumber('tahap')->name('proyek.edit');
+    Route::put('/proyek/tahap/{tahap}', [DaftarProyekController::class, 'update'])->whereNumber('tahap')->name('proyek.update');
+    Route::post('/proyek/alias', [DaftarProyekController::class, 'petakan'])->name('proyek.petakan');
+    Route::delete('/proyek/alias/{alias}', [DaftarProyekController::class, 'hapusAlias'])->whereNumber('alias')->name('proyek.alias.hapus');
     Route::get('/aset', [AsetController::class, 'index'])->name('aset.index');
     Route::get('/aset/tambah', [AsetController::class, 'create'])->name('aset.create');
     Route::post('/aset', [AsetController::class, 'store'])->name('aset.store');

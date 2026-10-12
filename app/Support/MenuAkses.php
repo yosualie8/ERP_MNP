@@ -33,6 +33,7 @@ class MenuAkses
         'riwayat-reimburse' => ['History Reimburse', 'kas.riwayat-reimburse', ['kas.riwayat-reimburse'], 'Rekap transaksi Kas Harian yang sudah direimburse per tanggal reimburse, klik untuk melihat rinciannya'],
         'kas-belum-reimburse' => ['⬇ Excel Belum Reimburse', 'kas.belum-reimburse', ['kas.belum-reimburse'], 'Unduh daftar transaksi Kas Harian yang belum reimburse (Excel)'],
         'rekap' => ['Rekap Biaya', 'kas.rekap', ['kas.rekap'], 'Rekap biaya per akun × bulan'],
+        'daftar-proyek' => ['Daftar Proyek', 'proyek.index', ['proyek.*'], 'Daftar proyek & tahap, pemetaan nama lama (Ritasi/BBM/Kas); data keuangan hanya Super Admin'],
         'aset' => ['Data Aset Truk', 'aset.index', ['aset.*'], 'Daftar truk milik MNP: lihat, tambah & ubah'],
         'kode-gl' => ['Kode GL', 'kas.kode-gl', ['kas.kode-gl'], 'Daftar Kode GL'],
     ];
@@ -41,6 +42,7 @@ class MenuAkses
     public const KATEGORI = [
         'asisten' => ['Asisten AI', '🤖', ['tanya-ai']],
         'dashboard' => ['Dashboard', '📊', ['dashboard-kas', 'dashboard-uj', 'dashboard-aktivitas']],
+        'proyek' => ['Proyek', '🏗️', ['daftar-proyek']],
         'kas' => ['Kas Harian', '🏦', ['input-kas', 'kas-harian', 'validasi-reimburse', 'riwayat-reimburse', 'kas-belum-reimburse', 'rekap', 'kode-gl']],
         'uj' => ['Uang Jalan', '🚚', ['pengajuan-uj', 'input-uj', 'kas-uj', 'reimburse-uj', 'rapikan-uj']],
         'ritasi' => ['Ritasi', '⛰️', ['input-ritasi', 'ritasi', 'buangan-truk', 'monitor-ritasi', 'bayar-tanah', 'performa-ritasi']],
