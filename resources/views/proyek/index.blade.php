@@ -5,7 +5,8 @@
 @section('isi')
     @php
         $tgl = fn ($d) => $d ? \Illuminate\Support\Carbon::parse($d)->translatedFormat('d-M-Y') : '';
-        $ang = fn ($v, $d = 0) => $v ? rtrim(rtrim(number_format((float) $v, $d, ',', '.'), '0'), ',') : '0';
+        // Nol di belakang koma dibuang hanya untuk desimal (50 tetap 50, 175,80 jadi 175,8).
+        $ang = fn ($v, $d = 0) => ! $v ? '0' : ($d ? rtrim(rtrim(number_format((float) $v, $d, ',', '.'), '0'), ',') : number_format((float) $v, 0, ',', '.'));
         $warnaStatus = ['belum' => '', 'progress' => 'kuning', 'selesai' => 'hijau', 'batal' => 'merah'];
         $rincian = ['rit' => ['Ritasi', 'rit'], 'ngepok' => ['Ngepok', 'rit'], 'solar' => ['Solar', 'liter'], 'rental' => ['Rental alat', 'jam HM'], 'kas' => ['Operasional Kas Harian', 'transaksi']];
     @endphp
