@@ -49,7 +49,7 @@ class DaftarProyek
     {
         $per = [];
         $lepas = [];
-        foreach (Ritasi::selectRaw('tahap, jenis_buangan, count(*) n, min(tanggal) a, max(tanggal) b')->groupBy('tahap', 'jenis_buangan')->get() as $r) {
+        foreach (Ritasi::selectRaw('tahap, jenis_buangan, count(*) n, sum(harga_jual) h, min(tanggal) a, max(tanggal) b')->groupBy('tahap', 'jenis_buangan')->get() as $r) {
             $id = self::tahapId('ritasi', $r->tahap);
             $ngepok = strcasecmp((string) $r->jenis_buangan, 'Ngepok') === 0;
             if ($id) {
@@ -59,6 +59,8 @@ class DaftarProyek
                 $tujuan['nama'] = trim(preg_replace('/\s+/', ' ', (string) $r->tahap)) ?: '(kosong)';
             }
             $tujuan[$ngepok ? 'ngepok' : 'rit'] = ($tujuan[$ngepok ? 'ngepok' : 'rit'] ?? 0) + $r->n;
+            // Biaya ritasi/ngepok = "Harga Jual" per rit di lembar Ritasi (sama dengan Cost Project).
+            $tujuan[$ngepok ? 'rp_ngepok' : 'rp_rit'] = ($tujuan[$ngepok ? 'rp_ngepok' : 'rp_rit'] ?? 0) + (int) $r->h;
             $tujuan['mulai'] = min($tujuan['mulai'] ?? '9999', substr((string) $r->a, 0, 10));
             $tujuan['selesai'] = max($tujuan['selesai'] ?? '0000', substr((string) $r->b, 0, 10));
             unset($tujuan);
@@ -84,6 +86,9 @@ class DaftarProyek
             if ($id) {
                 $per[$id]['n'] = ($per[$id]['n'] ?? 0) + $r->n;
                 $per[$id]['rp'] = ($per[$id]['rp'] ?? 0) + (int) $r->s;
+                $t = substr((string) $r->tanggal, 0, 10);
+                $per[$id]['mulai'] = min($per[$id]['mulai'] ?? '9999', $t);
+                $per[$id]['selesai'] = max($per[$id]['selesai'] ?? '0000', $t);
             } else {
                 $k = trim(($r->cc ?? '-').' '.$r->ref);
                 $lepas[$k]['nama'] = $k;
@@ -93,5 +98,53 @@ class DaftarProyek
         }
 
         return ['per_tahap' => $per, 'lepas' => array_values($lepas)];
+    }
+
+    /**
+     * Ringkasan Penggunaan BBM per tahap (sementara dibaca dari lembar sheet, sampai menu BBM ada di aplikasi):
+     * solar keluar (liter) & jam HM (0–24 jam per baris; salah ketik tidak ikut). Disimpan 30 menit.
+     *
+     * @return array{per_tahap: array<int, array{liter: float, hm: float}>, lepas: array<int, array>, waktu: string}
+     */
+    public static function bbm(bool $segarkan = false): array
+    {
+        if ($segarkan) {
+            \Illuminate\Support\Facades\Cache::forget('daftar-proyek-bbm');
+        }
+
+        // Sheet belum terhubung: kosong & tidak disimpan, supaya begitu terhubung langsung terbaca.
+        if (! $sheets = GoogleSheets::terhubung()) {
+            return ['per_tahap' => [], 'lepas' => [], 'waktu' => ''];
+        }
+
+        return \Illuminate\Support\Facades\Cache::remember('daftar-proyek-bbm', now()->addMinutes(30), function () use ($sheets) {
+            $per = [];
+            $lepas = [];
+            $r = "'Penggunaan BBM'!A2:O";
+            foreach ($sheets->nilaiMentah(config('mnp.sheet_ritasi'), [$r])[$r] as $x) {
+                $p = trim(preg_replace('/\s+/', ' ', (string) ($x[14] ?? '')));
+                $liter = is_numeric($x[6] ?? null) ? (float) $x[6] : 0;
+                $hm = is_numeric($x[4] ?? null) && $x[4] >= 0 && $x[4] <= 24 ? (float) $x[4] : 0;
+                if ($p === '' || (! $liter && ! $hm)) {
+                    continue;
+                }
+                $tgl = is_numeric($x[0] ?? null) ? date('Y-m-d', (int) round(($x[0] - 25569) * 86400)) : null;
+                if ($id = self::tahapId('bbm', $p)) {
+                    $per[$id]['liter'] = ($per[$id]['liter'] ?? 0) + $liter;
+                    $per[$id]['hm'] = ($per[$id]['hm'] ?? 0) + $hm;
+                    if ($tgl) {
+                        $per[$id]['mulai'] = min($per[$id]['mulai'] ?? '9999', $tgl);
+                        $per[$id]['selesai'] = max($per[$id]['selesai'] ?? '0000', $tgl);
+                    }
+                } else {
+                    $k = ProyekAlias::kunci($p);
+                    $lepas[$k]['nama'] = $p;
+                    $lepas[$k]['n'] = ($lepas[$k]['n'] ?? 0) + 1;
+                    $lepas[$k]['liter'] = ($lepas[$k]['liter'] ?? 0) + $liter;
+                }
+            }
+
+            return ['per_tahap' => $per, 'lepas' => array_values($lepas), 'waktu' => now()->toDateTimeString()];
+        });
     }
 }

@@ -18,28 +18,38 @@ use Illuminate\View\View;
  */
 class DaftarProyekController extends Controller
 {
+    /**
+     * Grid seperti sheet Cost Project: semua tahap rata (tidak dikelompokkan), urut tanggal mulai. Tanggal mulai/akhir =
+     * ritasi pertama/terakhir (tahap tanpa ritasi: dari BBM / Kas Harian). Biaya: ritasi & ngepok (Harga Jual Ritasi),
+     * solar (liter × tarif BBM), rental (jam HM × tarif rental), operasional Kas Harian.
+     */
     public function index(Request $request): View
     {
-        $status = array_key_exists($request->query('status'), ProyekTahap::STATUS) ? $request->query('status') : null;
-        $cari = trim((string) $request->query('q', ''));
-        $proyek = Proyek::with(['tahap' => fn ($q) => $q->withCount('alias')])->orderBy('urutan')->orderBy('nama')->get();
         $ritasi = DaftarProyek::ritasi();
         $kas = DaftarProyek::kas();
+        $bbm = DaftarProyek::bbm($request->boolean('segarkan'));
 
-        $proyek->each(function (Proyek $p) use ($status, $cari) {
-            $p->setRelation('tahap', $p->tahap
-                ->when($status, fn ($c) => $c->where('status', $status))
-                ->when($cari !== '', fn ($c) => $c->filter(fn ($t) => str_contains(mb_strtolower($t->nama.' '.$t->lokasi.' '.$p->nama), mb_strtolower($cari))))
-                ->sortBy(fn ($t) => [(int) preg_replace('/\D/', '', $t->nama) ?: 99999, $t->nama])->values());
-        });
+        $baris = ProyekTahap::with('proyek')->withCount('alias')->get()->map(function (ProyekTahap $t) use ($ritasi, $kas, $bbm) {
+            $r = $ritasi['per_tahap'][$t->id] ?? [];
+            $k = $kas['per_tahap'][$t->id] ?? [];
+            $b = $bbm['per_tahap'][$t->id] ?? [];
+            [$mulai, $akhir] = isset($r['mulai']) ? [$r['mulai'], $r['selesai']]
+                : (isset($b['mulai']) ? [$b['mulai'], $b['selesai']] : [$k['mulai'] ?? null, $k['selesai'] ?? null]);
+            $c = [
+                'rit' => [$r['rit'] ?? 0, $r['rp_rit'] ?? 0],
+                'ngepok' => [$r['ngepok'] ?? 0, $r['rp_ngepok'] ?? 0],
+                'solar' => [$b['liter'] ?? 0, (int) round(($b['liter'] ?? 0) * ($t->tarif_bbm ?? ProyekTahap::BAWAAN['tarif_bbm']))],
+                'rental' => [$b['hm'] ?? 0, (int) round(($b['hm'] ?? 0) * ($t->tarif_rental ?? ProyekTahap::BAWAAN['tarif_rental']))],
+                'kas' => [$k['n'] ?? 0, $k['rp'] ?? 0],
+            ];
+
+            return (object) ['t' => $t, 'mulai' => $mulai, 'akhir' => $akhir, 'biaya' => $c, 'total' => array_sum(array_column($c, 1))];
+        })->sortBy(fn ($x) => [$x->mulai ?? '9999', $x->t->nama])->values();
 
         return view('proyek.index', [
-            'proyek' => $proyek->filter(fn ($p) => $p->tahap->isNotEmpty() || (! $status && $cari === '')),
-            'ritasi' => $ritasi['per_tahap'], 'kas' => $kas['per_tahap'],
-            'lepasRitasi' => $ritasi['lepas'], 'lepasKas' => $kas['lepas'],
+            'baris' => $baris,
+            'lepasRitasi' => $ritasi['lepas'], 'lepasKas' => $kas['lepas'], 'lepasBbm' => $bbm['lepas'], 'waktuBbm' => $bbm['waktu'],
             'semuaTahap' => ProyekTahap::with('proyek')->get()->sortBy(fn ($t) => [$t->proyek->urutan, (int) preg_replace('/\D/', '', $t->nama) ?: 99999, $t->nama]),
-            'jumlahStatus' => ProyekTahap::selectRaw('status, count(*) n')->groupBy('status')->pluck('n', 'status'),
-            'status' => $status, 'cari' => $cari,
             'super' => $request->user()->isSuperAdmin(),
         ]);
     }
