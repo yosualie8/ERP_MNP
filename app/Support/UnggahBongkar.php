@@ -1,0 +1,201 @@
+<?php
+
+namespace App\Support;
+
+use App\Http\Controllers\RitasiController;
+use Carbon\Carbon;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Collection;
+use OpenSpout\Reader\CSV\Reader as ReaderCsv;
+use OpenSpout\Reader\XLSX\Reader as ReaderXlsx;
+use RuntimeException;
+
+/**
+ * Upload Excel surat jalan di Monitor Ritasi: tiap baris = satu surat jalan (No Mobil/DT, tanggal & jam bongkar, tujuan,
+ * jenis tanah, No Surat Jalan). Surat jalan dipasangkan ke DO belum bongkar milik DT yang sama; jumlah surat jalan suatu DT
+ * tidak boleh melebihi jumlah DO belum bongkarnya. Hasilnya hanya mengisi form — admin tetap meninjau lalu Simpan bongkar.
+ */
+class UnggahBongkar
+{
+    /** Judul kolom yang dikenali (huruf kecil, tanpa spasi berlebih). */
+    public const KOLOM = [
+        'dt' => ['no mobil', 'nomor mobil', 'no dt', 'dt', 'no lambung', 'mobil', 'nomor dt'],
+        'tanggal' => ['tanggal bongkar', 'tgl bongkar', 'tanggal', 'tgl'],
+        'jam' => ['jam bongkar', 'jam'],
+        'tahap' => ['tujuan bongkar', 'tujuan', 'tahap', 'proyek'],
+        'jenis_tanah' => ['jenis tanah / barang', 'jenis tanah/barang', 'jenis tanah', 'jenis barang', 'tanah'],
+        'no_seri' => ['no surat jalan', 'nomor surat jalan', 'no sj', 'surat jalan', 'no seri'],
+        'galian' => ['galian'],
+        'keterangan' => ['keterangan', 'catatan'],
+    ];
+
+    public const JUDUL_TEMPLAT = ['No Mobil', 'Tanggal Bongkar', 'Jam Bongkar', 'Tujuan Bongkar', 'Jenis Tanah', 'No Surat Jalan', 'Galian', 'Keterangan'];
+
+    /** @return array<int, array> baris surat jalan (baris = nomor baris Excel) */
+    public static function baca(UploadedFile $file): array
+    {
+        $reader = strtolower($file->getClientOriginalExtension()) === 'csv' ? new ReaderCsv : new ReaderXlsx;
+        $reader->open($file->getRealPath());
+        $semua = [];
+        foreach ($reader->getSheetIterator() as $sheet) {
+            foreach ($sheet->getRowIterator() as $row) {
+                $semua[] = array_map(fn ($c) => $c->getValue(), $row->getCells());
+            }
+            break; // lembar pertama saja
+        }
+        $reader->close();
+
+        $judul = null;
+        $posisi = [];
+        foreach (array_slice($semua, 0, 10, true) as $i => $r) {
+            $teks = array_map(fn ($v) => is_string($v) ? mb_strtolower(trim(preg_replace('/\s+/', ' ', $v))) : '', $r);
+            $p = [];
+            foreach (self::KOLOM as $kunci => $nama) {
+                foreach ($nama as $n) {
+                    if (($k = array_search($n, $teks, true)) !== false && ! in_array($k, $p, true)) {
+                        $p[$kunci] = $k;
+                        break;
+                    }
+                }
+            }
+            if (isset($p['dt'], $p['no_seri'])) {
+                [$judul, $posisi] = [$i, $p];
+                break;
+            }
+        }
+        if ($judul === null) {
+            throw new RuntimeException('Baris judul tidak ditemukan. Minimal harus ada kolom "No Mobil" dan "No Surat Jalan" (unduh templat Excel).');
+        }
+        $kurang = array_diff(['tanggal', 'tahap', 'jenis_tanah'], array_keys($posisi));
+        if ($kurang) {
+            throw new RuntimeException('Kolom belum ada: '.implode(', ', array_map(fn ($k) => self::JUDUL_TEMPLAT[array_search($k, array_keys(self::KOLOM))], $kurang)).'.');
+        }
+
+        $hasil = [];
+        foreach (array_slice($semua, $judul + 1, null, true) as $i => $r) {
+            $sel = fn (string $k) => isset($posisi[$k]) ? ($r[$posisi[$k]] ?? null) : null;
+            $teks = fn (string $k) => ($v = trim(preg_replace('/\s+/', ' ', (string) (is_scalar($sel($k)) ? $sel($k) : '')))) === '' ? null : $v;
+            if (! $teks('dt') && ! $teks('no_seri') && ! $sel('tanggal')) {
+                continue;
+            }
+            $hasil[] = [
+                'baris' => $i + 1,
+                'dt' => NomorMobil::rapikan($teks('dt')),
+                'tanggal' => self::tanggal($sel('tanggal')),
+                'tanggal_asli' => is_scalar($sel('tanggal')) ? (string) $sel('tanggal') : ($sel('tanggal') instanceof \DateTimeInterface ? $sel('tanggal')->format('d/m/Y') : ''),
+                'jam' => self::jam($sel('jam')),
+                'tahap' => $teks('tahap'),
+                'jenis_tanah' => $teks('jenis_tanah'),
+                'no_seri' => is_float($sel('no_seri')) ? (string) (int) $sel('no_seri') : $teks('no_seri'),
+                'galian' => $teks('galian'),
+                'keterangan' => $teks('keterangan'),
+            ];
+        }
+
+        return $hasil;
+    }
+
+    /**
+     * Pasangkan surat jalan ke DO belum bongkar per DT. Per DT: bila surat jalan > DO belum bongkar → DT itu ditolak.
+     * Bila DO lebih banyak, dipakai DO terbaru yang UJ-nya tidak sesudah bongkar terakhir (DO lama yang tertinggal tidak
+     * terpakai), lalu dipasangkan urut waktu: surat jalan paling awal ↔ DO paling awal.
+     *
+     * @param  Collection<int, array>  $belum  DO belum bongkar (MonitorRitasi::belumBongkar)
+     * @return array{isian: array<string, array>, per_dt: array<int, array>, galat: string[]}
+     */
+    public static function cocokkan(array $sj, Collection $belum): array
+    {
+        $isian = [];
+        $perDt = [];
+        $galat = [];
+        foreach ($sj as $s) {
+            $salah = array_filter([
+                $s['dt'] ? null : 'No Mobil kosong',
+                $s['tanggal'] ? null : ($s['tanggal_asli'] !== '' ? "Tanggal Bongkar \"{$s['tanggal_asli']}\" tidak dikenali" : 'Tanggal Bongkar kosong'),
+                $s['tanggal']?->isAfter(today()) ? 'Tanggal Bongkar sesudah hari ini' : null,
+                $s['tahap'] ? null : 'Tujuan Bongkar kosong',
+                $s['jenis_tanah'] ? null : 'Jenis Tanah kosong',
+                $s['no_seri'] ? null : 'No Surat Jalan kosong',
+            ]);
+            if ($salah) {
+                $galat[] = "Baris {$s['baris']}".($s['dt'] ? " ({$s['dt']})" : '').': '.implode(', ', $salah).'.';
+            }
+        }
+        if ($galat) {
+            return ['isian' => [], 'per_dt' => [], 'galat' => $galat];
+        }
+        $duplikat = collect($sj)->groupBy(fn ($s) => mb_strtolower($s['tahap']).'|'.LembarRitasi::kunciAngka($s['no_seri']))->filter(fn ($g) => $g->count() > 1);
+        foreach ($duplikat as $g) {
+            $galat[] = 'No Surat Jalan '.$g->first()['no_seri'].' ('.$g->first()['tahap'].') tertulis '.$g->count().'× (baris '.$g->pluck('baris')->implode(', ').').';
+        }
+        if ($galat) {
+            return ['isian' => [], 'per_dt' => [], 'galat' => $galat];
+        }
+
+        foreach (collect($sj)->groupBy('dt') as $dt => $daftarSj) {
+            $daftarSj = $daftarSj->sortBy(fn ($s) => $s['tanggal']->format('Ymd').($s['jam'] ?? '99:99').str_pad((string) LembarRitasi::kunciAngka($s['no_seri']), 10, '0', STR_PAD_LEFT))->values();
+            $doDt = $belum->filter(fn ($d) => in_array($dt, $d['mobil'], true))
+                ->sortBy(fn ($d) => ($d['pertama']?->format('Ymd') ?? '0').str_pad($d['do'], 10, '0', STR_PAD_LEFT))->values();
+            $info = ['dt' => $dt, 'sj' => $daftarSj->count(), 'do_belum' => $doDt->count(), 'pasangan' => [], 'galat' => null, 'catatan' => []];
+            if ($daftarSj->count() > $doDt->count()) {
+                $info['galat'] = "{$daftarSj->count()} surat jalan, padahal DO belum bongkar {$dt} hanya {$doDt->count()}"
+                    .($doDt->isNotEmpty() ? ' (DO '.$doDt->pluck('do')->implode(', ').')' : '').' — periksa lagi No Mobil / surat jalannya. Tidak ada yang diisi untuk DT ini.';
+                $perDt[] = $info;
+
+                continue;
+            }
+            // DO yang UJ-nya sesudah bongkar terakhir tidak mungkin dipakai; dari sisanya ambil yang terbaru sebanyak surat jalan.
+            $akhir = $daftarSj->last()['tanggal']->format('Ymd');
+            $calon = $doDt->filter(fn ($d) => ! $d['pertama'] || $d['pertama']->format('Ymd') <= $akhir)->values();
+            if ($calon->count() < $daftarSj->count()) {
+                $calon = $doDt; // tetap dipasangkan; ketidakcocokan tanggal ditandai di bawah
+            }
+            $pakai = $calon->slice($calon->count() - $daftarSj->count())->values();
+            foreach ($daftarSj as $i => $s) {
+                $d = $pakai[$i];
+                $isian[$d['do']] = [
+                    'tanggal' => $s['tanggal']->toDateString(), 'jam' => $s['jam'], 'tahap' => $s['tahap'], 'galian' => $s['galian'],
+                    'jenis_tanah' => $s['jenis_tanah'], 'no_seri' => $s['no_seri'], 'keterangan' => $s['keterangan'],
+                ];
+                $catatan = $d['pertama'] && $d['pertama']->gt($s['tanggal']) ? 'UJ '.$d['pertama']->translatedFormat('j M').' sesudah tanggal bongkar' : null;
+                $info['pasangan'][] = ['baris' => $s['baris'], 'no_seri' => $s['no_seri'], 'tanggal' => $s['tanggal'], 'jam' => $s['jam'], 'do' => $d['do'], 'uj' => $d['pertama'], 'catatan' => $catatan];
+            }
+            $sisa = $doDt->pluck('do')->diff($pakai->pluck('do'));
+            if ($sisa->isNotEmpty()) {
+                $info['catatan'][] = 'DO belum bongkar yang tidak terpakai: '.$sisa->implode(', ');
+            }
+            $perDt[] = $info;
+        }
+
+        return ['isian' => $isian, 'per_dt' => $perDt, 'galat' => []];
+    }
+
+    private static function tanggal(mixed $v): ?Carbon
+    {
+        if ($v instanceof \DateTimeInterface) {
+            return Carbon::instance($v)->startOfDay();
+        }
+        if (is_int($v) || is_float($v)) {
+            return $v > 20000 && $v < 80000 ? Carbon::create(1899, 12, 30)->addDays((int) $v) : null;
+        }
+
+        return RitasiController::tanggal(trim((string) $v));
+    }
+
+    private static function jam(mixed $v): ?string
+    {
+        if ($v instanceof \DateTimeInterface) {
+            return $v->format('H:i');
+        }
+        if ($v instanceof \DateInterval) {
+            return sprintf('%02d:%02d', $v->h, $v->i);
+        }
+        if (is_float($v) || is_int($v)) {
+            $menit = (int) round(fmod((float) $v, 1) * 1440);
+
+            return $v >= 0 && $v < 1 ? sprintf('%02d:%02d', intdiv($menit, 60), $menit % 60) : null;
+        }
+
+        return LembarRitasi::jam(trim((string) $v) ?: null);
+    }
+}

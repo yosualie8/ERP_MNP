@@ -27,6 +27,7 @@ class AktivitasAdmin
         'uj-ajukan-transfer' => ['Uang Jalan', 'Tautkan Transfer Pengajuan'],
         'rit-tambah' => ['Ritasi', 'Input Ritasi'],
         'kubikasi-ubah' => ['Ritasi', 'Kubikasi Kendaraan'],
+        'rit-unggah' => ['Ritasi', 'Upload Surat Jalan'],
         'rit-ubah' => ['Ritasi', 'Edit Ritasi'],
         'rit-hapus' => ['Ritasi', 'Hapus Ritasi'],
         'truk-buangan' => ['Ritasi', 'Ubah Tujuan Buangan'],

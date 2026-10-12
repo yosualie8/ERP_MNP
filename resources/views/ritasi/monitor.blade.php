@@ -90,6 +90,50 @@
     </div>
 
     @unless ($tanah)
+        {{-- Upload Excel surat jalan → isi otomatis form bongkar (belum disimpan). --}}
+        <div class="kartu unggah-sj">
+            <form method="POST" action="{{ route('ritasi.monitor.unggah') }}" enctype="multipart/form-data" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                @csrf
+                <b>Upload Excel surat jalan</b>
+                <input type="file" name="berkas" accept=".xlsx,.csv" required>
+                <button class="tombol polos" type="submit" style="padding: 6px 12px;">Upload &amp; isi otomatis</button>
+                <a href="{{ route('ritasi.monitor.templat') }}" class="redup" style="font-size: 13px;">⬇ Templat Excel</a>
+            </form>
+            <div class="redup" style="font-size: 12.5px; margin-top: 6px;">Kolom: No Mobil (DT), Tanggal Bongkar, Jam Bongkar, Tujuan Bongkar, Jenis Tanah, No Surat Jalan, Galian &amp; Keterangan (opsional).
+                Surat jalan tiap DT dipasangkan ke DO belum bongkar DT itu sesuai urutan waktu; jumlah surat jalan tidak boleh melebihi jumlah DO belum bongkarnya. Hasilnya hanya mengisi form di bawah — periksa dulu, lalu klik <b>Simpan bongkar</b>.</div>
+            @if ($errors->unggah->any())
+                <div class="pesan galat" style="margin-top: 8px;"><b>Excel belum bisa dipakai:</b>
+                    <ul style="margin: 6px 0 0; padding-left: 18px;">@foreach ($errors->unggah->all() as $e)<li>{{ $e }}</li>@endforeach</ul></div>
+            @endif
+            @if ($unggah)
+                <div style="margin-top: 10px;">
+                    <b>Hasil upload "{{ $unggah['file'] }}"</b>: {{ $unggah['jumlah'] }} surat jalan, {{ count($unggah['do']) }} DO terisi otomatis — <b>belum disimpan</b>.
+                    @if ($doUnggah !== null)<a href="{{ route('ritasi.monitor') }}" style="font-size: 13px;">Tampilkan semua DO</a>@endif
+                    <table class="kas" style="margin-top: 6px; font-size: 13px;">
+                        <thead><tr><th>DT</th><th class="angka">Surat jalan</th><th class="angka">DO belum bongkar</th><th>Pasangan (urut waktu)</th></tr></thead>
+                        @foreach ($unggah['per_dt'] as $p)
+                            <tr>
+                                <td><b>{{ $p['dt'] }}</b></td>
+                                <td class="angka">{{ $p['sj'] }}</td>
+                                <td class="angka">{{ $p['do_belum'] }}</td>
+                                <td>
+                                    @if ($p['galat'])<span style="color: #ff8a80;">⛔ {{ $p['galat'] }}</span>
+                                    @else
+                                        @foreach ($p['pasangan'] as $x)
+                                            <div>SJ <b>{{ $x['no_seri'] }}</b> · bongkar {{ \Illuminate\Support\Carbon::parse($x['tanggal'])->translatedFormat('j M') }}{{ $x['jam'] ? ' '.$x['jam'] : '' }} → DO <b>{{ $x['do'] }}</b>
+                                                <span class="redup">(UJ {{ $x['uj'] ? \Illuminate\Support\Carbon::parse($x['uj'])->translatedFormat('j M') : '–' }}, Excel baris {{ $x['baris'] }})</span>
+                                                @if ($x['catatan'])<span style="color: #f0c05a;"> ⚠ {{ $x['catatan'] }}</span>@endif</div>
+                                        @endforeach
+                                        @foreach ($p['catatan'] as $c)<div class="redup">{{ $c }}</div>@endforeach
+                                    @endif
+                                </td>
+                            </tr>
+                        @endforeach
+                    </table>
+                </div>
+            @endif
+        </div>
+
         {{-- Monitor Ritasi: admin mengisi data bongkar dari surat jalan; tiap DO yang diisi menjadi satu rit di Ritasi. --}}
         <form method="POST" action="{{ route('ritasi.monitor.bongkar') }}" id="form-bongkar">
             @csrf

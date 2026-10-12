@@ -15,6 +15,7 @@ use App\Support\PerformaRitasi;
 use App\Support\NomorMobil;
 use App\Support\TebakGalian;
 use App\Support\TulisRitasiSheet;
+use App\Support\UnggahBongkar;
 use App\Support\ValidasiRitasi;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -137,6 +138,51 @@ class RitasiController extends Controller
             .($tanpaHarga->isNotEmpty() ? ' Harga jual belum ditemukan dari riwayat untuk DO '.$tanpaHarga->implode(', ').' — lengkapi lewat menu Ritasi → Edit.' : ''));
     }
 
+    /**
+     * Upload Excel surat jalan → isi otomatis form Monitor Ritasi (belum disimpan). Surat jalan dipasangkan ke DO belum bongkar
+     * milik DT yang sama (lihat UnggahBongkar::cocokkan); admin meninjau lalu menekan Simpan bongkar.
+     */
+    public function unggahBongkar(Request $request): RedirectResponse
+    {
+        $request->validate(['berkas' => ['required', 'file', 'max:4096', 'mimes:xlsx,csv,txt']], [
+            'berkas.required' => 'Pilih file Excel surat jalan dulu.', 'berkas.mimes' => 'File harus Excel (.xlsx) atau CSV.',
+        ]);
+        try {
+            $sj = UnggahBongkar::baca($request->file('berkas'));
+        } catch (\Throwable $e) {
+            return back()->with('error', 'File tidak bisa dibaca: '.$e->getMessage());
+        }
+        if (! $sj) {
+            return back()->with('error', 'File tidak berisi surat jalan (baris di bawah judul kosong).');
+        }
+        $hasil = UnggahBongkar::cocokkan($sj, MonitorRitasi::belumBongkar()['do']);
+        if ($hasil['galat']) {
+            return back()->withErrors($hasil['galat'], 'unggah')
+                ->with('error', 'Excel belum bisa dipakai — perbaiki dulu baris berikut lalu upload lagi.');
+        }
+        $nama = $request->file('berkas')->getClientOriginalName();
+        KasRiwayat::create(['aksi' => 'rit-unggah', 'lembar' => 'Ritasi', 'baris_awal' => 0, 'baris_akhir' => 0, 'user_id' => $request->user()->id,
+            'ringkasan' => mb_strimwidth("Upload surat jalan \"{$nama}\": ".count($sj).' surat jalan, '.count($hasil['isian']).' DO terisi (belum disimpan)', 0, 490, '…'),
+            'isi' => ['file' => $nama, 'per_dt' => collect($hasil['per_dt'])->map(fn ($d) => ['dt' => $d['dt'], 'sj' => $d['sj'], 'do_belum' => $d['do_belum'],
+                'galat' => $d['galat'], 'pasangan' => collect($d['pasangan'])->map(fn ($p) => $p['no_seri'].' → DO '.$p['do'])->all()])->all()]]);
+
+        // Isian dikirim sebagai old input form bongkar; laporan per DT untuk ditinjau.
+        return redirect()->route('ritasi.monitor', ['unggah' => 1])
+            ->withInput(['bongkar' => $hasil['isian']])
+            ->with('unggah_bongkar', ['file' => $nama, 'jumlah' => count($sj), 'per_dt' => $hasil['per_dt'], 'do' => array_keys($hasil['isian'])]);
+    }
+
+    /** Templat Excel upload surat jalan. */
+    public function templatBongkar(): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        return response()->streamDownload(function () {
+            $w = new \OpenSpout\Writer\XLSX\Writer;
+            $w->openToFile('php://output');
+            $w->addRow(\OpenSpout\Common\Entity\Row::fromValues(UnggahBongkar::JUDUL_TEMPLAT, (new \OpenSpout\Common\Entity\Style\Style)->setFontBold()));
+            $w->close();
+        }, 'Templat Surat Jalan Bongkar.xlsx');
+    }
+
     /** Bayar Tanah: DO yang sudah ada Uang Jalan-nya di Kas UJ tetapi belum ada transaksi Uang Tanah-nya. */
     public function bayarTanah(Request $request): View
     {
@@ -176,9 +222,15 @@ class RitasiController extends Controller
             $saran = ['tahap' => $sering('tahap', 120), 'jenis_tanah' => $sering('jenis_tanah', 365), 'galian' => $sering('galian', 365)];
         }
 
+        // Setelah upload Excel: tampilkan hanya DO yang terisi dari Excel (?unggah=1).
+        $unggah = $mode === 'ritasi' ? session('unggah_bongkar') : null;
+        $doUnggah = $unggah && $request->boolean('unggah') ? $unggah['do'] : null;
+
         return view('ritasi.monitor', [
+            'unggah' => $unggah, 'doUnggah' => $doUnggah,
             'mode' => $mode, 'rute' => $mode === 'tanah' ? 'ritasi.bayar-tanah' : 'ritasi.monitor', 'saran' => $saran,
-            'daftar' => $semua->filter($cocokUmur)->filter($cocokCari)->filter($cocokTujuan)->filter($cocokGalian)->values(),
+            'daftar' => $doUnggah !== null ? $semua->filter(fn ($d) => in_array($d['do'], $doUnggah, true))->values()
+                : $semua->filter($cocokUmur)->filter($cocokCari)->filter($cocokTujuan)->filter($cocokGalian)->values(),
             'semua' => $semua, 'umur' => $umur, 'q' => $q, 'tujuan' => $tujuan, 'galian' => $galian, 'bukanAngka' => $bukanAngka,
             'jumlahTujuan' => $semua->filter($cocokUmur)->filter($cocokGalian)->flatMap(fn ($d) => $d['buangan'])->countBy()->sortDesc(),
             'jumlahTanpa' => $semua->filter($cocokUmur)->filter($cocokGalian)->filter(fn ($d) => ! $d['buangan'])->count(),
