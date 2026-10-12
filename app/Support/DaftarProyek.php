@@ -114,8 +114,8 @@ class DaftarProyek
             ->where(fn ($q) => $q->whereNull('al.abaikan')->orWhere('al.abaikan', false));
     }
 
-    /** Kunci tetap transaksi detail untuk kas_alokasi: ID transaksi, atau "lembar:baris" (lembar lama tanpa ID). */
-    public const SQL_KUNCI = "COALESCE(NULLIF(b.id_transaksi, ''), CONCAT(m.lembar, ':', b.baris))";
+    /** Kunci tetap transaksi detail untuk kas_alokasi: ID transaksi, atau "lembar:baris" bila ID kosong/#N/A/rusak (lembar lama). */
+    public const SQL_KUNCI = "CASE WHEN b.id_transaksi REGEXP '^[0-9]{6}-.*[^-]$' THEN b.id_transaksi ELSE CONCAT(m.lembar, ':', b.baris) END";
 
     /**
      * Ringkasan Penggunaan BBM per tahap (sementara dibaca dari lembar sheet, sampai menu BBM ada di aplikasi):
