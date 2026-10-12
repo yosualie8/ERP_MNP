@@ -179,7 +179,9 @@ class UnggahBongkar
                     $galian ? null : 'Galian belum diketahui — isi di form',
                 ])) ?: null;
                 $info['pasangan'][] = ['baris' => $s['baris'], 'no_seri' => $s['no_seri'], 'tanggal' => $s['tanggal'], 'jam' => $s['jam'], 'do' => $d['do'], 'uj' => $d['pertama'],
-                    'galian_do' => self::galianDo($d), 'catatan' => $catatan];
+                    'galian_do' => self::galianDo($d), 'catatan' => $catatan,
+                    // ID transaksi uang jalan DO itu di Kas UJ.
+                    'id_uj' => collect($d['detail'])->pluck('id_uj')->filter()->unique()->implode(', ')];
             }
             $sisa = $doDt->pluck('do')->diff($pakai->pluck('do'));
             if ($sisa->isNotEmpty()) {

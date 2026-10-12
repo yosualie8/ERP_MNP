@@ -121,7 +121,7 @@
                                     @else
                                         @foreach ($p['pasangan'] as $x)
                                             <div>SJ <b>{{ $x['no_seri'] }}</b> · bongkar {{ \Illuminate\Support\Carbon::parse($x['tanggal'])->translatedFormat('j M') }}{{ $x['jam'] ? ' '.$x['jam'] : '' }} → DO <b>{{ $x['do'] }}</b>
-                                                <span class="redup">(UJ {{ $x['uj'] ? \Illuminate\Support\Carbon::parse($x['uj'])->translatedFormat('j M') : '–' }}{{ ($x['galian_do'] ?? null) ? ' '.$x['galian_do'] : '' }}, Excel baris {{ $x['baris'] }})</span>
+                                                <span class="redup">({{ ($x['id_uj'] ?? '') ?: 'tanpa ID UJ' }})</span>
                                                 @if ($x['catatan'])<span style="color: #f0c05a;"> ⚠ {{ $x['catatan'] }}</span>@endif</div>
                                         @endforeach
                                         @foreach ($p['catatan'] as $c)<div class="redup">{{ $c }}</div>@endforeach
