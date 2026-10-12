@@ -84,8 +84,7 @@
         <table class="grid" id="grid">
             <thead>
                 <tr><th style="width: 40px;">No</th><th>Tahap</th><th>Status</th><th>Surveyor</th><th>Tanggal mulai</th><th>Tanggal akhir</th>
-                    @if ($super)<th class="angka">Total biaya</th>@endif
-                    <th style="width: 60px;"></th></tr>
+                    @if ($super)<th class="angka">Total biaya</th>@endif</tr>
                 <tr class="saring">
                     <th></th>
                     <th><input data-kolom="1" placeholder="Saring…"></th>
@@ -94,7 +93,6 @@
                     <th><input data-kolom="4" placeholder="mis. 2026 / >2026-07-01"></th>
                     <th><input data-kolom="5" placeholder="Saring…"></th>
                     @if ($super)<th><input data-kolom="6" placeholder="mis. >100000000"></th>@endif
-                    <th></th>
                 </tr>
             </thead>
             <tbody>
@@ -108,10 +106,9 @@
                         <td data-v="{{ $x->mulai }} {{ $tgl($x->mulai) }}" data-n="{{ $x->mulai }}" style="white-space: nowrap;">{{ $tgl($x->mulai) }}</td>
                         <td data-v="{{ $x->akhir }} {{ $tgl($x->akhir) }}" data-n="{{ $x->akhir }}" style="white-space: nowrap;">{{ $tgl($x->akhir) }}</td>
                         @if ($super)<td class="angka" data-n="{{ $x->total }}"><b>{{ $x->total ? rp($x->total) : '' }}</b></td>@endif
-                        <td style="white-space: nowrap;"><a href="{{ route('proyek.edit', $t) }}" class="tombol-edit">Edit</a></td>
                     </tr>
                     <tr class="d">
-                        <td colspan="{{ $super ? 8 : 7 }}">
+                        <td colspan="{{ $super ? 7 : 6 }}">
                             <table class="rinci">
                                 <tr><th style="text-align: left;">Biaya</th><th class="angka">Jumlah</th>@if ($super)<th class="angka">Nominal</th><th style="text-align: left;">Dasar hitung</th>@endif</tr>
                                 @foreach ($rincian as $k => [$label, $satuan])

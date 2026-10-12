@@ -24,9 +24,10 @@
             <span class="redup">{{ $tahap->proyek->nama }}</span>
             <span class="label {{ $warnaStatus[$tahap->status] ?? '' }}">{{ \App\Models\ProyekTahap::STATUS[$tahap->status] }}</span>
             @if ($tahap->lokasi)<span class="redup">· Surveyor: {{ $tahap->lokasi }}</span>@endif
-            <a href="{{ route('proyek.edit', $tahap) }}" class="tombol-edit" style="margin-left: auto;">Edit tahap</a>
         </div>
     </div>
+
+    @include('proyek._form')
 
     <div class="kartu">
         <h4 style="margin: 0 0 8px; color: var(--aksen-terang);">Kas Harian per akun</h4>

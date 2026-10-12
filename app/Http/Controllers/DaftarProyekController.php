@@ -55,7 +55,7 @@ class DaftarProyekController extends Controller
         ]);
     }
 
-    /** Detail satu tahap: transaksi detail Kas Harian yang terpetakan ke tahap ini (aturan sama dengan ringkasan grid). */
+    /** Satu halaman per tahap: form edit + alias, lalu transaksi detail Kas Harian yang terpetakan ke tahap ini (aturan sama dengan ringkasan grid). */
     public function show(Request $request, ProyekTahap $tahap): View
     {
         $transaksi = DB::table('kas_bon as b')->leftJoin('kode_gl as k', 'k.id', '=', 'b.kode_gl_id')
@@ -65,7 +65,8 @@ class DaftarProyekController extends Controller
             ->filter(fn ($r) => DaftarProyek::tahapKas($r->cc, $r->ref, $r->akun, substr((string) $r->tanggal, 0, 10)) === $tahap->id)->values();
 
         return view('proyek.show', [
-            'tahap' => $tahap->load('proyek'),
+            'tahap' => $tahap->load('proyek', 'alias'),
+            'proyek' => Proyek::orderBy('urutan')->get(),
             'transaksi' => $transaksi,
             'perAkun' => $transaksi->groupBy(fn ($r) => $r->akun ?? '(tanpa akun)')->map(fn ($g) => ['n' => $g->count(), 'rp' => $g->sum('nominal')])->sortByDesc('rp'),
             'super' => $request->user()->isSuperAdmin(),
@@ -79,9 +80,10 @@ class DaftarProyekController extends Controller
         return view('proyek.form', ['tahap' => $t, 'proyek' => Proyek::orderBy('urutan')->get(), 'super' => $request->user()->isSuperAdmin()]);
     }
 
-    public function edit(Request $request, ProyekTahap $tahap): View
+    /** Edit kini satu halaman dengan detail tahap. */
+    public function edit(ProyekTahap $tahap): RedirectResponse
     {
-        return view('proyek.form', ['tahap' => $tahap->load('alias'), 'proyek' => Proyek::orderBy('urutan')->get(), 'super' => $request->user()->isSuperAdmin()]);
+        return redirect()->route('proyek.show', $tahap);
     }
 
     public function store(Request $request): RedirectResponse
@@ -94,7 +96,7 @@ class DaftarProyekController extends Controller
         }
         $this->catat($request, 'proyek-tambah', "Tahap baru {$tahap->nama} ({$tahap->proyek->nama})", $tahap->toArray());
 
-        return redirect()->route('proyek.edit', $tahap)->with('success', "Tahap {$tahap->nama} ditambahkan.");
+        return redirect()->route('proyek.show', $tahap)->with('success', "Tahap {$tahap->nama} ditambahkan.");
     }
 
     public function update(Request $request, ProyekTahap $tahap): RedirectResponse
@@ -104,7 +106,7 @@ class DaftarProyekController extends Controller
         $berubah = collect($tahap->getChanges())->except(['updated_at', 'user_id'])->keys()->implode(', ');
         $this->catat($request, 'proyek-ubah', "Tahap {$tahap->nama} diubah: ".($berubah ?: 'tanpa perubahan'), ['sebelum' => $lama, 'sesudah' => $tahap->fresh()->toArray()]);
 
-        return redirect()->route('proyek.index', ['q' => $tahap->nama])->with('success', "Tahap {$tahap->nama} disimpan.");
+        return redirect()->route('proyek.show', $tahap)->with('success', "Tahap {$tahap->nama} disimpan.");
     }
 
     /** Petakan nama dari Ritasi/BBM/Kas ke sebuah tahap (dari panel "belum terpetakan" atau form tahap). */
