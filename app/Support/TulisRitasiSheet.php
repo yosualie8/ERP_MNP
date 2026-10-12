@@ -53,11 +53,30 @@ class TulisRitasiSheet
             }
             // Format (tanggal, jam, angka) mengikuti baris data terakhir.
             $sheetId = $this->sheetId();
-            $this->sheets->permintaan($this->id, [['copyPaste' => [
-                'source' => ['sheetId' => $sheetId, 'startRowIndex' => $akhir - 1, 'endRowIndex' => $akhir, 'startColumnIndex' => 0, 'endColumnIndex' => 19],
-                'destination' => ['sheetId' => $sheetId, 'startRowIndex' => $mulai - 1, 'endRowIndex' => $sampai, 'startColumnIndex' => 0, 'endColumnIndex' => 19],
-                'pasteType' => 'PASTE_FORMAT',
-            ]]], 'menyiapkan baris Ritasi');
+            try {
+                $this->sheets->permintaan($this->id, [['copyPaste' => [
+                    'source' => ['sheetId' => $sheetId, 'startRowIndex' => $akhir - 1, 'endRowIndex' => $akhir, 'startColumnIndex' => 0, 'endColumnIndex' => 19],
+                    'destination' => ['sheetId' => $sheetId, 'startRowIndex' => $mulai - 1, 'endRowIndex' => $sampai, 'startColumnIndex' => 0, 'endColumnIndex' => 19],
+                    'pasteType' => 'PASTE_FORMAT',
+                ]]], 'menyiapkan baris Ritasi');
+            } catch (\Throwable $e) {
+                // Sheet sedang difilter (baris terakhir tersembunyi) → Google menolak copyPaste. Format diatur langsung
+                // (tanggal, jam, harga); bila itu pun gagal, data tetap ditulis tanpa format.
+                report($e);
+                $kolom = fn (int $k, array $format) => ['repeatCell' => [
+                    'range' => ['sheetId' => $sheetId, 'startRowIndex' => $mulai - 1, 'endRowIndex' => $sampai, 'startColumnIndex' => $k, 'endColumnIndex' => $k + 1],
+                    'cell' => ['userEnteredFormat' => ['numberFormat' => $format]], 'fields' => 'userEnteredFormat.numberFormat',
+                ]];
+                try {
+                    $this->sheets->permintaan($this->id, [
+                        $kolom(3, ['type' => 'DATE', 'pattern' => 'd-mmm-yy']),
+                        $kolom(4, ['type' => 'TIME', 'pattern' => 'h:mm']),
+                        $kolom(13, ['type' => 'NUMBER', 'pattern' => '#,##0']),
+                    ], 'format baris Ritasi');
+                } catch (\Throwable $e2) {
+                    report($e2);
+                }
+            }
             $this->sheets->tulis($this->id, $data);
             Cache::forever('ritasi-akhir', $sampai);
 
