@@ -38,7 +38,7 @@
         <div class="kartu gulir" style="padding: 0;">
             <table class="kas">
                 <thead>
-                    <tr><th>Tanggal</th><th>Tahap</th><th>No Seri</th><th>DT · Plat / Driver</th><th>Galian</th><th>Tanah · Buangan</th><th>Kendaraan · Pemilik</th><th>No DO</th><th class="angka">Harga jual</th><th></th></tr>
+                    <tr><th>Tanggal</th><th>Tahap</th><th>No Seri</th><th>DT · Plat / Driver</th><th>Galian</th><th>Tanah · Buangan</th><th>Kendaraan · Pemilik</th><th>No DO</th><th class="angka">Kubikasi</th><th class="angka">Harga jual</th><th></th></tr>
                 </thead>
                 <tbody>
                     @forelse ($rit as $r)
@@ -51,6 +51,7 @@
                             <td>{{ $r->jenis_tanah }}@if ($r->jenis_buangan && $r->jenis_buangan !== 'Ritasi') <i>{{ $r->jenis_buangan }}</i>@endif</td>
                             <td>{{ $r->jenis_kendaraan }} <span class="redup">{{ $r->pemilik }}</span></td>
                             <td class="i">{{ $r->no_do }}</td>
+                            <td class="angka">{{ $r->kubikasi !== null ? rtrim(rtrim(number_format((float) $r->kubikasi, 2, ",", "."), "0"), ",")." m³" : "–" }}</td>
                             <td class="angka">{{ $r->harga_jual ? rp($r->harga_jual) : '–' }}</td>
                             <td style="white-space: nowrap;">
                                 @if ($bolehInput)
@@ -61,7 +62,7 @@
                             </td>
                         </tr>
                     @empty
-                        <tr><td colspan="10" class="redup" style="padding: 20px 14px;">Tidak ada rit yang cocok.</td></tr>
+                        <tr><td colspan="11" class="redup" style="padding: 20px 14px;">Tidak ada rit yang cocok.</td></tr>
                     @endforelse
                 </tbody>
             </table>

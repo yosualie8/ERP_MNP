@@ -30,6 +30,9 @@ class NomorMobil
             return null;
         }
 
+        // Salah ketik yang pernah ada di sheet (konfirmasi user 12 Okt 2026).
+        $v = preg_replace('/^cold diesel$/i', 'Colt diesel', $v);
+
         return strlen($v) <= 2 ? strtoupper($v) : ucfirst(strtolower($v));
     }
 }

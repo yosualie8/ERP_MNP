@@ -78,7 +78,7 @@
                     <th style="width: 100px;">Tanggal</th><th style="width: 190px;">Tahap</th><th style="width: 80px;">No Seri</th><th style="width: 62px;">Jam</th>
                     <th style="width: 84px;">No DO</th><th style="width: 82px;" title="Diambil dari Kas UJ lewat No DO">No Lambung 🔒</th><th style="width: 104px;" title="Diambil dari Kas UJ lewat No DO">Driver 🔒</th>
                     <th style="width: 84px;" title="Diambil dari Kas UJ lewat No DO">Jenis 🔒</th><th style="width: 112px;">Plat</th><th style="width: 92px;">Pemilik</th><th style="width: 130px;">Galian</th>
-                    <th style="width: 120px;">Jenis tanah</th><th style="width: 92px;">Jenis buangan</th><th style="width: 108px;" class="angka">Harga jual</th><th>Keterangan</th><th style="width: 26px;"></th>
+                    <th style="width: 120px;">Jenis tanah</th><th style="width: 92px;">Jenis buangan</th><th style="width: 108px;" class="angka">Harga jual</th><th style="width: 70px;" class="angka" title="Terisi otomatis dari kubikasi standar jenis kendaraan; boleh diketik sendiri">Kubikasi (m³)</th><th>Keterangan</th><th style="width: 26px;"></th>
                 </tr></thead>
                 <tbody id="daftar-rit"></tbody>
             </table>
@@ -123,6 +123,7 @@
             <td><input type="text" data-nama="jenis_tanah" list="daftar-tanah" autocomplete="off"></td>
             <td><input type="text" data-nama="jenis_buangan" list="daftar-buangan" autocomplete="off"></td>
             <td><input type="text" data-nama="harga_jual" list="daftar-harga" class="angka-input rupiah" inputmode="numeric" autocomplete="off"></td>
+            <td><input type="text" data-nama="kubikasi" class="angka-input" inputmode="decimal" autocomplete="off"></td>
             <td><input type="text" data-nama="keterangan" autocomplete="off"></td>
             <td><button type="button" class="hapus" title="Hapus baris rit">×</button></td>
         </tr>
@@ -133,6 +134,7 @@
             const DT = @json((object) $dt);
             const HARGA = @json((object) $harga);
             const SERI = @json((object) $seri);
+            const KUBIK = @json((object) $kubik);
             const awal = @json(old('rit', $edit['rit'] ?? []));
             const MODE_EDIT = {{ $edit ? 'true' : 'false' }};
             const MIN_KONFIRMASI = 10;
@@ -189,6 +191,7 @@
                 if (t?.galian) isiOtomatis(sel(tr, 'galian'), t.galian); // saran dari keterangan Kas UJ; isian admin sendiri tidak ditimpa
                 aturDariDt(tr);
                 aturHarga(tr);
+                aturKubik(tr);
             };
             // Tanggal: "8/10/26", "08-10-2026", "2026-10-08" → "08/10/2026"; selain itu dibiarkan (ditandai bila tidak dikenali).
             const BULAN = {jan: 1, feb: 2, mar: 3, apr: 4, mei: 5, may: 5, jun: 6, jul: 7, agu: 8, agt: 8, aug: 8, sep: 9, okt: 10, oct: 10, nov: 11, des: 12, dec: 12};
@@ -211,6 +214,12 @@
                     ? [[t, g, j, p], ['*', g, j, p], [t, '*', j, p], ['*', '*', j, p], [t, g]].map(k => HARGA[k.join('|')]).find(Boolean)
                     : HARGA[[t, g].join('|')];
                 if (h) isiOtomatis(sel(tr, 'harga_jual'), String(h));
+            };
+            // Kubikasi: standar jenis kendaraan (menu Kubikasi Kendaraan); tanpa jenis = 0. Ketikan admin tidak ditimpa.
+            const aturKubik = tr => {
+                const j = kecil(sel(tr, 'jenis_kendaraan').value);
+                const k = j ? KUBIK[j] : 0;
+                if (k !== undefined) isiOtomatis(sel(tr, 'kubikasi'), String(k).replace('.', ','));
             };
             // No Seri per tahap: rit pertama suatu tahap = nomor terakhir tahap itu + 1, rit berikutnya (tahap sama) +1 dari rit sebelumnya.
             const aturSeri = () => {
@@ -261,6 +270,7 @@
                     if (!sebelum && milikMnp(tr)) ['no_lambung', 'driver', 'jenis_kendaraan'].forEach(x => { sel(tr, x).value = ''; });
                 }
                 if (['pemilik', 'galian', 'tahap', 'jenis_kendaraan'].includes(f)) aturHarga(tr);
+                if (f === 'jenis_kendaraan') aturKubik(tr);
                 if (f === 'no_seri' || f === 'tahap') aturSeri();
                 hitung();
             });
@@ -337,7 +347,7 @@
             const aturKurang = (tr, i, kurang, tampil) => {
                 tr.kurang = kurang;
                 if (!kurang.length || !tampil) { tr.kurangEl?.remove(); tr.kurangEl = null; return; }
-                if (!tr.kurangEl) { tr.kurangEl = document.createElement('tr'); tr.kurangEl.className = 'kurang-baris'; tr.kurangEl.innerHTML = '<td colspan="16"><div class="kurang"></div></td>'; tr.after(tr.kurangEl); }
+                if (!tr.kurangEl) { tr.kurangEl = document.createElement('tr'); tr.kurangEl.className = 'kurang-baris'; tr.kurangEl.innerHTML = '<td colspan="17"><div class="kurang"></div></td>'; tr.after(tr.kurangEl); }
                 tr.kurangEl.querySelector('.kurang').textContent = `✎ Rit baris ${i + 1}: ${kurang.join(', ')} belum diisi / belum benar.`;
             };
             const cekIsian = () => {
@@ -376,7 +386,7 @@
                 tr.galat = g;
                 tr.classList.toggle('ber-galat', g.length > 0);
                 if (!g.length) { tr.galatEl?.remove(); tr.galatEl = null; return; }
-                if (!tr.galatEl) { tr.galatEl = document.createElement('tr'); tr.galatEl.className = 'galat-baris'; tr.galatEl.innerHTML = '<td colspan="16"><div class="galat-rit"></div></td>'; }
+                if (!tr.galatEl) { tr.galatEl = document.createElement('tr'); tr.galatEl.className = 'galat-baris'; tr.galatEl.innerHTML = '<td colspan="17"><div class="galat-rit"></div></td>'; }
                 (tr.kurangEl ?? tr).after(tr.galatEl);
                 tr.galatEl.querySelector('.galat-rit').innerHTML = `<b>✗ Rit baris ${i + 1} tidak bisa disimpan — perbaiki dulu:</b><ul>${g.map(x => `<li>${esc(x)}</li>`).join('')}</ul>`;
             };
@@ -392,7 +402,7 @@
                 tr.aturan = [...new Set(t.map(x => x.kode))];
                 const el = document.createElement('tr');
                 el.className = 'temuan-baris';
-                el.innerHTML = `<td colspan="16"><div class="temuan"><div class="judul-temuan">⚠ Rit baris ${i + 1} kena FLAG validasi (${t.length}) — perbaiki bila salah, atau tulis konfirmasi bila memang valid</div>
+                el.innerHTML = `<td colspan="17"><div class="temuan"><div class="judul-temuan">⚠ Rit baris ${i + 1} kena FLAG validasi (${t.length}) — perbaiki bila salah, atau tulis konfirmasi bila memang valid</div>
                     <ul>${t.map(x => `<li><span class="prioritas ${x.prioritas}">${x.prioritas}</span> <span class="aturan">${esc(x.kode)}</span> ${esc(x.pesan)}</li>`).join('')}</ul>
                     <label>Konfirmasi admin <span class="redup">(wajib, min. ${MIN_KONFIRMASI} karakter)</span><input type="text" data-konfirmasi maxlength="1000" autocomplete="off"></label>
                     <div class="status-konf"></div></div></td>`;

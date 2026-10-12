@@ -49,6 +49,7 @@ class TulisRitasiSheet
                 $data["{$l}!B{$n}:O{$n}"] = [self::isiBO($r)];
                 $data["{$l}!Q{$n}"] = [[self::angkaTeks($r['no_do'])]];
                 $data["{$l}!S{$n}"] = [["=COUNTIF(Q:Q;Q{$n})"]];
+                $data["{$l}!X{$n}"] = [[$r['kubikasi'] ?? '']];
             }
             // Format (tanggal, jam, angka) mengikuti baris data terakhir.
             $sheetId = $this->sheetId();
@@ -77,7 +78,7 @@ class TulisRitasiSheet
             $l = LembarRitasi::LEMBAR;
             $this->periksa($lama);
             $n = $lama->baris;
-            $this->sheets->tulis($this->id, ["{$l}!B{$n}:O{$n}" => [self::isiBO($r)], "{$l}!Q{$n}" => [[self::angkaTeks($r['no_do'])]]]);
+            $this->sheets->tulis($this->id, ["{$l}!B{$n}:O{$n}" => [self::isiBO($r)], "{$l}!Q{$n}" => [[self::angkaTeks($r['no_do'])]], "{$l}!X{$n}" => [[$r['kubikasi'] ?? '']]]);
             $lama->update(self::barisDb($r, $n));
         });
     }
@@ -136,7 +137,7 @@ class TulisRitasiSheet
             'baris' => $n, 'tahap' => $k['tahap'], 'no_seri' => $r['no_seri'], 'tanggal' => $k['tanggal']->toDateString(), 'jam' => $r['jam'] ?: null,
             'plat' => $r['plat'] ?: null, 'no_lambung' => $r['no_lambung'] ?: null, 'no_polisi' => $polisi ?: null, 'galian' => $k['galian'],
             'jenis_buangan' => $k['jenis_buangan'], 'jenis_tanah' => $k['jenis_tanah'], 'jenis_kendaraan' => $r['jenis_kendaraan'] ?: null,
-            'pemilik' => $r['pemilik'] ?: null, 'harga_jual' => $r['harga_jual'] ?: null, 'keterangan' => $r['keterangan'] ?: null, 'no_do' => $r['no_do'] ?: null,
+            'pemilik' => $r['pemilik'] ?: null, 'harga_jual' => $r['harga_jual'] ?: null, 'kubikasi' => $r['kubikasi'] ?? null, 'keterangan' => $r['keterangan'] ?: null, 'no_do' => $r['no_do'] ?: null,
         ];
     }
 

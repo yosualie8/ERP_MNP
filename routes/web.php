@@ -110,6 +110,8 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::post('/ritasi/monitor', [RitasiController::class, 'simpanBongkar'])->name('ritasi.monitor.bongkar');
     Route::get('/ritasi/bayar-tanah', [RitasiController::class, 'bayarTanah'])->name('ritasi.bayar-tanah');
     Route::get('/ritasi/performa', [RitasiController::class, 'performa'])->name('ritasi.performa');
+    Route::get('/ritasi/kubikasi', [\App\Http\Controllers\KubikasiKendaraanController::class, 'index'])->name('kubikasi.index');
+    Route::post('/ritasi/kubikasi', [\App\Http\Controllers\KubikasiKendaraanController::class, 'simpan'])->name('kubikasi.simpan');
     Route::get('/ritasi/buangan', [BuanganTrukController::class, 'index'])->name('ritasi.buangan');
     Route::post('/ritasi/buangan', [BuanganTrukController::class, 'simpan'])->name('ritasi.buangan.simpan');
     Route::get('/ritasi/input', [RitasiController::class, 'create'])->name('ritasi.input');

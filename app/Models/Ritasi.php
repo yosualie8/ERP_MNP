@@ -10,7 +10,7 @@ class Ritasi extends Model
     protected $table = 'ritasi';
 
     protected $fillable = ['baris', 'tahap', 'no_seri', 'tanggal', 'jam', 'plat', 'no_lambung', 'no_polisi', 'galian', 'jenis_buangan',
-        'jenis_tanah', 'jenis_kendaraan', 'pemilik', 'harga_jual', 'keterangan', 'status_bayar', 'no_do'];
+        'jenis_tanah', 'jenis_kendaraan', 'pemilik', 'harga_jual', 'kubikasi', 'keterangan', 'status_bayar', 'no_do'];
 
     protected $casts = ['tanggal' => 'date'];
 

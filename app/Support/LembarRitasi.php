@@ -17,6 +17,9 @@ class LembarRitasi
 {
     public const LEMBAR = 'Ritasi';
 
+    /** Indeks kolom X (Kubikasi) di lembar Ritasi. */
+    public const KOLOM_KUBIKASI = 23;
+
     public static function id(): string
     {
         return config('mnp.sheet_ritasi');
@@ -77,6 +80,8 @@ class LembarRitasi
                 'galian' => $teks(8), 'jenis_buangan' => $teks(9), 'jenis_tanah' => $teks(10), 'jenis_kendaraan' => NomorMobil::rapikanJenis($teks(11)),
                 'pemilik' => $teks(12), 'harga_jual' => KasSeabank::angka($sel(13)), 'keterangan' => $teks(14) ? mb_substr($teks(14), 0, 300) : null,
                 'status_bayar' => $teks(15), 'no_do' => $teks(16),
+                // Kolom X = Kubikasi (m³); kolom R–W dipakai rumus/pivot di sheet.
+                'kubikasi' => is_numeric($k = str_replace(',', '.', (string) $sel(self::KOLOM_KUBIKASI))) ? round((float) $k, 2) : null,
             ];
         }
 
@@ -88,7 +93,7 @@ class LembarRitasi
     {
         return Cache::lock('tulis-ritasi-sheet', 120)->block(60, function () use ($sheets) {
             $l = self::LEMBAR;
-            $baris = self::urai($sheets->nilaiMentah(self::id(), ["{$l}!A2:Q"])["{$l}!A2:Q"], 2);
+            $baris = self::urai($sheets->nilaiMentah(self::id(), ["{$l}!A2:X"])["{$l}!A2:X"], 2);
             DB::transaction(function () use ($baris) {
                 Ritasi::query()->delete();
                 $waktu = now();

@@ -279,7 +279,7 @@ class RitasiController extends Controller
 
         return view('ritasi.input', [
             'tahap' => $tahap, 'galian' => $sering('galian'), 'jenisTanah' => $sering('jenis_tanah'), 'jenisBuangan' => $sering('jenis_buangan'),
-            'jenisKendaraan' => $sering('jenis_kendaraan'), 'pemilik' => $sering('pemilik'), 'dt' => $dt, 'harga' => $harga, 'hargaSering' => $hargaSering, 'seri' => $seri,
+            'jenisKendaraan' => $sering('jenis_kendaraan'), 'kubik' => \App\Models\KubikasiKendaraan::peta(), 'pemilik' => $sering('pemilik'), 'dt' => $dt, 'harga' => $harga, 'hargaSering' => $hargaSering, 'seri' => $seri,
         ]);
     }
 
@@ -328,6 +328,7 @@ class RitasiController extends Controller
                     'jenis_kendaraan' => NomorMobil::rapikanJenis($rapi($r['jenis_kendaraan'] ?? null)),
                 ]),
                 'harga_jual' => (int) preg_replace('/\D/', '', (string) ($r['harga_jual'] ?? '')) ?: null, 'keterangan' => $rapi($r['keterangan'] ?? null),
+                'kubikasi' => is_numeric($k = str_replace(',', '.', trim((string) ($r['kubikasi'] ?? '')))) ? round((float) $k, 2) : null,
                 'konfirmasi' => $rapi($r['konfirmasi'] ?? null),
             ];
             // Baris kosong tidak ikut diperiksa saat pemeriksaan longgar (form menandai baris per baris).
@@ -341,6 +342,11 @@ class RitasiController extends Controller
             if (ValidasiRitasi::milikMnp($r['pemilik']) && ($d = $uj[LembarRitasi::kunciAngka($r['no_do'])] ?? null)) {
                 $rit[$i] = [...$r, 'no_lambung' => $d['no_lambung'], 'driver' => $d['driver'], 'jenis_kendaraan' => $d['jenis_kendaraan']];
             }
+        }
+        // Kubikasi kosong = standar jenis kendaraannya (master Kubikasi Kendaraan); tanpa jenis = 0.
+        $peta = \App\Models\KubikasiKendaraan::peta();
+        foreach ($rit as $i => $r) {
+            $rit[$i]['kubikasi'] ??= \App\Models\KubikasiKendaraan::untuk($r['jenis_kendaraan'], $peta);
         }
 
         return [$rit, $uj];
@@ -361,7 +367,7 @@ class RitasiController extends Controller
             'rit.*.plat' => ['nullable', 'string', 'max:30'], 'rit.*.pemilik' => ['required', 'string', 'max:60'],
             // No DO wajib hanya untuk truk milik MNP (dicek di ValidasiRitasi::galat); truk mitra boleh tanpa DO.
             'rit.*.no_do' => ['nullable', 'string', 'max:30'],
-            'rit.*.no_lambung' => ['nullable', 'string', 'max:20'], 'rit.*.driver' => ['nullable', 'string', 'max:60'], 'rit.*.jenis_kendaraan' => ['nullable', 'string', 'max:40'], 'rit.*.harga_jual' => ['nullable', 'string', 'max:20'], 'rit.*.keterangan' => ['nullable', 'string', 'max:300'],
+            'rit.*.no_lambung' => ['nullable', 'string', 'max:20'], 'rit.*.driver' => ['nullable', 'string', 'max:60'], 'rit.*.jenis_kendaraan' => ['nullable', 'string', 'max:40'], 'rit.*.harga_jual' => ['nullable', 'string', 'max:20'], 'rit.*.kubikasi' => ['nullable', 'string', 'max:10'], 'rit.*.keterangan' => ['nullable', 'string', 'max:300'],
             'rit.*.konfirmasi' => ['nullable', 'string', 'max:1000'],
         ];
     }
@@ -463,7 +469,7 @@ class RitasiController extends Controller
             'baris' => $r->baris, 'versi' => $this->versi($r),
             'rit' => [['tanggal' => $r->tanggal?->format('d/m/Y'), 'tahap' => $r->tahap, 'galian' => $r->galian, 'jenis_buangan' => $r->jenis_buangan, 'jenis_tanah' => $r->jenis_tanah,
                 'no_seri' => $r->no_seri, 'jam' => $r->jam, 'no_lambung' => $r->no_lambung, 'plat' => $r->plat, 'driver' => $r->driver,
-                'jenis_kendaraan' => $r->jenis_kendaraan, 'pemilik' => $r->pemilik, 'no_do' => $r->no_do, 'harga_jual' => $r->harga_jual, 'keterangan' => $r->keterangan]],
+                'jenis_kendaraan' => $r->jenis_kendaraan, 'pemilik' => $r->pemilik, 'no_do' => $r->no_do, 'harga_jual' => $r->harga_jual, 'kubikasi' => $r->kubikasi !== null ? rtrim(rtrim(number_format((float) $r->kubikasi, 2, ',', ''), '0'), ',') : '', 'keterangan' => $r->keterangan]],
         ];
 
         return $this->create()->with('edit', $edit);
