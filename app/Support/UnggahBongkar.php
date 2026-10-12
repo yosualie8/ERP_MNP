@@ -29,6 +29,9 @@ class UnggahBongkar
         'keterangan' => ['keterangan', 'catatan'],
     ];
 
+    /** DO yang UJ-nya lebih dari sekian hari sebelum bongkar dianggap tertinggal lama (dipakai terakhir, ditandai). */
+    public const HARI_LAMA = 30;
+
     public const JUDUL_TEMPLAT = ['No Mobil', 'Tanggal Bongkar', 'Jam Bongkar', 'Tujuan Bongkar', 'Jenis Tanah', 'No Surat Jalan', 'Galian', 'Keterangan'];
 
     /** @return array<int, array> baris surat jalan (baris = nomor baris Excel) */
@@ -97,8 +100,9 @@ class UnggahBongkar
 
     /**
      * Pasangkan surat jalan ke DO belum bongkar per DT. Per DT: bila surat jalan > DO belum bongkar → DT itu ditolak.
-     * Bila DO lebih banyak, dipakai DO terbaru yang UJ-nya tidak sesudah bongkar terakhir (DO lama yang tertinggal tidak
-     * terpakai), lalu dipasangkan urut waktu: surat jalan paling awal ↔ DO paling awal.
+     * Bila DO lebih banyak, dipakai urut antrean: DO paling lama dulu (FIFO), hanya DO yang UJ-nya tidak sesudah bongkar terakhir
+     * dan tidak lebih dari HARI_LAMA (30) hari sebelum bongkar pertama; DO yang lebih tua baru dipakai bila kurang (ditandai).
+     * Lalu dipasangkan urut waktu: surat jalan paling awal ↔ DO paling awal.
      *
      * @param  Collection<int, array>  $belum  DO belum bongkar (MonitorRitasi::belumBongkar)
      * @return array{isian: array<string, array>, per_dt: array<int, array>, galat: string[]}
@@ -158,13 +162,19 @@ class UnggahBongkar
 
                 continue;
             }
-            // DO yang UJ-nya sesudah bongkar terakhir tidak mungkin dipakai; dari sisanya ambil yang terbaru sebanyak surat jalan.
+            // Urut antrean (FIFO): DO paling lama dibongkar duluan. DO yang UJ-nya sesudah bongkar terakhir tidak mungkin dipakai;
+            // DO yang UJ-nya jauh sebelum bongkar pertama (tertinggal lama) baru dipakai bila DO yang wajar tidak cukup.
             $akhir = $daftarSj->last()['tanggal']->format('Ymd');
-            $calon = $doDt->filter(fn ($d) => ! $d['pertama'] || $d['pertama']->format('Ymd') <= $akhir)->values();
-            if ($calon->count() < $daftarSj->count()) {
-                $calon = $doDt; // tetap dipasangkan; ketidakcocokan tanggal ditandai di bawah
+            $batasLama = $daftarSj->first()['tanggal']->copy()->subDays(self::HARI_LAMA)->format('Ymd');
+            $mungkin = $doDt->filter(fn ($d) => ! $d['pertama'] || $d['pertama']->format('Ymd') <= $akhir)->values();
+            if ($mungkin->count() < $daftarSj->count()) {
+                $mungkin = $doDt; // tetap dipasangkan; ketidakcocokan tanggal ditandai di bawah
             }
-            $pakai = $calon->slice($calon->count() - $daftarSj->count())->values();
+            $wajar = $mungkin->filter(fn ($d) => ! $d['pertama'] || $d['pertama']->format('Ymd') >= $batasLama)->values();
+            $pakai = $wajar->count() >= $daftarSj->count()
+                ? $wajar->take($daftarSj->count())
+                : $mungkin->reject(fn ($d) => $wajar->contains('do', $d['do']))->take(-($daftarSj->count() - $wajar->count()))->concat($wajar);
+            $pakai = $pakai->sortBy(fn ($d) => ($d['pertama']?->format('Ymd') ?? '0').str_pad($d['do'], 10, '0', STR_PAD_LEFT))->values();
             foreach ($daftarSj as $i => $s) {
                 $d = $pakai[$i];
                 $terpakai[$d['do']] = true;
@@ -176,6 +186,7 @@ class UnggahBongkar
                 $galian = $s['galian'] ?? self::galianDo($d);
                 $catatan = implode(' · ', array_filter([
                     $d['pertama'] && $d['pertama']->gt($s['tanggal']) ? 'UJ '.$d['pertama']->translatedFormat('j M').' sesudah tanggal bongkar' : null,
+                    $d['pertama'] && $d['pertama']->format('Ymd') < $batasLama ? 'UJ '.$d['pertama']->translatedFormat('j M Y').' — sudah '.(int) $d['pertama']->diffInDays($s['tanggal']).' hari sebelum bongkar' : null,
                     $galian ? null : 'Galian belum diketahui — isi di form',
                 ])) ?: null;
                 $info['pasangan'][] = ['baris' => $s['baris'], 'no_seri' => $s['no_seri'], 'tanggal' => $s['tanggal'], 'jam' => $s['jam'], 'do' => $d['do'], 'uj' => $d['pertama'],
