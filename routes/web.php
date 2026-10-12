@@ -64,6 +64,8 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::post('/uj/rapikan', [RapikanUjController::class, 'simpan'])->name('uj.rapikan.simpan');
     // Daftar Proyek: proyek → tahap → alias (nama lama di Ritasi/BBM/Cost Project/Kas).
     Route::get('/proyek', [DaftarProyekController::class, 'index'])->name('proyek.index');
+    Route::get('/proyek/pengaturan', [DaftarProyekController::class, 'pengaturan'])->name('pengaturan-proyek');
+    Route::post('/proyek/pengaturan', [DaftarProyekController::class, 'simpanPengaturan'])->name('pengaturan-proyek.simpan');
     Route::get('/proyek/tahap/baru', [DaftarProyekController::class, 'create'])->name('proyek.create');
     Route::post('/proyek/tahap', [DaftarProyekController::class, 'store'])->name('proyek.store');
     Route::get('/proyek/tahap/{tahap}', [DaftarProyekController::class, 'show'])->whereNumber('tahap')->name('proyek.show');

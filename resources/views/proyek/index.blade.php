@@ -39,15 +39,28 @@
             <a href="{{ route('proyek.create') }}" class="tombol" style="margin-left: auto; padding: 8px 14px;">+ Tahap baru</a>
         </div>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; font-size: 13px;">
+            @php($tambah = $pakaiAtur ? [] : ['semua' => 1])
             @foreach ($jumlahTahun as $th => $n)
-                <a href="{{ route('proyek.index', ['tahun' => $th]) }}" @class(['chip', 'aktif' => $tahun === $th]) title="Tahap yang berjalan di tahun {{ $th }}">{{ $th }} · {{ $n }}</a>
+                <a href="{{ route('proyek.index', ['tahun' => $th] + $tambah) }}" @class(['chip', 'aktif' => $tahun === [$th]]) title="Tahap yang berjalan di tahun {{ $th }}">{{ $th }} · {{ $n }}</a>
             @endforeach
-            <a href="{{ route('proyek.index', ['tahun' => 'semua']) }}" @class(['chip', 'aktif' => ! $tahun])>Semua · {{ $jumlahSemua }}</a>
+            <a href="{{ route('proyek.index', ['tahun' => 'semua'] + $tambah) }}" @class(['chip', 'aktif' => ! $tahun])>Semua tahun · {{ $jumlahSemua }}</a>
             <span id="jumlah-tampil" class="redup"></span>
             <button type="button" class="tombol polos" id="hapus-saring" style="padding: 6px 12px;">Hapus saringan</button>
             <button type="button" class="tombol polos" id="buka-semua" style="padding: 6px 12px;">Buka semua</button>
             <span class="redup" style="margin-left: auto;">Data solar & jam HM dari lembar Penggunaan BBM{{ $waktuBbm ? ', diambil '.\Illuminate\Support\Carbon::parse($waktuBbm)->translatedFormat('d-M H:i') : ' (sheet belum terhubung)' }}</span>
-            <a href="{{ route('proyek.index', ['segarkan' => 1, 'tahun' => $tahun ?? 'semua']) }}" class="tombol polos" style="padding: 6px 12px;">↻ Segarkan BBM</a>
+            <a href="{{ route('proyek.index', ['segarkan' => 1] + request()->only('tahun', 'semua')) }}" class="tombol polos" style="padding: 6px 12px;">↻ Segarkan BBM</a>
+        </div>
+        <div class="redup" style="font-size: 12.5px; margin-top: 8px;">
+            @if ($pakaiAtur)
+                Filter bawaan: {{ \App\Support\DaftarProyek::PERIODE[$atur['periode']] }}
+                · status {{ count($atur['status']) === count(\App\Models\ProyekTahap::STATUS) ? 'semua' : collect($atur['status'])->map(fn ($s) => \App\Models\ProyekTahap::STATUS[$s])->implode(', ') }}
+                · tipe {{ count($atur['tipe']) === count(\App\Models\ProyekTahap::TIPE) ? 'semua' : collect($atur['tipe'])->map(fn ($s) => \App\Models\ProyekTahap::TIPE[$s])->implode(', ') }}
+                · cost center {{ $atur['cost_center'] ? implode(', ', array_map(fn ($c) => $c === '-' ? 'tanpa cost center' : $c, $atur['cost_center'])) : 'semua' }}
+                · <a href="{{ route('proyek.index', ['semua' => 1, 'tahun' => 'semua']) }}">Tampilkan semua tanpa filter bawaan</a>
+            @else
+                Menampilkan tanpa filter bawaan · <a href="{{ route('proyek.index') }}">Kembali ke filter bawaan</a>
+            @endif
+            @if (auth()->user()->bolehMenu('pengaturan-proyek')) · <a href="{{ route('pengaturan-proyek') }}">Ubah pengaturan</a>@endif
         </div>
     </div>
 

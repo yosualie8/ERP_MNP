@@ -47,21 +47,64 @@ class DaftarProyekController extends Controller
             return (object) ['t' => $t, 'mulai' => $mulai, 'akhir' => $akhir, 'biaya' => $c, 'total' => array_sum(array_column($c, 1))];
         })->sortBy(fn ($x) => [$x->mulai ?? '9999', $x->t->nama])->values();
 
-        // Bawaan: tahap yang berjalan di tahun ini (periode mulai–akhir menyentuh tahun itu); tahap belum ada data tetap tampil
-        // bila statusnya Belum mulai / Progress. ?tahun=semua untuk semua tahap.
+        // Filter bawaan dari menu Pengaturan Daftar Proyek (status, tipe, cost center, periode); ?semua=1 mengabaikannya.
+        $atur = DaftarProyek::pengaturan();
+        $pakaiAtur = ! $request->boolean('semua');
+        if ($pakaiAtur) {
+            $baris = $baris->filter(fn ($x) => in_array($x->t->status, $atur['status'], true) && in_array($x->t->tipe, $atur['tipe'], true)
+                && (! $atur['cost_center'] || in_array($x->t->costCenter() ?? '-', $atur['cost_center'], true)))->values();
+        }
+
+        // Tahap "berjalan" di suatu tahun: periode mulai–akhir menyentuh tahun itu; tahap belum ada data ikut bila Belum mulai / Progress.
         $daftarTahun = range((int) now()->year, (int) substr($baris->min('mulai') ?? now()->year, 0, 4));
-        $tahun = $request->query('tahun') === 'semua' ? null : (in_array((int) $request->query('tahun'), $daftarTahun, true) ? (int) $request->query('tahun') : (int) now()->year);
         $berjalan = fn ($x, int $th) => $x->mulai ? (int) substr($x->mulai, 0, 4) <= $th && (int) substr($x->akhir, 0, 4) >= $th
             : in_array($x->t->status, ['belum', 'progress'], true);
         $jumlahTahun = collect($daftarTahun)->mapWithKeys(fn ($th) => [$th => $baris->filter(fn ($x) => $berjalan($x, $th))->count()]);
+        // Tahun: pilihan chip, atau bawaan dari pengaturan (tahun berjalan / + tahun lalu / semua).
+        $pilih = $request->query('tahun');
+        $tahun = match (true) {
+            $pilih === 'semua' => [],
+            in_array((int) $pilih, $daftarTahun, true) => [(int) $pilih],
+            ! $pakaiAtur, $atur['periode'] === 'tahun_ini' => [(int) now()->year],
+            $atur['periode'] === 'dua_tahun' => [(int) now()->year, (int) now()->year - 1],
+            default => [],
+        };
 
         return view('proyek.index', [
-            'baris' => $tahun ? $baris->filter(fn ($x) => $berjalan($x, $tahun))->values() : $baris,
+            'baris' => $tahun ? $baris->filter(fn ($x) => collect($tahun)->contains(fn ($th) => $berjalan($x, $th)))->values() : $baris,
             'tahun' => $tahun, 'jumlahTahun' => $jumlahTahun, 'jumlahSemua' => $baris->count(),
+            'atur' => $atur, 'pakaiAtur' => $pakaiAtur,
             'lepasRitasi' => $ritasi['lepas'], 'lepasKas' => $kas['lepas'], 'lepasBbm' => $bbm['lepas'], 'waktuBbm' => $bbm['waktu'],
             'semuaTahap' => ProyekTahap::with('proyek')->get()->sortBy(fn ($t) => [$t->proyek->urutan, (int) preg_replace('/\D/', '', $t->nama) ?: 99999, $t->nama]),
             'super' => $request->user()->isSuperAdmin(),
         ]);
+    }
+
+    public function pengaturan(): View
+    {
+        return view('proyek.pengaturan', [
+            'atur' => DaftarProyek::pengaturan(),
+            'costCenter' => \App\Models\CostCenter::orderBy('kode')->pluck('kode'),
+        ]);
+    }
+
+    public function simpanPengaturan(Request $request): RedirectResponse
+    {
+        $d = $request->validate([
+            'periode' => ['required', Rule::in(array_keys(DaftarProyek::PERIODE))],
+            'status' => ['required', 'array', 'min:1'], 'status.*' => [Rule::in(array_keys(ProyekTahap::STATUS))],
+            'tipe' => ['required', 'array', 'min:1'], 'tipe.*' => [Rule::in(array_keys(ProyekTahap::TIPE))],
+            'cost_center' => ['nullable', 'array'], 'cost_center.*' => ['string', 'max:20'],
+        ], ['status.required' => 'Pilih minimal satu status.', 'tipe.required' => 'Pilih minimal satu tipe.']);
+        // Semua cost center dicentang = tanpa batasan, supaya cost center baru nanti ikut tampil.
+        $pilihCc = array_values($d['cost_center'] ?? []);
+        $semuaCc = \App\Models\CostCenter::pluck('kode')->push('-')->all();
+        $d['cost_center'] = array_diff($semuaCc, $pilihCc) ? $pilihCc : [];
+        $lama = DaftarProyek::pengaturan();
+        \App\Models\PengaturanApp::simpan(DaftarProyek::KUNCI_PENGATURAN, json_encode($d), $request->user()->id);
+        $this->catat($request, 'proyek-ubah', 'Pengaturan filter bawaan Daftar Proyek diubah', ['sebelum' => $lama, 'sesudah' => $d]);
+
+        return redirect()->route('pengaturan-proyek')->with('success', 'Pengaturan Daftar Proyek disimpan.');
     }
 
     /** Satu halaman per tahap: form edit + alias, lalu transaksi detail Kas Harian yang terpetakan ke tahap ini (aturan sama dengan ringkasan grid). */

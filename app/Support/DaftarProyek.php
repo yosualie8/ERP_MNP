@@ -12,6 +12,27 @@ use Illuminate\Support\Facades\DB;
  */
 class DaftarProyek
 {
+    public const KUNCI_PENGATURAN = 'daftar_proyek_filter';
+
+    public const PERIODE = ['tahun_ini' => 'Tahun berjalan', 'dua_tahun' => 'Tahun berjalan & tahun lalu', 'semua' => 'Semua tahun'];
+
+    /**
+     * Filter bawaan grid Daftar Proyek (menu Pengaturan Daftar Proyek). cost_center kosong = semua.
+     *
+     * @return array{periode: string, status: string[], tipe: string[], cost_center: string[]}
+     */
+    public static function pengaturan(): array
+    {
+        $simpan = json_decode((string) \App\Models\PengaturanApp::ambil(self::KUNCI_PENGATURAN), true) ?: [];
+
+        return [
+            'periode' => array_key_exists($simpan['periode'] ?? '', self::PERIODE) ? $simpan['periode'] : 'tahun_ini',
+            'status' => $simpan['status'] ?? array_keys(\App\Models\ProyekTahap::STATUS),
+            'tipe' => $simpan['tipe'] ?? array_keys(\App\Models\ProyekTahap::TIPE),
+            'cost_center' => $simpan['cost_center'] ?? [],
+        ];
+    }
+
     /** @var array<string, array<string, int>> sumber → kunci → id tahap */
     private static array $peta = [];
 
