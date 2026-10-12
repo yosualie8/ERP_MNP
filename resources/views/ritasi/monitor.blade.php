@@ -110,10 +110,10 @@
                     <b>Hasil upload "{{ $unggah['file'] }}"</b>: {{ $unggah['jumlah'] }} surat jalan, {{ count($unggah['do']) }} DO terisi otomatis — <b>belum disimpan</b>.
                     @if ($doUnggah !== null)<a href="{{ route('ritasi.monitor') }}" style="font-size: 13px;">Tampilkan semua DO</a>@endif
                     <table class="kas" style="margin-top: 6px; font-size: 13px;">
-                        <thead><tr><th>DT</th><th class="angka">Surat jalan</th><th class="angka">DO belum bongkar</th><th>Pasangan (urut waktu)</th></tr></thead>
+                        <thead><tr><th>DT · Galian</th><th class="angka">Surat jalan</th><th class="angka" title="DO belum bongkar DT itu dengan galian yang sama (galian DO dari keterangan UJ-nya)">DO belum bongkar (galian sama)</th><th>Pasangan (urut waktu)</th></tr></thead>
                         @foreach ($unggah['per_dt'] as $p)
                             <tr>
-                                <td><b>{{ $p['dt'] }}</b></td>
+                                <td><b>{{ $p['dt'] }}</b><br><span class="redup">{{ $p['galian'] ?? 'galian kosong' }}</span></td>
                                 <td class="angka">{{ $p['sj'] }}</td>
                                 <td class="angka">{{ $p['do_belum'] }}</td>
                                 <td>
@@ -121,7 +121,7 @@
                                     @else
                                         @foreach ($p['pasangan'] as $x)
                                             <div>SJ <b>{{ $x['no_seri'] }}</b> · bongkar {{ \Illuminate\Support\Carbon::parse($x['tanggal'])->translatedFormat('j M') }}{{ $x['jam'] ? ' '.$x['jam'] : '' }} → DO <b>{{ $x['do'] }}</b>
-                                                <span class="redup">(UJ {{ $x['uj'] ? \Illuminate\Support\Carbon::parse($x['uj'])->translatedFormat('j M') : '–' }}, Excel baris {{ $x['baris'] }})</span>
+                                                <span class="redup">(UJ {{ $x['uj'] ? \Illuminate\Support\Carbon::parse($x['uj'])->translatedFormat('j M') : '–' }}{{ ($x['galian_do'] ?? null) ? ' '.$x['galian_do'] : '' }}, Excel baris {{ $x['baris'] }})</span>
                                                 @if ($x['catatan'])<span style="color: #f0c05a;"> ⚠ {{ $x['catatan'] }}</span>@endif</div>
                                         @endforeach
                                         @foreach ($p['catatan'] as $c)<div class="redup">{{ $c }}</div>@endforeach

@@ -132,14 +132,28 @@ class UnggahBongkar
             return ['isian' => [], 'per_dt' => [], 'galat' => $galat];
         }
 
-        foreach (collect($sj)->groupBy('dt') as $dt => $daftarSj) {
+        // Per DT + galian: surat jalan hanya dipasangkan ke DO DT itu yang galiannya sama (galian DO = tempat di keterangan UJ-nya).
+        // Surat jalan tanpa galian di Excel dipasangkan ke semua DO DT itu (diproses terakhir, DO yang sudah terpakai tidak diulang).
+        $terpakai = [];
+        $kelompok = collect($sj)->groupBy(fn ($s) => $s['dt'].'|'.self::kunciGalian($s['galian']))
+            ->sortBy(fn ($g, $k) => str_ends_with($k, '|') ? 1 : 0);
+        foreach ($kelompok as $daftarSj) {
+            $dt = $daftarSj->first()['dt'];
+            $galianSj = $daftarSj->first()['galian'];
             $daftarSj = $daftarSj->sortBy(fn ($s) => $s['tanggal']->format('Ymd').($s['jam'] ? str_pad($s['jam'], 5, '0', STR_PAD_LEFT) : '99:99').str_pad((string) LembarRitasi::kunciAngka($s['no_seri']), 10, '0', STR_PAD_LEFT))->values();
-            $doDt = $belum->filter(fn ($d) => in_array($dt, $d['mobil'], true))
+            $semuaDt = $belum->filter(fn ($d) => in_array($dt, $d['mobil'], true) && ! isset($terpakai[$d['do']]));
+            $doDt = $semuaDt->filter(fn ($d) => ! $galianSj || self::galianSama($galianSj, $d))
                 ->sortBy(fn ($d) => ($d['pertama']?->format('Ymd') ?? '0').str_pad($d['do'], 10, '0', STR_PAD_LEFT))->values();
-            $info = ['dt' => $dt, 'sj' => $daftarSj->count(), 'do_belum' => $doDt->count(), 'pasangan' => [], 'galat' => null, 'catatan' => []];
+            $info = ['dt' => $dt, 'galian' => $galianSj, 'sj' => $daftarSj->count(), 'do_belum' => $doDt->count(), 'pasangan' => [], 'galat' => null, 'catatan' => []];
+            $lain = $semuaDt->reject(fn ($d) => $doDt->contains('do', $d['do']));
+            $sebutLain = fn () => $lain->map(fn ($d) => $d['do'].' ('.(self::galianDo($d) ?? 'galian tidak diketahui').')')->implode(', ');
+            if (! $galianSj) {
+                $info['catatan'][] = 'Galian kosong di Excel — dicocokkan ke semua DO belum bongkar DT ini.';
+            }
             if ($daftarSj->count() > $doDt->count()) {
-                $info['galat'] = "{$daftarSj->count()} surat jalan, padahal DO belum bongkar {$dt} hanya {$doDt->count()}"
-                    .($doDt->isNotEmpty() ? ' (DO '.$doDt->pluck('do')->implode(', ').')' : '').' — periksa lagi No Mobil / surat jalannya. Tidak ada yang diisi untuk DT ini.';
+                $info['galat'] = "{$daftarSj->count()} surat jalan, padahal DO belum bongkar {$dt}".($galianSj ? " galian {$galianSj}" : '')." hanya {$doDt->count()}"
+                    .($doDt->isNotEmpty() ? ' (DO '.$doDt->pluck('do')->implode(', ').')' : '').' — periksa lagi No Mobil / galian / surat jalannya. Tidak ada yang diisi untuk kelompok ini.'
+                    .($lain->isNotEmpty() ? ' DO '.$dt.' lain yang belum bongkar: '.$sebutLain().'.' : '');
                 $perDt[] = $info;
 
                 continue;
@@ -153,26 +167,53 @@ class UnggahBongkar
             $pakai = $calon->slice($calon->count() - $daftarSj->count())->values();
             foreach ($daftarSj as $i => $s) {
                 $d = $pakai[$i];
+                $terpakai[$d['do']] = true;
                 $isian[$d['do']] = [
                     'tanggal' => $s['tanggal']->toDateString(), 'jam' => $s['jam'], 'tahap' => $s['tahap'], 'galian' => $s['galian'],
                     'jenis_tanah' => $s['jenis_tanah'], 'no_seri' => $s['no_seri'], 'keterangan' => $s['keterangan'],
                 ];
                 // Galian wajib saat simpan: dari Excel, atau tebakan dari keterangan UJ DO itu.
-                $galian = $s['galian'] ?? TebakGalian::galian($d['tujuan'], null) ?? ($d['tujuan'] ? ucwords($d['tujuan']) : null);
+                $galian = $s['galian'] ?? self::galianDo($d);
                 $catatan = implode(' · ', array_filter([
                     $d['pertama'] && $d['pertama']->gt($s['tanggal']) ? 'UJ '.$d['pertama']->translatedFormat('j M').' sesudah tanggal bongkar' : null,
                     $galian ? null : 'Galian belum diketahui — isi di form',
                 ])) ?: null;
-                $info['pasangan'][] = ['baris' => $s['baris'], 'no_seri' => $s['no_seri'], 'tanggal' => $s['tanggal'], 'jam' => $s['jam'], 'do' => $d['do'], 'uj' => $d['pertama'], 'catatan' => $catatan];
+                $info['pasangan'][] = ['baris' => $s['baris'], 'no_seri' => $s['no_seri'], 'tanggal' => $s['tanggal'], 'jam' => $s['jam'], 'do' => $d['do'], 'uj' => $d['pertama'],
+                    'galian_do' => self::galianDo($d), 'catatan' => $catatan];
             }
             $sisa = $doDt->pluck('do')->diff($pakai->pluck('do'));
             if ($sisa->isNotEmpty()) {
-                $info['catatan'][] = 'DO belum bongkar yang tidak terpakai: '.$sisa->implode(', ');
+                $info['catatan'][] = 'DO galian ini yang tidak terpakai: '.$sisa->implode(', ');
             }
             $perDt[] = $info;
         }
 
         return ['isian' => $isian, 'per_dt' => $perDt, 'galat' => []];
+    }
+
+    /** Galian DO dari keterangan UJ-nya (nama galian baku bila dikenal), null bila tidak diketahui. */
+    private static function galianDo(array $d): ?string
+    {
+        return $d['tujuan'] ? (TebakGalian::galian($d['tujuan'], null) ?? ucwords($d['tujuan'])) : null;
+    }
+
+    private static function kunciGalian(?string $v): string
+    {
+        return preg_replace('/[^a-z0-9]/', '', mb_strtolower((string) $v));
+    }
+
+    /** Galian surat jalan sama dengan galian DO: sama persis, atau salah satu memuat yang lain ("Sajira" ~ "Sajira 2"). */
+    private static function galianSama(string $galian, array $d): bool
+    {
+        $a = self::kunciGalian($galian);
+        foreach (array_filter([self::galianDo($d), $d['tujuan']]) as $calon) {
+            $b = self::kunciGalian($calon);
+            if ($a === $b || (strlen($a) >= 4 && strlen($b) >= 4 && (str_contains($a, $b) || str_contains($b, $a)))) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static function tanggal(mixed $v): ?Carbon
