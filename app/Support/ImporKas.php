@@ -33,10 +33,10 @@ class ImporKas
     }
 
     /** @return array<string, array> lembar => baris nilai, diurutkan per bulan */
-    public static function ambilDariSheet(array $pilihan = []): array
+    public static function ambilDariSheet(array $pilihan = [], ?string $spreadsheet = null): array
     {
         $sheets = GoogleSheets::wajib();
-        $id = config('mnp.sheet_kas_harian');
+        $id = $spreadsheet ?? config('mnp.sheet_kas_harian');
         $nama = collect($sheets->info($id)['sheets'])->pluck('properties.title')
             ->filter(fn ($t) => preg_match('/^\d{4}$/', $t) && (! $pilihan || in_array($t, $pilihan, true)))
             ->values()->all();
@@ -77,11 +77,11 @@ class ImporKas
     }
 
     /** Tulis ke database dalam satu transaksi. Saldo awal dicek terhadap bulan sebelumnya yang sudah tersimpan. */
-    public function simpan(array $hasil): void
+    public function simpan(array $hasil, bool $arsip = false): void
     {
-        DB::transaction(function () use ($hasil) {
+        DB::transaction(function () use ($hasil, $arsip) {
             foreach ($hasil as $h) {
-                $this->simpanLembar($h);
+                $this->simpanLembar($arsip ? self::pecahGabungan($h) : $h, $arsip);
             }
             // Cost center & akun yang tidak dipakai lagi setelah urai ulang (mis. "PM Infra Marina" digabung ke "Infra PM").
             CostCenter::whereDoesntHave('kodeGl')->delete();
@@ -89,9 +89,15 @@ class ImporKas
         });
     }
 
-    private function simpanLembar(array $h): void
+    private function simpanLembar(array $h, bool $arsip = false): void
     {
-        KasBulan::where('lembar', $h['lembar'])->delete();
+        // Arsip tidak boleh menimpa lembar aktif (0126 dst. dari spreadsheet Kas Harian MNP yang berjalan), dan sebaliknya.
+        if ($ada = KasBulan::where('lembar', $h['lembar'])->first()) {
+            if ($ada->arsip !== $arsip) {
+                throw new \RuntimeException("Lembar {$h['lembar']} sudah ada sebagai ".($ada->arsip ? 'arsip' : 'lembar aktif').', tidak ditimpa.');
+            }
+            $ada->delete();
+        }
 
         $catatan = $h['catatan'];
         $sebelum = KasBulan::where('bulan', '<', $h['bulan'])->orderByDesc('bulan')->first();
@@ -101,6 +107,7 @@ class ImporKas
 
         $bulan = KasBulan::create([
             'lembar' => $h['lembar'],
+            'arsip' => $arsip,
             'bulan' => $h['bulan'],
             'saldo_awal' => $h['saldo_awal'],
             'total_debet' => $h['total_debet'],
@@ -132,6 +139,29 @@ class ImporKas
                 DB::table('kas_bon')->insert($potong);
             }
         }
+    }
+
+    /**
+     * Kode GL dua tahap sekaligus ("Biaya Operasional ASG T4-T5") dipecah jadi dua transaksi detail sama rata
+     * (keputusan user 12 Okt 2026, sama dengan baris BBM gabungan). Sisa pembulatan masuk ke tahap pertama.
+     */
+    private static function pecahGabungan(array $h): array
+    {
+        foreach ($h['transfer'] as &$t) {
+            $bon = [];
+            foreach ($t['bon'] as $b) {
+                if (preg_match('/^(.*\S)\s+T(\d+)\s*-\s*T(\d+)$/', trim((string) $b['kode_gl']), $m)) {
+                    $separuh = intdiv($b['nominal'], 2);
+                    $bon[] = ['kode_gl' => "{$m[1]} T{$m[2]}", 'nominal' => $b['nominal'] - $separuh] + $b;
+                    $bon[] = ['kode_gl' => "{$m[1]} T{$m[3]}", 'nominal' => $separuh] + $b;
+                } else {
+                    $bon[] = $b;
+                }
+            }
+            $t['bon'] = $bon;
+        }
+
+        return $h;
     }
 
     /** Kode GL asli → id; hasil urai diperbarui tiap impor kecuali yang sudah dikoreksi manual. */

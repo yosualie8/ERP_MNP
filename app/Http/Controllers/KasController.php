@@ -72,7 +72,14 @@ class KasController extends Controller
         $sudah = StatusReimburse::untuk($transfer->flatMap(fn ($t) => $t->bon->map(fn ($b) => StatusReimburse::idBon($b, $t)))->all());
         $statusBon = [];
         $statusTransfer = [];
+        // Lembar arsip (Kas Harian 2024–2025): tanpa status reimburse, hanya dilihat.
+        $bulanArsip = KasBulan::where('arsip', true)->pluck('id')->flip();
         foreach ($transfer as $t) {
+            if (isset($bulanArsip[$t->kas_bulan_id])) {
+                $statusTransfer[$t->id] = ['kode' => 'arsip'];
+
+                continue;
+            }
             if ($t->bon->isEmpty()) {
                 $statusTransfer[$t->id] = ['kode' => $t->debet ? 'masuk' : 'kosong'];
 

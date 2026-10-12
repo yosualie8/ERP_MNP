@@ -280,6 +280,9 @@ class KasInputController extends Controller
     public function hapus(Request $request, KasTransfer $transfer): RedirectResponse
     {
         $transfer->load('bon', 'kasBulan');
+        if ($transfer->kasBulan->arsip) {
+            return back()->with('error', 'Transaksi arsip (Kas Harian 2024–2025) tidak bisa dihapus.');
+        }
         $lembar = $transfer->kasBulan->lembar;
         $ringkasan = ($transfer->debet ? 'Uang masuk ' : 'Transfer ').rp($transfer->debet ?: $transfer->kredit)
             .' '.$transfer->tanggal->translatedFormat('j M Y').' '.trim($transfer->nama_tujuan.' — '.$transfer->keterangan, ' —')

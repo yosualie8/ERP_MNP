@@ -9,12 +9,13 @@ class KasBulan extends Model
 {
     protected $table = 'kas_bulan';
 
-    protected $fillable = ['lembar', 'bulan', 'saldo_awal', 'total_debet', 'total_kredit', 'total_bon', 'saldo_akhir', 'saldo_akhir_sheet', 'catatan', 'diimpor_pada'];
+    protected $fillable = ['lembar', 'arsip', 'bulan', 'saldo_awal', 'total_debet', 'total_kredit', 'total_bon', 'saldo_akhir', 'saldo_akhir_sheet', 'catatan', 'diimpor_pada'];
 
     protected $casts = [
         'bulan' => 'date',
         'catatan' => 'array',
         'diimpor_pada' => 'datetime',
+        'arsip' => 'boolean',
     ];
 
     public function transfer(): HasMany

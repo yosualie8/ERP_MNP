@@ -47,8 +47,17 @@ class DaftarProyekController extends Controller
             return (object) ['t' => $t, 'mulai' => $mulai, 'akhir' => $akhir, 'biaya' => $c, 'total' => array_sum(array_column($c, 1))];
         })->sortBy(fn ($x) => [$x->mulai ?? '9999', $x->t->nama])->values();
 
+        // Bawaan: tahap yang berjalan di tahun ini (periode mulai–akhir menyentuh tahun itu); tahap belum ada data tetap tampil
+        // bila statusnya Belum mulai / Progress. ?tahun=semua untuk semua tahap.
+        $daftarTahun = range((int) now()->year, (int) substr($baris->min('mulai') ?? now()->year, 0, 4));
+        $tahun = $request->query('tahun') === 'semua' ? null : (in_array((int) $request->query('tahun'), $daftarTahun, true) ? (int) $request->query('tahun') : (int) now()->year);
+        $berjalan = fn ($x, int $th) => $x->mulai ? (int) substr($x->mulai, 0, 4) <= $th && (int) substr($x->akhir, 0, 4) >= $th
+            : in_array($x->t->status, ['belum', 'progress'], true);
+        $jumlahTahun = collect($daftarTahun)->mapWithKeys(fn ($th) => [$th => $baris->filter(fn ($x) => $berjalan($x, $th))->count()]);
+
         return view('proyek.index', [
-            'baris' => $baris,
+            'baris' => $tahun ? $baris->filter(fn ($x) => $berjalan($x, $tahun))->values() : $baris,
+            'tahun' => $tahun, 'jumlahTahun' => $jumlahTahun, 'jumlahSemua' => $baris->count(),
             'lepasRitasi' => $ritasi['lepas'], 'lepasKas' => $kas['lepas'], 'lepasBbm' => $bbm['lepas'], 'waktuBbm' => $bbm['waktu'],
             'semuaTahap' => ProyekTahap::with('proyek')->get()->sortBy(fn ($t) => [$t->proyek->urutan, (int) preg_replace('/\D/', '', $t->nama) ?: 99999, $t->nama]),
             'super' => $request->user()->isSuperAdmin(),
@@ -58,8 +67,7 @@ class DaftarProyekController extends Controller
     /** Satu halaman per tahap: form edit + alias, lalu transaksi detail Kas Harian yang terpetakan ke tahap ini (aturan sama dengan ringkasan grid). */
     public function show(Request $request, ProyekTahap $tahap): View
     {
-        $transaksi = DB::table('kas_bon as b')->leftJoin('kode_gl as k', 'k.id', '=', 'b.kode_gl_id')
-            ->leftJoin('cost_center as c', 'c.id', '=', 'k.cost_center_id')->leftJoin('akun_gl as a', 'a.id', '=', 'k.akun_gl_id')
+        $transaksi = DaftarProyek::queryKas()
             ->select('b.no_id', 'b.tanggal', 'b.nominal', 'b.pic', 'b.keterangan', 'k.kode_asli', 'c.kode as cc', 'k.ref', 'a.nama as akun')
             ->orderByDesc('b.tanggal')->orderByDesc('b.no_id')->get()
             ->filter(fn ($r) => DaftarProyek::tahapKas($r->cc, $r->ref, $r->akun, substr((string) $r->tanggal, 0, 10)) === $tahap->id)->values();

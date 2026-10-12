@@ -124,6 +124,8 @@
                                     <span class="label kuning" title="{{ $s['sudah'] }} dari {{ $s['jumlah'] }} detail sudah direimburse; belum {{ rp($s['nilai_belum']) }}">Sebagian {{ $s['sudah'] }}/{{ $s['jumlah'] }}</span>
                                 @elseif ($s['kode'] === 'belum')
                                     <span class="label merah">Belum</span>
+                                @elseif ($s['kode'] === 'arsip')
+                                    <span class="redup" style="font-size: 12px;" title="Data lama (spreadsheet Kas Harian MNP - 2025), hanya untuk dilihat">Arsip</span>
                                 @elseif ($s['kode'] === 'masuk')
                                     <span class="redup" style="font-size: 12px;">Saldo masuk</span>
                                 @endif
@@ -132,7 +134,7 @@
                                 {{-- Edit, foto bon & Hapus hanya untuk akun yang punya menu Input Kas. --}}
                                 {{-- Transaksi yang sudah (sebagian) direimburse dikunci: tidak bisa diedit/dihapus. --}}
                                 @php($terkunci = in_array($s['kode'], ['sudah', 'sebagian'], true))
-                                @if ($bolehInput)
+                                @if ($bolehInput && $s['kode'] !== 'arsip')
                                     @if ($terkunci)
                                         <span class="kunci-reimburse" title="Sudah {{ $s['kode'] === 'sebagian' ? 'sebagian ' : '' }}direimburse — tidak bisa diedit atau dihapus">🔒</span>
                                     @elseif ($t->no_id)
@@ -157,7 +159,7 @@
                         @endif
                         @foreach ($t->bon as $b)
                             @php($k = $b->kodeGl)
-                            <tr class="b"><td></td><td class="p">{{ $b->pic }}</td><td>{{ $b->keterangan }}@if ($b->no_mobil) <span class="label" title="No Mobil (truk)">🚛 {{ $b->no_mobil }}</span>@endif</td><td>@if ($k){{ $k->akun?->nama ?? $k->kode_asli }}@if ($k->costCenter) <i>{{ $k->costCenter->kode }}</i>@endif @if ($k->ref)<i title="Tahap proyek">{{ $k->ref }}</i>@endif @if ($b->kode_gl_ditebak)<i title="Kode GL kosong di sheet, ditebak dari keterangan">ditebak</i>@endif @else<i class="x">tanpa Kode GL</i>@endif</td><td></td><td class="angka">{{ rp($b->nominal) }}</td><td class="i">{{ $b->id_transaksi }}</td><td style="white-space: nowrap;">@if ($statusBon[$b->id]['sudah'])<span class="label hijau">✓ Sudah{{ $statusBon[$b->id]['tanggal'] ? ' · '.$statusBon[$b->id]['tanggal']->translatedFormat('j M') : '' }}</span>@else<span class="label merah">Belum</span>@endif</td><td></td></tr>
+                            <tr class="b"><td></td><td class="p">{{ $b->pic }}</td><td>{{ $b->keterangan }}@if ($b->no_mobil) <span class="label" title="No Mobil (truk)">🚛 {{ $b->no_mobil }}</span>@endif</td><td>@if ($k){{ $k->akun?->nama ?? $k->kode_asli }}@if ($k->costCenter) <i>{{ $k->costCenter->kode }}</i>@endif @if ($k->ref)<i title="Tahap proyek">{{ $k->ref }}</i>@endif @if ($b->kode_gl_ditebak)<i title="Kode GL kosong di sheet, ditebak dari keterangan">ditebak</i>@endif @else<i class="x">tanpa Kode GL</i>@endif</td><td></td><td class="angka">{{ rp($b->nominal) }}</td><td class="i">{{ $b->id_transaksi }}</td><td style="white-space: nowrap;">@if (! isset($statusBon[$b->id]))<span class="redup" style="font-size: 12px;">Arsip</span>@elseif ($statusBon[$b->id]['sudah'])<span class="label hijau">✓ Sudah{{ $statusBon[$b->id]['tanggal'] ? ' · '.$statusBon[$b->id]['tanggal']->translatedFormat('j M') : '' }}</span>@else<span class="label merah">Belum</span>@endif</td><td></td></tr>
                         @endforeach
                     </tbody>
                 @empty

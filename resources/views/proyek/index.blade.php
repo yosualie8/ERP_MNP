@@ -39,11 +39,15 @@
             <a href="{{ route('proyek.create') }}" class="tombol" style="margin-left: auto; padding: 8px 14px;">+ Tahap baru</a>
         </div>
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 10px; font-size: 13px;">
+            @foreach ($jumlahTahun as $th => $n)
+                <a href="{{ route('proyek.index', ['tahun' => $th]) }}" @class(['chip', 'aktif' => $tahun === $th]) title="Tahap yang berjalan di tahun {{ $th }}">{{ $th }} · {{ $n }}</a>
+            @endforeach
+            <a href="{{ route('proyek.index', ['tahun' => 'semua']) }}" @class(['chip', 'aktif' => ! $tahun])>Semua · {{ $jumlahSemua }}</a>
             <span id="jumlah-tampil" class="redup"></span>
             <button type="button" class="tombol polos" id="hapus-saring" style="padding: 6px 12px;">Hapus saringan</button>
             <button type="button" class="tombol polos" id="buka-semua" style="padding: 6px 12px;">Buka semua</button>
             <span class="redup" style="margin-left: auto;">Data solar & jam HM dari lembar Penggunaan BBM{{ $waktuBbm ? ', diambil '.\Illuminate\Support\Carbon::parse($waktuBbm)->translatedFormat('d-M H:i') : ' (sheet belum terhubung)' }}</span>
-            <a href="{{ route('proyek.index', ['segarkan' => 1]) }}" class="tombol polos" style="padding: 6px 12px;">↻ Segarkan BBM</a>
+            <a href="{{ route('proyek.index', ['segarkan' => 1, 'tahun' => $tahun ?? 'semua']) }}" class="tombol polos" style="padding: 6px 12px;">↻ Segarkan BBM</a>
         </div>
     </div>
 

@@ -15,7 +15,8 @@ class ImporKas extends Command
         {--lembar=* : Hanya lembar tertentu, mis. --lembar=0926 (boleh berulang); kosong = semua lembar BBTT}
         {--bulan-berjalan : Hanya lembar bulan ini dan bulan lalu (dipakai sinkron otomatis tiap jam)}
         {--simpan : Tulis ke database}
-        {--dari-folder= : Baca dari folder JSON hasil mnp:baca-sheet, bukan dari Google}';
+        {--dari-folder= : Baca dari folder JSON hasil mnp:baca-sheet, bukan dari Google}
+        {--arsip= : Link/id spreadsheet lama (mis. Kas Harian MNP - 2025): lembarnya disimpan sebagai arsip (hanya dilihat, tanpa reimburse)}';
 
     protected $description = 'Impor & rekonsiliasi lembar kas bulanan dari Kas Harian MNP';
 
@@ -27,12 +28,18 @@ class ImporKas extends Command
         }
 
         $folder = $this->option('dari-folder');
-        if (! $folder && $this->option('simpan')) {
+        $arsip = $this->option('arsip') ? \App\Support\GoogleSheets::idDari($this->option('arsip')) : null;
+        if ($arsip && ! $pilihan) {
+            $this->error('Impor arsip wajib menyebut lembarnya dengan --lembar.');
+
+            return self::FAILURE;
+        }
+        if (! $folder && ! $arsip && $this->option('simpan')) {
             // Dari sheet + simpan: baca & simpan di bawah kunci tulis (lihat ImporKas::imporUlang).
             $hasil = Impor::imporUlang($pilihan);
             $disimpan = true;
         } else {
-            $sumber = $folder ? $this->dariFolder($folder, $pilihan) : Impor::ambilDariSheet($pilihan);
+            $sumber = $folder ? $this->dariFolder($folder, $pilihan) : Impor::ambilDariSheet($pilihan, $arsip);
             $hasil = $sumber ? Impor::baca($sumber) : [];
         }
         if (! $hasil) {
@@ -58,7 +65,7 @@ class ImporKas extends Command
         }
 
         if (empty($disimpan)) {
-            (new Impor)->simpan($hasil);
+            (new Impor)->simpan($hasil, (bool) $arsip);
         }
         $this->info('Tersimpan: '.implode(', ', array_keys($hasil)).'.');
 

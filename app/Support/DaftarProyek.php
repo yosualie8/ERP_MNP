@@ -78,8 +78,7 @@ class DaftarProyek
     {
         $per = [];
         $lepas = [];
-        $baris = DB::table('kas_bon as b')->leftJoin('kode_gl as k', 'k.id', '=', 'b.kode_gl_id')->leftJoin('cost_center as c', 'c.id', '=', 'k.cost_center_id')
-            ->leftJoin('akun_gl as a', 'a.id', '=', 'k.akun_gl_id')
+        $baris = self::queryKas()
             ->selectRaw('c.kode cc, k.ref, a.nama akun, b.tanggal, count(*) n, sum(b.nominal) s')->groupBy('c.kode', 'k.ref', 'a.nama', 'b.tanggal')->get();
         foreach ($baris as $r) {
             $id = self::tahapKas($r->cc, $r->ref, $r->akun, substr((string) $r->tanggal, 0, 10));
@@ -98,6 +97,17 @@ class DaftarProyek
         }
 
         return ['per_tahap' => $per, 'lepas' => array_values($lepas)];
+    }
+
+    /**
+     * Transaksi detail Kas Harian yang dihitung sebagai biaya proyek: tanpa Kode GL (bayar hutang, pindah kantong, dll.
+     * di lembar lama) dan akun Non-biaya (talangan, salah transfer, pindah kantong) tidak ikut.
+     */
+    public static function queryKas(): \Illuminate\Database\Query\Builder
+    {
+        return DB::table('kas_bon as b')->join('kode_gl as k', 'k.id', '=', 'b.kode_gl_id')->leftJoin('cost_center as c', 'c.id', '=', 'k.cost_center_id')
+            ->leftJoin('akun_gl as a', 'a.id', '=', 'k.akun_gl_id')
+            ->where(fn ($q) => $q->whereNull('a.kelompok')->orWhere('a.kelompok', '<>', 'Non-biaya'));
     }
 
     /**

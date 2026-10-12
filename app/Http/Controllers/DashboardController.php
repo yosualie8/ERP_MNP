@@ -18,7 +18,7 @@ class DashboardController extends Controller
             'fotoStatus' => KasFoto::selectRaw('status_drive, COUNT(*) as n')->groupBy('status_drive')->pluck('n', 'status_drive'),
             'bulanTerakhir' => KasBulan::orderByDesc('bulan')->first(),
             'jumlahBulan' => KasBulan::count(),
-            'bulanBercatatan' => KasBulan::get()->reject->cocok()->pluck('lembar'),
+            'bulanBercatatan' => KasBulan::where('arsip', false)->get()->reject->cocok()->pluck('lembar'),
         ]);
     }
 }

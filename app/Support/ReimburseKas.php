@@ -28,6 +28,7 @@ class ReimburseKas
     {
         $belum = KasBon::query()->join('kas_transfer', 'kas_transfer.id', '=', 'kas_bon.kas_transfer_id')
             ->leftJoin('kas_sudah_reimburse', 'kas_sudah_reimburse.id_transaksi', '=', 'kas_bon.id_transaksi')
+            ->join('kas_bulan', 'kas_bulan.id', '=', 'kas_transfer.kas_bulan_id')->where('kas_bulan.arsip', false)
             ->whereNull('kas_sudah_reimburse.id_transaksi')->where('kas_transfer.kredit', '>', 0)
             ->pluck('kas_bon.kas_transfer_id')->unique();
         $transfer = KasTransfer::whereIn('id', $belum)->with(['bon.kodeGl', 'kasBulan'])->get();

@@ -43,7 +43,7 @@ class BacaLembarKas
         $adaTotal = false;
         $transfer = [];
         $catatan = [];
-        $sel = fn (array $r, string $nama) => trim((string) ($r[$k[$nama]] ?? ''));
+        $sel = fn (array $r, string $nama) => $k[$nama] === null ? '' : trim((string) ($r[$k[$nama]] ?? ''));
 
         for ($i = $judul + 1; $i < count($baris); $i++) {
             $r = $baris[$i];
@@ -64,7 +64,8 @@ class BacaLembarKas
             }
 
             if ($debet || $kredit) {
-                $tanggal = self::tanggal($sel($r, 'tanggal'), $bulan, $no, $lembar);
+                // Lembar lama: baris "Biaya Transfer Keluar" tanpa tanggal = tanggal transfer di atasnya.
+                $tanggal = $sel($r, 'tanggal') === '' && $transfer ? end($transfer)['tanggal'] : self::tanggal($sel($r, 'tanggal'), $bulan, $no, $lembar);
                 $transfer[] = [
                     'baris' => $no,
                     'tanggal' => $tanggal,
@@ -157,11 +158,12 @@ class BacaLembarKas
             'detail' => $cari('detail kredit'),
             'pic' => $cari('pic'),
             'ket_bon' => $cari('keterangan', 2),
-            'gl' => $cari('gl'),
             'kode_gl' => $cari('kode gl'),
-            'kode_bon' => $cari('kode bon'),
-            'no_id' => $cari('no id'),
-            'id_transaksi' => $cari('id transaksi'),
+            // Lembar lama (2024–2025) belum punya kolom GL / NO ID / ID TRANSAKSI (dan sebagian Kode Bon).
+            'gl' => array_keys($judul, 'gl', true)[0] ?? null,
+            'kode_bon' => array_keys($judul, 'kode bon', true)[0] ?? null,
+            'no_id' => array_keys($judul, 'no id', true)[0] ?? null,
+            'id_transaksi' => array_keys($judul, 'id transaksi', true)[0] ?? null,
             // Kolom S "NO MOBIL" (sejak 8 Okt 2026); lembar lama boleh belum punya.
             'no_mobil' => array_keys($judul, 'no mobil', true)[0] ?? null,
         ];
