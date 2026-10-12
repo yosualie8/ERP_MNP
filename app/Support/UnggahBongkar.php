@@ -202,13 +202,24 @@ class UnggahBongkar
         return preg_replace('/[^a-z0-9]/', '', mb_strtolower((string) $v));
     }
 
-    /** Galian surat jalan sama dengan galian DO: sama persis, atau salah satu memuat yang lain ("Sajira" ~ "Sajira 2"). */
+    /**
+     * Galian surat jalan sama dengan galian DO: sama dengan galian tebakan DO (persis, atau salah satu memuat yang lain:
+     * "Sajira" ~ "Sajira 2"), atau nama galiannya tertulis di keterangan UJ DO itu ("Uang Jalan Sidomuncul KIK").
+     */
     private static function galianSama(string $galian, array $d): bool
     {
         $a = self::kunciGalian($galian);
+        if (strlen($a) < 3) {
+            return false;
+        }
         foreach (array_filter([self::galianDo($d), $d['tujuan']]) as $calon) {
             $b = self::kunciGalian($calon);
             if ($a === $b || (strlen($a) >= 4 && strlen($b) >= 4 && (str_contains($a, $b) || str_contains($b, $a)))) {
+                return true;
+            }
+        }
+        foreach ($d['detail'] ?? [] as $x) {
+            if (str_contains(self::kunciGalian($x->keterangan ?? ''), $a)) {
                 return true;
             }
         }
