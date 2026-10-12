@@ -191,6 +191,7 @@ class UjController extends Controller
             'detail.*.konfirmasi' => ['nullable', 'string', 'max:1000'],
             'detail.*.pengajuan' => ['nullable', 'integer'],
             'detail.*.alasan_pengajuan' => ['nullable', 'string', 'max:1000'],
+            'detail.*.duluan' => ['nullable', 'string', 'max:30'],
             'foto' => ['nullable', 'array', 'max:'.KasFotoController::MAKS_FOTO],
             'foto.*' => KasFotoController::ATURAN['foto.*'],
         ], [
@@ -226,6 +227,8 @@ class UjController extends Controller
                 'pengajuan' => ! empty($d['pengajuan']) ? (int) $d['pengajuan'] : null,
                 // Alasan bila realisasinya berbeda dari pengajuan (penyesuaian / dialihkan).
                 'alasan_pengajuan' => $rapi($d['alasan_pengajuan'] ?? null),
+                // Pengajuan UJ: ID UJ transaksi yang sudah terjadi duluan (jawaban "Ya" atas pertanyaan validasi D).
+                'duluan' => $pengajuan ? $rapi($d['duluan'] ?? null) : null,
             ], $data['detail'])),
             'biaya_transfer' => $request->boolean('biaya_transfer'),
             'nominal_biaya' => (int) ($data['nominal_biaya'] ?? TulisUjSheet::BIAYA_TRANSFER),
@@ -255,7 +258,7 @@ class UjController extends Controller
             $detail[(int) $i] = [
                 'nama' => $rapi($d['nama'] ?? null), 'keterangan' => trim($d['keterangan']), 'nominal' => $nominal, 'kategori' => KategoriUj::baku($rapi($d['kategori'])),
                 'jenis_kendaraan' => NomorMobil::rapikanJenis($d['jenis_kendaraan'] ?? null), 'no_mobil' => NomorMobil::rapikan($d['no_mobil'] ?? null),
-                'no_do' => $rapi($d['no_do'] ?? null), 'konfirmasi' => null,
+                'no_do' => $rapi($d['no_do'] ?? null), 'konfirmasi' => null, 'duluan' => $this->tanyaDuluan() ? $rapi($d['duluan'] ?? null) : null,
             ];
         }
         $kecuali = $request->filled('no_uj') ? UjTransaksi::where('no_uj', $request->integer('no_uj'))->value('id') : null;
@@ -273,8 +276,14 @@ class UjController extends Controller
             }
         }
 
-        return response()->json(['temuan' => (object) ValidasiUj::periksa($input, $kecuali, $this->kecualiPengajuan($request), $this->tawarkanTautan() && ! $kecuali),
+        return response()->json(['temuan' => (object) ValidasiUj::periksa($input, $kecuali, $this->kecualiPengajuan($request), $this->tawarkanTautan() && ! $kecuali, $this->tanyaDuluan()),
             'pengajuan' => (object) $pengajuan]);
+    }
+
+    /** Form Pengajuan UJ menanyakan "sudah terjadi duluan?" untuk DO yang transaksinya sudah ada di Kas UJ; Input UJ tidak. */
+    protected function tanyaDuluan(): bool
+    {
+        return false;
     }
 
     /** Input UJ menawarkan "Tautkan ke pengajuan" untuk baris yang cocok dengan pengajuan menunggu; form Pengajuan UJ tidak. */
@@ -327,9 +336,16 @@ class UjController extends Controller
      */
     protected function wajibKonfirmasi(array $input, ?int $kecuali, array $kecualiPengajuan = []): array|RedirectResponse
     {
-        $temuan = ValidasiUj::periksa($input, $kecuali, $kecualiPengajuan, $this->tawarkanTautan() && ! $kecuali);
+        $temuan = ValidasiUj::periksa($input, $kecuali, $kecualiPengajuan, $this->tawarkanTautan() && ! $kecuali, $this->tanyaDuluan());
         $pesan = [];
         foreach ($temuan as $i => $daftar) {
+            // Pertanyaan "sudah terjadi duluan?" belum dijawab Ya = ditolak (konfirmasi teks tidak cukup).
+            if ($duluan = collect($daftar)->firstWhere('kode', 'D')) {
+                $pesan["duluan.{$i}"] = 'Ditolak — transaksi detail baris '.($i + 1).': DO '.$duluan['duluan']['no_do'].' sudah ada transaksinya di Kas UJ ('.$duluan['duluan']['id_uj']
+                    .'). Bila transaksi itu memang terjadi duluan sebelum pengajuan, jawab "Ya" di pertanyaannya supaya langsung tertaut; bila bukan, data ini tidak bisa diajukan.';
+
+                continue;
+            }
             if (mb_strlen((string) $input['detail'][$i]['konfirmasi']) >= self::MIN_KONFIRMASI) {
                 continue;
             }

@@ -33,7 +33,12 @@ class ValidasiUj
      * @param  bool  $tawarkanTautan  Input UJ: baris yang DO & jenis kategorinya sama dengan pengajuan yang masih menunggu tidak
      *                                dianggap dobel, tetapi ditawari "Tautkan ke PUJ-xxxx" (kemungkinan besar itu realisasinya).
      */
-    public static function periksa(array $input, ?int $kecualiTransaksi = null, array $kecualiPengajuan = [], bool $tawarkanTautan = false): array
+    /**
+     * @param  bool  $tanyaDuluan  Pengajuan UJ: baris yang DO & jenis kategorinya sama dengan transaksi Kas UJ yang belum tertaut ke
+     *                             pengajuan mana pun → tanya "sudah terjadi duluan?" (kode D). Ya = detail.duluan berisi ID UJ itu
+     *                             (tertaut, bukan dobel); tanpa jawaban Ya pengajuan ditolak.
+     */
+    public static function periksa(array $input, ?int $kecualiTransaksi = null, array $kecualiPengajuan = [], bool $tawarkanTautan = false, bool $tanyaDuluan = false): array
     {
         $tgl = $input['tanggal'];
         $rentang = [$tgl->copy()->subDays(self::HARI)->toDateString(), $tgl->copy()->addDays(self::HARI)->toDateString()];
@@ -43,7 +48,10 @@ class ValidasiUj
             ->when($kecualiTransaksi, fn ($q) => $q->where('uj_transaksi_id', '!=', $kecualiTransaksi))
             ->orderBy('tanggal')->orderBy('baris')
             ->get(['id_uj', 'tanggal', 'nama', 'keterangan', 'nominal', 'kategori', 'jenis_kendaraan', 'no_mobil', 'no_do'])
-            ->map(fn (UjDetail $d) => self::baris($d->id_uj ?: 'tanpa ID', $d->tanggal, $d->nama, $d->keterangan, (int) $d->nominal, $d->kategori, $d->jenis_kendaraan, $d->no_mobil, $d->no_do));
+            ->map(fn (UjDetail $d) => [...self::baris($d->id_uj ?: 'tanpa ID', $d->tanggal, $d->nama, $d->keterangan, (int) $d->nominal, $d->kategori, $d->jenis_kendaraan, $d->no_mobil, $d->no_do), 'id_uj' => $d->id_uj]);
+        // ID UJ yang sudah menjadi realisasi suatu pengajuan (tidak bisa ditautkan lagi sebagai "duluan").
+        $tertaut = $tanyaDuluan ? \App\Models\UjPengajuanDetail::whereNotNull('id_uj')->pluck('id_uj')->flip()->all() : [];
+        $dipakaiDuluan = [];
         // Pengajuan UJ yang masih menunggu realisasi ikut dibandingkan (kecuali detail yang sedang diedit / direalisasikan).
         $histori = $histori->concat(\App\Models\UjPengajuanDetail::query()->where('status', 'menunggu')
             ->whereNotIn('id', $kecualiPengajuan ?: [0])
@@ -85,6 +93,25 @@ class ValidasiUj
                             'pesan' => "DO {$r['doAsli']} sudah diajukan di {$c['kode']} ({$c['tanggal']?->translatedFormat('j M')}, {$c['nama']}, {$c['kategori']} ".rp($c['nominal'])
                                 .', "'.$c['ket'].'") dan belum direalisasikan. Bila baris ini realisasinya, klik "Tautkan" supaya pengajuan itu tercatat terealisasi — bukan dobel.'
                                 .' Bila memang transaksi terpisah, tulis konfirmasi.'];
+                    }
+                }
+            }
+            if ($tanyaDuluan && $r['do'] !== null) {
+                // Transaksi Kas UJ dengan DO & jenis kategori sama yang belum tertaut ke pengajuan: kemungkinan dibayar duluan.
+                $calon = $histori->filter(fn ($x) => ! empty($x['id_uj']) && $x['do'] === $r['do'] && $x['jenisKat'] === $r['jenisKat']
+                    && ! isset($tertaut[$x['id_uj']]) && ! isset($dipakaiDuluan[$x['id_uj']]));
+                $jawab = $d['duluan'] ?? null;
+                if ($jawab && $calon->contains('id_uj', $jawab)) {
+                    $dipakaiDuluan[$jawab] = true;
+                    $pembanding = $pembanding->reject(fn ($x) => ($x['id_uj'] ?? null) === $jawab);
+                } elseif ($calon->isNotEmpty()) {
+                    $pembanding = $pembanding->reject(fn ($x) => $calon->contains('id_uj', $x['id_uj'] ?? '-'));
+                    foreach ($calon as $c) {
+                        $tautan[] = ['kode' => 'D', 'prioritas' => 'tinggi', 'duluan' => [
+                            'id_uj' => $c['id_uj'], 'tanggal' => $c['tanggal']?->translatedFormat('j M Y'), 'nama' => $c['nama'], 'kategori' => $c['kategori'],
+                            'nominal' => $c['nominal'], 'keterangan' => $c['ket'], 'no_mobil' => $c['mobilAsli'], 'no_do' => $c['doAsli'],
+                        ], 'pesan' => "Transaksi untuk DO {$r['doAsli']} sudah diinput di Kas UJ: {$c['id_uj']} ({$c['tanggal']?->translatedFormat('j M Y')}, ".($c['nama'] ?: 'tanpa nama')
+                            .", {$c['kategori']} ".rp($c['nominal']).', "'.$c['ket'].'"). Apakah transaksi ini sudah terjadi duluan sebelum pengajuan?'];
                     }
                 }
             }

@@ -55,6 +55,11 @@
         .temuan .prioritas.rendah { background: #3b404b; color: #dfe2e7; }
         .temuan .aturan { color: var(--redup); font-size: 11px; }
         .temuan label { display: block; color: var(--teks); font-size: 12px; margin: 0; }
+        .duluan-tanya { margin: 6px 0 8px; padding: 8px 10px; border: 1px solid #e0a526; border-radius: 8px; background: rgba(224, 165, 38, .08); }
+        .duluan-tanya .rinci { font-size: 12px; margin: 4px 0 6px; }
+        .duluan-tanya .rinci b { color: var(--teks); }
+        .duluan-tanya.ditolak { border-color: var(--aksen); background: rgba(229, 72, 77, .10); }
+        tr.duluan-info td { padding: 2px 8px 8px; font-size: 12px; color: var(--sukses); }
         .temuan input[data-konfirmasi] { margin-top: 4px; }
         .temuan input[data-konfirmasi].kosong { border-color: var(--aksen); box-shadow: 0 0 0 2px var(--aksen-muda); }
         .form-kas input.wajib-kosong { border-color: var(--aksen) !important; box-shadow: 0 0 0 2px var(--aksen-muda); background: var(--isian-fokus); }
@@ -257,7 +262,7 @@
 
     <template id="templat-bon">
         <tr class="baris-detail">
-            <td><input type="hidden" class="pengajuan-kunci"><input type="text" class="angka-input rupiah" data-nama="nominal" inputmode="numeric" autocomplete="off" required></td>
+            <td><input type="hidden" class="pengajuan-kunci"><input type="hidden" class="duluan-kunci"><input type="text" class="angka-input rupiah" data-nama="nominal" inputmode="numeric" autocomplete="off" required></td>
             <td><input type="text" data-nama="nama" list="daftar-nama" autocomplete="off"></td>
             <td><input type="text" data-nama="keterangan" autocomplete="off" required></td>
             <td><input type="text" data-nama="kategori" list="daftar-kategori" autocomplete="off" required><div class="saran-kode"></div></td>
@@ -309,6 +314,8 @@
                 // Tautan ke detail Pengajuan UJ yang direalisasikan baris ini (hanya bila ditautkan lewat tombol "Tautkan").
                 const p = tr.querySelector('.pengajuan-kunci');
                 p.name = p.value ? `detail[${i}][pengajuan]` : '';
+                const dl = tr.querySelector('.duluan-kunci');
+                dl.name = dl.value ? `detail[${i}][duluan]` : '';
             });
             const nominalTransfer = document.getElementById('nominal_transfer');
             const statusCocok = document.getElementById('status-cocok');
@@ -362,7 +369,7 @@
                 tr.querySelectorAll('input.rupiah').forEach(rapikanRupiah);
                 tr.konfirmasi = isi.konfirmasi ?? '';
                 tr.querySelector('.hapus').addEventListener('click', () => {
-                    if (barisDetail().length > 1) { tr.temuan?.remove(); tr.kurangEl?.remove(); tr.bedaEl?.remove(); tr.remove(); urutkanNama(); hitung(); aturNamaPertama(); }
+                    if (barisDetail().length > 1) { tr.temuan?.remove(); tr.kurangEl?.remove(); tr.bedaEl?.remove(); tr.duluanEl?.remove(); tr.remove(); urutkanNama(); hitung(); aturNamaPertama(); }
                 });
                 daftar.appendChild(tr);
                 urutkanNama();
@@ -756,15 +763,51 @@
             const tampilTemuan = temuan => {
                 let jumlah = 0;
                 barisDetail().forEach((tr, i) => {
-                    if (tr.temuan) tr.konfirmasi = tr.temuan.querySelector('[data-konfirmasi]').value;
+                    if (tr.temuan?.querySelector('[data-konfirmasi]')) tr.konfirmasi = tr.temuan.querySelector('[data-konfirmasi]').value;
                     tr.temuan?.remove();
                     tr.temuan = null;
                     tr.aturan = [];
+                    tr.duluanTanya = false;
                     tr.classList.remove('ber-flag');
-                    const daftarT = temuan[i];
-                    if (!daftarT?.length) return;
-                    jumlah++;
+                    // Sudah dijawab "Ya": tampilkan tautannya (bisa dibatalkan).
+                    tr.duluanEl?.remove(); tr.duluanEl = null;
+                    const kunciDl = tr.querySelector('.duluan-kunci').value;
+                    if (kunciDl) {
+                        tr.duluanEl = document.createElement('tr');
+                        tr.duluanEl.className = 'duluan-info';
+                        tr.duluanEl.innerHTML = `<td colspan="8">✓ Tertaut ke transaksi <b>${esc2(kunciDl)}</b> yang terjadi duluan — setelah disimpan, detail ini langsung tercatat terealisasi. <a href="#" class="batal-duluan">Batalkan</a></td>`;
+                        tr.duluanEl.querySelector('.batal-duluan').addEventListener('click', e => { e.preventDefault(); tr.querySelector('.duluan-kunci').value = ''; tr.ditolakDuluan = false; urutkanNama(); evaluasi(); });
+                        (tr.kurangEl ?? tr).after(tr.duluanEl);
+                    }
+                    const semuaT = temuan[i] || [];
+                    const tanya = semuaT.filter(x => x.kode === 'D');
+                    const daftarT = semuaT.filter(x => x.kode !== 'D');
+                    if (tanya.length) {
+                        tr.duluanTanya = true;
+                        jumlah++;
+                        const t = document.createElement('tr');
+                        t.className = 'temuan-baris';
+                        t.innerHTML = `<td colspan="8"><div class="temuan">${tanya.map(x => `<div class="duluan-tanya${tr.ditolakDuluan ? ' ditolak' : ''}">
+                                <b>❓ Baris ${i + 1}: transaksi untuk DO ${esc2(x.duluan.no_do)} sudah diinput di Kas UJ. Apakah transaksi ini sudah terjadi duluan sebelum pengajuan?</b>
+                                <div class="rinci"><b>${esc2(x.duluan.id_uj)}</b> · ${esc2(x.duluan.tanggal || '')} · ${esc2(x.duluan.nama || 'tanpa nama')} · ${esc2(x.duluan.kategori)} · <b>Rp ${fmt(x.duluan.nominal)}</b>
+                                    · ${esc2(x.duluan.no_mobil || '')} · DO ${esc2(x.duluan.no_do)}<br>"${esc2(x.duluan.keterangan)}"</div>
+                                ${tr.ditolakDuluan ? `<div style="color: #ff8a80;">⛔ Ditolak: DO ini sudah ada transaksinya di Kas UJ — hapus baris ini atau perbaiki No DO-nya.</div>` : ''}
+                                <button type="button" class="tombol duluan-ya" data-id="${esc2(x.duluan.id_uj)}" style="padding: 3px 12px; font-size: 12px;">Ya, sudah terjadi duluan — tautkan</button>
+                                <button type="button" class="tombol polos duluan-tidak" style="padding: 3px 12px; font-size: 12px;">Tidak</button></div>`).join('')}</div></td>`;
+                        t.querySelectorAll('.duluan-ya').forEach(btn => btn.addEventListener('click', () => {
+                            tr.querySelector('.duluan-kunci').value = btn.dataset.id;
+                            tr.ditolakDuluan = false;
+                            urutkanNama(); evaluasi();
+                        }));
+                        t.querySelectorAll('.duluan-tidak').forEach(btn => btn.addEventListener('click', () => { tr.ditolakDuluan = true; tampilTemuan(temuanTerakhir); evaluasi(false); }));
+                        (tr.duluanEl ?? tr.kurangEl ?? tr).after(t);
+                        tr.temuan = t;
+                        tr.classList.add('ber-flag');
+                    }
+                    if (!daftarT.length) return;
+                    if (!tanya.length) jumlah++;
                     tr.aturan = [...new Set(daftarT.map(x => x.kode))];
+                    if (tanya.length) return;
                     const t = document.createElement('tr');
                     t.className = 'temuan-baris';
                     t.innerHTML = `<td colspan="8"><div class="temuan">
@@ -788,7 +831,7 @@
                         tr.title = 'Dari pengajuan ' + btn.dataset.kode;
                         urutkanNama(); tampilModePj?.(); evaluasi();
                     }));
-                    (tr.kurangEl ?? tr).after(t);
+                    (tr.duluanEl ?? tr.kurangEl ?? tr).after(t);
                     tr.temuan = t;
                     tr.classList.add('ber-flag');
                 });
@@ -827,6 +870,8 @@
                 const masalah = [];
                 let pertama = null;
                 const baris = [];
+                const tanyaBelum = barisDetail().map((tr, i) => tr.duluanTanya ? i + 1 : null).filter(Boolean);
+                if (tanyaBelum.length) masalah.push(`Baris ${tanyaBelum.join(', ')}: transaksinya sudah ada di Kas UJ — jawab "Ya, sudah terjadi duluan" untuk menautkan. Bila jawabannya Tidak, data itu tidak bisa diajukan (hapus barisnya atau perbaiki No DO).`);
                 barisDetail().forEach((tr, i) => {
                     const k = tr.temuan?.querySelector('[data-konfirmasi]');
                     if (!k) return;
@@ -865,6 +910,7 @@
                 return JSON.stringify([...d.entries()].filter(([k, v]) => typeof v === 'string' && !/konfirmasi|alasan_pengajuan|_token|_method|versi/.test(k)));
             };
             let diperiksa = null;   // kunciIsi() yang terakhir lolos pemeriksaan server
+            let temuanTerakhir = {}; // hasil pemeriksaan server terakhir (dipakai ulang saat jawaban "Tidak")
             let memeriksa = null;   // kunciIsi() yang sedang diperiksa
             let jedaPeriksa = null;
             let galatServer = [];
@@ -887,7 +933,7 @@
                         diperiksa = null;
                     } else {
                         galatServer = [];
-                        tampilTemuan(hasil.temuan || {});
+                        temuanTerakhir = hasil.temuan || {}; tampilTemuan(temuanTerakhir);
                         tampilBeda(hasil.pengajuan || {});
                         diperiksa = kunci;
                     }

@@ -66,6 +66,11 @@ class PengajuanUjController extends UjController
     }
 
     /** Mengajukan lagi DO yang sudah diajukan memang dobel — tidak ditawari tautan. */
+    protected function tanyaDuluan(): bool
+    {
+        return true;
+    }
+
     protected function tawarkanTautan(): bool
     {
         return false;
@@ -231,12 +236,25 @@ class PengajuanUjController extends UjController
     private function simpanDetail(UjPengajuan $p, array $input, array $temuan): void
     {
         foreach ($input['detail'] as $i => $d) {
-            UjPengajuanDetail::create([
+            $detail = UjPengajuanDetail::create([
                 'uj_pengajuan_id' => $p->id, 'urut' => $i + 1, 'nama' => $d['nama'], 'keterangan' => $d['keterangan'], 'nominal' => $d['nominal'],
                 'kategori' => $d['kategori'], 'jenis_kendaraan' => $d['jenis_kendaraan'], 'no_mobil' => $d['no_mobil'], 'no_do' => $d['no_do'],
                 'konfirmasi' => $d['konfirmasi'], 'temuan' => $temuan[$i] ?? null, 'status' => 'menunggu',
             ]);
+            // Transaksi Kas UJ yang terjadi duluan (dijawab "Ya"): langsung tercatat sebagai realisasi pengajuan ini.
+            if ($d['duluan'] && ($uj = \App\Models\UjDetail::where('id_uj', $d['duluan'])->first())) {
+                $isiUj = $uj->only(['nama', 'keterangan', 'nominal', 'kategori', 'jenis_kendaraan', 'no_mobil', 'no_do']);
+                $b = \App\Support\BandingPengajuan::banding($detail, $isiUj);
+                $sesuai = $b['jenis'] === \App\Support\BandingPengajuan::SESUAI;
+                $detail->update([
+                    'status' => $b['jenis'] === \App\Support\BandingPengajuan::DIALIHKAN ? 'dialihkan' : 'terealisasi', 'id_uj' => $uj->id_uj, 'jenis_realisasi' => $b['jenis'],
+                    'alasan' => $sesuai ? null : 'Transaksi UJ terjadi duluan sebelum pengajuan (dikonfirmasi admin saat mengajukan).',
+                    'realisasi' => $sesuai ? null : [...$isiUj, 'id_uj' => $uj->id_uj, 'beda' => $b['beda']],
+                    'realisasi_pada' => now(), 'realisasi_oleh' => auth()->id(),
+                ]);
+            }
         }
+        $p->hitungStatus();
     }
 
     private function tolakUbah(UjPengajuan $p): ?string
