@@ -158,6 +158,7 @@ class DaftarProyekController extends Controller
             'tipe' => ['required', Rule::in(array_keys(ProyekTahap::TIPE))],
             'status' => ['required', Rule::in(array_keys(ProyekTahap::STATUS))],
             'lokasi' => ['nullable', 'string', 'max:200'],
+            'cost_center' => ['nullable', Rule::exists('cost_center', 'kode')],
             'volume' => ['nullable', 'numeric', 'min:0'],
             'luas' => ['nullable', 'numeric', 'min:0'],
             'catatan' => ['nullable', 'string', 'max:2000'],

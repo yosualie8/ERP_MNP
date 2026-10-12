@@ -11,7 +11,7 @@ class ProyekTahap extends Model
 {
     protected $table = 'proyek_tahap';
 
-    protected $fillable = ['proyek_id', 'nama', 'tipe', 'status', 'lokasi', 'volume', 'luas', 'harga_m3', 'omset', 'tarif_bbm', 'tarif_rental',
+    protected $fillable = ['proyek_id', 'nama', 'tipe', 'status', 'lokasi', 'cost_center', 'volume', 'luas', 'harga_m3', 'omset', 'tarif_bbm', 'tarif_rental',
         'komisi_lapangan', 'komisi_yosua', 'komisi_verlix', 'bayar_lapangan', 'bayar_yosua', 'bayar_verlix', 'catatan', 'user_id'];
 
     protected $casts = ['volume' => 'float', 'luas' => 'float', 'komisi_lapangan' => 'float', 'komisi_yosua' => 'float', 'komisi_verlix' => 'float',
@@ -32,6 +32,12 @@ class ProyekTahap extends Model
     public function alias(): HasMany
     {
         return $this->hasMany(ProyekAlias::class);
+    }
+
+    /** Cost center tahap: isian tahap, kalau kosong ikut proyek induk. */
+    public function costCenter(): ?string
+    {
+        return $this->cost_center ?: $this->proyek?->cost_center;
     }
 
     public function tinggiUrugan(): ?float
