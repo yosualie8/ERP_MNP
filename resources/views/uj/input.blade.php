@@ -4,15 +4,22 @@
 
 @section('isi')
     <style>
-        #panel-bt .bt-alat { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 10px 0; }
-        #panel-bt .bt-galian { border: 1px solid var(--garis); border-radius: 9px; margin-bottom: 8px; overflow: hidden; }
-        #panel-bt .bt-galian > .kepala { display: flex; gap: 10px; align-items: center; padding: 8px 12px; background: var(--kartu-2); font-weight: 700; }
-        #panel-bt table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        #panel-bt td, #panel-bt th { padding: 4px 8px; border-top: 1px solid var(--garis); text-align: left; }
-        #panel-bt td.angka, #panel-bt th.angka { text-align: right; }
-        #panel-bt input.bt-harga { width: 110px; text-align: right; padding: 3px 6px; }
-        #panel-bt .bt-kaki { display: flex; gap: 12px; align-items: center; position: sticky; bottom: 0; background: var(--kartu); padding-top: 8px; }
-        #daftar-bt { max-height: 520px; overflow: auto; }
+        .kartu-rui { border-color: var(--aksen); }
+        .rui-grup { border: 1px solid var(--garis); border-radius: 9px; margin-bottom: 8px; overflow: hidden; }
+        .rui-master { display: flex; align-items: center; gap: 12px; padding: 10px 12px; cursor: pointer; background: var(--kartu-2); }
+        .rui-master:hover { background: var(--aksen-muda); }
+        .rui-master.sudah { cursor: default; opacity: .75; }
+        .rui-master.sudah:hover { background: var(--kartu-2); }
+        .rui-buka { background: none; border: 1px solid var(--garis-kuat); color: var(--teks); border-radius: 6px; width: 28px; height: 28px; cursor: pointer; flex: none; }
+        .rui-buka:hover { border-color: var(--aksen); }
+        .rui-grup.terbuka .rui-buka { transform: rotate(90deg); }
+        .rui-judul { flex: 1; min-width: 0; }
+        .rui-judul b { display: block; }
+        .rui-total { font-variant-numeric: tabular-nums; font-weight: 700; white-space: nowrap; }
+        .rui-detail { padding: 6px 10px 10px; max-height: 420px; overflow: auto; }
+        .rui-detail table { font-size: 12.5px; width: 100%; }
+        .rui-detail td, .rui-detail th { padding: 4px 6px; text-align: left; }
+        .rui-detail .angka { text-align: right; }
         .form-kas label { display: block; font-size: 13px; color: var(--redup); margin-bottom: 4px; }
         .form-kas input[type=text], .form-kas input[type=date] {
             width: 100%; padding: 8px 10px; border: 1px solid var(--garis); border-radius: 7px; font-size: 14px; background: var(--isian); color: var(--teks); }
@@ -157,26 +164,15 @@
                 sudah terisi persis seperti pengajuannya. Isi <b>nama, rekening & bank penerima transfer</b>, lalu klik Simpan — semuanya tercatat sebagai satu transfer.</div>
         @endif
         @unless ($edit || $ajukan)
-            {{-- Input bayar tanah: DO yang belum ada uang tanahnya (data menu Bayar Tanah) → pilih & harga → form terisi. --}}
-            <div class="kartu" id="panel-bt" hidden>
+            {{-- Input bayar tanah: rekap bayar tanah (RBT) dari menu Bayar Tanah — tampilan sama dengan Input reimburse Kas UJ. --}}
+            <div class="kartu kartu-rui" id="panel-bt" hidden>
                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
-                    <h3 style="margin: 0;">🏔️ Input bayar tanah <span class="redup" style="font-size: 13px; font-weight: normal;">DO yang sudah ada uang jalannya tetapi belum ada uang tanahnya</span></h3>
+                    <h3 style="margin: 0;">🏔️ Bayar Tanah <span class="redup" style="font-size: 13px; font-weight: normal;">per rekap bayar tanah (30 hari terakhir)</span></h3>
                     <button type="button" class="tombol polos" id="tutup-bt">Tutup</button>
                 </div>
-                <div class="bt-alat">
-                    <span class="redup">Umur:</span>
-                    <button type="button" class="chip" data-umur="7">≤ 7 hari</button><button type="button" class="chip aktif" data-umur="30">≤ 30 hari</button><button type="button" class="chip" data-umur="semua">All time</button>
-                    <input type="search" id="bt-cari" placeholder="Saring DO, DT, driver, galian…" style="width: 220px;">
-                    <span class="redup" style="margin-left: auto;">Harga tanah:</span>
-                    <input type="text" id="bt-harga-massal" inputmode="numeric" placeholder="mis. 490.000" style="width: 120px; text-align: right;">
-                    <button type="button" class="tombol polos" id="bt-isi-harga" style="padding: 5px 10px; font-size: 13px;">Isi ke DO yang dicentang</button>
-                </div>
-                <div id="rekap-bt"></div>
+                <p class="redup" style="margin: 6px 0 12px;">Klik ▸ untuk melihat rinciannya. Klik baris rekapnya untuk memasukkan semua DO itu ke form di bawah, lalu periksa dan tekan <b>Simpan</b>.
+                    Rekap dibuat di menu Ritasi → Bayar Tanah.</p>
                 <div id="daftar-bt"><p class="redup">Memuat…</p></div>
-                <div class="bt-kaki">
-                    <button type="button" class="tombol" id="bt-masukkan" disabled>Masukkan ke form</button>
-                    <span class="redup" id="bt-info">Centang DO yang mau dibayar. Harga awal = tarif terakhir galiannya, boleh diubah per DO.</span>
-                </div>
             </div>
         @endunless
         <div class="kartu">
@@ -1074,105 +1070,53 @@
     </script>
     @unless ($edit || $ajukan)
     <script>
-        // ===== Input bayar tanah: daftar DO belum bayar tanah (data menu Bayar Tanah), dikelompokkan per galian =====
+        // ===== Input bayar tanah: pilih satu rekap bayar tanah (RBT) → master + semua DO-nya masuk ke form (seperti reimburse UJ di Kas Harian) =====
         (() => {
             const panel = document.getElementById('panel-bt');
             if (!panel) return;
             const daftar = document.getElementById('daftar-bt');
-            const tombol = document.getElementById('bt-masukkan');
-            const info = document.getElementById('bt-info');
-            const awalInfo = info.textContent;
             const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
-            const rp = n => (+n || 0).toLocaleString('id-ID');
-            const digit = v => String(v || '').replace(/\D/g, '');
-            let umur = '30';
-            const centang = () => [...daftar.querySelectorAll('input.bt-pilih:checked')];
-            const harga = cb => digit(cb.closest('tr').querySelector('input.bt-harga').value);
-            const atur = () => {
-                const dipilih = centang();
-                const galian = [...new Set(dipilih.map(cb => cb.dataset.galian))];
-                const tanpa = dipilih.filter(cb => !harga(cb)).length;
-                tombol.disabled = !dipilih.length;
-                tombol.textContent = dipilih.length ? `Masukkan ${dipilih.length} DO ke form` : 'Masukkan ke form';
-                info.textContent = !dipilih.length ? awalInfo
-                    : `Total Rp ${rp(dipilih.reduce((s, cb) => s + (+harga(cb) || 0), 0))}${tanpa ? ` · ${tanpa} DO belum ada harga` : ''} · Galian: ${galian.join(', ')}`
-                        + (galian.length > 1 ? ' — beda galian biasanya beda rekening, sebaiknya bayar per galian.' : '');
-                daftar.querySelectorAll('.bt-galian').forEach(g => {
-                    const cb = [...g.querySelectorAll('tbody tr:not([hidden]) input.bt-pilih')];
-                    const semua = g.querySelector('input.bt-semua');
-                    semua.checked = cb.length > 0 && cb.every(x => x.checked);
-                    semua.indeterminate = !semua.checked && cb.some(x => x.checked);
-                });
-            };
-            const saring = () => {
-                const q = document.getElementById('bt-cari').value.trim().toLowerCase();
-                daftar.querySelectorAll('.bt-galian').forEach(g => {
-                    let ada = 0;
-                    g.querySelectorAll('tbody tr').forEach(tr => { const ok = !q || tr.textContent.toLowerCase().includes(q) || g.dataset.galian.toLowerCase().includes(q); tr.hidden = !ok; ada += ok; });
-                    g.hidden = !ada;
-                });
-                atur();
+            const fmt = n => (+n || 0).toLocaleString('id-ID');
+            const rp = n => 'Rp ' + fmt(n);
+            const tabelDetail = r => `<table><thead><tr><th>No DO</th><th>DT</th><th>Driver</th><th>Keterangan UJ</th><th class="angka">Harga tanah</th></tr></thead><tbody>`
+                + r.detail.map(x => `<tr><td>${esc(x.do)}</td><td>${esc(x.mobil)}</td><td>${esc(x.driver)}</td><td>${esc(x.keterangan)}</td><td class="angka">${fmt(x.harga)}</td></tr>`).join('')
+                + `<tr><td colspan="4"><b>Total ${r.detail.length} DO</b></td><td class="angka"><b>${fmt(r.total)}</b></td></tr></tbody></table>`;
+            const masukkan = r => {
+                const adaIsi = [...document.querySelectorAll('#daftar-bon [data-nama=keterangan], #daftar-bon [data-nama=nominal]')].some(el => el.value.trim());
+                if (adaIsi && !confirm(`Isi form sekarang akan diganti dengan ${r.kode}. Lanjutkan?`)) return;
+                window.onbeforeunload = null;
+                location.href = @json(route('uj.input')) + '?rbt=' + r.id;
             };
             const muat = async () => {
                 daftar.innerHTML = '<p class="redup">Memuat…</p>';
-                const {do: semua, rekap} = await (await fetch(@json(route('uj.input.bayar-tanah')) + '?umur=' + umur, {headers: {Accept: 'application/json'}})).json();
-                // Rekap Bayar Tanah (RBT) yang menunggu dibayar: klik → form terisi DO & harga dari rekap itu.
-                document.getElementById('rekap-bt').innerHTML = rekap.length ? `<div class="bt-galian"><div class="kepala">Rekap bayar tanah menunggu dibayar</div><table><tbody>`
-                    + rekap.map(x => `<tr class="pilih-rbt" data-id="${x.id}" style="cursor: pointer;" title="Klik untuk mengisi form dengan rekap ini"><td><b>${esc(x.kode)}</b></td><td>${x.jumlah} DO</td><td class="angka"><b>Rp ${rp(x.total)}</b></td><td class="redup">${esc(x.dibuat)}</td><td class="redup">${esc(x.catatan || '')}</td><td><span class="tombol polos" style="padding: 3px 10px; font-size: 12px;">Isi ke form</span></td></tr>`).join('')
-                    + `</tbody></table></div><p class="redup" style="margin: 4px 0 10px; font-size: 12px;">Atau pilih DO langsung di bawah (DO yang sudah ada di rekap tidak ditampilkan).</p>` : '';
-                document.querySelectorAll('#rekap-bt tr.pilih-rbt').forEach(tr => tr.addEventListener('click', () => {
-                    const adaIsi = [...document.querySelectorAll('#daftar-bon [data-nama=keterangan], #daftar-bon [data-nama=nominal]')].some(el => el.value.trim());
-                    if (adaIsi && !confirm('Isi form sekarang akan diganti dengan rekap bayar tanah ini. Lanjutkan?')) return;
-                    window.onbeforeunload = null;
-                    location.href = @json(route('uj.input')) + '?rbt=' + tr.dataset.id;
-                }));
-                if (!semua.length) { daftar.innerHTML = '<p class="redup">Tidak ada DO yang belum dibayar tanahnya pada rentang ini.</p>'; atur(); return; }
-                const grup = {};
-                semua.forEach(d => (grup[d.galian || 'Galian tidak diketahui'] ??= []).push(d));
-                daftar.innerHTML = Object.entries(grup).sort((a, b) => b[1].length - a[1].length).map(([g, list]) => `
-                    <div class="bt-galian" data-galian="${esc(g)}">
-                        <div class="kepala"><label style="display: flex; gap: 8px; align-items: center; cursor: pointer;"><input type="checkbox" class="bt-semua"> ${esc(g)}</label>
-                            <span class="redup" style="font-weight: 400;">${list.length} DO</span></div>
-                        <table><thead><tr><th style="width: 28px;"></th><th>No DO</th><th>UJ</th><th>DT</th><th>Driver</th><th>Bongkar · No SJ</th><th class="angka">Harga tanah</th></tr></thead><tbody>
-                        ${list.map(d => `<tr><td><input type="checkbox" class="bt-pilih" value="${esc(d.do)}" data-galian="${esc(g)}"></td><td><b>${esc(d.do)}</b></td>
-                            <td>${esc(d.tanggal)} <span class="redup">${d.umur ?? ''} hr</span></td><td>${esc(d.mobil)}</td><td>${esc(d.driver)}</td>
-                            <td>${d.bongkar ? '✓ ' + esc(d.bongkar) : '<span class="redup">belum</span>'}${d.surat_jalan ? ' · ' + esc(d.surat_jalan) : ''}</td>
-                            <td class="angka"><input type="text" class="bt-harga" inputmode="numeric" value="${d.tarif ? rp(d.tarif) : ''}" placeholder="isi harga"></td></tr>`).join('')}
-                        </tbody></table></div>`).join('');
-                saring();
+                const {rekap} = await (await fetch(@json(route('uj.input.bayar-tanah')), {headers: {Accept: 'application/json'}})).json();
+                if (!rekap.length) { daftar.innerHTML = '<p class="redup">Belum ada rekap bayar tanah dalam 30 hari terakhir. Buat rekapnya di menu Ritasi → Bayar Tanah.</p>'; return; }
+                daftar.innerHTML = '';
+                rekap.forEach(r => {
+                    const sudah = r.status === 'dibayar';
+                    const el = document.createElement('div');
+                    el.className = 'rui-grup';
+                    const status = sudah
+                        ? `<span class="label hijau">✓ Sudah dibayar${r.no_uj ? ' · UJ-' + r.no_uj : ''}</span>`
+                        : '<span class="label merah">Belum dibayar</span>';
+                    el.innerHTML = `<div class="rui-master${sudah ? ' sudah' : ''}" title="${sudah ? 'Sudah dibayar' : 'Klik untuk memasukkan semua DO rekap ini ke form'}">
+                            <button type="button" class="rui-buka" title="Lihat rincian">▸</button>
+                            <span class="rui-judul"><b>${esc(r.judul)} · ${esc(r.kode)}</b><span class="redup">${r.jumlah} DO · dibuat ${esc(r.jam)}${r.oleh ? ' · ' + esc(r.oleh) : ''}${r.catatan ? ' · ' + esc(r.catatan) : ''}</span></span>
+                            ${status}<span class="rui-total">${rp(r.total)}</span></div><div class="rui-detail" hidden></div>`;
+                    const detail = el.querySelector('.rui-detail');
+                    el.querySelector('.rui-buka').addEventListener('click', e => {
+                        e.stopPropagation();
+                        el.classList.toggle('terbuka');
+                        detail.hidden = !el.classList.contains('terbuka');
+                        if (!detail.hidden && !detail.innerHTML) detail.innerHTML = tabelDetail(r);
+                    });
+                    el.querySelector('.rui-master').addEventListener('click', () => {
+                        if (sudah) { alert(`${r.kode} sudah dibayar${r.no_uj ? ' (UJ-' + r.no_uj + ')' : ''}.`); return; }
+                        masukkan(r);
+                    });
+                    daftar.appendChild(el);
+                });
             };
-            daftar.addEventListener('change', e => {
-                if (e.target.matches('input.bt-semua')) e.target.closest('.bt-galian').querySelectorAll('tbody tr:not([hidden]) input.bt-pilih').forEach(x => x.checked = e.target.checked);
-                atur();
-            });
-            daftar.addEventListener('input', e => {
-                if (!e.target.matches('input.bt-harga')) return;
-                const v = digit(e.target.value).replace(/^0+(?=\d)/, '');
-                e.target.value = v ? rp(v) : '';
-                atur();
-            });
-            document.getElementById('bt-cari').addEventListener('input', saring);
-            const massal = document.getElementById('bt-harga-massal');
-            massal.addEventListener('input', () => { const v = digit(massal.value); massal.value = v ? rp(v) : ''; });
-            document.getElementById('bt-isi-harga').addEventListener('click', () => {
-                const dipilih = centang();
-                if (!massal.value) { alert('Isi harga tanahnya dulu.'); massal.focus(); return; }
-                if (!dipilih.length) { alert('Centang dulu DO yang mau diisi harganya.'); return; }
-                dipilih.forEach(cb => cb.closest('tr').querySelector('input.bt-harga').value = massal.value);
-                atur();
-            });
-            panel.querySelectorAll('button[data-umur]').forEach(b => b.addEventListener('click', () => {
-                umur = b.dataset.umur;
-                panel.querySelectorAll('button[data-umur]').forEach(x => x.classList.toggle('aktif', x === b));
-                muat();
-            }));
-            tombol.addEventListener('click', () => {
-                const dipilih = centang();
-                const adaIsi = [...document.querySelectorAll('#daftar-bon [data-nama=keterangan], #daftar-bon [data-nama=nominal]')].some(el => el.value.trim());
-                if (adaIsi && !confirm('Isi form sekarang akan diganti dengan bayar tanah DO yang dipilih. Lanjutkan?')) return;
-                window.onbeforeunload = null;
-                location.href = @json(route('uj.input')) + '?bayar_tanah=' + dipilih.map(cb => cb.value + (harga(cb) ? ':' + harga(cb) : '')).join(',');
-            });
             document.getElementById('buka-bt').addEventListener('click', () => { panel.hidden = false; panel.scrollIntoView({behavior: 'smooth'}); muat(); });
             document.getElementById('tutup-bt').addEventListener('click', () => { panel.hidden = true; });
         })();

@@ -101,28 +101,28 @@ class UjController extends Controller
     }
 
     /**
-     * Input UJ → panel "Input bayar tanah": DO yang belum ada uang tanahnya (data menu Bayar Tanah), dengan galian & tarif
-     * terakhirnya. ?umur=7|30|semua (bawaan 30).
+     * Input UJ → panel "Input bayar tanah" (tampilan sama dengan Input reimburse Kas UJ di Kas Harian): rekap bayar tanah
+     * (RBT) 30 hari terakhir, terbaru dulu, beserta rinciannya; RBT yang sudah dibayar menyebut UJ-nya.
      */
-    public function daftarBayarTanah(Request $request): JsonResponse
+    public function daftarBayarTanah(): JsonResponse
     {
-        $umur = in_array($request->query('umur'), ['7', '30', 'semua'], true) ? $request->query('umur') : '30';
-        $direkap = \App\Models\BayarTanahRekap::doMenunggu();
-        $rekap = \App\Models\BayarTanahRekap::with('user')->where('status', 'menunggu')->orderBy('id')->get()->map(fn ($x) => [
-            'id' => $x->id, 'kode' => $x->kode(), 'jumlah' => $x->jumlah, 'total' => (int) $x->total, 'catatan' => $x->catatan,
-            'dibuat' => $x->created_at->translatedFormat('j M Y H:i').' · '.($x->user?->name ?? ''),
-        ]);
-        $do = \App\Support\MonitorRitasi::belumBayarTanah()['do']
-            ->filter(fn ($d) => ! isset($direkap[$d['do']]))
-            ->filter(fn ($d) => $umur === 'semua' || ($d['umur'] !== null && $d['umur'] <= (int) $umur))
-            ->map(fn ($d) => [
-                'do' => $d['do'], 'tanggal' => $d['pertama']?->translatedFormat('j M Y'), 'umur' => $d['umur'],
-                'mobil' => implode(', ', $d['mobil']), 'driver' => implode(', ', $d['driver']),
-                'galian' => \App\Support\BayarTanah::galianDo($d), 'tarif' => \App\Support\BayarTanah::tarifDo($d),
-                'bongkar' => $d['bongkar']?->translatedFormat('j M'), 'surat_jalan' => implode(', ', $d['surat_jalan']),
-            ])->values();
+        $rekap = \App\Models\BayarTanahRekap::with('user')->where('status', '!=', 'batal')->where('created_at', '>=', now()->subDays(30))
+            ->orderByDesc('id')->get();
+        $semuaDo = $rekap->flatMap(fn ($r) => array_column($r->isi, 'do'))->unique()->values();
+        // DO → baris uang jalannya (DT, driver, keterangan) untuk rincian.
+        $uj = UjDetail::where('biaya_transfer', false)->whereIn('no_do', $semuaDo->all() ?: ['-'])->orderBy('baris')->get(['no_do', 'no_mobil', 'nama', 'keterangan', 'kategori'])
+            ->groupBy(fn ($d) => (string) $d->no_do)
+            ->map(fn ($g) => $g->first(fn ($d) => \App\Support\ValidasiUj::jenisKategori($d->kategori) === 'uj') ?? $g->first());
 
-        return response()->json(['umur' => $umur, 'rekap' => $rekap, 'do' => $do]);
+        return response()->json(['rekap' => $rekap->map(fn ($r) => [
+            'id' => $r->id, 'kode' => $r->kode(), 'judul' => $r->created_at->translatedFormat('l, j M Y'), 'jam' => $r->created_at->format('H:i'),
+            'jumlah' => $r->jumlah, 'total' => (int) $r->total, 'status' => $r->status, 'no_uj' => $r->no_uj, 'catatan' => $r->catatan,
+            'oleh' => $r->user?->name,
+            'detail' => collect($r->isi)->map(fn ($x) => [
+                'do' => (string) $x['do'], 'harga' => (int) $x['harga'], 'mobil' => $uj[(string) $x['do']]->no_mobil ?? null,
+                'driver' => $uj[(string) $x['do']]->nama ?? null, 'keterangan' => $uj[(string) $x['do']]->keterangan ?? null,
+            ])->values(),
+        ])->values()]);
     }
 
     /**
