@@ -28,7 +28,7 @@ class ReimburseUjKeKas
      *
      * @return array<int, array{kunci: string, tanggal: string, judul: string, kode: ?string, jumlah: int, total: int, kas: ?array}>
      */
-    public static function daftar(int $hari = 60): array
+    public static function daftar(int $hari = 30): array
     {
         $dari = now()->subDays($hari)->toDateString();
         $hasil = [];

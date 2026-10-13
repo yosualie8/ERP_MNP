@@ -99,7 +99,7 @@
         @unless ($edit)
             <div class="kartu kartu-rui" id="panel-rui" hidden>
                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
-                    <h3 style="margin: 0;">🚚 Reimburse Kas UJ <span class="redup" style="font-size: 13px; font-weight: normal;">per tanggal reimburse (60 hari terakhir)</span></h3>
+                    <h3 style="margin: 0;">🚚 Reimburse Kas UJ <span class="redup" style="font-size: 13px; font-weight: normal;">per reimburse (30 hari terakhir)</span></h3>
                     <button type="button" class="tombol polos" id="tutup-rui">Tutup</button>
                 </div>
                 <p class="redup" style="margin: 6px 0 12px;">Klik ▸ untuk melihat rinciannya. Klik baris tanggalnya untuk memasukkan semua transaksi itu ke form di bawah, lalu periksa dan tekan <b>Simpan ke sheet</b>.</p>
@@ -804,7 +804,7 @@
                 const muat = async () => {
                     daftarRui.innerHTML = '<p class="redup">Memuat…</p>';
                     const {daftar: grup} = await (await fetch(@json(route('kas.input.reimburse-uj')), {headers: {Accept: 'application/json'}})).json();
-                    if (!grup.length) { daftarRui.innerHTML = '<p class="redup">Belum ada transaksi Kas UJ yang direimburse dalam 60 hari terakhir.</p>'; return; }
+                    if (!grup.length) { daftarRui.innerHTML = '<p class="redup">Belum ada transaksi Kas UJ yang direimburse dalam 30 hari terakhir.</p>'; return; }
                     daftarRui.innerHTML = '';
                     grup.forEach(g => {
                         const el = document.createElement('div');
