@@ -55,10 +55,10 @@ class AsetController extends Controller
 
     private function baca(Request $request, ?AsetTruk $aset): array
     {
-        // Dump truck: No Lambung baku "DT 000"; aset lain: nama bebas (spasi dirapikan).
+        // Nomor DT dibakukan "DT 000" ("dt34" → DT 034); nama lain bebas (spasi dirapikan), mis. Selfloader, Excavator Kobelco 07.
         $kode = trim(preg_replace('/\s+/', ' ', (string) $request->input('no_lambung')));
         $request->merge([
-            'no_lambung' => in_array($request->input('kategori'), AsetTruk::KATEGORI_TRUK, true) ? NomorMobil::rapikan($kode) : ($kode === '' ? null : $kode),
+            'no_lambung' => preg_match('/^dt\s*[o0-9]{1,3}$/i', $kode) ? NomorMobil::rapikan($kode) : ($kode === '' ? null : $kode),
             'vendor' => ($v = trim((string) $request->input('vendor'))) === '' ? null : $v,
             'plat' => ($p = trim(preg_replace('/\s+/', ' ', strtoupper((string) $request->input('plat'))))) === '' ? null : $p,
             'no_rangka' => strtoupper(trim((string) $request->input('no_rangka'))) ?: null,
@@ -68,7 +68,7 @@ class AsetController extends Controller
         return $request->validate([
             'kategori' => ['required', Rule::in(array_keys(AsetTruk::KATEGORI))],
             'no_lambung' => ['required', 'string', 'max:60', Rule::unique('aset_truk', 'no_lambung')->ignore($aset?->id),
-                ...(in_array($request->input('kategori'), AsetTruk::KATEGORI_TRUK, true) ? ['regex:/^DT \d{3}$/'] : [])],
+                ...(preg_match('/^dt\b/i', $kode) ? ['regex:/^DT \d{3}$/'] : [])],
             'kepemilikan' => ['required', Rule::in(array_keys(AsetTruk::KEPEMILIKAN))],
             'vendor' => ['nullable', 'required_if:kepemilikan,rental', 'string', 'max:100'],
             'plat' => ['nullable', 'string', 'max:20'],
