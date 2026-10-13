@@ -44,7 +44,9 @@
                         <th>Penerima / Nama</th>
                         <th>Keterangan</th>
                         <th>Kategori</th>
-                        <th>Mobil · DO</th>
+                        <th>No Mobil</th>
+                        <th>Jenis</th>
+                        <th>No DO</th>
                         <th class="angka">Nominal</th>
                         <th>ID UJ · status</th>
                         <th></th>
@@ -66,6 +68,8 @@
                             <td>{{ $detail->first()?->keterangan }}@if ($t->nominal && $jumlah !== $t->nominal) <i class="x" title="Jumlah detail (tanpa biaya transfer) tidak sama dengan Nominal Master">detail {{ rp($jumlah) }}</i>@endif</td>
                             <td class="ringkas-gl">{{ $detail->reject->biaya_transfer->pluck('kategori')->filter()->unique()->take(3)->implode(', ') }}</td>
                             <td class="ringkas-gl">{{ $detail->pluck('no_mobil')->filter()->unique()->take(3)->implode(', ') }}</td>
+                            <td class="ringkas-gl">{{ $detail->pluck('jenis_kendaraan')->filter()->unique()->take(3)->implode(', ') }}</td>
+                            <td class="ringkas-gl">{{ ($dos = $detail->pluck('no_do')->filter()->unique())->take(3)->implode(', ') }}@if ($dos->count() > 3) +{{ $dos->count() - 3 }}@endif</td>
                             <td class="angka"><b>{{ rp($t->nominal, true) }}</b></td>
                             <td class="i">@if ($t->no_uj)UJ-{{ $t->no_uj }}@else<i title="Baris master belum diberi ID UJ di sheet">tanpa ID</i>@endif
                                 @if ($jumlahSudah === $detail->count() && $sudah)<span class="label hijau">Sudah reimburse</span>
@@ -88,7 +92,7 @@
                             </td>
                         </tr>
                         @if ($detail->isNotEmpty())
-                            <tr class="bh"><td>Transaksi detail</td><td>Nama</td><td>Keterangan</td><td>Kategori</td><td>Mobil · DO</td><td class="angka">Nominal</td><td>ID UJ · reimburse</td><td></td></tr>
+                            <tr class="bh"><td>Transaksi detail</td><td>Nama</td><td>Keterangan</td><td>Kategori</td><td>No Mobil</td><td>Jenis</td><td>No DO</td><td class="angka">Nominal</td><td>ID UJ · reimburse</td><td></td></tr>
                         @endif
                         @foreach ($detail as $d)
                             <tr @class(['b', 'fee' => $d->biaya_transfer])>
@@ -96,7 +100,9 @@
                                 <td class="p">{{ $d->nama }}</td>
                                 <td>{{ $d->keterangan }}</td>
                                 <td>{{ $d->kategori }}</td>
-                                <td class="mobil">{{ $d->no_mobil }}@if ($d->jenis_kendaraan) <i>{{ $d->jenis_kendaraan }}</i>@endif @if ($d->no_do)<span class="redup">DO {{ $d->no_do }}</span>@endif</td>
+                                <td class="mobil">{{ $d->no_mobil }}</td>
+                                <td>{{ $d->jenis_kendaraan }}</td>
+                                <td>{{ $d->no_do }}</td>
                                 <td class="angka">{{ rp($d->nominal) }}</td>
                                 <td class="i">{{ $d->id_uj }} @if ($d->tanggal_reimburse)<i title="Tanggal reimburse">✓ {{ $d->tanggal_reimburse->translatedFormat('j M') }}</i>@endif</td>
                                 <td></td>
@@ -104,7 +110,7 @@
                         @endforeach
                     </tbody>
                 @empty
-                    <tbody><tr><td colspan="8" class="redup" style="padding: 20px 14px;">Tidak ada transaksi yang cocok.</td></tr></tbody>
+                    <tbody><tr><td colspan="10" class="redup" style="padding: 20px 14px;">Tidak ada transaksi yang cocok.</td></tr></tbody>
                 @endforelse
             </table>
         </div>
