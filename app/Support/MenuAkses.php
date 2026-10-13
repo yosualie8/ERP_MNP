@@ -36,7 +36,7 @@ class MenuAkses
         'daftar-proyek' => ['Daftar Proyek', 'proyek.index', ['proyek.*'], 'Daftar proyek & tahap, pemetaan nama lama (Ritasi/BBM/Kas); data keuangan hanya Super Admin'],
         'pengaturan-proyek' => ['Pengaturan Daftar Proyek', 'pengaturan-proyek', ['pengaturan-proyek', 'pengaturan-proyek.*'], 'Filter bawaan grid Daftar Proyek (periode, status, cost center, tipe) untuk semua pengguna'],
         'kubikasi-kendaraan' => ['Kubikasi Kendaraan', 'kubikasi.index', ['kubikasi.*'], 'Kubikasi standar per jenis kendaraan (nilai awal kolom Kubikasi saat input ritasi)'],
-        'aset' => ['Data Aset Truk', 'aset.index', ['aset.*'], 'Daftar truk milik MNP: lihat, tambah & ubah'],
+        'aset' => ['Data Aset', 'aset.index', ['aset.*'], 'Semua aset MNP (dump truck, alat berat, LV, engkel, …): lihat, tambah & ubah'],
         'kode-gl' => ['Kode GL', 'kas.kode-gl', ['kas.kode-gl'], 'Daftar Kode GL'],
     ];
 

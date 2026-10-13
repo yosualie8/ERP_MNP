@@ -10,23 +10,24 @@ use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
-/** Data Aset: daftar truk milik MNP (data induk di aplikasi) — hanya data truknya; performa & pencocokan dibuat terpisah nanti. */
+/** Data Aset: semua aset MNP (dump truck, alat berat, LV, engkel, …) — data induk di aplikasi. */
 class AsetController extends Controller
 {
     public function index(Request $request): View
     {
         $status = array_key_exists($request->query('status'), AsetTruk::STATUS) ? $request->query('status') : null;
-        $semua = AsetTruk::orderBy('no_lambung')->get();
+        $kategori = array_key_exists($request->query('kategori'), AsetTruk::KATEGORI) ? $request->query('kategori') : null;
+        $semua = AsetTruk::orderBy('kategori')->orderBy('no_lambung')->get();
 
         return view('aset.index', [
-            'truk' => $status ? $semua->where('status', $status)->values() : $semua,
-            'semua' => $semua, 'status' => $status, 'bolehUbah' => $request->user()->bolehMenu('aset'),
+            'truk' => $semua->when($status, fn ($c) => $c->where('status', $status))->when($kategori, fn ($c) => $c->where('kategori', $kategori))->values(),
+            'semua' => $semua, 'status' => $status, 'kategori' => $kategori, 'bolehUbah' => $request->user()->bolehMenu('aset'),
         ]);
     }
 
     public function create(): View
     {
-        return view('aset.form', ['aset' => new AsetTruk(['status' => 'aktif']), 'jenis' => $this->daftarJenis()]);
+        return view('aset.form', ['aset' => new AsetTruk(['status' => 'aktif', 'kategori' => request('kategori', 'dump_truck'), 'kepemilikan' => 'milik']), 'jenis' => $this->daftarJenis()]);
     }
 
     public function edit(AsetTruk $aset): View
@@ -39,7 +40,7 @@ class AsetController extends Controller
         $aset = AsetTruk::create([...$this->baca($request, null), 'user_id' => $request->user()->id]);
         $this->catat($request, 'aset-tambah', "Aset baru {$aset->no_lambung} {$aset->plat}", $aset->toArray());
 
-        return redirect()->route('aset.index')->with('success', "Truk {$aset->no_lambung} ditambahkan ke Data Aset.");
+        return redirect()->route('aset.index')->with('success', "{$aset->labelKategori()} {$aset->no_lambung} ditambahkan ke Data Aset.");
     }
 
     public function update(Request $request, AsetTruk $aset): RedirectResponse
@@ -54,15 +55,22 @@ class AsetController extends Controller
 
     private function baca(Request $request, ?AsetTruk $aset): array
     {
+        // Dump truck: No Lambung baku "DT 000"; aset lain: nama bebas (spasi dirapikan).
+        $kode = trim(preg_replace('/\s+/', ' ', (string) $request->input('no_lambung')));
         $request->merge([
-            'no_lambung' => NomorMobil::rapikan($request->input('no_lambung')),
+            'no_lambung' => in_array($request->input('kategori'), AsetTruk::KATEGORI_TRUK, true) ? NomorMobil::rapikan($kode) : ($kode === '' ? null : $kode),
+            'vendor' => ($v = trim((string) $request->input('vendor'))) === '' ? null : $v,
             'plat' => ($p = trim(preg_replace('/\s+/', ' ', strtoupper((string) $request->input('plat'))))) === '' ? null : $p,
             'no_rangka' => strtoupper(trim((string) $request->input('no_rangka'))) ?: null,
             'no_mesin' => strtoupper(trim((string) $request->input('no_mesin'))) ?: null,
         ]);
 
         return $request->validate([
-            'no_lambung' => ['required', 'regex:/^DT \d{3}$/', Rule::unique('aset_truk', 'no_lambung')->ignore($aset?->id)],
+            'kategori' => ['required', Rule::in(array_keys(AsetTruk::KATEGORI))],
+            'no_lambung' => ['required', 'string', 'max:60', Rule::unique('aset_truk', 'no_lambung')->ignore($aset?->id),
+                ...(in_array($request->input('kategori'), AsetTruk::KATEGORI_TRUK, true) ? ['regex:/^DT \d{3}$/'] : [])],
+            'kepemilikan' => ['required', Rule::in(array_keys(AsetTruk::KEPEMILIKAN))],
+            'vendor' => ['nullable', 'required_if:kepemilikan,rental', 'string', 'max:100'],
             'plat' => ['nullable', 'string', 'max:20'],
             'jenis' => ['nullable', 'string', 'max:40'],
             'tahun' => ['nullable', 'integer', 'min:1980', 'max:'.(now()->year + 1)],
@@ -74,14 +82,16 @@ class AsetController extends Controller
             'driver_tetap' => ['nullable', 'string', 'max:60'],
             'catatan' => ['nullable', 'string', 'max:2000'],
         ], [
-            'no_lambung.regex' => 'No Lambung harus berformat "DT 000", mis. DT 026.',
-            'no_lambung.unique' => 'No Lambung ini sudah terdaftar di Data Aset.',
+            'no_lambung.regex' => 'No Lambung dump truck harus berformat "DT 000", mis. DT 026.',
+            'no_lambung.unique' => 'Kode / nama aset ini sudah terdaftar di Data Aset.',
+            'no_lambung.required' => 'Kode / nama aset belum diisi.',
+            'vendor.required_if' => 'Aset rental: isi nama vendornya.',
         ]);
     }
 
     private function daftarJenis(): array
     {
-        return AsetTruk::whereNotNull('jenis')->distinct()->orderBy('jenis')->pluck('jenis')->merge(['Faw', 'Mercy', 'Giga', 'Hino'])->unique()->values()->all();
+        return AsetTruk::whereNotNull('jenis')->distinct()->orderBy('jenis')->pluck('jenis')->merge(['Faw', 'Mercy', 'Giga', 'Hino', 'Komatsu PC 200', 'Kobelco', 'SANY'])->unique()->values()->all();
     }
 
     private function catat(Request $request, string $aksi, string $ringkasan, array $isi): void

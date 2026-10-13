@@ -1,4 +1,4 @@
-@extends('layouts.app', ['judul' => $aset->exists ? 'Edit '.$aset->no_lambung : 'Tambah truk'])
+@extends('layouts.app', ['judul' => $aset->exists ? 'Edit '.$aset->no_lambung : 'Tambah aset'])
 
 @section('lebar', '900px')
 
@@ -14,9 +14,16 @@
     <form method="POST" action="{{ $aset->exists ? route('aset.update', $aset) : route('aset.store') }}" class="kartu form-aset">
         @csrf
         @if ($aset->exists) @method('PUT') @endif
-        <h3 style="margin: 0 0 14px;">{{ $aset->exists ? 'Edit truk '.$aset->no_lambung : 'Tambah truk ke Data Aset' }}</h3>
+        <h3 style="margin: 0 0 14px;">{{ $aset->exists ? 'Edit aset '.$aset->no_lambung : 'Tambah aset ke Data Aset' }}</h3>
         <div class="baris">
-            <div><label for="no_lambung">No Lambung</label><input id="no_lambung" name="no_lambung" value="{{ old('no_lambung', $aset->no_lambung) }}" placeholder="DT 070" required autocomplete="off"></div>
+            <div><label for="kategori">Kategori</label>
+                <select id="kategori" name="kategori">@foreach (\App\Models\AsetTruk::KATEGORI as $k => $l)<option value="{{ $k }}" @selected(old('kategori', $aset->kategori) === $k)>{{ $l }}</option>@endforeach</select></div>
+            <div><label for="no_lambung" id="label-kode">Kode / nama aset</label><input id="no_lambung" name="no_lambung" value="{{ old('no_lambung', $aset->no_lambung) }}" placeholder="DT 070 / Excavator Kobelco 07" required autocomplete="off"></div>
+            <div><label for="kepemilikan">Kepemilikan</label>
+                <select id="kepemilikan" name="kepemilikan">@foreach (\App\Models\AsetTruk::KEPEMILIKAN as $k => $l)<option value="{{ $k }}" @selected(old('kepemilikan', $aset->kepemilikan) === $k)>{{ $l }}</option>@endforeach</select></div>
+            <div id="isi-vendor"><label for="vendor">Vendor rental</label><input id="vendor" name="vendor" value="{{ old('vendor', $aset->vendor) }}" autocomplete="off"></div>
+        </div>
+        <div class="baris">
             <div><label for="plat">Plat nomor</label><input id="plat" name="plat" value="{{ old('plat', $aset->plat) }}" placeholder="B 9231 UIR" autocomplete="off"></div>
             <div><label for="jenis">Jenis / merek</label><input id="jenis" name="jenis" list="daftar-jenis" value="{{ old('jenis', $aset->jenis) }}" autocomplete="off">
                 <datalist id="daftar-jenis">@foreach ($jenis as $j)<option value="{{ $j }}">@endforeach</datalist></div>
@@ -34,6 +41,18 @@
             <div><label for="driver_tetap">Driver tetap</label><input id="driver_tetap" name="driver_tetap" value="{{ old('driver_tetap', $aset->driver_tetap) }}" autocomplete="off"></div>
         </div>
         <div style="margin-bottom: 14px;"><label for="catatan">Catatan</label><textarea id="catatan" name="catatan" rows="3">{{ old('catatan', $aset->catatan) }}</textarea></div>
+        <script>
+            (() => {
+                const kat = document.getElementById('kategori'), milik = document.getElementById('kepemilikan');
+                const atur = () => {
+                    const dt = kat.value === 'dump_truck';
+                    document.getElementById('label-kode').textContent = dt ? 'No Lambung (DT 000)' : 'Kode / nama aset';
+                    document.getElementById('no_lambung').placeholder = dt ? 'DT 070' : 'mis. Excavator Kobelco 07';
+                    document.getElementById('isi-vendor').style.display = milik.value === 'rental' ? '' : 'none';
+                };
+                kat.addEventListener('change', atur); milik.addEventListener('change', atur); atur();
+            })();
+        </script>
         <div style="display: flex; gap: 10px;">
             <button type="submit" class="tombol">Simpan</button>
             <a href="{{ route('aset.index') }}" class="tombol polos">Batal</a>

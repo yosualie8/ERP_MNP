@@ -147,7 +147,7 @@ class ValidasiRitasi
     {
         $dt = collect($rit)->pluck('no_lambung')->filter()->unique()->all();
         // Acuan jenis kendaraan: Data Aset (daftar truk resmi); bila truk belum ada di Data Aset, jenis terbanyak di rit setahun terakhir.
-        $jenisAset = \App\Models\AsetTruk::whereIn('no_lambung', $dt)->whereNotNull('jenis')->pluck('jenis', 'no_lambung')
+        $jenisAset = \App\Models\AsetTruk::truk()->whereIn('no_lambung', $dt)->whereNotNull('jenis')->pluck('jenis', 'no_lambung')
             ->map(fn ($j) => NomorMobil::rapikanJenis($j))->filter();
         /** @var Collection $jenisDt */
         $jenisDt = Ritasi::whereIn('no_lambung', $dt)->whereNotNull('jenis_kendaraan')->where('tanggal', '>=', now()->subYear())

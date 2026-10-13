@@ -77,7 +77,7 @@ class UjController extends Controller
             ->sortByDesc('n')->pluck('nama')->values();
 
         // No mobil → jenis kendaraan, dari Data Aset (truk yang belum dijual); cadangan: histori Kas UJ.
-        $mobil = AsetTruk::where('status', '!=', 'dijual')->orderBy('no_lambung')->pluck('jenis', 'no_lambung');
+        $mobil = AsetTruk::truk()->where('status', '!=', 'dijual')->orderBy('no_lambung')->pluck('jenis', 'no_lambung');
         if ($mobil->isEmpty()) {
             $mobil = UjDetail::whereNotNull('no_mobil')->where('no_mobil', '!=', '')->orderBy('baris')->get(['no_mobil', 'jenis_kendaraan'])
                 ->mapWithKeys(fn ($d) => [NomorMobil::rapikan($d->no_mobil) => $d->jenis_kendaraan])->filter()->sortKeys();

@@ -171,7 +171,7 @@ class OpenAi
     private static function kosakata(): string
     {
         return Cache::remember('ai-kosakata', now()->addHours(6), function () {
-            $truk = AsetTruk::orderBy('no_lambung')->pluck('no_lambung')->take(40)->implode(', ');
+            $truk = AsetTruk::truk()->orderBy('no_lambung')->pluck('no_lambung')->take(40)->implode(', ');
             $driver = UjDetail::where('tanggal', '>=', now()->subDays(60))->whereNotNull('nama')->selectRaw('nama, COUNT(*) n')->groupBy('nama')
                 ->orderByDesc('n')->limit(30)->pluck('nama')->implode(', ');
             $pic = KasBon::where('tanggal', '>=', now()->subDays(90))->whereNotNull('pic')->selectRaw('pic, COUNT(*) n')->groupBy('pic')

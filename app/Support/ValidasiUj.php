@@ -141,7 +141,7 @@ class ValidasiUj
     {
         static $aset;
 
-        return $aset ??= \App\Models\AsetTruk::pluck('status', 'no_lambung')->all();
+        return $aset ??= \App\Models\AsetTruk::truk()->pluck('status', 'no_lambung')->all();
     }
 
     private static function aturan(array $r, Collection $lain, Collection $jenisDt): array

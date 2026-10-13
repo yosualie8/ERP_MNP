@@ -68,7 +68,7 @@ class BuanganTruk
         }
         $terakhir = self::ritTerakhir();
         $atur = TrukBuangan::with('user')->get()->keyBy('no_lambung');
-        $aset = AsetTruk::get(['no_lambung', 'jenis', 'status'])->keyBy('no_lambung');
+        $aset = AsetTruk::truk()->get(['no_lambung', 'jenis', 'status'])->keyBy('no_lambung');
 
         return collect($truk)->map(function ($t, $dt) use ($terakhir, $atur, $aset) {
             $a = $atur[$dt] ?? null;

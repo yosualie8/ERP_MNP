@@ -24,7 +24,7 @@ class KasNoMobil extends Command
 
     public function handle(): int
     {
-        $aset = AsetTruk::pluck('no_lambung')->flip();
+        $aset = AsetTruk::truk()->pluck('no_lambung')->flip();
         $bon = KasBon::whereNull('no_mobil')->with('transfer.kasBulan')->get();
         $rencana = [];
         $ganda = 0;

@@ -59,7 +59,7 @@ class KasInputController extends Controller
         $modelKode = Cache::remember('model-kode-gl:'.md5($versi), now()->addDay(), fn () => ModelKodeGl::latih(ModelKodeGl::dataLatih()));
 
         // No Mobil per detail dipilih dari Data Aset (truk yang belum dijual).
-        $aset = AsetTruk::where('status', '!=', 'dijual')->orderBy('no_lambung')->get(['no_lambung', 'plat', 'jenis']);
+        $aset = AsetTruk::truk()->where('status', '!=', 'dijual')->orderBy('no_lambung')->get(['no_lambung', 'plat', 'jenis']);
 
         return view('kas.input', compact('kodeGl', 'pic', 'rekening', 'bank', 'modelKode', 'aset'));
     }
@@ -164,7 +164,7 @@ class KasInputController extends Controller
 
         // No Mobil: dibakukan ("dt34" → "DT 034") dan harus terdaftar di Data Aset.
         if ($data['arah'] === 'keluar') {
-            $aset = AsetTruk::pluck('no_lambung')->flip();
+            $aset = AsetTruk::truk()->pluck('no_lambung')->flip();
             $salah = [];
             foreach ($data['bon'] as $i => $b) {
                 $data['bon'][$i]['no_mobil'] = NomorMobil::rapikan($b['no_mobil'] ?? null);

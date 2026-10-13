@@ -30,13 +30,13 @@ class RapikanUjController extends Controller
         return view('uj.rapikan', [
             'baris' => $tampil, 'jumlah' => $baris->count(), 'semua' => $semua, 'kategori' => $kategori, 'hal' => $hal,
             'halaman' => (int) ceil($baris->count() / self::PER_HALAMAN), 'saran' => $this->saran($tampil),
-            'aset' => AsetTruk::where('status', '!=', 'dijual')->orderBy('no_lambung')->get(['no_lambung', 'plat', 'jenis', 'driver_tetap']),
+            'aset' => AsetTruk::truk()->where('status', '!=', 'dijual')->orderBy('no_lambung')->get(['no_lambung', 'plat', 'jenis', 'driver_tetap']),
         ]);
     }
 
     public function simpan(Request $request): RedirectResponse
     {
-        $aset = AsetTruk::pluck('jenis', 'no_lambung');
+        $aset = AsetTruk::truk()->pluck('jenis', 'no_lambung');
         $isian = collect((array) $request->input('mobil', []))->map(fn ($v) => strtoupper(trim(preg_replace('/\s+/', ' ', (string) $v))))->filter();
         $ubah = [];
         $bukan = [];
@@ -96,7 +96,7 @@ class RapikanUjController extends Controller
         $riwayat = UjDetail::whereNotNull('no_mobil')->whereNotNull('nama')
             ->whereBetween('tanggal', [$baris->min('tanggal')->copy()->subDays(14), $baris->max('tanggal')->copy()->addDays(14)])
             ->get(['nama', 'no_mobil', 'tanggal'])->groupBy(fn ($u) => $kunci($u->nama));
-        $tetap = AsetTruk::whereNotNull('driver_tetap')->where('status', '!=', 'dijual')->get()->mapWithKeys(fn ($a) => [$kunci($a->driver_tetap) => $a->no_lambung]);
+        $tetap = AsetTruk::truk()->whereNotNull('driver_tetap')->where('status', '!=', 'dijual')->get()->mapWithKeys(fn ($a) => [$kunci($a->driver_tetap) => $a->no_lambung]);
 
         $hasil = [];
         foreach ($baris as $d) {

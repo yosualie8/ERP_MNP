@@ -83,7 +83,7 @@ class RapikanUj
     public static function rencanaOtomatis(): array
     {
         $k = fn ($v) => LembarRitasi::kunciAngka($v);
-        $aset = AsetTruk::pluck('jenis', 'no_lambung');
+        $aset = AsetTruk::truk()->pluck('jenis', 'no_lambung');
         $uj = UjDetail::where('biaya_transfer', false)->get(['baris', 'id_uj', 'kategori', 'jenis_kendaraan', 'no_mobil', 'no_do']);
         $doDt = $uj->filter(fn ($u) => $u->no_mobil && $k($u->no_do))->groupBy(fn ($u) => $k($u->no_do))->map(fn ($g) => $g->pluck('no_mobil')->unique()->values());
 

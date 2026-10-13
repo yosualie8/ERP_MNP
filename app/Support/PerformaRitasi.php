@@ -25,7 +25,7 @@ class PerformaRitasi
      */
     public static function data(int $tahun, ?array $hanyaTruk = null): array
     {
-        $aset = AsetTruk::pluck('no_lambung')->flip();
+        $aset = AsetTruk::truk()->pluck('no_lambung')->flip();
         $hitung = []; // [Y-m-d][DT] => n
         $terakhir = null;
         foreach (Ritasi::whereYear('tanggal', $tahun)->whereNotNull('no_lambung')->get(['tanggal', 'no_lambung']) as $r) {
