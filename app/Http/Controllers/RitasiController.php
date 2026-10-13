@@ -515,7 +515,7 @@ class RitasiController extends Controller
     {
         $r = Ritasi::where('baris', $baris)->first();
         if (! $r) {
-            return redirect()->route('ritasi.index')->with('error', "Rit di baris {$baris} tidak ditemukan — mungkin sheet berubah. Klik \"Sinkron dari sheet\".");
+            return redirect()->route('ritasi.index')->with('error', "Rit di baris {$baris} tidak ditemukan — mungkin sheet berubah. Tunggu beberapa menit (data diperbarui otomatis tiap 5 menit), lalu muat ulang.");
         }
         $edit = [
             'baris' => $r->baris, 'versi' => $this->versi($r),
@@ -572,19 +572,6 @@ class RitasiController extends Controller
 
         return redirect()->route('ritasi.index', ['bulan' => $r->tanggal?->format('Y-m'), 'q' => $request->input('q') ?: null])
             ->with('success', "Dihapus dari sheet Ritasi baris {$baris}: {$ringkas}.");
-    }
-
-    public function sinkron(): RedirectResponse
-    {
-        try {
-            $n = LembarRitasi::impor(GoogleSheets::wajib());
-        } catch (\Throwable $e) {
-            report($e);
-
-            return back()->with('error', 'Sinkron gagal: '.$e->getMessage());
-        }
-
-        return back()->with('success', "Ritasi disinkron dari sheet: {$n} rit.");
     }
 
     private static function untukRiwayat(array $rit): array

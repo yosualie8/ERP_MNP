@@ -129,7 +129,7 @@ class TulisRitasiSheet
             && NomorMobil::rapikan(LembarRitasi::potong((string) ($isi[6] ?? ''))) === $r->no_lambung
             && $teks(16) === $r->no_do;
         if (! $sama) {
-            throw new RuntimeException("Isi sheet Ritasi baris {$r->baris} sudah berubah sejak sinkron terakhir. Klik \"Sinkron dari sheet\", periksa lagi, lalu ulangi.");
+            throw new RuntimeException("Isi sheet Ritasi baris {$r->baris} sudah berubah sejak sinkron terakhir. Tunggu beberapa menit (data diperbarui otomatis tiap 5 menit), muat ulang, periksa lagi, lalu ulangi.");
         }
     }
 

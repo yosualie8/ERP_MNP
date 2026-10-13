@@ -6,8 +6,7 @@
     @if (! $bulan)
         <div class="kartu">
             <h3 style="margin-top: 0;">Belum ada data ritasi</h3>
-            <p class="redup">Klik sinkron untuk mengambil lembar "Ritasi" dari sheet <i>Proyek ASG - Gsheet</i>.</p>
-            <form method="POST" action="{{ route('ritasi.sinkron') }}">@csrf<button class="tombol" type="submit">Sinkron dari sheet</button></form>
+            <p class="redup">Data diambil otomatis dari lembar "Ritasi" (sheet <i>Proyek ASG - Gsheet</i>) setiap 5 menit.</p>
         </div>
     @else
         <div style="margin-bottom: 10px;">
@@ -29,11 +28,9 @@
             <button class="tombol" type="submit" style="padding: 8px 14px;">Cari</button>
             @if ($q !== '')<a href="{{ route('ritasi.index', ['bulan' => $bulan]) }}" class="redup">Hapus pencarian</a>@endif
             <span class="redup">{{ $rit->count() }} rit · terbaru di atas</span>
-            <span class="redup" style="margin-left: auto;">@if ($diimpor)Disinkron {{ \Illuminate\Support\Carbon::parse($diimpor)->translatedFormat('j M Y H:i') }}@endif</span>
-            <button type="submit" form="form-sinkron" class="tombol polos" title="Ambil ulang lembar Ritasi dari sheet">Sinkron dari sheet</button>
+            <span class="redup" style="margin-left: auto;">@if ($diimpor)Data diperbarui otomatis · terakhir {{ \Illuminate\Support\Carbon::parse($diimpor)->translatedFormat('j M Y H:i') }}@endif</span>
             @if ($bolehInput)<a href="{{ route('ritasi.input') }}" class="tombol" style="padding: 8px 14px;">+ Input ritasi</a>@endif
         </form>
-        <form method="POST" action="{{ route('ritasi.sinkron') }}" id="form-sinkron">@csrf</form>
 
         <div class="kartu gulir" style="padding: 0;">
             <table class="kas">

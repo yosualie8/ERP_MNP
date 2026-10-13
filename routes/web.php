@@ -122,7 +122,6 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/ritasi/{baris}/edit', [RitasiController::class, 'edit'])->whereNumber('baris')->name('ritasi.edit');
     Route::put('/ritasi/{baris}', [RitasiController::class, 'update'])->whereNumber('baris')->name('ritasi.update');
     Route::delete('/ritasi/{baris}', [RitasiController::class, 'hapus'])->whereNumber('baris')->name('ritasi.hapus');
-    Route::post('/ritasi/sinkron', [RitasiController::class, 'sinkron'])->name('ritasi.sinkron');
     Route::get('/uj/reimburse', [ReimburseUjController::class, 'index'])->name('reimburse.index');
     Route::post('/uj/reimburse', [ReimburseUjController::class, 'simpan'])->name('reimburse.simpan');
     Route::get('/uj/reimburse/{reimburse}/excel', [ReimburseUjController::class, 'unduh'])->name('reimburse.unduh');
