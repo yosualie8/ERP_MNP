@@ -50,7 +50,7 @@ class BayarTanahRekapController extends Controller
             'status' => 'menunggu', 'jumlah' => count($isi), 'total' => array_sum(array_column($isi, 'harga')), 'isi' => array_values($isi),
             'catatan' => $request->input('catatan'), 'user_id' => $request->user()->id,
         ]);
-        KasRiwayat::create(['aksi' => 'rbt-buat', 'lembar' => 'Bayar Tanah', 'baris_awal' => 0, 'baris_akhir' => 0, 'user_id' => $request->user()->id,
+        KasRiwayat::create(['aksi' => 'rbt-buat', 'lembar' => 'Ritasi', 'baris_awal' => 0, 'baris_akhir' => 0, 'user_id' => $request->user()->id,
             'ringkasan' => "{$rekap->kode()} dibuat: {$rekap->jumlah} DO · ".rp($rekap->total), 'isi' => $rekap->only(['id', 'isi', 'total'])]);
 
         return back()->with('success', "{$rekap->kode()} tersimpan: {$rekap->jumlah} DO, total ".rp($rekap->total).'. Admin tinggal memilihnya di Input UJ → 🏔️ Input bayar tanah.');
@@ -62,7 +62,7 @@ class BayarTanahRekapController extends Controller
             return back()->with('error', "{$rekap->kode()} sudah ".strtolower(BayarTanahRekap::STATUS[$rekap->status]).', tidak bisa dibatalkan.');
         }
         $rekap->update(['status' => 'batal']);
-        KasRiwayat::create(['aksi' => 'rbt-batal', 'lembar' => 'Bayar Tanah', 'baris_awal' => 0, 'baris_akhir' => 0, 'user_id' => $request->user()->id,
+        KasRiwayat::create(['aksi' => 'rbt-batal', 'lembar' => 'Ritasi', 'baris_awal' => 0, 'baris_akhir' => 0, 'user_id' => $request->user()->id,
             'ringkasan' => "{$rekap->kode()} dibatalkan ({$rekap->jumlah} DO · ".rp($rekap->total).')', 'isi' => ['id' => $rekap->id]]);
 
         return back()->with('success', "{$rekap->kode()} dibatalkan; DO-nya bisa direkap lagi.");
