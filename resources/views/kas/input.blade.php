@@ -763,21 +763,21 @@
             });
             if (inputRui.value) {
                 const n = [...daftar.querySelectorAll('.uj-kunci')].filter(el => el.value).length;
-                tampilModeRui(inputRui.value.split('-').reverse().join('/'), `${n} detail tertaut`);
+                tampilModeRui(/^r\d+$/.test(inputRui.value) ? 'RUJ-' + inputRui.value.slice(1).padStart(4, '0') : inputRui.value.split('-').reverse().join('/'), `${n} detail tertaut`);
             }
             const panelRui = document.getElementById('panel-rui');
             if (panelRui) {
                 const daftarRui = document.getElementById('daftar-rui');
                 const rp = n => 'Rp ' + fmt(n);
                 const cacheIsi = {};
-                const ambilIsi = async tgl => cacheIsi[tgl] ??= await (await fetch(@json(url('/kas/input/reimburse-uj')) + '/' + tgl, {headers: {Accept: 'application/json'}})).json();
+                const ambilIsi = async kunci => cacheIsi[kunci] ??= await (await fetch(@json(url('/kas/input/reimburse-uj')) + '/' + kunci, {headers: {Accept: 'application/json'}})).json();
                 const tabelDetail = d => `<table><thead><tr><th>ID UJ</th><th>Tgl</th><th>Nama</th><th>Keterangan</th><th>Kategori</th><th>DT</th><th>No DO</th><th>Galian</th><th class="angka">Nominal</th></tr></thead><tbody>`
                     + d.detail.map(x => `<tr><td>${esc(x.id_uj || '—')}</td><td>${esc(x.tanggal_uj)}</td><td>${esc(x.nama)}</td><td>${esc(x.keterangan)}</td><td>${esc(x.kategori)}</td>`
                         + `<td>${esc(x.no_mobil)}</td><td>${esc(x.no_do)}</td><td>${esc(x.galian)}</td><td class="angka">${fmt(x.nominal)}</td></tr>`).join('')
                     + `<tr><td colspan="8"><b>Total ${d.detail.length} transaksi</b></td><td class="angka"><b>${fmt(d.master.nominal)}</b></td></tr></tbody></table>`;
 
                 const masukkan = async g => {
-                    const d = await ambilIsi(g.tanggal);
+                    const d = await ambilIsi(g.kunci);
                     const adaIsi = [...daftar.querySelectorAll('[data-nama=keterangan], [data-nama=nominal]')].some(el => el.value.trim());
                     if (adaIsi && !confirm('Isi form sekarang akan diganti dengan reimburse Kas UJ ' + d.judul + '. Lanjutkan?')) return;
                     document.getElementById('arah-keluar').checked = true;
@@ -794,7 +794,7 @@
                     urutkanNama();
                     biayaDiubahManual = false;
                     aturBiaya();
-                    inputRui.value = d.tanggal;
+                    inputRui.value = d.kunci;
                     tampilModeRui(d.judul, `${d.detail.length} transaksi · ${rp(d.master.nominal)}`);
                     hitung();
                     panelRui.hidden = true;
@@ -814,17 +814,17 @@
                             : '<span class="label merah">Belum dicatat di Kas Harian</span>';
                         el.innerHTML = `<div class="rui-master${g.kas ? ' sudah' : ''}" title="${g.kas ? 'Sudah dicatat di Kas Harian' : 'Klik untuk memasukkan semua transaksi ini ke form'}">
                                 <button type="button" class="rui-buka" title="Lihat rincian">▸</button>
-                                <span class="rui-judul"><b>${esc(g.judul)}</b><span class="redup">${g.jumlah} transaksi</span></span>
+                                <span class="rui-judul"><b>${esc(g.judul)}${g.kode ? ` · <span title="ID reimburse UJ">${esc(g.kode)}</span>` : ''}</b><span class="redup">${g.jumlah} transaksi${g.jam ? ` · dibuat ${esc(g.jam)}` : (g.kode ? '' : ' · tanpa ID reimburse')}</span></span>
                                 ${status}<span class="rui-total">${rp(g.total)}</span></div><div class="rui-detail" hidden></div>`;
                         const detail = el.querySelector('.rui-detail');
                         el.querySelector('.rui-buka').addEventListener('click', async e => {
                             e.stopPropagation();
                             el.classList.toggle('terbuka');
                             detail.hidden = !el.classList.contains('terbuka');
-                            if (!detail.hidden && !detail.innerHTML) { detail.innerHTML = '<p class="redup">Memuat…</p>'; detail.innerHTML = tabelDetail(await ambilIsi(g.tanggal)); }
+                            if (!detail.hidden && !detail.innerHTML) { detail.innerHTML = '<p class="redup">Memuat…</p>'; detail.innerHTML = tabelDetail(await ambilIsi(g.kunci)); }
                         });
                         el.querySelector('.rui-master').addEventListener('click', () => {
-                            if (g.kas) { alert(`Reimburse ${g.judul} sudah dicatat di Kas Harian (NO ID ${g.kas.no_id}).`); return; }
+                            if (g.kas) { alert(`Reimburse ${g.kode || g.judul} sudah dicatat di Kas Harian (NO ID ${g.kas.no_id}).`); return; }
                             masukkan(g);
                         });
                         daftarRui.appendChild(el);

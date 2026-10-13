@@ -7,12 +7,13 @@ use App\Models\KasReimburseUj;
 use App\Models\KasTransfer;
 use App\Models\Ritasi;
 use App\Models\UjDetail;
+use App\Models\UjReimburse;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 /**
  * Input Kas → "Input reimburse Kas UJ": uang jalan yang sudah direimburse (Kas Seabank kolom N) dicatat di Kas Harian sebagai satu
- * transfer "Reimburse Uang Jalan" per tanggal reimburse, satu transaksi detail per baris UJ (pola Kas Harian sejak Sep 2026:
+ * transfer "Reimburse Uang Jalan" per reimburse (batch menu Reimburse UJ; data lama tanpa batch: per tanggal), satu transaksi detail per baris UJ (pola Kas Harian sejak Sep 2026:
  * tanggal transfer = tanggal reimburse, total & jumlah baris sama persis).
  * Saat disimpan, tiap detail ditautkan ke baris UJ-nya (tabel kas_reimburse_uj) supaya Mutasi Reimburse kolom C, E, H–L terisi.
  */
@@ -21,38 +22,120 @@ class ReimburseUjKeKas
     public const KETERANGAN = 'Reimburse Uang Jalan';
 
     /**
-     * Ringkasan per tanggal reimburse (terbaru dulu).
+     * Ringkasan per reimburse (terbaru dulu). Setiap batch menu Reimburse UJ (tabel uj_reimburse) berdiri sendiri dengan kunci
+     * "r{id}" (RUJ-0007), jadi beberapa reimburse dalam satu hari bisa dicatat terpisah. Baris UJ yang ber-tanggal reimburse
+     * tetapi tidak termasuk batch mana pun (data lama / diisi langsung di sheet) dikelompokkan per tanggal (kunci = tanggal).
      *
-     * @return array<int, array{tanggal: string, judul: string, jumlah: int, total: int, kas: ?array}>
+     * @return array<int, array{kunci: string, tanggal: string, judul: string, kode: ?string, jumlah: int, total: int, kas: ?array}>
      */
     public static function daftar(int $hari = 60): array
     {
-        $grup = UjDetail::whereNotNull('tanggal_reimburse')->where('tanggal_reimburse', '>=', now()->subDays($hari)->toDateString())
-            ->selectRaw('tanggal_reimburse, COUNT(*) n, SUM(nominal) s')->groupBy('tanggal_reimburse')->orderByDesc('tanggal_reimburse')->get();
+        $dari = now()->subDays($hari)->toDateString();
+        $hasil = [];
+        $tercakup = [];
+        foreach (UjReimburse::where('tanggal', '>=', $dari)->orderByDesc('tanggal')->orderByDesc('id')->get() as $r) {
+            $baris = self::barisBatch($r);
+            foreach ($baris as $d) {
+                $tercakup[$d->id] = true;
+            }
+            $hasil[] = [
+                'kunci' => 'r'.$r->id, 'tanggal' => $r->tanggal->toDateString(), 'kode' => self::kode($r),
+                'judul' => $r->tanggal->translatedFormat('l, j M Y'), 'jam' => $r->created_at?->format('H:i'),
+                'jumlah' => $baris->count(), 'total' => (int) $baris->sum('nominal'), 'kas' => self::sudahDiKasBatch($r, $baris),
+            ];
+        }
+        // Sisa per tanggal (tanpa batch).
+        $sisa = UjDetail::whereNotNull('tanggal_reimburse')->where('tanggal_reimburse', '>=', $dari)->whereNotIn('id', array_keys($tercakup) ?: [0])
+            ->get()->groupBy(fn ($d) => $d->tanggal_reimburse->toDateString());
+        foreach ($sisa as $tgl => $baris) {
+            $t = Carbon::parse($tgl);
+            $hasil[] = ['kunci' => $tgl, 'tanggal' => $tgl, 'kode' => null, 'judul' => $t->translatedFormat('l, j M Y'), 'jam' => null,
+                'jumlah' => $baris->count(), 'total' => (int) $baris->sum('nominal'), 'kas' => self::sudahDiKas($t, (int) $baris->sum('nominal'))];
+        }
+        usort($hasil, fn ($x, $y) => [$y['tanggal'], $y['kunci']] <=> [$x['tanggal'], $x['kunci']]);
 
-        return $grup->map(fn ($g) => [
-            'tanggal' => $g->tanggal_reimburse->toDateString(),
-            'judul' => $g->tanggal_reimburse->translatedFormat('l, j M Y'),
-            'jumlah' => (int) $g->n,
-            'total' => (int) $g->s,
-            'kas' => self::sudahDiKas($g->tanggal_reimburse),
-        ])->all();
+        return $hasil;
+    }
+
+    public static function kode(UjReimburse $r): string
+    {
+        return 'RUJ-'.str_pad((string) $r->id, 4, '0', STR_PAD_LEFT);
+    }
+
+    /** Batch dari kunci "r{id}"; null bila kunci berupa tanggal (data tanpa batch). */
+    public static function batch(string $kunci): ?UjReimburse
+    {
+        return preg_match('/^r(\d+)$/', $kunci, $m) ? UjReimburse::find((int) $m[1]) : null;
+    }
+
+    /** Baris UJ satu batch: lewat ID UJ yang disalin saat reimburse; baris tanpa ID lewat nomor baris + nominal. */
+    public static function barisBatch(UjReimburse $r): Collection
+    {
+        $isi = collect($r->isi ?? []);
+        $id = $isi->pluck('id_uj')->filter()->unique()->values();
+        $tanpaId = $isi->filter(fn ($x) => empty($x['id_uj']) && ! empty($x['baris']));
+        return UjDetail::query()
+            ->where(fn ($q) => $q->whereIn('id_uj', $id->all() ?: ['-'])
+                ->orWhere(fn ($q2) => $tanpaId->each(fn ($x) => $q2->orWhere(fn ($q3) => $q3->whereNull('id_uj')->where('baris', $x['baris'])->where('nominal', $x['nominal'] ?? 0)))))
+            ->orderBy('baris')->get();
+    }
+
+    /** Baris UJ untuk kunci form: batch (r{id}) atau tanggal reimburse (baris yang tidak termasuk batch mana pun). */
+    public static function barisKunci(string $kunci): Collection
+    {
+        if ($r = self::batch($kunci)) {
+            return self::barisBatch($r);
+        }
+        $tercakup = UjReimburse::whereDate('tanggal', $kunci)->get()->flatMap(fn ($r) => self::barisBatch($r)->pluck('id'))->all();
+
+        return UjDetail::whereDate('tanggal_reimburse', $kunci)->whereNotIn('id', $tercakup ?: [0])->orderBy('baris')->get();
     }
 
     /**
-     * Transfer Kas Harian yang sudah mencatat reimburse tanggal ini: yang dibuat lewat fitur ini, atau (data lama)
-     * transfer "Reimburse Uang Jalan" bertanggal sama.
+     * Transfer Kas Harian yang sudah mencatat batch ini: tautan batch, tautan ID UJ-nya (dicatat sebelum ada batch), atau (data
+     * lama) transfer "Reimburse Uang Jalan" bertanggal sama dengan nominal sama yang belum dipakai batch lain.
      *
      * @return array{no_id: int, nominal: int, tanggal: string, lewat_aplikasi: bool}|null
      */
-    public static function sudahDiKas(Carbon $tanggal): ?array
+    public static function sudahDiKasBatch(UjReimburse $r, ?Collection $baris = null): ?array
     {
-        if ($noId = KasReimburseUj::whereDate('tanggal_reimburse', $tanggal)->value('no_id_transfer')) {
+        $baris ??= self::barisBatch($r);
+        $noId = KasReimburseUj::where('uj_reimburse_id', $r->id)->value('no_id_transfer')
+            ?? KasReimburseUj::whereIn('id_uj', $baris->pluck('id_uj')->filter()->all() ?: ['-'])->value('no_id_transfer');
+        if ($noId) {
             $t = KasTransfer::where('no_id', $noId)->first();
 
             return ['no_id' => (int) $noId, 'nominal' => (int) ($t->kredit ?? 0), 'tanggal' => $t?->tanggal?->translatedFormat('j M Y') ?? '', 'lewat_aplikasi' => true];
         }
-        $t = KasTransfer::where('keterangan', self::KETERANGAN)->whereDate('tanggal', $tanggal)->orderBy('baris')->first();
+        $dipakai = KasReimburseUj::whereNotNull('no_id_transfer')->distinct()->pluck('no_id_transfer')->all();
+        $t = KasTransfer::where('keterangan', self::KETERANGAN)->whereDate('tanggal', $r->tanggal)->where('kredit', (int) $baris->sum('nominal'))
+            ->whereNotIn('no_id', $dipakai ?: [0])->orderBy('baris')->first();
+
+        return $t ? ['no_id' => (int) $t->no_id, 'nominal' => (int) $t->kredit, 'tanggal' => $t->tanggal->translatedFormat('j M Y'), 'lewat_aplikasi' => false] : null;
+    }
+
+    /** Status Kas Harian untuk kunci form (batch atau tanggal). */
+    public static function sudahDiKasKunci(string $kunci): ?array
+    {
+        return ($r = self::batch($kunci)) ? self::sudahDiKasBatch($r) : self::sudahDiKas(Carbon::parse($kunci), (int) self::barisKunci($kunci)->sum('nominal'));
+    }
+
+    /**
+     * Data tanpa batch: transfer Kas Harian yang sudah mencatat reimburse tanggal ini (tautan per tanggal tanpa batch, atau
+     * transfer "Reimburse Uang Jalan" bertanggal sama — bila nominal diberikan, harus sama).
+     *
+     * @return array{no_id: int, nominal: int, tanggal: string, lewat_aplikasi: bool}|null
+     */
+    public static function sudahDiKas(Carbon $tanggal, ?int $nominal = null): ?array
+    {
+        if ($noId = KasReimburseUj::whereDate('tanggal_reimburse', $tanggal)->whereNull('uj_reimburse_id')->value('no_id_transfer')) {
+            $t = KasTransfer::where('no_id', $noId)->first();
+
+            return ['no_id' => (int) $noId, 'nominal' => (int) ($t->kredit ?? 0), 'tanggal' => $t?->tanggal?->translatedFormat('j M Y') ?? '', 'lewat_aplikasi' => true];
+        }
+        $dipakai = KasReimburseUj::whereNotNull('no_id_transfer')->distinct()->pluck('no_id_transfer')->all();
+        $t = KasTransfer::where('keterangan', self::KETERANGAN)->whereDate('tanggal', $tanggal)->whereNotIn('no_id', $dipakai ?: [0])
+            ->when($nominal, fn ($q) => $q->where('kredit', $nominal))->orderBy('baris')->first();
 
         return $t ? ['no_id' => (int) $t->no_id, 'nominal' => (int) $t->kredit, 'tanggal' => $t->tanggal->translatedFormat('j M Y'), 'lewat_aplikasi' => false] : null;
     }
@@ -95,18 +178,20 @@ class ReimburseUjKeKas
         ];
     }
 
-    /** Isi form untuk satu tanggal reimburse: master + detail (dengan kunci baris UJ). */
-    public static function untukForm(string $tanggal): array
+    /** Isi form untuk satu reimburse (kunci batch r{id} atau tanggal): master + detail (dengan kunci baris UJ). */
+    public static function untukForm(string $kunci): array
     {
-        $tgl = Carbon::parse($tanggal);
+        $r = self::batch($kunci);
+        $tgl = $r ? $r->tanggal : Carbon::parse($kunci);
         $b = self::bawaan();
-        $baris = self::baris($tgl);
+        $baris = self::barisKunci($kunci);
         $galian = self::galian($baris);
 
         return [
+            'kunci' => $kunci, 'kode' => $r ? self::kode($r) : null,
             'tanggal' => $tgl->toDateString(),
-            'judul' => $tgl->translatedFormat('l, j M Y'),
-            'kas' => self::sudahDiKas($tgl),
+            'judul' => $tgl->translatedFormat('l, j M Y').($r ? ' · '.self::kode($r) : ''),
+            'kas' => self::sudahDiKasKunci($kunci),
             'master' => [...$b, 'nominal' => (int) $baris->sum('nominal')],
             'detail' => $baris->map(fn (UjDetail $d) => [
                 'uj' => self::kunci($d), 'id_uj' => $d->id_uj, 'tanggal_uj' => $d->tanggal?->translatedFormat('j M'), 'nama' => $d->nama,
@@ -149,9 +234,11 @@ class ReimburseUjKeKas
      * @param  array<int, array>  $bon  bon dari form (urutan sama dengan NO ID yang ditulis), masing-masing boleh membawa 'uj'
      * @param  int[]  $noIds  NO ID baris yang ditulis (bon ke-i = NO ID ke-i)
      */
-    public static function catat(string $tanggal, array $bon, array $noIds, ?int $userId): int
+    public static function catat(string $kunci, array $bon, array $noIds, ?int $userId): int
     {
-        $baris = self::baris($tanggal)->keyBy(fn ($d) => self::kunci($d));
+        $r = self::batch($kunci);
+        $tanggal = $r ? $r->tanggal->toDateString() : $kunci;
+        $baris = self::barisKunci($kunci)->keyBy(fn ($d) => self::kunci($d));
         $galian = self::galian($baris->values());
         $n = 0;
         foreach (array_values($bon) as $i => $b) {
@@ -160,7 +247,7 @@ class ReimburseUjKeKas
                 continue;
             }
             KasReimburseUj::updateOrCreate(['no_id' => $noIds[$i]], [
-                'no_id_transfer' => $noIds[0], 'tanggal_reimburse' => $tanggal, 'id_uj' => $d->id_uj, 'baris_uj' => $d->baris,
+                'no_id_transfer' => $noIds[0], 'uj_reimburse_id' => $r?->id, 'tanggal_reimburse' => $tanggal, 'id_uj' => $d->id_uj, 'baris_uj' => $d->baris,
                 'tanggal_uj' => $d->tanggal, 'jenis_kendaraan' => $d->jenis_kendaraan, 'no_mobil' => $d->no_mobil, 'no_do' => $d->no_do,
                 'galian' => $galian[self::kunci($d)] ?? null, 'kategori' => $d->biaya_transfer ? 'Biaya Transfer' : $d->kategori,
                 'nominal' => (int) $b['nominal'], 'user_id' => $userId,

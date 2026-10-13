@@ -133,7 +133,7 @@ class KasInputController extends Controller
             'bon.*.kode_gl' => ['required', 'string', 'max:120'],
             'bon.*.uj' => ['nullable', 'string', 'max:40'],
             'bon.*.no_mobil' => ['nullable', 'string', 'max:20'],
-            'reimburse_uj' => ['nullable', 'date'],
+            'reimburse_uj' => ['nullable', 'string', 'max:20', 'regex:/^(r\d+|\d{4}-\d{2}-\d{2})$/'],
             // Transaksi yang baru diinput/diedit tetapi kenyataannya sudah direimburse.
             'sudah_reimburse' => ['nullable', 'boolean'],
             'tanggal_reimburse' => ['exclude_unless:sudah_reimburse,1', 'required', 'date', 'before_or_equal:today'],
@@ -205,10 +205,10 @@ class KasInputController extends Controller
             return $input;
         }
         $tanggal = $input['tanggal'];
-        // Reimburse Kas UJ: satu tanggal reimburse hanya boleh dicatat sekali.
-        if ($input['reimburse_uj'] && ($ada = KasReimburseUj::whereDate('tanggal_reimburse', $input['reimburse_uj'])->value('no_id_transfer'))) {
-            return back()->withInput()->with('error', 'Reimburse Kas UJ tanggal '.Carbon::parse($input['reimburse_uj'])->translatedFormat('j M Y')
-                ." sudah dicatat di Kas Harian (NO ID {$ada}). Transaksi tidak ditulis.");
+        // Reimburse Kas UJ: satu reimburse (batch RUJ / tanggal tanpa batch) hanya boleh dicatat sekali.
+        $labelRui = $input['reimburse_uj'] ? $this->labelReimburseUj($input['reimburse_uj']) : null;
+        if ($input['reimburse_uj'] && ($ada = ReimburseUjKeKas::sudahDiKasKunci($input['reimburse_uj']))) {
+            return back()->withInput()->with('error', "Reimburse Kas UJ {$labelRui} sudah dicatat di Kas Harian (NO ID {$ada['no_id']}). Transaksi tidak ditulis.");
         }
 
         try {
@@ -257,7 +257,7 @@ class KasInputController extends Controller
             .' (NO ID '.reset($hasil['no_id']).(count($hasil['no_id']) > 1 ?'–'.end($hasil['no_id']) : '').').'
             .($akunBaru->isNotEmpty() ? ' Akun baru: '.$akunBaru->implode(', ').'.' : '')
             .($jumlahFoto ? " {$jumlahFoto} foto bon terlampir." : '')
-            .($tertaut ? " {$tertaut} detail tertaut ke Kas UJ (reimburse ".Carbon::parse($input['reimburse_uj'])->translatedFormat('j M Y').')' : '')
+            .($tertaut ? " {$tertaut} detail tertaut ke Kas UJ (reimburse {$labelRui})" : '')
             .$pesanImpor
         );
     }
@@ -268,12 +268,20 @@ class KasInputController extends Controller
         return response()->json(['daftar' => ReimburseUjKeKas::daftar()]);
     }
 
-    /** Isi form satu tanggal reimburse: master + semua detail UJ-nya. */
+    /** Isi form satu reimburse (batch r{id}, atau tanggal untuk data tanpa batch): master + semua detail UJ-nya. */
     public function reimburseUjIsi(string $tanggal): JsonResponse
     {
-        abort_unless(preg_match('/^\d{4}-\d{2}-\d{2}$/', $tanggal), 404);
+        abort_unless(preg_match('/^(r\d+|\d{4}-\d{2}-\d{2})$/', $tanggal), 404);
+        abort_if(str_starts_with($tanggal, 'r') && ! ReimburseUjKeKas::batch($tanggal), 404);
 
         return response()->json(ReimburseUjKeKas::untukForm($tanggal));
+    }
+
+    private function labelReimburseUj(string $kunci): string
+    {
+        return ($r = ReimburseUjKeKas::batch($kunci))
+            ? ReimburseUjKeKas::kode($r).' ('.$r->tanggal->translatedFormat('j M Y').')'
+            : 'tanggal '.Carbon::parse($kunci)->translatedFormat('j M Y');
     }
 
     /** Hapus transfer + seluruh bonnya dari sheet (opsional beserta baris biaya transfernya), lalu impor ulang lembarnya. */
