@@ -73,10 +73,11 @@ class ReimburseUjKeKas
     {
         $isi = collect($r->isi ?? []);
         $id = $isi->pluck('id_uj')->filter()->unique()->values();
+        // Baris yang saat reimburse belum ber-ID (mis. biaya transfer yang ID-nya diberikan belakangan): cocokkan nomor baris + nominal.
         $tanpaId = $isi->filter(fn ($x) => empty($x['id_uj']) && ! empty($x['baris']));
         return UjDetail::query()
             ->where(fn ($q) => $q->whereIn('id_uj', $id->all() ?: ['-'])
-                ->orWhere(fn ($q2) => $tanpaId->each(fn ($x) => $q2->orWhere(fn ($q3) => $q3->whereNull('id_uj')->where('baris', $x['baris'])->where('nominal', $x['nominal'] ?? 0)))))
+                ->orWhere(fn ($q2) => $tanpaId->each(fn ($x) => $q2->orWhere(fn ($q3) => $q3->where('baris', $x['baris'])->where('nominal', $x['nominal'] ?? 0)))))
             ->orderBy('baris')->get();
     }
 
@@ -134,8 +135,9 @@ class ReimburseUjKeKas
             return ['no_id' => (int) $noId, 'nominal' => (int) ($t->kredit ?? 0), 'tanggal' => $t?->tanggal?->translatedFormat('j M Y') ?? '', 'lewat_aplikasi' => true];
         }
         $dipakai = KasReimburseUj::whereNotNull('no_id_transfer')->distinct()->pluck('no_id_transfer')->all();
-        $t = KasTransfer::where('keterangan', self::KETERANGAN)->whereDate('tanggal', $tanggal)->whereNotIn('no_id', $dipakai ?: [0])
-            ->when($nominal, fn ($q) => $q->where('kredit', $nominal))->orderBy('baris')->first();
+        $calon = KasTransfer::where('keterangan', self::KETERANGAN)->whereDate('tanggal', $tanggal)->whereNotIn('no_id', $dipakai ?: [0])->orderBy('baris')->get();
+        // Nominal sama diutamakan; data lama (satu reimburse per hari) cukup tanggalnya.
+        $t = ($nominal ? $calon->firstWhere('kredit', $nominal) : null) ?? $calon->first();
 
         return $t ? ['no_id' => (int) $t->no_id, 'nominal' => (int) $t->kredit, 'tanggal' => $t->tanggal->translatedFormat('j M Y'), 'lewat_aplikasi' => false] : null;
     }
