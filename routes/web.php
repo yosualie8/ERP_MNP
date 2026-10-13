@@ -58,7 +58,6 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::post('/kas/bon/{noId}', [KasFotoController::class, 'store'])->whereNumber('noId')->name('kas.bon.store');
     Route::get('/kas/foto/{foto}', [KasFotoController::class, 'tampil'])->name('kas.foto');
     Route::delete('/kas/foto/{foto}', [KasFotoController::class, 'destroy'])->name('kas.foto.destroy');
-    Route::post('/kas/sinkron', [KasInputController::class, 'sinkron'])->name('kas.sinkron');
     Route::get('/kas/rekap', [KasController::class, 'rekap'])->name('kas.rekap');
     Route::get('/uj/rapikan', [RapikanUjController::class, 'index'])->name('uj.rapikan');
     Route::post('/uj/rapikan', [RapikanUjController::class, 'simpan'])->name('uj.rapikan.simpan');
@@ -92,7 +91,6 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/uj/{noUj}/edit', [UjController::class, 'edit'])->whereNumber('noUj')->name('uj.edit');
     Route::put('/uj/{noUj}', [UjController::class, 'update'])->whereNumber('noUj')->name('uj.update');
     Route::delete('/uj/{noUj}', [UjController::class, 'hapus'])->whereNumber('noUj')->name('uj.hapus');
-    Route::post('/uj/sinkron', [UjController::class, 'sinkron'])->name('uj.sinkron');
     // Pengajuan uang jalan (disimpan di aplikasi, direalisasikan lewat Input UJ).
     Route::get('/uj/pengajuan', [PengajuanUjController::class, 'daftar'])->name('pengajuan-uj.daftar');
     Route::get('/uj/pengajuan/baru', [PengajuanUjController::class, 'buat'])->name('pengajuan-uj.buat');

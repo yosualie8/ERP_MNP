@@ -10,8 +10,7 @@
     @if (! $bulan)
         <div class="kartu">
             <h3 style="margin-top: 0;">Belum ada data Kas Seabank</h3>
-            <p class="redup">Klik sinkron untuk mengambil lembar "Kas Seabank" dari sheet <i>KAS MMP Uang Jalan dan UM</i>.</p>
-            <form method="POST" action="{{ route('uj.sinkron') }}">@csrf<button class="tombol" type="submit">Sinkron dari sheet</button></form>
+            <p class="redup">Data diambil otomatis dari lembar "Kas Seabank" (sheet <i>KAS MMP Uang Jalan dan UM</i>) setiap 5 menit.</p>
         </div>
     @else
         @include('partials.periode', ['rute' => 'uj.index', 'bawa' => ['q' => $q]])
@@ -33,14 +32,12 @@
             @endif
             <span class="redup">{{ $transaksi->count() }} transfer · {{ $detailSemua->count() }} detail · terbaru di atas</span>
             <button type="button" class="tombol polos" id="buka-semua">Buka semua detail</button>
-            <span class="redup" style="margin-left: auto;">@if ($diimpor)Disinkron {{ \Illuminate\Support\Carbon::parse($diimpor)->translatedFormat('j M Y H:i') }}@endif</span>
-            <button type="submit" form="form-sinkron" class="tombol polos" title="Ambil ulang lembar Kas Seabank dari sheet (setelah sheet diubah langsung)">Sinkron dari sheet</button>
+            <span class="redup" style="margin-left: auto;">@if ($diimpor)Data diperbarui otomatis · terakhir {{ \Illuminate\Support\Carbon::parse($diimpor)->translatedFormat('j M Y H:i') }}@endif</span>
             @if ($bolehInput)<a href="{{ route('uj.input') }}" class="tombol" style="padding: 8px 14px;">+ Input UJ</a>@endif
         </form>
-        <form method="POST" action="{{ route('uj.sinkron') }}" id="form-sinkron">@csrf</form>
 
         <div class="kartu gulir" style="padding: 0;">
-            <table class="kas">
+            <table class="kas" data-saring-kolom="grup">
                 <thead>
                     <tr>
                         <th>Tanggal</th>
@@ -144,4 +141,5 @@
             }));
         </script>
     @endif
+    <script src="{{ asset('js/saring-kolom.js') }}?v={{ filemtime(public_path('js/saring-kolom.js')) }}"></script>
 @endsection

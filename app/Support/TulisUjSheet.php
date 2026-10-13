@@ -137,7 +137,7 @@ class TulisUjSheet
         $l = KasSeabank::LEMBAR;
         [$dari, $sampai] = [$t->baris, $t->baris_akhir];
         $isi = $this->sheets->nilaiMentah($this->id, ["{$l}!A{$dari}:N".($sampai + 1)])["{$l}!A{$dari}:N".($sampai + 1)];
-        $berubah = fn (string $alasan) => new RuntimeException("Isi sheet Kas Seabank sudah berubah sejak sinkron terakhir ({$alasan}). Klik \"Sinkron dari sheet\", periksa lagi, lalu coba ulang.");
+        $berubah = fn (string $alasan) => new RuntimeException("Isi sheet Kas Seabank sudah berubah sejak sinkron terakhir ({$alasan}). Tunggu beberapa menit (data diperbarui otomatis tiap 5 menit), muat ulang, periksa lagi, lalu coba ulang.");
         foreach ($t->detail as $d) {
             $r = $isi[$d->baris - $dari] ?? [];
             if (KasSeabank::angka($r[7] ?? null) !== $d->nominal || trim((string) ($r[0] ?? '')) !== (string) $d->id_uj) {

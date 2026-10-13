@@ -71,7 +71,7 @@ class ReimburseUj
                     ? KasSeabank::biayaTransfer((string) ($r[8] ?? ''), (string) ($r[6] ?? '')) && KasSeabank::angka($r[7] ?? null) === (int) $d->nominal
                     : trim((string) ($r[0] ?? '')) === (string) $d->id_uj && KasSeabank::angka($r[7] ?? null) === (int) $d->nominal;
                 if (! $sama) {
-                    throw new RuntimeException("Isi sheet Kas Seabank baris {$d->baris} sudah berubah sejak sinkron terakhir. Klik \"Sinkron dari sheet\" di Kas UJ, lalu ulangi.");
+                    throw new RuntimeException("Isi sheet Kas Seabank baris {$d->baris} sudah berubah sejak sinkron terakhir. Tunggu beberapa menit (data diperbarui otomatis tiap 5 menit) lalu muat ulang di Kas UJ, lalu ulangi.");
                 }
                 if (trim((string) ($r[13] ?? '')) !== '') {
                     throw new RuntimeException("Baris {$d->baris} ({$d->id_uj}) di sheet sudah berisi tanggal reimburse. Sinkron dulu, lalu ulangi.");

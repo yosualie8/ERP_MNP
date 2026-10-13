@@ -443,7 +443,7 @@ class UjController extends Controller
     {
         $t = UjTransaksi::with('detail')->where('no_uj', $noUj)->first();
         if (! $t) {
-            return redirect()->route('uj.index')->with('error', "Transaksi UJ-{$noUj} tidak ditemukan. Mungkin sudah dihapus atau sheet berubah — klik \"Sinkron dari sheet\".");
+            return redirect()->route('uj.index')->with('error', "Transaksi UJ-{$noUj} tidak ditemukan. Mungkin sudah dihapus atau sheet berubah — tunggu beberapa menit (data diperbarui otomatis tiap 5 menit) lalu muat ulang.");
         }
         if ($tolak = $this->tolakReimburse($t)) {
             return redirect()->route('uj.index', ['bulan' => $t->tanggal?->format('Y-m')])->with('error', $tolak);
@@ -554,19 +554,6 @@ class UjController extends Controller
             "Dihapus dari Kas Seabank baris {$hasil['baris_awal']}–{$hasil['baris_akhir']}: {$ringkasan}".($foto ? ", {$foto} foto bon ikut dihapus" : '').'.'.$pesanImpor);
     }
 
-    public function sinkron(): RedirectResponse
-    {
-        try {
-            $h = KasSeabank::impor(GoogleSheets::wajib());
-        } catch (\Throwable $e) {
-            report($e);
-
-            return back()->with('error', 'Sinkron gagal: '.$e->getMessage());
-        }
-
-        return back()->with('success', "Kas Seabank disinkron dari sheet: {$h['transaksi']} transaksi, {$h['detail']} detail.");
-    }
-
     private function simpanFoto(Request $request, int $noUj, Carbon $tanggal): int
     {
         $n = 0;
@@ -593,7 +580,7 @@ class UjController extends Controller
         } catch (\Throwable $e) {
             report($e);
 
-            return ' Sheet sudah diubah, tetapi data aplikasi belum diperbarui ('.$e->getMessage().'); klik "Sinkron dari sheet".';
+            return ' Sheet sudah diubah, tetapi data aplikasi belum diperbarui ('.$e->getMessage().'); tunggu beberapa menit (data diperbarui otomatis tiap 5 menit) lalu muat ulang.';
         }
     }
 

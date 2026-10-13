@@ -33,7 +33,7 @@
         </form>
 
         <div class="kartu gulir" style="padding: 0;">
-            <table class="kas">
+            <table class="kas" data-saring-kolom>
                 <thead>
                     <tr><th>Tanggal</th><th>Tahap</th><th>No Seri</th><th>DT · Plat / Driver</th><th>Galian</th><th>Tanah · Buangan</th><th>Kendaraan · Pemilik</th><th>No DO</th><th class="angka">Kubikasi</th><th class="angka">Harga jual</th><th></th></tr>
                 </thead>
@@ -75,4 +75,5 @@
             }));
         </script>
     @endif
+    <script src="{{ asset('js/saring-kolom.js') }}?v={{ filemtime(public_path('js/saring-kolom.js')) }}"></script>
 @endsection

@@ -338,7 +338,7 @@ class KasInputController extends Controller
     {
         $t = KasTransfer::where('no_id', $noId)->with('bon.kodeGl', 'kodeGl', 'kasBulan')->first();
         if (! $t) {
-            return redirect()->route('kas.index')->with('error', "Transaksi NO ID {$noId} tidak ditemukan. Mungkin sudah dihapus atau sheet berubah — klik \"Sinkron dari sheet\".");
+            return redirect()->route('kas.index')->with('error', "Transaksi NO ID {$noId} tidak ditemukan. Mungkin sudah dihapus atau sheet berubah — tunggu beberapa menit (data diperbarui otomatis tiap 5 menit) lalu muat ulang.");
         }
         $biaya = HapusKasSheet::biayaTransferMilik($t);
         // Hanya transaksi yang belum direimburse yang boleh diedit (dicek juga saat disimpan).
@@ -507,24 +507,7 @@ class KasInputController extends Controller
         } catch (\Throwable $e) {
             report($e);
 
-            return ' Sheet sudah diubah, tetapi impor ulang ke aplikasi gagal ('.$e->getMessage().'); klik "Sinkron dari sheet".';
+            return ' Sheet sudah diubah, tetapi impor ulang ke aplikasi gagal ('.$e->getMessage().'); tunggu beberapa menit (data diperbarui otomatis tiap 5 menit) lalu muat ulang.';
         }
-    }
-
-    /** Impor ulang satu lembar dari sheet (setelah admin mengubah sheet langsung). */
-    public function sinkron(Request $request): RedirectResponse
-    {
-        // Satu lembar ("1026") atau beberapa sekaligus untuk periode lebih dari sebulan ("0926,1026").
-        $lembar = explode(',', $request->validate(['lembar' => ['required', 'regex:/^\d{4}(,\d{4})*$/']])['lembar']);
-        try {
-            $hasil = ImporKas::imporUlang($lembar);
-        } catch (\Throwable $e) {
-            report($e);
-
-            return back()->with('error', 'Sinkron gagal: '.$e->getMessage());
-        }
-
-        return back()->with('success', 'Lembar '.implode(', ', $lembar).' disinkronkan dari sheet: '.collect($hasil)->sum(fn ($h) => count($h['transfer'])).' transfer, '
-            .collect($hasil)->sum('jumlah_bon').' transaksi detail, saldo akhir '.rp(collect($hasil)->last()['saldo_akhir']).'.');
     }
 }

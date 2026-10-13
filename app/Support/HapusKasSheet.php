@@ -80,7 +80,7 @@ class HapusKasSheet
     public static function cocokkan(array $blok, array $isi, int $dari, int $sampai): void
     {
         $sel = fn (int $baris, int $kolom) => trim((string) ($isi[$baris - $dari][$kolom] ?? ''));
-        $berubah = fn (string $alasan) => new RuntimeException("Isi sheet sudah berubah sejak sinkron terakhir ({$alasan}). Klik \"Sinkron dari sheet\", periksa lagi, lalu coba ulang.");
+        $berubah = fn (string $alasan) => new RuntimeException("Isi sheet sudah berubah sejak sinkron terakhir ({$alasan}). Tunggu beberapa menit (data diperbarui otomatis tiap 5 menit), muat ulang, periksa lagi, lalu coba ulang.");
 
         foreach ($blok as $t) {
             if ((BacaLembarKas::rupiah($sel($t->baris, 6)) ?? 0) !== $t->debet || (BacaLembarKas::rupiah($sel($t->baris, 7)) ?? 0) !== $t->kredit) {

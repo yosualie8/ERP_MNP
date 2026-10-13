@@ -76,17 +76,12 @@
             @endif
             <span class="redup">{{ $transfer->count() }} transfer · {{ $transfer->sum(fn ($t) => $t->bon->count()) }} detail · terbaru di atas</span>
             <button type="button" class="tombol polos" id="buka-semua">Buka semua detail</button>
-            <span class="redup" style="margin-left: auto;">Diimpor {{ $lembar->min('diimpor_pada')->translatedFormat('j M Y H:i') }} dari lembar {{ $lembar->pluck('lembar')->implode(', ') }}</span>
-            <button type="submit" form="form-sinkron" class="tombol polos" title="Ambil ulang lembar {{ $lembar->pluck('lembar')->implode(', ') }} dari sheet (setelah sheet diubah langsung)">Sinkron dari sheet</button>
+            <span class="redup" style="margin-left: auto;">Data diperbarui otomatis · terakhir {{ $lembar->min('diimpor_pada')->translatedFormat('j M Y H:i') }} (lembar {{ $lembar->pluck('lembar')->implode(', ') }})</span>
             @if ($bolehInput)<a href="{{ route('kas.input') }}" class="tombol" style="padding: 8px 14px;">+ Input kas</a>@endif
-        </form>
-        <form method="POST" action="{{ route('kas.sinkron') }}" id="form-sinkron">
-            @csrf
-            <input type="hidden" name="lembar" value="{{ $lembar->pluck('lembar')->implode(',') }}">
         </form>
 
         <div class="kartu gulir" style="padding: 0;">
-            <table class="kas">
+            <table class="kas" data-saring-kolom="grup">
                 <thead>
                     <tr>
                         <th>Tanggal</th>
@@ -206,4 +201,5 @@
         </script>
     @endif
     @endif
+    <script src="{{ asset('js/saring-kolom.js') }}?v={{ filemtime(public_path('js/saring-kolom.js')) }}"></script>
 @endsection
