@@ -132,6 +132,14 @@
         @if ($pesanPengajuan ?? null)
             <div class="pesan galat">{{ $pesanPengajuan }}</div>
         @endif
+        @if (! empty($dariBayarTanah) && ! old('detail'))
+            <div class="pesan sukses" id="petunjuk-bayar-tanah">🏔️ <b>Bayar tanah</b> · {{ count($dariBayarTanah['detail']) }} DO
+                (Rp {{ number_format(array_sum(array_map('intval', array_column($dariBayarTanah['detail'], 'nominal'))), 0, ',', '.') }}) sudah terisi:
+                keterangan & nominal mengikuti pembayaran uang tanah terakhir galian itu, rekening penerima dari pembayaran terakhir ke galian yang sama.
+                Periksa dulu, lalu klik Simpan.
+                @if ($dariBayarTanah['catatan'])<ul style="margin: 6px 0 0; padding-left: 18px; color: #f0c05a;">@foreach ($dariBayarTanah['catatan'] as $c)<li>{{ $c }}</li>@endforeach</ul>@endif
+            </div>
+        @endif
         @if (! empty($dariPengajuan) && ! old('detail'))
             <div class="pesan sukses" id="petunjuk-pengajuan">📝 {{ count($dariPengajuan) }} transaksi dari pengajuan
                 ({{ collect($dariPengajuan)->pluck('kode')->unique()->implode(', ') }} · Rp {{ number_format(array_sum(array_column($dariPengajuan, 'nominal')), 0, ',', '.') }})
@@ -161,24 +169,24 @@
                 {{-- Pengajuan = daftar transaksi yang diajukan: belum ada penerima transfer, rekening, maupun nominal master. --}}
                 <div style="grid-column: span 2;{{ $ajukan ? ' display: none;' : '' }}" class="isian-saran">
                     <label for="nama_tujuan">Nama penerima transfer</label>
-                    <input type="text" name="nama" id="nama_tujuan" value="{{ old('nama', $edit['nama'] ?? (count($driverPengajuan = collect($dariPengajuan ?? [])->pluck('nama')->filter()->unique()) === 1 ? $driverPengajuan->first() : '')) }}" autocomplete="off" required placeholder="Ketik nama, pilih rekeningnya dari daftar">
+                    <input type="text" name="nama" id="nama_tujuan" value="{{ old('nama', $edit['nama'] ?? ($dariBayarTanah['master']['nama'] ?? (count($driverPengajuan = collect($dariPengajuan ?? [])->pluck('nama')->filter()->unique()) === 1 ? $driverPengajuan->first() : ''))) }}" autocomplete="off" required placeholder="Ketik nama, pilih rekeningnya dari daftar">
                     <div class="saran" id="saran-nama" hidden></div>
                 </div>
             </div>
             <div class="baris2" @if ($ajukan) style="display: none;" @endif>
                 <div class="isian-saran">
                     <label for="no_rek">No. rekening / e-wallet</label>
-                    <input type="text" name="rekening" id="no_rek" value="{{ old('rekening', $edit['rekening'] ?? '') }}" inputmode="numeric" autocomplete="off" placeholder="Atau ketik nomornya">
+                    <input type="text" name="rekening" id="no_rek" value="{{ old('rekening', $edit['rekening'] ?? ($dariBayarTanah['master']['rekening'] ?? '')) }}" inputmode="numeric" autocomplete="off" placeholder="Atau ketik nomornya">
                     <div class="saran" id="saran-norek" hidden></div>
                 </div>
                 <div style="grid-column: span 2;">
                     <label for="bank">Bank / e-wallet</label>
-                    <div class="isian-saran" style="max-width: 360px; margin-bottom: 6px;"><input type="text" name="bank" id="bank" value="{{ old('bank', $edit['bank'] ?? '') }}" autocomplete="off" placeholder="Ketik singkatan / nama bank / e-wallet, mis. BCA, GoPay"></div>
+                    <div class="isian-saran" style="max-width: 360px; margin-bottom: 6px;"><input type="text" name="bank" id="bank" value="{{ old('bank', $edit['bank'] ?? ($dariBayarTanah['master']['bank'] ?? '')) }}" autocomplete="off" placeholder="Ketik singkatan / nama bank / e-wallet, mis. BCA, GoPay"></div>
                 </div>
             </div>
             <div style="max-width: 260px;{{ $ajukan ? ' display: none;' : '' }}">
                 <label for="nominal_transfer">Nominal master <span class="redup">(yang ditransfer, tanpa biaya transfer)</span></label>
-                <input type="text" name="nominal" id="nominal_transfer" class="angka-input rupiah" inputmode="numeric" autocomplete="off" value="{{ old('nominal', $edit['nominal'] ?? (($dariPengajuan ?? []) ? array_sum(array_column($dariPengajuan, 'nominal')) : '')) }}" required>
+                <input type="text" name="nominal" id="nominal_transfer" class="angka-input rupiah" inputmode="numeric" autocomplete="off" value="{{ old('nominal', $edit['nominal'] ?? (($dariPengajuan ?? []) ? array_sum(array_column($dariPengajuan, 'nominal')) : ($dariBayarTanah ? (array_sum(array_map('intval', array_column($dariBayarTanah['detail'], 'nominal'))) ?: '') : ''))) }}" required>
             </div>
         </div>
 
@@ -278,7 +286,7 @@
             const rekening = @json($rekening);
             const jenisMobil = @json($mobil);
             // Isian awal: input lama (bila gagal simpan) → data edit → detail pengajuan dari tombol "Input UJ" di menu Pengajuan UJ.
-            const awal = @json(old('detail', $edit['detail'] ?? ($dariPengajuan ?? [])));
+            const awal = @json(old('detail', $edit['detail'] ?? (($dariPengajuan ?? []) ?: ($dariBayarTanah['detail'] ?? []))));
             const AJUKAN = @json($ajukan);
             const daftar = document.getElementById('daftar-bon');
             const templat = document.getElementById('templat-bon');

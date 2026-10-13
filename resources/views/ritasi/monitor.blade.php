@@ -230,13 +230,14 @@
             </div>
         </form>
     @else
+    @php($bolehBayar = auth()->user()->bolehMenu('input-uj'))
     <div class="kartu gulir" style="padding: 0;">
         <table class="kas" data-saring-kolom="grup">
-            <thead><tr><th>No DO</th><th>UJ pertama</th><th>Umur</th><th>No Mobil</th><th>Tujuan buangan</th><th>Driver</th><th>Galian</th>@if ($tanah)<th>Bongkar</th><th>No Surat Jalan</th>@endif<th>Kategori</th><th class="angka">Transaksi</th><th class="angka">Total UJ</th></tr></thead>
+            <thead><tr><th>@if ($bolehBayar)<input type="checkbox" id="pilih-semua" title="Pilih semua DO yang sedang tampil (hasil saringan)" style="margin-right: 6px; vertical-align: middle;">@endif No DO</th><th>UJ pertama</th><th>Umur</th><th>No Mobil</th><th>Tujuan buangan</th><th>Driver</th><th>Galian</th>@if ($tanah)<th>Bongkar</th><th>No Surat Jalan</th>@endif<th>Kategori</th><th class="angka">Transaksi</th><th class="angka">Total UJ</th></tr></thead>
             @forelse ($daftar as $d)
                 <tbody class="grup">
                     <tr class="t ada-bon">
-                        <td><span class="panah">▸</span> <b>{{ $d['do'] }}</b></td>
+                        <td style="white-space: nowrap;">@if ($bolehBayar)<input type="checkbox" class="pilih-do" value="{{ $d['do'] }}" data-galian="{{ $d['tujuan'] ? ucwords($d['tujuan']) : '' }}" data-total="{{ $d['total'] }}" style="margin-right: 6px; vertical-align: middle;">@endif<span class="panah">▸</span> <b>{{ $d['do'] }}</b></td>
                         <td>{{ $d['pertama']?->translatedFormat('j M Y') ?? '–' }}@if ($d['terakhir'] && $d['pertama'] && ! $d['terakhir']->isSameDay($d['pertama']))<span class="redup" style="font-size: 12px;"> s/d {{ $d['terakhir']->translatedFormat('j M') }}</span>@endif</td>
                         <td>@if ($d['umur'] !== null)<span @class(['umur', 'baru' => $d['umur'] <= 7, 'sedang' => $d['umur'] > 7 && $d['umur'] <= 30, 'lama' => $d['umur'] > 30])>{{ $d['umur'] }} hari</span>@endif</td>
                         <td>{{ implode(', ', $d['mobil']) ?: '–' }}</td>
@@ -268,6 +269,13 @@
             @endforelse
         </table>
     </div>
+    @if ($bolehBayar)
+        <div class="simpan-bongkar" id="bar-bayar" hidden>
+            <a href="#" class="tombol" id="tombol-bayar">Bayar tanah</a>
+            <span class="redup" id="info-bayar"></span>
+            <button type="button" class="tombol polos" id="batal-pilih" style="padding: 6px 12px; margin-left: auto;">Batal pilih</button>
+        </div>
+    @endif
     @endunless
 
     @if ($bukanAngka->isNotEmpty())
@@ -287,6 +295,32 @@
                 if (t) { tb.append(t.content); t.remove(); }
                 tb.classList.toggle('buka');
             }));
+            // Bayar Tanah: pilih DO (satu-satu / pilih semua yang tampil) → "Bayar tanah" membuka Input UJ berisi satu detail Uang Tanah per DO.
+            const pilih = [...document.querySelectorAll('input.pilih-do')];
+            if (pilih.length) {
+                const semua = document.getElementById('pilih-semua');
+                const bar = document.getElementById('bar-bayar');
+                const tampil = c => c.closest('tbody').style.display !== 'none';
+                const atur = () => {
+                    const dipilih = pilih.filter(c => c.checked);
+                    const galian = [...new Set(dipilih.map(c => c.dataset.galian || 'galian tidak diketahui'))];
+                    bar.hidden = !dipilih.length;
+                    document.getElementById('tombol-bayar').textContent = `Bayar tanah (${dipilih.length} DO)`;
+                    document.getElementById('tombol-bayar').href = @json(route('uj.input')) + '?bayar_tanah=' + dipilih.map(c => c.value).join(',');
+                    document.getElementById('info-bayar').textContent = dipilih.length
+                        ? `Galian: ${galian.join(', ')}` + (galian.length > 1 ? ' — beda galian biasanya beda rekening, sebaiknya bayar per galian.' : '') : '';
+                    const terlihat = pilih.filter(tampil);
+                    semua.checked = terlihat.length > 0 && terlihat.every(c => c.checked);
+                    semua.indeterminate = !semua.checked && terlihat.some(c => c.checked);
+                };
+                pilih.forEach(c => { c.addEventListener('click', e => e.stopPropagation()); c.addEventListener('change', atur); });
+                semua.addEventListener('click', e => e.stopPropagation());
+                semua.addEventListener('change', () => { pilih.filter(tampil).forEach(c => c.checked = semua.checked); atur(); });
+                document.getElementById('batal-pilih').addEventListener('click', () => { pilih.forEach(c => c.checked = false); atur(); });
+                // Saringan kolom mengubah baris yang tampil → status "pilih semua" ikut diperbarui.
+                document.querySelector('tr.saring-kolom')?.addEventListener('input', () => setTimeout(atur));
+                atur();
+            }
             const form = document.getElementById('form-bongkar');
             if (!form) return;
             // Tanggal selalu tampil "dd-MMM-yyyy" (mis. 09-Okt-2026), tidak mengikuti pengaturan bahasa komputer.

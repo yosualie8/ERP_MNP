@@ -96,7 +96,21 @@ class UjController extends Controller
             'bank' => $bank,
             'modelKategori' => $this->modelKategori(),
             ...$this->dariPengajuan(),
+            ...$this->dariBayarTanah(),
         ]);
+    }
+
+    /**
+     * Menu Bayar Tanah → tombol "Bayar tanah": /uj/input?bayar_tanah=15790,15791 membuka form berisi satu detail Uang Tanah per DO
+     * (lihat BayarTanah::untukForm). Admin memeriksa lalu menyimpan seperti input biasa.
+     *
+     * @return array{dariBayarTanah: ?array}
+     */
+    private function dariBayarTanah(): array
+    {
+        $do = collect(explode(',', (string) request()->query('bayar_tanah')))->map(fn ($v) => trim($v))->filter(fn ($v) => ctype_digit($v))->unique()->values()->all();
+
+        return ['dariBayarTanah' => $do ? \App\Support\BayarTanah::untukForm($do) : null];
     }
 
     /**
