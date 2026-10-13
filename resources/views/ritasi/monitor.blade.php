@@ -231,7 +231,26 @@
             </div>
         </form>
     @else
-    @php($bolehBayar = auth()->user()->bolehMenu('input-uj'))
+    @php($bolehBayar = true)
+    @if ($rekapTanah->isNotEmpty())
+        <div class="kartu" style="padding: 10px 14px;">
+            <b>Rekap bayar tanah</b> <span class="redup" style="font-size: 12px;">— dibayar admin lewat Input UJ → 🏔️ Input bayar tanah</span>
+            <table class="kas" style="margin-top: 6px; font-size: 13px;">
+                <thead><tr><th>Rekap</th><th>Status</th><th class="angka">DO</th><th class="angka">Total</th><th>Dibuat</th><th>Catatan</th><th></th></tr></thead>
+                @foreach ($rekapTanah as $rb)
+                    <tr>
+                        <td><b>{{ $rb->kode() }}</b></td>
+                        <td><span @class(['label', 'kuning' => $rb->status === 'menunggu', 'hijau' => $rb->status === 'dibayar', 'merah' => $rb->status === 'batal'])>{{ \App\Models\BayarTanahRekap::STATUS[$rb->status] }}{{ $rb->no_uj ? ' · UJ-'.$rb->no_uj : '' }}</span></td>
+                        <td class="angka">{{ $rb->jumlah }}</td>
+                        <td class="angka">{{ rp($rb->total) }}</td>
+                        <td class="redup">{{ $rb->created_at->translatedFormat('j M H:i') }} · {{ $rb->user?->name }}</td>
+                        <td class="redup">{{ $rb->catatan }}</td>
+                        <td>@if ($rb->status === 'menunggu')<form method="POST" action="{{ route('ritasi.bayar-tanah.batal', $rb) }}" onsubmit="return confirm('Batalkan {{ $rb->kode() }}? DO-nya bisa direkap lagi.')">@csrf<button class="tombol-hapus">Batalkan</button></form>@endif</td>
+                    </tr>
+                @endforeach
+            </table>
+        </div>
+    @endif
     @if ($bolehBayar)
         <div class="cari-monitor">
             <span class="redup">Harga tanah:</span>
@@ -246,7 +265,7 @@
             @forelse ($daftar as $d)
                 <tbody class="grup">
                     <tr class="t ada-bon">
-                        <td style="white-space: nowrap;">@if ($bolehBayar)<input type="checkbox" class="pilih-do" value="{{ $d['do'] }}" data-galian="{{ \App\Support\BayarTanah::galianDo($d) }}" data-total="{{ $d['total'] }}" style="margin-right: 6px; vertical-align: middle;">@endif<span class="panah">▸</span> <b>{{ $d['do'] }}</b></td>
+                        <td style="white-space: nowrap;">@if ($rbt = $doDirekap[$d['do']] ?? null)<span class="label kuning" title="Sudah ada di rekap yang menunggu dibayar" style="margin-right: 6px;">{{ $rbt }}</span>@elseif ($bolehBayar)<input type="checkbox" class="pilih-do" value="{{ $d['do'] }}" data-galian="{{ \App\Support\BayarTanah::galianDo($d) }}" data-total="{{ $d['total'] }}" style="margin-right: 6px; vertical-align: middle;">@endif<span class="panah">▸</span> <b>{{ $d['do'] }}</b></td>
                         <td>{{ $d['pertama']?->translatedFormat('j M Y') ?? '–' }}@if ($d['terakhir'] && $d['pertama'] && ! $d['terakhir']->isSameDay($d['pertama']))<span class="redup" style="font-size: 12px;"> s/d {{ $d['terakhir']->translatedFormat('j M') }}</span>@endif</td>
                         <td>@if ($d['umur'] !== null)<span @class(['umur', 'baru' => $d['umur'] <= 7, 'sedang' => $d['umur'] > 7 && $d['umur'] <= 30, 'lama' => $d['umur'] > 30])>{{ $d['umur'] }} hari</span>@endif</td>
                         <td>{{ implode(', ', $d['mobil']) ?: '–' }}</td>
@@ -286,7 +305,12 @@
     </div>
     @if ($bolehBayar)
         <div class="simpan-bongkar" id="bar-bayar" hidden>
-            <a href="#" class="tombol" id="tombol-bayar">Bayar tanah</a>
+            <form method="POST" action="{{ route('ritasi.bayar-tanah.rekap') }}" id="form-rekap" style="display: flex; gap: 8px; align-items: center;">
+                @csrf
+                <input type="hidden" name="pilih" id="isi-rekap">
+                <input type="text" name="catatan" placeholder="catatan (opsional)" maxlength="500" style="width: 180px;">
+                <button type="submit" class="tombol" id="tombol-bayar">Buat rekap bayar tanah</button>
+            </form>
             <span class="redup" id="info-bayar"></span>
             <button type="button" class="tombol polos" id="batal-pilih" style="padding: 6px 12px; margin-left: auto;">Batal pilih</button>
         </div>
@@ -316,13 +340,13 @@
                 const semua = document.getElementById('pilih-semua');
                 const bar = document.getElementById('bar-bayar');
                 const tampil = c => c.closest('tbody').style.display !== 'none';
+                const harga = c => (document.querySelector(`input.harga-tanah[data-do="${c.value}"]`)?.value || '').replace(/\D/g, '');
                 const atur = () => {
                     const dipilih = pilih.filter(c => c.checked);
                     const galian = [...new Set(dipilih.map(c => c.dataset.galian || 'galian tidak diketahui'))];
                     bar.hidden = !dipilih.length;
-                    document.getElementById('tombol-bayar').textContent = `Bayar tanah (${dipilih.length} DO)`;
-                    const harga = c => (document.querySelector(`input.harga-tanah[data-do="${c.value}"]`)?.value || '').replace(/\D/g, '');
-                    document.getElementById('tombol-bayar').href = @json(route('uj.input')) + '?bayar_tanah=' + dipilih.map(c => c.value + (harga(c) ? ':' + harga(c) : '')).join(',');
+                    document.getElementById('tombol-bayar').textContent = `Buat rekap bayar tanah (${dipilih.length} DO)`;
+                    document.getElementById('isi-rekap').value = dipilih.map(c => c.value + ':' + (harga(c) || '0')).join(',');
                     const total = dipilih.reduce((s, c) => s + (+harga(c) || 0), 0);
                     const tanpa = dipilih.filter(c => !harga(c)).length;
                     document.getElementById('info-bayar').textContent = dipilih.length
@@ -349,6 +373,12 @@
                 semua.addEventListener('click', e => e.stopPropagation());
                 semua.addEventListener('change', () => { pilih.filter(tampil).forEach(c => c.checked = semua.checked); atur(); });
                 document.getElementById('batal-pilih').addEventListener('click', () => { pilih.forEach(c => c.checked = false); atur(); });
+                document.getElementById('form-rekap').addEventListener('submit', e => {
+                    const dipilih = pilih.filter(c => c.checked);
+                    const tanpa = dipilih.filter(c => !harga(c));
+                    if (tanpa.length) { e.preventDefault(); alert(`Harga tanah belum diisi untuk DO ${tanpa.map(c => c.value).join(', ')}.`); return; }
+                    if (!confirm(`Buat rekap bayar tanah ${dipilih.length} DO, total Rp ${dipilih.reduce((s, c) => s + (+harga(c) || 0), 0).toLocaleString('id-ID')}?`)) e.preventDefault();
+                });
                 // Saringan kolom mengubah baris yang tampil → status "pilih semua" ikut diperbarui.
                 document.querySelector('tr.saring-kolom')?.addEventListener('input', () => setTimeout(atur));
                 atur();

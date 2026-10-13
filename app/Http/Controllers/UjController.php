@@ -107,7 +107,13 @@ class UjController extends Controller
     public function daftarBayarTanah(Request $request): JsonResponse
     {
         $umur = in_array($request->query('umur'), ['7', '30', 'semua'], true) ? $request->query('umur') : '30';
+        $direkap = \App\Models\BayarTanahRekap::doMenunggu();
+        $rekap = \App\Models\BayarTanahRekap::with('user')->where('status', 'menunggu')->orderBy('id')->get()->map(fn ($x) => [
+            'id' => $x->id, 'kode' => $x->kode(), 'jumlah' => $x->jumlah, 'total' => (int) $x->total, 'catatan' => $x->catatan,
+            'dibuat' => $x->created_at->translatedFormat('j M Y H:i').' · '.($x->user?->name ?? ''),
+        ]);
         $do = \App\Support\MonitorRitasi::belumBayarTanah()['do']
+            ->filter(fn ($d) => ! isset($direkap[$d['do']]))
             ->filter(fn ($d) => $umur === 'semua' || ($d['umur'] !== null && $d['umur'] <= (int) $umur))
             ->map(fn ($d) => [
                 'do' => $d['do'], 'tanggal' => $d['pertama']?->translatedFormat('j M Y'), 'umur' => $d['umur'],
@@ -116,7 +122,7 @@ class UjController extends Controller
                 'bongkar' => $d['bongkar']?->translatedFormat('j M'), 'surat_jalan' => implode(', ', $d['surat_jalan']),
             ])->values();
 
-        return response()->json(['umur' => $umur, 'do' => $do]);
+        return response()->json(['umur' => $umur, 'rekap' => $rekap, 'do' => $do]);
     }
 
     /**
@@ -127,6 +133,15 @@ class UjController extends Controller
      */
     private function dariBayarTanah(): array
     {
+        // Rekap Bayar Tanah (RBT) yang menunggu dibayar: DO & harganya dari rekap.
+        if ($id = request()->integer('rbt')) {
+            $rekap = \App\Models\BayarTanahRekap::where('status', 'menunggu')->find($id);
+            if (! $rekap) {
+                return ['dariBayarTanah' => ['detail' => [], 'master' => [], 'galian' => [], 'catatan' => ['Rekap itu sudah dibayar / dibatalkan, atau tidak ada.'], 'rekap' => null]];
+            }
+
+            return ['dariBayarTanah' => [...\App\Support\BayarTanah::untukForm(array_column($rekap->isi, 'do'), $rekap->harga()), 'rekap' => ['id' => $rekap->id, 'kode' => $rekap->kode()]]];
+        }
         // Format: DO atau DO:harga (harga tanah yang diisi admin di menu Bayar Tanah).
         $do = [];
         $harga = [];
@@ -236,6 +251,7 @@ class UjController extends Controller
             'detail.*.pengajuan' => ['nullable', 'integer'],
             'detail.*.alasan_pengajuan' => ['nullable', 'string', 'max:1000'],
             'detail.*.duluan' => ['nullable', 'string', 'max:30'],
+            'bayar_tanah_id' => ['nullable', 'integer'],
             'foto' => ['nullable', 'array', 'max:'.KasFotoController::MAKS_FOTO],
             'foto.*' => KasFotoController::ATURAN['foto.*'],
         ], [
@@ -276,6 +292,8 @@ class UjController extends Controller
             ], $data['detail'])),
             'biaya_transfer' => $request->boolean('biaya_transfer'),
             'nominal_biaya' => (int) ($data['nominal_biaya'] ?? TulisUjSheet::BIAYA_TRANSFER),
+            // Rekap Bayar Tanah (RBT) yang dibayar oleh transaksi ini (dari Input bayar tanah).
+            'bayar_tanah_id' => $pengajuan ? null : ($data['bayar_tanah_id'] ?? null),
         ];
     }
 
@@ -432,6 +450,10 @@ class UjController extends Controller
         if ($banding instanceof RedirectResponse) {
             return $banding;
         }
+        $rekapTanah = $input['bayar_tanah_id'] ? \App\Models\BayarTanahRekap::find($input['bayar_tanah_id']) : null;
+        if ($input['bayar_tanah_id'] && $rekapTanah?->status !== 'menunggu') {
+            return back()->withInput()->with('error', 'Rekap bayar tanah itu sudah dibayar atau dibatalkan (mungkin oleh admin lain). Transaksi tidak ditulis.');
+        }
         $temuan = $this->wajibKonfirmasi($input, null, $idPengajuan->all());
         if ($temuan instanceof RedirectResponse) {
             return $temuan;
@@ -469,6 +491,7 @@ class UjController extends Controller
         $pesanImpor = $this->perbarui(fn () => KasSeabank::perbaruiBlok(null, 0, 0, $hasil['mentah'], $hasil['baris_awal']));
         $this->catatTemuan($temuan, $input, $hasil['ids'], $request->user()->id);
         $jumlahFoto = $this->simpanFoto($request, $hasil['no_uj'], $input['tanggal']);
+        $rekapTanah?->update(['status' => 'dibayar', 'no_uj' => $hasil['no_uj'], 'dibayar_pada' => now(), 'dibayar_oleh' => $request->user()->id]);
 
         KasRiwayat::create([
             'aksi' => 'uj-tambah', 'lembar' => 'Seabank', 'baris_awal' => $hasil['baris_awal'], 'baris_akhir' => $hasil['baris_akhir'],
@@ -479,7 +502,7 @@ class UjController extends Controller
         return redirect()->route('uj.index', ['bulan' => $input['tanggal']->format('Y-m')])->with($pesanImpor ? 'error' : 'success',
             'Tersimpan di Kas Seabank baris '.$hasil['baris_awal'].'–'.$hasil['baris_akhir'].' (UJ-'.reset($hasil['ids']).(count($hasil['ids']) > 1 ? ' s/d UJ-'.end($hasil['ids']) : '')
             .($hasil['id_biaya'] ? ', biaya transfer UJ-'.$hasil['id_biaya'] : '').'): '
-            .$this->ringkasanInput($input).'.'.($jumlahFoto ? " {$jumlahFoto} foto bon terlampir." : '')
+            .$this->ringkasanInput($input).'.'.($jumlahFoto ? " {$jumlahFoto} foto bon terlampir." : '').($rekapTanah ? ' '.$rekapTanah->kode().' tercatat dibayar.' : '')
             .($terealisasi ? " {$terealisasi} detail pengajuan tercatat terealisasi".($berbeda ? " ({$berbeda} berbeda dari pengajuannya, tercatat beserta alasannya)" : '').'.' : '').$pesanImpor);
     }
 

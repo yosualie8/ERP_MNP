@@ -141,8 +141,10 @@
         @if ($pesanPengajuan ?? null)
             <div class="pesan galat">{{ $pesanPengajuan }}</div>
         @endif
+        @if (old('bayar_tanah_id'))<input type="hidden" name="bayar_tanah_id" value="{{ old('bayar_tanah_id') }}">@endif
         @if (! empty($dariBayarTanah) && ! old('detail'))
-            <div class="pesan sukses" id="petunjuk-bayar-tanah">🏔️ <b>Bayar tanah</b> · {{ count($dariBayarTanah['detail']) }} DO
+            <input type="hidden" name="bayar_tanah_id" value="{{ $dariBayarTanah['rekap']['id'] ?? '' }}">
+            <div class="pesan sukses" id="petunjuk-bayar-tanah">🏔️ <b>Bayar tanah{{ ($dariBayarTanah['rekap'] ?? null) ? ' '.$dariBayarTanah['rekap']['kode'] : '' }}</b> · {{ count($dariBayarTanah['detail']) }} DO
                 (Rp {{ number_format(array_sum(array_map('intval', array_column($dariBayarTanah['detail'], 'nominal'))), 0, ',', '.') }}) sudah terisi:
                 keterangan & nominal mengikuti pembayaran uang tanah terakhir galian itu, rekening penerima dari pembayaran terakhir ke galian yang sama.
                 Periksa dulu, lalu klik Simpan.
@@ -169,6 +171,7 @@
                     <input type="text" id="bt-harga-massal" inputmode="numeric" placeholder="mis. 490.000" style="width: 120px; text-align: right;">
                     <button type="button" class="tombol polos" id="bt-isi-harga" style="padding: 5px 10px; font-size: 13px;">Isi ke DO yang dicentang</button>
                 </div>
+                <div id="rekap-bt"></div>
                 <div id="daftar-bt"><p class="redup">Memuat…</p></div>
                 <div class="bt-kaki">
                     <button type="button" class="tombol" id="bt-masukkan" disabled>Masukkan ke form</button>
@@ -1112,7 +1115,17 @@
             };
             const muat = async () => {
                 daftar.innerHTML = '<p class="redup">Memuat…</p>';
-                const {do: semua} = await (await fetch(@json(route('uj.input.bayar-tanah')) + '?umur=' + umur, {headers: {Accept: 'application/json'}})).json();
+                const {do: semua, rekap} = await (await fetch(@json(route('uj.input.bayar-tanah')) + '?umur=' + umur, {headers: {Accept: 'application/json'}})).json();
+                // Rekap Bayar Tanah (RBT) yang menunggu dibayar: klik → form terisi DO & harga dari rekap itu.
+                document.getElementById('rekap-bt').innerHTML = rekap.length ? `<div class="bt-galian"><div class="kepala">Rekap bayar tanah menunggu dibayar</div><table><tbody>`
+                    + rekap.map(x => `<tr class="pilih-rbt" data-id="${x.id}" style="cursor: pointer;" title="Klik untuk mengisi form dengan rekap ini"><td><b>${esc(x.kode)}</b></td><td>${x.jumlah} DO</td><td class="angka"><b>Rp ${rp(x.total)}</b></td><td class="redup">${esc(x.dibuat)}</td><td class="redup">${esc(x.catatan || '')}</td><td><span class="tombol polos" style="padding: 3px 10px; font-size: 12px;">Isi ke form</span></td></tr>`).join('')
+                    + `</tbody></table></div><p class="redup" style="margin: 4px 0 10px; font-size: 12px;">Atau pilih DO langsung di bawah (DO yang sudah ada di rekap tidak ditampilkan).</p>` : '';
+                document.querySelectorAll('#rekap-bt tr.pilih-rbt').forEach(tr => tr.addEventListener('click', () => {
+                    const adaIsi = [...document.querySelectorAll('#daftar-bon [data-nama=keterangan], #daftar-bon [data-nama=nominal]')].some(el => el.value.trim());
+                    if (adaIsi && !confirm('Isi form sekarang akan diganti dengan rekap bayar tanah ini. Lanjutkan?')) return;
+                    window.onbeforeunload = null;
+                    location.href = @json(route('uj.input')) + '?rbt=' + tr.dataset.id;
+                }));
                 if (!semua.length) { daftar.innerHTML = '<p class="redup">Tidak ada DO yang belum dibayar tanahnya pada rentang ini.</p>'; atur(); return; }
                 const grup = {};
                 semua.forEach(d => (grup[d.galian || 'Galian tidak diketahui'] ??= []).push(d));

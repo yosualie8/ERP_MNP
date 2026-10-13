@@ -28,6 +28,8 @@ class AktivitasAdmin
         'rit-tambah' => ['Ritasi', 'Input Ritasi'],
         'kubikasi-ubah' => ['Ritasi', 'Kubikasi Kendaraan'],
         'rit-unggah' => ['Ritasi', 'Upload Surat Jalan'],
+        'rbt-buat' => ['Ritasi', 'Rekap Bayar Tanah'],
+        'rbt-batal' => ['Ritasi', 'Batal Rekap Bayar Tanah'],
         'rit-ubah' => ['Ritasi', 'Edit Ritasi'],
         'rit-hapus' => ['Ritasi', 'Hapus Ritasi'],
         'truk-buangan' => ['Ritasi', 'Ubah Tujuan Buangan'],
