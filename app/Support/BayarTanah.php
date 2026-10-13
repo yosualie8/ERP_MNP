@@ -17,9 +17,10 @@ class BayarTanah
 
     /**
      * @param  string[]  $daftarDo
+     * @param  array<string, int>  $harga  harga tanah per DO yang diisi admin di menu Bayar Tanah (mengalahkan tarif terakhir)
      * @return array{detail: array<int, array>, master: array{nama: ?string, bank: ?string, rekening: ?string}, galian: string[], catatan: string[]}
      */
-    public static function untukForm(array $daftarDo): array
+    public static function untukForm(array $daftarDo, array $harga = []): array
     {
         $belum = MonitorRitasi::belumBayarTanah()['do']->keyBy('do');
         $riwayat = self::riwayat();
@@ -39,10 +40,10 @@ class BayarTanah
             $uj = collect($d['detail'])->first(fn ($x) => ValidasiUj::jenisKategori($x->kategori) === 'uj') ?? collect($d['detail'])->first();
             $detail[] = [
                 'nama' => $uj?->nama, 'keterangan' => $r['keterangan'] ?? ('Uang tanah '.($tempat ? ucwords($tempat) : '')),
-                'nominal' => $r['nominal'] ?? '', 'kategori' => 'Uang Tanah',
+                'nominal' => ($harga[$do] ?? 0) ?: ($r['nominal'] ?? ''), 'kategori' => 'Uang Tanah',
                 'jenis_kendaraan' => $uj?->jenis_kendaraan, 'no_mobil' => $uj?->no_mobil, 'no_do' => $do,
             ];
-            if (! $r) {
+            if (! $r && empty($harga[$do])) {
                 $catatan[] = "DO {$do}: ".($tempat ? "belum ada riwayat uang tanah galian \"{$tempat}\"" : 'galian tidak diketahui').' — isi keterangan & nominalnya sendiri.';
             }
             $galianDipakai[$tempat ?? '?'] = $r;
@@ -60,6 +61,16 @@ class BayarTanah
             'galian' => $galian,
             'catatan' => $catatan,
         ];
+    }
+
+    /** Tarif uang tanah terakhir galian DO itu (isi awal kolom Harga tanah), null bila belum ada riwayat. */
+    public static function tarifDo(array $d): ?int
+    {
+        static $riwayat;
+        $riwayat ??= self::riwayat();
+        $t = self::tempatDo($d, array_keys($riwayat));
+
+        return $t ? ($riwayat[$t]['nominal'] ?? null) : null;
     }
 
     /** Nama galian DO untuk ditampilkan (sama dengan yang dipakai saat mengisi form), null bila tidak diketahui. */

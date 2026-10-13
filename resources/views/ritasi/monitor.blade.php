@@ -232,9 +232,17 @@
         </form>
     @else
     @php($bolehBayar = auth()->user()->bolehMenu('input-uj'))
+    @if ($bolehBayar)
+        <div class="cari-monitor">
+            <span class="redup">Harga tanah:</span>
+            <input type="text" id="harga-massal" class="angka-input" inputmode="numeric" autocomplete="off" placeholder="mis. 490.000" style="width: 130px; text-align: right;">
+            <button type="button" class="tombol polos" id="isi-harga-massal" style="padding: 6px 12px;">Isi ke semua DO yang tampil</button>
+            <span class="redup" style="font-size: 12px;">Harga per DO bisa diketik sendiri di kolom Harga tanah (isi awal: tarif terakhir galiannya). Harga ini yang dipakai saat Bayar tanah.</span>
+        </div>
+    @endif
     <div class="kartu gulir" style="padding: 0;">
         <table class="kas" data-saring-kolom="grup">
-            <thead><tr><th>@if ($bolehBayar)<input type="checkbox" id="pilih-semua" title="Pilih semua DO yang sedang tampil (hasil saringan)" style="margin-right: 6px; vertical-align: middle;">@endif No DO</th><th>UJ pertama</th><th>Umur</th><th>No Mobil</th><th>Tujuan buangan</th><th>Driver</th><th>Galian</th>@if ($tanah)<th>Bongkar</th><th>No Surat Jalan</th>@endif<th>Kategori</th><th class="angka">Transaksi</th><th class="angka">Total UJ</th></tr></thead>
+            <thead><tr><th>@if ($bolehBayar)<input type="checkbox" id="pilih-semua" title="Pilih semua DO yang sedang tampil (hasil saringan)" style="margin-right: 6px; vertical-align: middle;">@endif No DO</th><th>UJ pertama</th><th>Umur</th><th>No Mobil</th><th>Tujuan buangan</th><th>Driver</th><th>Galian</th>@if ($tanah)<th>Bongkar</th><th>No Surat Jalan</th>@endif<th>Kategori</th><th class="angka">Transaksi</th><th class="angka">Total UJ</th>@if ($bolehBayar)<th class="angka" data-tanpa-saring>Harga tanah</th>@endif</tr></thead>
             @forelse ($daftar as $d)
                 <tbody class="grup">
                     <tr class="t ada-bon">
@@ -250,8 +258,13 @@
                         <td class="ringkas-gl">{{ implode(', ', $d['kategori']) }}</td>
                         <td class="angka">{{ count($d['detail']) }}</td>
                         <td class="angka"><b>{{ rp($d['total']) }}</b></td>
+                        @if ($bolehBayar)
+                            @php($tarif = \App\Support\BayarTanah::tarifDo($d))
+                            <td class="angka"><input type="text" class="harga-tanah angka-input" inputmode="numeric" autocomplete="off" data-do="{{ $d['do'] }}"
+                                value="{{ $tarif ? number_format($tarif, 0, ',', '.') : '' }}" placeholder="isi harga" title="Harga tanah DO ini (isi awal: tarif terakhir galiannya)" style="width: 110px; text-align: right;"></td>
+                        @endif
                     </tr>
-                    <tr class="bh"><td>ID UJ</td><td>Tanggal</td><td>Status</td><td>No Mobil · Jenis</td><td>Driver</td><td colspan="{{ $tanah ? 5 : 3 }}">Keterangan</td><td>Kategori</td><td class="angka">Nominal</td></tr>
+                    <tr class="bh"><td>ID UJ</td><td>Tanggal</td><td>Status</td><td>No Mobil · Jenis</td><td>Driver</td><td colspan="{{ $tanah ? 5 : 3 }}">Keterangan</td><td>Kategori</td><td class="angka">Nominal</td>@if ($bolehBayar)<td></td>@endif</tr>
                     @foreach ($d['detail'] as $x)
                         <tr class="b">
                             <td class="i">{{ $x->id_uj ?: 'baris '.$x->baris }}</td>
@@ -262,11 +275,12 @@
                             <td colspan="{{ $tanah ? 5 : 3 }}">{{ $x->keterangan }} <span class="redup">· DO {{ $x->no_do }}</span></td>
                             <td>{{ $x->kategori }}</td>
                             <td class="angka">{{ rp((int) $x->nominal) }}</td>
+                            @if ($bolehBayar)<td></td>@endif
                         </tr>
                     @endforeach
                 </tbody>
             @empty
-                <tbody><tr><td colspan="{{ $tanah ? 12 : 10 }}" class="redup" style="padding: 20px 14px;">{{ $q || $umur || $tujuan !== '' || $galian !== '' ? 'Tidak ada DO yang cocok dengan saringan ini.' : ($tanah ? 'Semua DO yang ada uang jalannya sudah ada transaksi uang tanahnya.' : 'Semua DO di Kas UJ sudah ada di data Ritasi.') }}</td></tr></tbody>
+                <tbody><tr><td colspan="{{ ($tanah ? 12 : 10) + ($bolehBayar ? 1 : 0) }}" class="redup" style="padding: 20px 14px;">{{ $q || $umur || $tujuan !== '' || $galian !== '' ? 'Tidak ada DO yang cocok dengan saringan ini.' : ($tanah ? 'Semua DO yang ada uang jalannya sudah ada transaksi uang tanahnya.' : 'Semua DO di Kas UJ sudah ada di data Ritasi.') }}</td></tr></tbody>
             @endforelse
         </table>
     </div>
@@ -307,14 +321,31 @@
                     const galian = [...new Set(dipilih.map(c => c.dataset.galian || 'galian tidak diketahui'))];
                     bar.hidden = !dipilih.length;
                     document.getElementById('tombol-bayar').textContent = `Bayar tanah (${dipilih.length} DO)`;
-                    document.getElementById('tombol-bayar').href = @json(route('uj.input')) + '?bayar_tanah=' + dipilih.map(c => c.value).join(',');
+                    const harga = c => (document.querySelector(`input.harga-tanah[data-do="${c.value}"]`)?.value || '').replace(/\D/g, '');
+                    document.getElementById('tombol-bayar').href = @json(route('uj.input')) + '?bayar_tanah=' + dipilih.map(c => c.value + (harga(c) ? ':' + harga(c) : '')).join(',');
+                    const total = dipilih.reduce((s, c) => s + (+harga(c) || 0), 0);
+                    const tanpa = dipilih.filter(c => !harga(c)).length;
                     document.getElementById('info-bayar').textContent = dipilih.length
-                        ? `Galian: ${galian.join(', ')}` + (galian.length > 1 ? ' — beda galian biasanya beda rekening, sebaiknya bayar per galian.' : '') : '';
+                        ? `Total Rp ${total.toLocaleString('id-ID')}${tanpa ? ` · ${tanpa} DO belum ada harga` : ''} · Galian: ${galian.join(', ')}` + (galian.length > 1 ? ' — beda galian biasanya beda rekening, sebaiknya bayar per galian.' : '') : '';
                     const terlihat = pilih.filter(tampil);
                     semua.checked = terlihat.length > 0 && terlihat.every(c => c.checked);
                     semua.indeterminate = !semua.checked && terlihat.some(c => c.checked);
                 };
                 pilih.forEach(c => { c.addEventListener('click', e => e.stopPropagation()); c.addEventListener('change', atur); });
+                // Harga tanah: format ribuan, klik tidak membuka rincian DO; perubahan ikut ke tombol Bayar tanah.
+                const rupiah = el => { const v = el.value.replace(/\D/g, '').replace(/^0+(?=\d)/, ''); el.value = v ? (+v).toLocaleString('id-ID') : ''; };
+                const kolomHarga = [...document.querySelectorAll('input.harga-tanah')];
+                kolomHarga.forEach(el => { el.addEventListener('click', e => e.stopPropagation()); el.addEventListener('input', () => { rupiah(el); atur(); }); });
+                const massal = document.getElementById('harga-massal');
+                massal?.addEventListener('input', () => rupiah(massal));
+                document.getElementById('isi-harga-massal')?.addEventListener('click', () => {
+                    if (!massal.value) { alert('Isi harga tanahnya dulu.'); massal.focus(); return; }
+                    const sasaran = kolomHarga.filter(el => el.closest('tbody').style.display !== 'none');
+                    if (!confirm(`Isi harga Rp ${massal.value} ke ${sasaran.length} DO yang sedang tampil?`)) return;
+                    sasaran.forEach(el => el.value = massal.value);
+                    atur();
+                });
+                massal?.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); document.getElementById('isi-harga-massal').click(); } });
                 semua.addEventListener('click', e => e.stopPropagation());
                 semua.addEventListener('change', () => { pilih.filter(tampil).forEach(c => c.checked = semua.checked); atur(); });
                 document.getElementById('batal-pilih').addEventListener('click', () => { pilih.forEach(c => c.checked = false); atur(); });

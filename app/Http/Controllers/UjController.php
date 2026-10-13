@@ -108,9 +108,20 @@ class UjController extends Controller
      */
     private function dariBayarTanah(): array
     {
-        $do = collect(explode(',', (string) request()->query('bayar_tanah')))->map(fn ($v) => trim($v))->filter(fn ($v) => ctype_digit($v))->unique()->values()->all();
+        // Format: DO atau DO:harga (harga tanah yang diisi admin di menu Bayar Tanah).
+        $do = [];
+        $harga = [];
+        foreach (explode(',', (string) request()->query('bayar_tanah')) as $x) {
+            [$no, $h] = array_pad(explode(':', trim($x), 2), 2, null);
+            if (ctype_digit((string) $no)) {
+                $do[] = $no;
+                if ($h !== null && ctype_digit($h) && (int) $h > 0) {
+                    $harga[$no] = (int) $h;
+                }
+            }
+        }
 
-        return ['dariBayarTanah' => $do ? \App\Support\BayarTanah::untukForm($do) : null];
+        return ['dariBayarTanah' => $do ? \App\Support\BayarTanah::untukForm(array_values(array_unique($do)), $harga) : null];
     }
 
     /**

@@ -38,7 +38,7 @@
         const isian = [];
         [...kepala.cells].forEach((th, i) => {
             const sel = document.createElement('th');
-            if (th.textContent.trim()) {
+            if (th.textContent.trim() && !th.hasAttribute('data-tanpa-saring')) {
                 const x = document.createElement('input');
                 x.type = 'search';
                 x.placeholder = th.classList.contains('angka') ? 'mis. >100000' : 'Saring…';
