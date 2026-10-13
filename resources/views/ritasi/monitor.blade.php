@@ -13,10 +13,6 @@
         .cari-monitor { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
         .cari-monitor input[type=search] { min-width: 280px; padding: 8px 10px; border-radius: 7px; }
         table.bongkar td { vertical-align: middle; }
-        /* Lebar kolom tetap (table-layout: fixed): tabel ±200 DO tidak dihitung ulang seluruhnya tiap kali DO dibuka/diisi. */
-        table.bongkar { table-layout: fixed; width: 100%; min-width: 1500px; }
-        table.bongkar td, table.bongkar th { overflow: hidden; text-overflow: ellipsis; }
-        table.bongkar tr.b td { white-space: normal; }
         table.bongkar td.sel-do { cursor: pointer; white-space: nowrap; }
         table.bongkar input.isi-bongkar { width: 100%; min-width: 110px; padding: 6px 8px; border-radius: 6px; font-size: 13px; }
         table.bongkar input[data-tanggal-id].isi-bongkar { min-width: 112px; }
@@ -177,8 +173,6 @@
             @endif
             <div class="kartu gulir" style="padding: 0;">
                 <table class="kas bongkar">
-                    <colgroup><col style="width: 92px"><col style="width: 82px"><col style="width: 72px"><col style="width: 104px"><col style="width: 104px"><col style="width: 130px">
-                        <col style="width: 156px"><col style="width: 82px"><col style="width: 150px"><col style="width: 140px"><col style="width: 128px"><col style="width: 160px"></colgroup>
                     <thead><tr><th>No DO</th><th>Nomor Mobil</th><th>Jenis Mobil</th><th>Nama Supir</th><th>Tanggal UJ</th><th>Galian</th>
                         <th>Tanggal Bongkar</th><th>Jam Bongkar</th><th>Tujuan Bongkar</th><th>Jenis Tanah / Barang</th><th>No Surat Jalan</th><th>Keterangan</th></tr></thead>
                     @forelse ($daftar as $d)
@@ -206,6 +200,7 @@
                                     @endif
                                 </td>
                             </tr>
+                            <template class="rinci-uj">
                             <tr class="bh"><td>ID UJ</td><td>Tanggal</td><td>Status</td><td>No Mobil · Jenis</td><td>Supir</td><td colspan="5">Keterangan UJ</td><td>Kategori</td><td class="angka">Nominal</td></tr>
                             @foreach ($d['detail'] as $x)
                                 <tr class="b">
@@ -219,6 +214,7 @@
                                     <td class="angka">{{ rp((int) $x->nominal) }}</td>
                                 </tr>
                             @endforeach
+                            </template>
                         </tbody>
                     @empty
                         <tbody><tr><td colspan="12" class="redup" style="padding: 20px 14px;">{{ $q || $umur || $tujuan !== '' || $galian !== '' ? 'Tidak ada DO yang cocok dengan saringan ini.' : 'Semua DO di Kas UJ sudah ada di data Ritasi.' }}</td></tr></tbody>
@@ -282,7 +278,13 @@
     <script>
         (() => {
             // Bayar Tanah: klik baris membuka transaksi. Monitor Ritasi: hanya sel No DO (sel lain berisi isian).
-            document.querySelectorAll('tbody.grup tr.t').forEach(tr => (tr.querySelector('.sel-do') ?? tr).addEventListener('click', () => tr.parentElement.classList.toggle('buka')));
+            document.querySelectorAll('tbody.grup tr.t').forEach(tr => (tr.querySelector('.sel-do') ?? tr).addEventListener('click', () => {
+                const tb = tr.parentElement;
+                // Rincian UJ baru dimasukkan ke tabel saat DO pertama kali dibuka (halaman tetap ringan walau ±200 DO).
+                const t = tb.querySelector(':scope > template.rinci-uj');
+                if (t) { tb.append(t.content); t.remove(); }
+                tb.classList.toggle('buka');
+            }));
             const form = document.getElementById('form-bongkar');
             if (!form) return;
             // Tanggal selalu tampil "dd-MMM-yyyy" (mis. 09-Okt-2026), tidak mengikuti pengaturan bahasa komputer.
