@@ -101,6 +101,25 @@ class UjController extends Controller
     }
 
     /**
+     * Input UJ → panel "Input bayar tanah": DO yang belum ada uang tanahnya (data menu Bayar Tanah), dengan galian & tarif
+     * terakhirnya. ?umur=7|30|semua (bawaan 30).
+     */
+    public function daftarBayarTanah(Request $request): JsonResponse
+    {
+        $umur = in_array($request->query('umur'), ['7', '30', 'semua'], true) ? $request->query('umur') : '30';
+        $do = \App\Support\MonitorRitasi::belumBayarTanah()['do']
+            ->filter(fn ($d) => $umur === 'semua' || ($d['umur'] !== null && $d['umur'] <= (int) $umur))
+            ->map(fn ($d) => [
+                'do' => $d['do'], 'tanggal' => $d['pertama']?->translatedFormat('j M Y'), 'umur' => $d['umur'],
+                'mobil' => implode(', ', $d['mobil']), 'driver' => implode(', ', $d['driver']),
+                'galian' => \App\Support\BayarTanah::galianDo($d), 'tarif' => \App\Support\BayarTanah::tarifDo($d),
+                'bongkar' => $d['bongkar']?->translatedFormat('j M'), 'surat_jalan' => implode(', ', $d['surat_jalan']),
+            ])->values();
+
+        return response()->json(['umur' => $umur, 'do' => $do]);
+    }
+
+    /**
      * Menu Bayar Tanah → tombol "Bayar tanah": /uj/input?bayar_tanah=15790,15791 membuka form berisi satu detail Uang Tanah per DO
      * (lihat BayarTanah::untukForm). Admin memeriksa lalu menyimpan seperti input biasa.
      *

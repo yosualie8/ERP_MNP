@@ -95,6 +95,7 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/uj/pengajuan', [PengajuanUjController::class, 'daftar'])->name('pengajuan-uj.daftar');
     Route::get('/uj/pengajuan/baru', [PengajuanUjController::class, 'buat'])->name('pengajuan-uj.buat');
     Route::post('/uj/pengajuan', [PengajuanUjController::class, 'simpan'])->name('pengajuan-uj.simpan');
+    Route::get('/uj/input/bayar-tanah', [UjController::class, 'daftarBayarTanah'])->name('uj.input.bayar-tanah');
     Route::post('/uj/pengajuan/periksa', [PengajuanUjController::class, 'periksa'])->name('pengajuan-uj.periksa');
     Route::get('/uj/pengajuan/{pengajuan}/edit', [PengajuanUjController::class, 'ubah'])->whereNumber('pengajuan')->name('pengajuan-uj.ubah');
     Route::put('/uj/pengajuan/{pengajuan}', [PengajuanUjController::class, 'simpanUbah'])->whereNumber('pengajuan')->name('pengajuan-uj.simpan-ubah');
