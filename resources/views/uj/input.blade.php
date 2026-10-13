@@ -71,6 +71,9 @@
         .temuan .prioritas.rendah { background: #3b404b; color: #dfe2e7; }
         .temuan .aturan { color: var(--redup); font-size: 11px; }
         .temuan label { display: block; color: var(--teks); font-size: 12px; margin: 0; }
+        .aksi-massal-pj { border: 1px solid var(--aksen); background: var(--aksen-muda); border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; }
+        .aksi-massal-pj[hidden] { display: none; }
+        .baris-massal-pj { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 13px; padding: 3px 0; }
         .duluan-tanya { margin: 6px 0 8px; padding: 8px 10px; border: 1px solid #e0a526; border-radius: 8px; background: rgba(224, 165, 38, .08); }
         .duluan-tanya .rinci { font-size: 12px; margin: 4px 0 6px; }
         .duluan-tanya .rinci b { color: var(--teks); }
@@ -904,6 +907,49 @@
                 });
                 urutkanNama();
             };
+            // Aksi massal: tautkan semua baris ke pengajuan (PUJ-xxxx) yang ditawarkan, dan isi alasan perbedaan sekaligus.
+            const kotakMassal = document.createElement('div');
+            kotakMassal.className = 'aksi-massal-pj';
+            kotakMassal.hidden = true;
+            daftar.closest('table').before(kotakMassal);
+            const aturMassal = () => {
+                const dipakai = new Set(barisDetail().map(tr => tr.querySelector('.pengajuan-kunci').value).filter(Boolean));
+                const tawaran = {}; // kode → [[tr, id], …]
+                barisDetail().forEach((tr, i) => {
+                    if (tr.querySelector('.pengajuan-kunci').value) return;
+                    (temuanTerakhir[i] || []).filter(x => x.tautan).forEach(x => (tawaran[x.tautan.kode] ??= []).push([tr, String(x.tautan.id)]));
+                });
+                const tanpaAlasan = barisDetail().filter(tr => { const a = tr.bedaEl?.querySelector('[data-alasan]'); return a && a.value.trim().length < MIN_KONFIRMASI; });
+                const kode = Object.keys(tawaran);
+                kotakMassal.hidden = !kode.length && tanpaAlasan.length < 2;
+                kotakMassal.innerHTML = kode.map(k => {
+                    const n = new Set(tawaran[k].map(([tr]) => tr)).size;
+                    return `<div class="baris-massal-pj">🔗 <b>${n} baris</b> cocok dengan pengajuan <b>${esc2(k)}</b> yang belum direalisasikan.
+                        <button type="button" class="tombol" data-tautkan-semua="${esc2(k)}" style="padding: 4px 12px; font-size: 13px;">Tautkan semua ke ${esc2(k)}</button></div>`;
+                }).join('') + (tanpaAlasan.length >= 2 ? `<div class="baris-massal-pj">≠ <b>${tanpaAlasan.length} baris</b> berbeda dari pengajuannya dan belum beralasan.
+                        <input type="text" id="alasan-massal" maxlength="1000" placeholder="Alasan untuk semua baris itu (min. ${MIN_KONFIRMASI} karakter)" style="flex: 1; min-width: 260px;">
+                        <button type="button" class="tombol polos" id="isi-alasan-massal" style="padding: 4px 12px; font-size: 13px;">Isi ke ${tanpaAlasan.length} baris</button></div>` : '');
+                kotakMassal.querySelectorAll('[data-tautkan-semua]').forEach(btn => btn.addEventListener('click', () => {
+                    let n = 0;
+                    (tawaran[btn.dataset.tautkanSemua] || []).forEach(([tr, id]) => {
+                        const kunci = tr.querySelector('.pengajuan-kunci');
+                        if (kunci.value || dipakai.has(id)) return; // satu detail pengajuan hanya untuk satu baris
+                        kunci.value = id;
+                        dipakai.add(id);
+                        tr.classList.add('dari-pengajuan');
+                        tr.title = 'Dari pengajuan ' + btn.dataset.tautkanSemua;
+                        n++;
+                    });
+                    urutkanNama(); tampilModePj?.(); evaluasi();
+                    kotakMassal.innerHTML = `<div class="baris-massal-pj">✓ ${n} baris ditautkan ke ${esc2(btn.dataset.tautkanSemua)} — memeriksa ulang…</div>`;
+                }));
+                kotakMassal.querySelector('#isi-alasan-massal')?.addEventListener('click', () => {
+                    const v = kotakMassal.querySelector('#alasan-massal').value.trim();
+                    if (v.length < MIN_KONFIRMASI) { alert(`Alasan minimal ${MIN_KONFIRMASI} karakter.`); return; }
+                    tanpaAlasan.forEach(tr => { const a = tr.bedaEl.querySelector('[data-alasan]'); a.value = v; tr.alasan = v; });
+                    aturMassal(); evaluasi(false);
+                });
+            };
             // Lapis 3: setiap baris ber-FLAG wajib punya konfirmasi yang memadai.
             const cekKonfirmasi = () => {
                 const masalah = [];
@@ -974,6 +1020,7 @@
                         galatServer = [];
                         temuanTerakhir = hasil.temuan || {}; tampilTemuan(temuanTerakhir);
                         tampilBeda(hasil.pengajuan || {});
+                        aturMassal();
                         diperiksa = kunci;
                     }
                 } catch (err) {
