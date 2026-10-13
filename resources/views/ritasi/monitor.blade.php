@@ -56,13 +56,13 @@
             Jenis Tanah & No Surat Jalan lalu klik <b>Simpan bongkar</b> — rit tercatat di Ritasi (aplikasi & sheet) dan DO hilang dari daftar ini.@endif
         Umur dihitung dari tanggal uang jalan pertama DO itu. Klik {{ $tanah ? 'baris' : 'No DO' }} untuk melihat transaksi uang jalannya.</p>
 
-    @php($tautan = fn (array $ubah) => route($rute, array_filter([...['umur' => $umur, 'q' => $q, 'tujuan' => $tujuan, 'galian' => $galian], ...$ubah], fn ($v) => $v !== null && $v !== '')))
+    @php($tautan = fn (array $ubah) => route($rute, array_filter([...['umur' => $umur ?? 'semua', 'q' => $q, 'tujuan' => $tujuan, 'galian' => $galian], ...$ubah], fn ($v) => $v !== null && $v !== '')))
     <form method="GET" action="{{ route($rute) }}" class="cari-monitor">
         <span class="redup">Umur:</span>
         <a href="{{ $tautan(['umur' => '7']) }}" @class(['chip', 'aktif' => $umur === '7'])>≤ 7 hari · {{ $jumlahUmur['7'] }}</a>
         <a href="{{ $tautan(['umur' => '30']) }}" @class(['chip', 'aktif' => $umur === '30'])>≤ 30 hari · {{ $jumlahUmur['30'] }}</a>
-        <a href="{{ $tautan(['umur' => null]) }}" @class(['chip', 'aktif' => ! $umur])>All time · {{ $semua->count() }}</a>
-        @if ($umur)<input type="hidden" name="umur" value="{{ $umur }}">@endif
+        <a href="{{ $tautan(['umur' => 'semua']) }}" @class(['chip', 'aktif' => ! $umur])>All time · {{ $semua->count() }}</a>
+        <input type="hidden" name="umur" value="{{ $umur ?? 'semua' }}">
         @if ($tujuan !== '')<input type="hidden" name="tujuan" value="{{ $tujuan }}">@endif
         @if ($galian !== '')<input type="hidden" name="galian" value="{{ $galian }}">@endif
         <input type="search" name="q" value="{{ $q }}" placeholder="Cari No DO, DT, driver, galian, keterangan…" style="margin-left: auto;">
