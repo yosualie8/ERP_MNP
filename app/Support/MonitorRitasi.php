@@ -39,9 +39,13 @@ class MonitorRitasi
     {
         $kunci = fn ($v) => LembarRitasi::kunciAngka(str_replace(['`', "'"], '', (string) $v));
         $ritasi = [];
-        foreach (Ritasi::whereNotNull('no_do')->orderBy('tanggal')->get(['no_do', 'tanggal']) as $r) {
+        $suratJalan = [];
+        foreach (Ritasi::whereNotNull('no_do')->orderBy('tanggal')->get(['no_do', 'tanggal', 'no_seri']) as $r) {
             if ($k = $kunci($r->no_do)) {
                 $ritasi[$k] ??= $r->tanggal;
+                if ($r->no_seri) {
+                    $suratJalan[$k][] = $r->no_seri;
+                }
             }
         }
         $detail = UjDetail::where('biaya_transfer', false)->whereNotNull('no_do')->where('no_do', '!=', '')
@@ -61,7 +65,7 @@ class MonitorRitasi
         }
         $hariIni = Carbon::today();
         $do = collect($per)->map(fn ($b) => collect($b))->filter(fn (Collection $c, $k) => $termasuk((string) $k, $c, $ritasi))
-            ->map(function (Collection $c, $k) use ($hariIni, $ritasi) {
+            ->map(function (Collection $c, $k) use ($hariIni, $ritasi, $suratJalan) {
                 $pertama = $c->first()->tanggal;
 
                 return [
@@ -76,6 +80,8 @@ class MonitorRitasi
                     'kategori' => $c->pluck('kategori')->filter()->unique()->values()->all(),
                     'total' => (int) $c->sum('nominal'),
                     'bongkar' => $ritasi[(string) $k] ?? null,
+                    // No Surat Jalan (No Seri) rit DO itu di data Ritasi.
+                    'surat_jalan' => array_values(array_unique($suratJalan[(string) $k] ?? [])),
                     'detail' => $c->all(),
                 ];
             })->sortByDesc(fn ($d) => ($d['pertama']?->format('Ymd') ?? '0').str_pad($d['do'], 10, '0', STR_PAD_LEFT))->values();

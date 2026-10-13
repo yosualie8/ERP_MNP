@@ -67,7 +67,8 @@
             let n = 0;
             semua.forEach(u => {
                 const master = grup ? u.querySelector('tr.t') : u;
-                const detail = grup ? [...u.querySelectorAll('tr.b')] : [];
+                // Detail hanya dibandingkan bila kolomnya sejajar dengan judul (tanpa colspan).
+                const detail = grup ? [...u.querySelectorAll('tr.b')].filter(r => r.cells.length === kepala.cells.length) : [];
                 let lewatDetail = false;
                 const ok = aktif.every(x => {
                     const k = +x.dataset.kolom;

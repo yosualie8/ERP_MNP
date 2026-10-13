@@ -231,8 +231,8 @@
         </form>
     @else
     <div class="kartu gulir" style="padding: 0;">
-        <table class="kas">
-            <thead><tr><th>No DO</th><th>UJ pertama</th><th>Umur</th><th>No Mobil</th><th>Tujuan buangan</th><th>Driver</th><th>Galian</th>@if ($tanah)<th>Bongkar</th>@endif<th>Kategori</th><th class="angka">Transaksi</th><th class="angka">Total UJ</th></tr></thead>
+        <table class="kas" data-saring-kolom="grup">
+            <thead><tr><th>No DO</th><th>UJ pertama</th><th>Umur</th><th>No Mobil</th><th>Tujuan buangan</th><th>Driver</th><th>Galian</th>@if ($tanah)<th>Bongkar</th><th>No Surat Jalan</th>@endif<th>Kategori</th><th class="angka">Transaksi</th><th class="angka">Total UJ</th></tr></thead>
             @forelse ($daftar as $d)
                 <tbody class="grup">
                     <tr class="t ada-bon">
@@ -243,12 +243,13 @@
                         <td>{{ implode(', ', $d['buangan']) ?: '–' }}</td>
                         <td>{{ implode(', ', $d['driver']) ?: '–' }}</td>
                         <td>{{ $d['tujuan'] ? ucwords($d['tujuan']) : '–' }}</td>
-                        @if ($tanah)<td>{!! $d['bongkar'] ? '✓ '.e($d['bongkar']->translatedFormat('j M')) : '<span class="redup">belum</span>' !!}</td>@endif
+                        @if ($tanah)<td>{!! $d['bongkar'] ? '✓ '.e($d['bongkar']->translatedFormat('j M')) : '<span class="redup">belum</span>' !!}</td>
+                            <td class="i">{{ implode(', ', $d['surat_jalan']) ?: '–' }}</td>@endif
                         <td class="ringkas-gl">{{ implode(', ', $d['kategori']) }}</td>
                         <td class="angka">{{ count($d['detail']) }}</td>
                         <td class="angka"><b>{{ rp($d['total']) }}</b></td>
                     </tr>
-                    <tr class="bh"><td>ID UJ</td><td>Tanggal</td><td>Status</td><td>No Mobil · Jenis</td><td>Driver</td><td colspan="{{ $tanah ? 4 : 3 }}">Keterangan</td><td>Kategori</td><td class="angka">Nominal</td></tr>
+                    <tr class="bh"><td>ID UJ</td><td>Tanggal</td><td>Status</td><td>No Mobil · Jenis</td><td>Driver</td><td colspan="{{ $tanah ? 5 : 3 }}">Keterangan</td><td>Kategori</td><td class="angka">Nominal</td></tr>
                     @foreach ($d['detail'] as $x)
                         <tr class="b">
                             <td class="i">{{ $x->id_uj ?: 'baris '.$x->baris }}</td>
@@ -256,14 +257,14 @@
                             <td class="redup" style="font-size: 12px;">{{ $x->status }}</td>
                             <td>{{ $x->no_mobil }}@if ($x->jenis_kendaraan) <span class="redup">· {{ $x->jenis_kendaraan }}</span>@endif</td>
                             <td class="p">{{ $x->nama }}</td>
-                            <td colspan="{{ $tanah ? 4 : 3 }}">{{ $x->keterangan }} <span class="redup">· DO {{ $x->no_do }}</span></td>
+                            <td colspan="{{ $tanah ? 5 : 3 }}">{{ $x->keterangan }} <span class="redup">· DO {{ $x->no_do }}</span></td>
                             <td>{{ $x->kategori }}</td>
                             <td class="angka">{{ rp((int) $x->nominal) }}</td>
                         </tr>
                     @endforeach
                 </tbody>
             @empty
-                <tbody><tr><td colspan="{{ $tanah ? 11 : 10 }}" class="redup" style="padding: 20px 14px;">{{ $q || $umur || $tujuan !== '' || $galian !== '' ? 'Tidak ada DO yang cocok dengan saringan ini.' : ($tanah ? 'Semua DO yang ada uang jalannya sudah ada transaksi uang tanahnya.' : 'Semua DO di Kas UJ sudah ada di data Ritasi.') }}</td></tr></tbody>
+                <tbody><tr><td colspan="{{ $tanah ? 12 : 10 }}" class="redup" style="padding: 20px 14px;">{{ $q || $umur || $tujuan !== '' || $galian !== '' ? 'Tidak ada DO yang cocok dengan saringan ini.' : ($tanah ? 'Semua DO yang ada uang jalannya sudah ada transaksi uang tanahnya.' : 'Semua DO di Kas UJ sudah ada di data Ritasi.') }}</td></tr></tbody>
             @endforelse
         </table>
     </div>
@@ -275,6 +276,7 @@
     @endif
 
     <script src="{{ asset('js/tanggal-id.js') }}"></script>
+    <script src="{{ asset('js/saring-kolom.js') }}?v={{ filemtime(public_path('js/saring-kolom.js')) }}"></script>
     <script>
         (() => {
             // Bayar Tanah: klik baris membuka transaksi. Monitor Ritasi: hanya sel No DO (sel lain berisi isian).
