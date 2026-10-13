@@ -119,34 +119,39 @@
             return detailSaja ? detail.map(r => nilaiSel(r.cells[k])) : [nilaiSel(master.cells[k])];
         };
 
+        // Grup: kolom yang punya nilai di baris detail disaring PER BARIS DETAIL (detail yang tidak cocok disembunyikan; semua
+        // saringan detail harus cocok di baris yang sama); kolom yang hanya ada di master (mis. Tanggal) disaring di master.
         const terapkan = () => {
-            const aktif = isian.filter(x => x.value.trim());
-            const kolomNilai = Object.keys(pilihan).filter(k => pilihan[k]);
-            const sumber = Object.fromEntries(kolomNilai.map(k => [k, pakaiDetail(+k)]));
+            const aktif = isian.filter(x => x.value.trim()).map(x => ({k: +x.dataset.kolom, cek: v => cocok(v, x.value), teks: true}));
+            const kolomNilai = Object.keys(pilihan).filter(k => pilihan[k]).map(k => ({k: +k, cek: v => pilihan[k].has(v)}));
+            const saringan = [...aktif, ...kolomNilai];
+            const nilaiCek = (f, td) => f.teks ? (td ? td.textContent : '') : nilaiSel(td);
+            const diDetail = grup ? Object.fromEntries([...new Set(saringan.map(f => f.k))].map(k => [k, pakaiDetail(k)])) : {};
             const semua = unit();
             let n = 0;
             semua.forEach(u => {
                 const [master, detail] = bagian(u);
-                let lewatDetail = false;
-                const okTeks = aktif.every(x => {
-                    const k = +x.dataset.kolom;
-                    if (master.cells[k] && cocok(master.cells[k].textContent, x.value)) return true;
-                    const d = detail.some(r => r.cells[k] && cocok(r.cells[k].textContent, x.value));
-                    lewatDetail ||= d;
-                    return d;
-                });
-                const okNilai = okTeks && kolomNilai.every(k => {
-                    const ada = nilaiUnit(u, +k, sumber[k]).some(v => pilihan[k].has(v));
-                    if (ada && sumber[k]) lewatDetail = true;
-                    return ada;
-                });
-                const ok = okTeks && okNilai;
+                const fMaster = saringan.filter(f => !diDetail[f.k]);
+                const fDetail = saringan.filter(f => diDetail[f.k]);
+                const okMaster = fMaster.every(f => f.cek(nilaiCek(f, master.cells[f.k])));
+                let ok = okMaster;
+                if (grup) {
+                    // Sel master berupa ringkasan detail (class ringkas-gl, mis. daftar DO) tidak dipakai; sel master biasa (mis. penerima)
+                    // yang cocok berlaku untuk semua detailnya.
+                    const masterCocok = Object.fromEntries(fDetail.map((f, i) => [i, !!master.cells[f.k] && !master.cells[f.k].classList.contains('ringkas-gl')
+                        && f.cek(nilaiCek(f, master.cells[f.k]))]));
+                    const cocokDetail = detail.map(r => fDetail.every((f, i) => masterCocok[i] || f.cek(nilaiCek(f, r.cells[f.k]))));
+                    if (fDetail.length) ok = okMaster && (detail.length ? cocokDetail.some(Boolean) : fDetail.every((f, i) => masterCocok[i]));
+                    // Hanya detail yang cocok yang tampil (judul kolom detail tetap tampil).
+                    detail.forEach((r, i) => { r.style.display = fDetail.length && !cocokDetail[i] ? 'none' : ''; });
+                    if (ok && fDetail.length) u.classList.add('buka');
+                }
                 u.style.display = ok ? '' : 'none';
-                if (ok && lewatDetail) u.classList.add('buka');
                 n += ok;
             });
-            info.hidden = !aktif.length && !kolomNilai.length;
-            info.querySelector('span').textContent = `${n} dari ${semua.length} ${grup ? 'transaksi' : 'baris'} cocok dengan saringan kolom`;
+            info.hidden = !saringan.length;
+            info.querySelector('span').textContent = `${n} dari ${semua.length} ${grup ? 'transaksi' : 'baris'} cocok dengan saringan kolom`
+                + (grup && saringan.some(f => diDetail[f.k]) ? ' · hanya detail yang cocok yang ditampilkan' : '');
             barisSaring.dispatchEvent(new Event('input', {bubbles: true}));
         };
         isian.forEach(x => x.addEventListener('input', terapkan));
