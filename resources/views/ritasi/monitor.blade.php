@@ -13,6 +13,10 @@
         .cari-monitor { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px; }
         .cari-monitor input[type=search] { min-width: 280px; padding: 8px 10px; border-radius: 7px; }
         table.bongkar td { vertical-align: middle; }
+        /* Lebar kolom tetap (table-layout: fixed): tabel ±200 DO tidak dihitung ulang seluruhnya tiap kali DO dibuka/diisi. */
+        table.bongkar { table-layout: fixed; width: 100%; min-width: 1500px; }
+        table.bongkar td, table.bongkar th { overflow: hidden; text-overflow: ellipsis; }
+        table.bongkar tr.b td { white-space: normal; }
         table.bongkar td.sel-do { cursor: pointer; white-space: nowrap; }
         table.bongkar input.isi-bongkar { width: 100%; min-width: 110px; padding: 6px 8px; border-radius: 6px; font-size: 13px; }
         table.bongkar input[data-tanggal-id].isi-bongkar { min-width: 112px; }
@@ -173,6 +177,8 @@
             @endif
             <div class="kartu gulir" style="padding: 0;">
                 <table class="kas bongkar">
+                    <colgroup><col style="width: 92px"><col style="width: 82px"><col style="width: 72px"><col style="width: 104px"><col style="width: 104px"><col style="width: 130px">
+                        <col style="width: 156px"><col style="width: 82px"><col style="width: 150px"><col style="width: 140px"><col style="width: 128px"><col style="width: 160px"></colgroup>
                     <thead><tr><th>No DO</th><th>Nomor Mobil</th><th>Jenis Mobil</th><th>Nama Supir</th><th>Tanggal UJ</th><th>Galian</th>
                         <th>Tanggal Bongkar</th><th>Jam Bongkar</th><th>Tujuan Bongkar</th><th>Jenis Tanah / Barang</th><th>No Surat Jalan</th><th>Keterangan</th></tr></thead>
                     @forelse ($daftar as $d)
@@ -319,19 +325,29 @@
             // tidak dihitung, supaya DO yang hanya berisi tanggal massal tidak ikut disimpan.
             const terisi = tr => [...tr.querySelectorAll('.isi-bongkar')].some(i => i.name.endsWith('[galian]') || i.dataset.massal === '1' ? false : i.value.trim());
             const kurang = tr => [...tr.querySelectorAll('.isi-bongkar.wajib')].filter(i => !i.value.trim()).length + (tr.querySelector('[name$="[galian]"]').value.trim() ? 0 : 1);
-            const hitung = () => {
-                const isi = baris.filter(terisi);
-                baris.forEach(tr => tr.classList.toggle('diisi', terisi(tr)));
-                baris.forEach(tr => tr.classList.toggle('belum-lengkap', terisi(tr) && kurang(tr) > 0));
-                const belum = isi.filter(tr => kurang(tr) > 0);
+            // Status per baris disimpan; ketikan hanya memeriksa ulang baris itu (bukan ±200 DO sekaligus).
+            const status = new Map();
+            const periksaBaris = tr => {
+                const t = terisi(tr), k = t && kurang(tr) > 0;
+                const lama = status.get(tr);
+                if (lama && lama.t === t && lama.k === k) return;
+                status.set(tr, {t, k});
+                tr.classList.toggle('diisi', t);
+                tr.classList.toggle('belum-lengkap', k);
+            };
+            const ringkas = () => {
+                const isi = baris.filter(tr => status.get(tr)?.t);
+                const belum = isi.filter(tr => status.get(tr).k);
                 tombol.disabled = !isi.length || belum.length > 0;
                 info.textContent = !isi.length ? awal : belum.length
                     ? `${isi.length} DO diisi · ${belum.length} belum lengkap (DO ${belum.map(tr => tr.dataset.do).join(', ')}) — lengkapi Tanggal, Tujuan, Galian, Jenis Tanah & No Surat Jalan.`
                     : `${isi.length} DO siap disimpan sebagai bongkar: ${isi.map(tr => tr.dataset.do).join(', ')}.`;
             };
+            const hitung = () => { baris.forEach(periksaBaris); ringkas(); };
             form.addEventListener('input', e => {
                 if (e.target.dataset?.massal) delete e.target.dataset.massal; // diubah sendiri = isian biasa
-                hitung();
+                const tr = e.target.closest?.('tr.t[data-do]');
+                if (tr) { periksaBaris(tr); ringkas(); } else hitung();
             });
             // Isi Tanggal / Jam Bongkar semua DO yang tampil (hasil saringan) sekaligus.
             const kolomBaris = f => baris.map(tr => tr.querySelector(`[name$="[${f}]"]`));
