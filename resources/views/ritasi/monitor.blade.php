@@ -38,6 +38,7 @@
         table.bongkar tr.t.diisi td { background: rgba(76, 195, 138, .10); }
         table.bongkar tr.t.belum-lengkap td, table.bongkar tr.t.baris-salah td { background: rgba(224, 165, 38, .12); }
         table.bongkar tr.t.belum-lengkap input.wajib:placeholder-shown, table.bongkar tr.t.belum-lengkap input.wajib[value=""] { border-color: #e0a526; }
+        #bar-bayar[hidden] { display: none; }
         .simpan-bongkar { position: sticky; bottom: 0; display: flex; gap: 12px; align-items: center; padding: 12px 16px; margin-top: 12px;
             background: var(--kartu); border: 1px solid var(--garis); border-radius: 10px; z-index: 2; }
     </style>
@@ -237,7 +238,7 @@
             @forelse ($daftar as $d)
                 <tbody class="grup">
                     <tr class="t ada-bon">
-                        <td style="white-space: nowrap;">@if ($bolehBayar)<input type="checkbox" class="pilih-do" value="{{ $d['do'] }}" data-galian="{{ $d['tujuan'] ? ucwords($d['tujuan']) : '' }}" data-total="{{ $d['total'] }}" style="margin-right: 6px; vertical-align: middle;">@endif<span class="panah">▸</span> <b>{{ $d['do'] }}</b></td>
+                        <td style="white-space: nowrap;">@if ($bolehBayar)<input type="checkbox" class="pilih-do" value="{{ $d['do'] }}" data-galian="{{ \App\Support\BayarTanah::galianDo($d) }}" data-total="{{ $d['total'] }}" style="margin-right: 6px; vertical-align: middle;">@endif<span class="panah">▸</span> <b>{{ $d['do'] }}</b></td>
                         <td>{{ $d['pertama']?->translatedFormat('j M Y') ?? '–' }}@if ($d['terakhir'] && $d['pertama'] && ! $d['terakhir']->isSameDay($d['pertama']))<span class="redup" style="font-size: 12px;"> s/d {{ $d['terakhir']->translatedFormat('j M') }}</span>@endif</td>
                         <td>@if ($d['umur'] !== null)<span @class(['umur', 'baru' => $d['umur'] <= 7, 'sedang' => $d['umur'] > 7 && $d['umur'] <= 30, 'lama' => $d['umur'] > 30])>{{ $d['umur'] }} hari</span>@endif</td>
                         <td>{{ implode(', ', $d['mobil']) ?: '–' }}</td>

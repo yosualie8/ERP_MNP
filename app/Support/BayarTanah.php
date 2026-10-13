@@ -62,6 +62,16 @@ class BayarTanah
         ];
     }
 
+    /** Nama galian DO untuk ditampilkan (sama dengan yang dipakai saat mengisi form), null bila tidak diketahui. */
+    public static function galianDo(array $d): ?string
+    {
+        static $kunci;
+        $kunci ??= array_keys(self::riwayat());
+        $t = self::tempatDo($d, $kunci);
+
+        return $t ? ucwords($t) : null;
+    }
+
     /** Tempat (galian) DO: dari keterangan UJ-nya, nama tempat yang dikenal di keterangan, atau galian rit-nya. */
     private static function tempatDo(array $d, array $kunciAda): ?string
     {
