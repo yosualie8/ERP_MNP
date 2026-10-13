@@ -193,10 +193,10 @@ class RitasiController extends Controller
     private function tampilMonitor(Request $request, string $mode, array $hasil): View
     {
         // Umur DO: ≤ 7 hari, ≤ 30 hari, atau all time (bawaan).
-        // Umur DO: ≤ 7 hari, ≤ 30 hari, atau semua (?umur=semua). Monitor Ritasi bawaannya ≤ 30 hari supaya halaman ringan
-        // (DO lama tetap bisa dilihat lewat "All time"); Bayar Tanah bawaannya semua.
+        // Umur DO: ≤ 7 hari, ≤ 30 hari, atau semua (?umur=semua). Bawaan ≤ 7 hari (Monitor Ritasi & Bayar Tanah) supaya halaman
+        // ringan; DO lama tetap bisa dilihat lewat "≤ 30 hari" / "All time".
         $pilihUmur = $request->query('umur');
-        $umur = in_array($pilihUmur, ['7', '30'], true) ? $pilihUmur : ($pilihUmur === 'semua' || $mode !== 'ritasi' ? null : '30');
+        $umur = in_array($pilihUmur, ['7', '30'], true) ? $pilihUmur : ($pilihUmur === 'semua' ? null : '7');
         $q = trim((string) $request->query('q'));
         ['do' => $semua, 'bukan_angka' => $bukanAngka] = $hasil;
         $galian = trim((string) $request->query('galian'));
