@@ -72,7 +72,8 @@ class BbmController extends Controller
             if ($b->hm_akhir !== null) {
                 $info[$k]['hm'] = $b->hm_akhir;
             }
-            if ($b->proyek && ! str_contains($b->proyek, ' + ')) {
+            // Saran proyek hanya dari catatan 30 hari terakhir (proyek lama sudah tidak relevan).
+            if ($b->proyek && ! str_contains($b->proyek, ' + ') && $b->tanggal?->gte(now()->subDays(30))) {
                 $info[$k]['proyek'] = $b->proyek;
             }
         }
@@ -113,6 +114,7 @@ class BbmController extends Controller
         }
         $peta = BbmUnitPeta::get()->keyBy('kunci')->all();
         $hasil = [];
+        $ejaan = null;
         foreach ((array) $request->input('baris', []) as $i => $r) {
             $b = [
                 'tanggal' => $tanggal, 'unit' => $rapi($r['unit'] ?? null), 'hm_awal' => $angka($r['hm_awal'] ?? null), 'hm_akhir' => $angka($r['hm_akhir'] ?? null),
@@ -136,7 +138,13 @@ class BbmController extends Controller
                     $g[] = "$nama tidak boleh minus.";
                 }
             }
-            [$jenis] = $b['unit'] ? LembarBbm::arti($b['unit'], $peta) : ['cek'];
+            [$jenis, $aset] = $b['unit'] ? LembarBbm::arti($b['unit'], $peta) : ['cek', null];
+            // Ejaan baku: nama di Data Aset, selain itu ejaan yang paling sering dipakai di data BBM.
+            if ($jenis !== 'cek') {
+                $ejaan ??= Bbm::whereNotNull('unit')->selectRaw('unit, COUNT(*) n')->groupBy('unit')->orderBy('n')->pluck('unit')
+                    ->mapWithKeys(fn ($u) => [BbmUnitPeta::kunci($u) => $u])->all();
+                $b['unit'] = ($aset ? AsetTruk::find($aset)?->no_lambung : null) ?? $ejaan[BbmUnitPeta::kunci($b['unit'])] ?? $b['unit'];
+            }
             if (! $b['unit']) {
                 $g[] = 'Unit belum diisi.';
             } elseif ($jenis === 'cek') {
