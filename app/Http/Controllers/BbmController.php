@@ -186,8 +186,10 @@ class BbmController extends Controller
                 'rasio' => $hOk > 0 ? round($lOk / $hOk, 2) : null,
                 'stok' => Bbm::whereNotNull('stok')->orderByDesc('baris')->value('stok'),
                 // hanya ALAT BERAT (kategori Data Aset) — dump truck / engkel / selfloader tidak punya HM meter
-                'tanpa_hm' => $pakai->filter(fn ($b) => $b->keluar > 0 && $hm($b) <= 0 && ($kategori[$b->unit] ?? null) === 'alat_berat')->count(),
-                'isi' => $pakai->filter(fn ($b) => $b->keluar > 0 && ($kategori[$b->unit] ?? null) === 'alat_berat')->count(),
+                // dihitung sejak aturan wajib HM berlaku; sebelum itu hanya keterangan (data lama tidak bisa dilengkapi)
+                'tanpa_hm' => $pakai->filter(fn ($b) => $b->keluar > 0 && $hm($b) <= 0 && ($kategori[$b->unit] ?? null) === 'alat_berat' && $b->tanggal->toDateString() >= LembarBbm::WAJIB_HM_SEJAK)->count(),
+                'isi' => $pakai->filter(fn ($b) => $b->keluar > 0 && ($kategori[$b->unit] ?? null) === 'alat_berat' && $b->tanggal->toDateString() >= LembarBbm::WAJIB_HM_SEJAK)->count(),
+                'tanpa_hm_lama' => $pakai->filter(fn ($b) => $b->keluar > 0 && $hm($b) <= 0 && ($kategori[$b->unit] ?? null) === 'alat_berat' && $b->tanggal->toDateString() < LembarBbm::WAJIB_HM_SEJAK)->count(),
                 'isi_semua' => $pakai->where('keluar', '>', 0)->count(),
             ],
         ]);
@@ -196,7 +198,11 @@ class BbmController extends Controller
     /** Nama unit master + info terakhirnya (jenis, HM akhir, proyek) untuk mengisi otomatis. */
     private function infoUnit(): array
     {
-        $info = array_map(fn ($j) => ['jenis' => $j], $this->master()['unit']);
+        $berat = AsetTruk::where('kategori', 'alat_berat')->pluck('no_lambung')->flip();
+        $info = [];
+        foreach ($this->master()['unit'] as $n => $j) {
+            $info[$n] = ['jenis' => $j, 'berat' => isset($berat[$n])];
+        }
         // HM akhir & proyek terakhir per unit (dari data setahun terakhir).
         foreach (Bbm::where('tanggal', '>=', now()->subYear())->whereNotNull('unit')->orderBy('baris')->get(['unit', 'jenis', 'hm_akhir', 'proyek', 'tanggal']) as $b) {
             $k = $b->unit;
@@ -252,6 +258,7 @@ class BbmController extends Controller
         }
         $peta = BbmUnitPeta::get()->keyBy('kunci')->all();
         $hasil = [];
+        $beratDb = null;
         foreach ((array) $request->input('baris', []) as $i => $r) {
             $b = [
                 'tanggal' => $tanggal, 'unit' => $mentah($r['unit'] ?? null), 'hm_awal' => $angka($r['hm_awal'] ?? null), 'hm_akhir' => $angka($r['hm_akhir'] ?? null),
@@ -331,6 +338,11 @@ class BbmController extends Controller
                     $g[] = 'Isi liter Keluar — atau HM awal & akhir bila alat bekerja tanpa isi solar. Baris tanpa transaksi tidak bisa disimpan.';
                 } elseif (! $b['proyek']) {
                     $g[] = 'Pemakaian solar / jam kerja alat wajib diisi Proyek.';
+                }
+                // Alat berat yang diisi solar wajib disertai HM awal & akhir (supaya rasio L/jam bisa dihitung) — sejak WAJIB_HM_SEJAK.
+                if ($b['keluar'] > 0 && ($b['hm_awal'] === null || $b['hm_akhir'] === null) && $tanggal?->toDateString() >= LembarBbm::WAJIB_HM_SEJAK
+                    && ($beratDb ??= AsetTruk::where('kategori', 'alat_berat')->pluck('no_lambung')->flip())->has($b['unit'])) {
+                    $g[] = 'Alat berat yang diisi solar wajib diisi HM awal & HM akhir hari itu (dasar rasio liter/jam).';
                 }
             } elseif ($jenis === 'masuk') {
                 if (! $b['masuk']) {

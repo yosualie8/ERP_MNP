@@ -48,7 +48,7 @@
                 <span class="redup">keluar <b id="jml-keluar">0</b> L · masuk <b id="jml-masuk">0</b> L · <b id="jml-baris">0</b> baris</span>
             </div>
             <p class="redup" style="margin: 0 0 12px; font-size: 13px;">Pilih <b style="color: var(--teks);">Jenis</b> dulu di tiap baris. <b style="color: var(--teks);">Setiap baris harus berisi transaksi</b> (liter Keluar/Masuk, atau HM untuk alat yang bekerja tanpa isi solar).
-                <b>Pemakaian alat</b>: Unit = nama di Data Aset, isi HM & Keluar (liter) + Proyek. <b>Solar masuk</b>: Unit bebas diketik (sumber solarnya, mis. "Isi Solar dari Luar", "Isi Solar dari DT 035"); tulis No DO di Keterangan bila ada.
+                <b>Pemakaian alat</b>: Unit = nama di Data Aset, isi HM & Keluar (liter) + Proyek — <b>alat berat yang diisi solar wajib HM awal & akhir</b>. <b>Solar masuk</b>: Unit bebas diketik (sumber solarnya, mis. "Isi Solar dari Luar", "Isi Solar dari DT 035"); tulis No DO di Keterangan bila ada.
                 Unit (selain solar masuk), Proyek & Status harus persis sama dengan data master — beda huruf besar/kecil atau spasi pun ditolak. Total jam kerja dihitung otomatis dari jam Mulai–Selesai.
                 HM awal & proyek terisi otomatis dari catatan terakhir unit itu (ungu = otomatis, boleh diganti). Stok dihitung otomatis di sheet.</p>
 
@@ -96,6 +96,7 @@
         (() => {
             const UNIT = @json($unit);
             const JENIS = @json($jenisLabel);
+            const WAJIB_HM_SEJAK = @json(\App\Support\LembarBbm::WAJIB_HM_SEJAK);
             // Isian ber-master harus PERSIS sama (huruf besar/kecil & spasi) — beda sedikit pun ditandai dan tidak bisa disimpan.
             // Unit dicocokkan ke master JENIS yang dipilih; jenis Solar masuk boleh diketik bebas.
             const unitJenis = j => Object.keys(UNIT).filter(n => UNIT[n].jenis === j);
@@ -230,6 +231,13 @@
                     const hm = n.hm_awal !== null && n.hm_akhir !== null ? n.hm_akhir - n.hm_awal : n.total_hm;
                     if (!n.keluar && !(hm > 0)) { galat.push('Isi liter Keluar — atau HM awal & akhir bila alat bekerja tanpa isi solar. Baris tanpa transaksi tidak bisa disimpan.'); salahDi.add('keluar'); }
                     else if (!v('proyek').trim()) { galat.push('Pemakaian solar / jam kerja alat wajib diisi Proyek.'); salahDi.add('proyek'); }
+                    // Alat berat yang diisi solar wajib disertai HM awal & akhir (sejak WAJIB_HM_SEJAK; baris lama yang diedit tidak terkena).
+                    const tgl = window.TanggalId ? TanggalId.urai(document.querySelector('[name=tanggal]').value) : null;
+                    const iso = tgl ? `${tgl.getFullYear()}-${String(tgl.getMonth() + 1).padStart(2, '0')}-${String(tgl.getDate()).padStart(2, '0')}` : '9999';
+                    if (u?.berat && n.keluar > 0 && (n.hm_awal === null || n.hm_akhir === null) && iso >= WAJIB_HM_SEJAK) {
+                        galat.push('Alat berat yang diisi solar wajib diisi HM awal & HM akhir hari itu (dasar rasio liter/jam).');
+                        if (n.hm_awal === null) salahDi.add('hm_awal'); if (n.hm_akhir === null) salahDi.add('hm_akhir');
+                    }
                 } else if (jenis === 'masuk') {
                     if (!n.masuk) { galat.push('Isi jumlah liter di kolom Masuk.'); salahDi.add('masuk'); }
                     if (n.keluar) { galat.push('Baris solar masuk tidak boleh berisi Keluar — kosongkan Keluar.'); salahDi.add('keluar'); }

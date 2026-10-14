@@ -41,6 +41,9 @@ class LembarBbm
     }
 
     /** Jenis yang dipilih admin di Input BBM & HM. */
+    /** Sejak tanggal ini, isi solar ALAT BERAT wajib disertai HM awal & akhir (keputusan user 14 Okt 2026). Data sebelumnya dibiarkan. */
+    public const WAJIB_HM_SEJAK = '2026-10-15';
+
     public const JENIS_INPUT = ['pakai' => 'Pemakaian alat', 'masuk' => 'Solar masuk', 'pindah' => 'Pindah lokasi', 'susut' => 'Susut', 'operasional' => 'Kendaraan operasional'];
 
     /** Total jam kerja (menit) = Selesai − Mulai − Rest; lewat tengah malam = hari berikutnya. Null bila Mulai/Selesai kosong. */
