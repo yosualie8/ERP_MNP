@@ -326,9 +326,7 @@ class BbmController extends Controller
             return back()->withInput()->withErrors($galat);
         }
         self::daftarkanSumber($isi);
-        // Rental & Keterangan kerja tidak ada lagi di form: isi lamanya dipertahankan.
-        $isi[0]['rental'] = $b->rental;
-        $isi[0]['keterangan_kerja'] = $b->keterangan_kerja;
+
         $lama = "{$b->unit} {$b->tanggal?->translatedFormat('j M Y')} keluar ".self::liter($b->keluar).' masuk '.self::liter($b->masuk);
         try {
             (new TulisBbmSheet(GoogleSheets::wajib()))->ubah($b, $isi[0]);
@@ -375,7 +373,7 @@ class BbmController extends Controller
         $fisik = (float) $fisik;
         $stok = (float) (Bbm::whereNotNull('stok')->orderByDesc('baris')->value('stok') ?? 0);
         $selisih = round($fisik - $stok, 2);
-        $b = ['tanggal' => $tanggal, 'unit' => 'Stock Opname', 'hm_awal' => null, 'hm_akhir' => null, 'total_hm' => null,
+        $b = ['tanggal' => $tanggal, 'jenis' => 'opname', 'unit' => 'Stock Opname', 'hm_awal' => null, 'hm_akhir' => null, 'total_hm' => null,
             'masuk' => $selisih > 0 ? $selisih : null, 'keluar' => $selisih < 0 ? -$selisih : null,
             'keterangan' => 'Stok fisik '.rtrim(rtrim(number_format($fisik, 2, '.', ''), '0'), '.').' liter',
             'keterangan_kerja' => $request->input('catatan') ? mb_substr(trim($request->input('catatan')), 0, 300) : null];

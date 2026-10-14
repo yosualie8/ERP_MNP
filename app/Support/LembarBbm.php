@@ -10,8 +10,9 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Lembar "Penggunaan BBM" (spreadsheet yang sama dengan Ritasi): satu baris = satu kejadian solar per unit per hari.
- * Kolom: A Tanggal, B Unit, C HM Awal, D HM Akhir, E Total HM (=D-C), F Masuk, G Keluar, H Stok Solar (=H baris data sebelumnya
- * + N(F) - N(G)), I Start Kerja, J Restime, K Selesai Kerja, L Status, M Keterangan, N Rental (jam), O Proyek, P Keterangan Kerja.
+ * Kolom (sejak 14 Okt 2026, sama dengan urutan di aplikasi): A Tanggal, B Jenis, C Unit, D HM Awal, E HM Akhir, F Total HM (=E-D),
+ * G Masuk, H Keluar, I Stok Solar (=I baris data sebelumnya + N(G) - N(H)), J Mulai Kerja, K Restime, L Selesai Kerja,
+ * M Total Jam Kerja (=MOD(L-J;1)-N(K)), N Status, O Proyek, P Keterangan. Kolom Q ke kanan = tabel bantu admin (tidak dibaca).
  * Proyek "Tahap A + Tahap B" = liter & HM dibagi rata ke tahap-tahap itu. Baris tanpa tanggal & unit (mis. baris SUM admin) dilewati.
  */
 class LembarBbm
@@ -19,6 +20,25 @@ class LembarBbm
     public const LEMBAR = 'Penggunaan BBM';
 
     public const STATUS = ['Running', 'Stand By', 'Breakdown', 'Lembur', 'Libur'];
+
+    /** Judul baris 1 lembar (dipakai memastikan struktur sheet = struktur yang dipahami aplikasi). */
+    public const JUDUL = ['Tanggal', 'Jenis', 'Unit', 'HM Awal', 'HM Akhir', 'Total HM', 'Masuk', 'Keluar', 'Stok Solar', 'Mulai Kerja', 'Restime',
+        'Selesai Kerja', 'Total Jam Kerja', 'Status', 'Proyek', 'Keterangan'];
+
+    /** Tulisan kolom Jenis di sheet. */
+    public static function labelJenis(): array
+    {
+        return self::JENIS_INPUT + ['opname' => 'Stock Opname'];
+    }
+
+    /** Tolak bekerja bila judul kolom sheet tidak sama dengan JUDUL (mis. struktur lama / kolom digeser admin). */
+    public static function pastikanStruktur(array $barisJudul): void
+    {
+        $ada = array_map(fn ($v) => mb_strtolower(trim((string) $v)), array_slice(array_pad($barisJudul, 16, ''), 0, 16));
+        if ($ada !== array_map('mb_strtolower', self::JUDUL)) {
+            throw new \RuntimeException('Struktur kolom lembar "'.self::LEMBAR.'" tidak sesuai (harus: '.implode(', ', self::JUDUL).'). Data tidak dibaca/ditulis supaya tidak tertukar.');
+        }
+    }
 
     /** Jenis yang dipilih admin di Input BBM & HM. */
     public const JENIS_INPUT = ['pakai' => 'Pemakaian alat', 'masuk' => 'Solar masuk', 'pindah' => 'Pindah lokasi', 'susut' => 'Susut', 'operasional' => 'Kendaraan operasional'];
@@ -58,7 +78,7 @@ class LembarBbm
     /** Baris data = ada tanggal atau unit. */
     public static function adaData(array $r): bool
     {
-        return trim((string) ($r[0] ?? '')) !== '' || trim((string) ($r[1] ?? '')) !== '';
+        return trim((string) ($r[0] ?? '')) !== '' || trim((string) ($r[2] ?? '')) !== '';
     }
 
     public static function angka(mixed $v): ?float
@@ -128,21 +148,25 @@ class LembarBbm
                 continue;
             }
             $teks = fn (int $k, int $maks) => ($v = trim(preg_replace('/\s+/', ' ', (string) ($r[$k] ?? '')))) === '' ? null : mb_substr($v, 0, $maks);
-            $unit = $teks(1, 100);
+            $unit = $teks(2, 100);
             [$jenis, $aset] = self::arti($unit, $peta);
+            // Jenis tertulis di kolom B diutamakan (dipilih admin); kosong / tak dikenal → dari pemetaan unit.
+            if (($k = array_search($teks(1, 40), self::labelJenis(), true)) !== false) {
+                $jenis = $k;
+            }
             $proyek = $teks(14, 500);
+            $hmA = self::angka($r[3] ?? null);
+            $hmB = self::angka($r[4] ?? null);
             $hasil[] = [
                 'baris' => $mulai + $i, 'tanggal' => KasSeabank::tanggal($r[0] ?? null)?->toDateString(), 'unit' => $unit, 'jenis' => $jenis, 'aset_id' => $aset,
-                'hm_awal' => self::angka($r[2] ?? null), 'hm_akhir' => self::angka($r[3] ?? null),
+                'hm_awal' => $hmA, 'hm_akhir' => $hmB,
                 // Total HM kosong tetapi HM awal & akhir ada → dihitung (akhir − awal).
-                'total_hm' => self::angka($r[4] ?? null) ?? (self::angka($r[2] ?? null) !== null && self::angka($r[3] ?? null) !== null ? round(self::angka($r[3]) - self::angka($r[2]), 2) : null),
-                'masuk' => self::angka($r[5] ?? null), 'keluar' => self::angka($r[6] ?? null), 'stok' => self::angka($r[7] ?? null),
-                'jam_mulai' => LembarRitasi::jam($r[8] ?? null), 'istirahat' => LembarRitasi::jam($r[9] ?? null), 'jam_selesai' => LembarRitasi::jam($r[10] ?? null),
-                'status' => $teks(11, 40), 'keterangan' => $teks(12, 300),
-                // Rental = jam kerja/sewa sehari; angka di luar 0–24 (mis. No DO salah kolom) tidak dipakai.
-                'rental' => ($jam = self::angka($r[13] ?? null)) !== null && $jam >= 0 && $jam <= 24 ? $jam : null,
+                'total_hm' => self::angka($r[5] ?? null) ?? ($hmA !== null && $hmB !== null ? round($hmB - $hmA, 2) : null),
+                'masuk' => self::angka($r[6] ?? null), 'keluar' => self::angka($r[7] ?? null), 'stok' => self::angka($r[8] ?? null),
+                'jam_mulai' => LembarRitasi::jam($r[9] ?? null), 'istirahat' => LembarRitasi::jam($r[10] ?? null), 'jam_selesai' => LembarRitasi::jam($r[11] ?? null),
+                'status' => $teks(13, 40), 'keterangan' => $teks(15, 300), 'rental' => null,
                 'proyek' => $proyek, 'tahap_ids' => $proyek === null ? null : json_encode($tahap[$proyek] ??= self::tahapIds($proyek)),
-                'keterangan_kerja' => $teks(15, 500),
+                'keterangan_kerja' => null,
             ];
         }
 
@@ -153,8 +177,10 @@ class LembarBbm
     public static function impor(GoogleSheets $sheets): int
     {
         return Cache::lock('tulis-bbm-sheet', 120)->block(60, function () use ($sheets) {
-            $r = self::kutip().'!A2:P';
-            $baris = self::urai($sheets->nilaiMentah(self::id(), [$r])[$r], 2);
+            $r = self::kutip().'!A1:P';
+            $semua = $sheets->nilaiMentah(self::id(), [$r])[$r];
+            self::pastikanStruktur($semua[0] ?? []);
+            $baris = self::urai(array_slice($semua, 1), 2);
             DB::transaction(function () use ($baris) {
                 Bbm::query()->delete();
                 $waktu = now();

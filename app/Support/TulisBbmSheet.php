@@ -31,6 +31,7 @@ class TulisBbmSheet
     {
         return Cache::lock('tulis-bbm-sheet', 120)->block(60, function () use ($baris) {
             $l = LembarBbm::kutip();
+            $this->pastikanStruktur();
             $akhir = $this->barisAkhir();
             $mulai = $akhir + 1;
             $sampai = $mulai + count($baris) - 1;
@@ -43,10 +44,10 @@ class TulisBbmSheet
             $this->sheets->permintaan($this->id, [
                 ['insertDimension' => ['range' => ['sheetId' => $sid, 'dimension' => 'ROWS', 'startIndex' => $mulai - 1, 'endIndex' => $sampai], 'inheritFromBefore' => true]],
                 $format(0, 0, ['type' => 'DATE', 'pattern' => 'd-mmm-yy']),
-                $format(2, 6, null),
-                $format(7, 7, ['type' => 'NUMBER', 'pattern' => '#,##0']),
-                $format(8, 10, ['type' => 'TIME', 'pattern' => 'h:mm']),
-                $format(13, 13, null),
+                $format(3, 7, null),
+                $format(8, 8, ['type' => 'NUMBER', 'pattern' => '#,##0']),
+                $format(9, 11, ['type' => 'TIME', 'pattern' => 'h:mm']),
+                $format(12, 12, ['type' => 'TIME', 'pattern' => '[h]:mm']),
             ], 'menyisipkan baris Penggunaan BBM');
             $data = [];
             foreach (array_values($baris) as $i => $b) {
@@ -75,7 +76,7 @@ class TulisBbmSheet
             $this->periksa($lama);
             $n = $lama->baris;
             $isi = self::isi($b, $n, $n - 1);
-            $this->sheets->tulis($this->id, ["{$l}!A{$n}:G{$n}" => [array_slice($isi, 0, 7)], "{$l}!I{$n}:P{$n}" => [array_slice($isi, 8)]]);
+            $this->sheets->tulis($this->id, ["{$l}!A{$n}:H{$n}" => [array_slice($isi, 0, 8)], "{$l}!J{$n}:P{$n}" => [array_slice($isi, 9)]]);
             $selisih = ((float) ($b['masuk'] ?? 0) - (float) ($b['keluar'] ?? 0)) - ((float) $lama->masuk - (float) $lama->keluar);
             $peta = null;
             DB::transaction(function () use ($lama, $b, $n, $selisih, &$peta) {
@@ -98,7 +99,7 @@ class TulisBbmSheet
             $this->sheets->hapusBaris($this->id, $this->sheetId(), $n, $n);
             if ($sesudah) {
                 $s = $sesudah - 1;
-                $this->sheets->tulis($this->id, ["{$l}!H{$s}" => [[$sebelum ? "=H{$sebelum}+N(F{$s})-N(G{$s})" : "=N(F{$s})-N(G{$s})"]]]);
+                $this->sheets->tulis($this->id, ["{$l}!I{$s}" => [[$sebelum ? "=I{$sebelum}+N(G{$s})-N(H{$s})" : "=N(G{$s})-N(H{$s})"]]]);
             }
             $selisih = (float) $lama->masuk - (float) $lama->keluar;
             DB::transaction(function () use ($lama, $n, $selisih) {
@@ -116,10 +117,10 @@ class TulisBbmSheet
     {
         $l = LembarBbm::kutip();
         $akhir = (int) Bbm::max('baris') ?: 1;
-        $bawah = $this->sheets->nilaiMentah($this->id, ["{$l}!A".($akhir + 1).':B'.($akhir + 40)])["{$l}!A".($akhir + 1).':B'.($akhir + 40)];
+        $bawah = $this->sheets->nilaiMentah($this->id, ["{$l}!A".($akhir + 1).':C'.($akhir + 40)])["{$l}!A".($akhir + 1).':C'.($akhir + 40)];
         if (collect($bawah)->contains(fn ($r) => LembarBbm::adaData($r))) {
             $akhir = 1;
-            foreach ($this->sheets->nilaiMentah($this->id, ["{$l}!A2:B"])["{$l}!A2:B"] as $i => $r) {
+            foreach ($this->sheets->nilaiMentah($this->id, ["{$l}!A2:C"])["{$l}!A2:C"] as $i => $r) {
                 if (LembarBbm::adaData($r)) {
                     $akhir = $i + 2;
                 }
@@ -133,13 +134,21 @@ class TulisBbmSheet
     private function periksa(Bbm $b): void
     {
         $l = LembarBbm::kutip();
-        $isi = $this->sheets->nilaiMentah($this->id, ["{$l}!A{$b->baris}:G{$b->baris}"])["{$l}!A{$b->baris}:G{$b->baris}"][0] ?? [];
+        $this->pastikanStruktur();
+        $isi = $this->sheets->nilaiMentah($this->id, ["{$l}!A{$b->baris}:H{$b->baris}"])["{$l}!A{$b->baris}:H{$b->baris}"][0] ?? [];
         $sama = KasSeabank::tanggal($isi[0] ?? null)?->toDateString() === $b->tanggal?->toDateString()
-            && BbmUnitPeta::kunci($isi[1] ?? '') === BbmUnitPeta::kunci($b->unit)
-            && LembarBbm::angka($isi[5] ?? null) == $b->masuk && LembarBbm::angka($isi[6] ?? null) == $b->keluar;
+            && BbmUnitPeta::kunci($isi[2] ?? '') === BbmUnitPeta::kunci($b->unit)
+            && LembarBbm::angka($isi[6] ?? null) == $b->masuk && LembarBbm::angka($isi[7] ?? null) == $b->keluar;
         if (! $sama) {
             throw new RuntimeException("Isi sheet Penggunaan BBM baris {$b->baris} sudah berubah sejak data terakhir diperbarui. Tunggu beberapa menit (data diperbarui otomatis tiap 5 menit), muat ulang, lalu ulangi.");
         }
+    }
+
+    /** Pastikan judul kolom sheet = struktur yang dipahami aplikasi (lihat LembarBbm::JUDUL). */
+    private function pastikanStruktur(): void
+    {
+        $l = LembarBbm::kutip();
+        LembarBbm::pastikanStruktur($this->sheets->nilaiMentah($this->id, ["{$l}!A1:P1"])["{$l}!A1:P1"][0] ?? []);
     }
 
     /** Kolom A..P satu baris; $sebelum = baris data sebelumnya untuk rumus Stok. */
@@ -147,27 +156,37 @@ class TulisBbmSheet
     {
         $t = fn ($v) => ($v = trim((string) $v)) !== '' && in_array($v[0], ['=', '+', '-', '@'], true) ? "'".$v : $v;
         $a = fn ($v) => $v === null || $v === '' ? '' : (float) $v;
-        $total = $b['hm_awal'] !== null && $b['hm_akhir'] !== null ? "=D{$n}-C{$n}" : $a($b['total_hm'] ?? null);
+        $total = $b['hm_awal'] !== null && $b['hm_akhir'] !== null ? "=E{$n}-D{$n}" : $a($b['total_hm'] ?? null);
+        $jenis = $b['jenis'] ?? null;
+        if (! isset(LembarBbm::labelJenis()[$jenis])) {
+            $peta = null;
+            [$jenis] = LembarBbm::arti($b['unit'], $peta);
+        }
 
         return [
-            $b['tanggal']->format('Y-m-d'), $t($b['unit']), $a($b['hm_awal']), $a($b['hm_akhir']), $total, $a($b['masuk']), $a($b['keluar']),
-            $sebelum >= 2 ? "=H{$sebelum}+N(F{$n})-N(G{$n})" : "=N(F{$n})-N(G{$n})",
-            $b['jam_mulai'] ?? '', $b['istirahat'] ?? '', $b['jam_selesai'] ?? '', $t($b['status'] ?? ''), $t($b['keterangan'] ?? ''),
-            $a($b['rental'] ?? null), $t($b['proyek'] ?? ''), $t($b['keterangan_kerja'] ?? ''),
+            $b['tanggal']->format('Y-m-d'), LembarBbm::labelJenis()[$jenis] ?? '', $t($b['unit']), $a($b['hm_awal']), $a($b['hm_akhir']), $total,
+            $a($b['masuk']), $a($b['keluar']),
+            $sebelum >= 2 ? "=I{$sebelum}+N(G{$n})-N(H{$n})" : "=N(G{$n})-N(H{$n})",
+            $b['jam_mulai'] ?? '', $b['istirahat'] ?? '', $b['jam_selesai'] ?? '',
+            "=IF(OR(J{$n}=\"\";L{$n}=\"\");\"\";MOD(L{$n}-J{$n};1)-N(K{$n}))",
+            $t($b['status'] ?? ''), $t($b['proyek'] ?? ''), $t($b['keterangan'] ?? ''),
         ];
     }
 
     private static function untukDb(array $b, int $n, float $stok, ?array &$peta): array
     {
         [$jenis, $aset] = LembarBbm::arti($b['unit'], $peta);
+        if (isset(LembarBbm::labelJenis()[$b['jenis'] ?? null])) {
+            $jenis = $b['jenis'];
+        }
         $total = $b['hm_awal'] !== null && $b['hm_akhir'] !== null ? round($b['hm_akhir'] - $b['hm_awal'], 2) : ($b['total_hm'] ?? null);
 
         return [
             'baris' => $n, 'tanggal' => $b['tanggal']->toDateString(), 'unit' => $b['unit'], 'jenis' => $jenis, 'aset_id' => $aset,
             'hm_awal' => $b['hm_awal'], 'hm_akhir' => $b['hm_akhir'], 'total_hm' => $total, 'masuk' => $b['masuk'], 'keluar' => $b['keluar'], 'stok' => $stok,
             'jam_mulai' => $b['jam_mulai'] ?? null, 'istirahat' => $b['istirahat'] ?? null, 'jam_selesai' => $b['jam_selesai'] ?? null,
-            'status' => $b['status'] ?? null, 'keterangan' => $b['keterangan'] ?? null, 'rental' => $b['rental'] ?? null,
-            'proyek' => $b['proyek'] ?? null, 'tahap_ids' => LembarBbm::tahapIds($b['proyek'] ?? null), 'keterangan_kerja' => $b['keterangan_kerja'] ?? null,
+            'status' => $b['status'] ?? null, 'keterangan' => $b['keterangan'] ?? null, 'rental' => null,
+            'proyek' => $b['proyek'] ?? null, 'tahap_ids' => LembarBbm::tahapIds($b['proyek'] ?? null), 'keterangan_kerja' => null,
         ];
     }
 
