@@ -10,7 +10,7 @@ class LokasiAbsen extends Model
 {
     protected $table = 'lokasi_absen';
 
-    protected $fillable = ['nama', 'proyek_id', 'lat', 'lng', 'radius_m', 'aktif', 'user_id'];
+    protected $fillable = ['nama', 'proyek_tahap_id', 'lat', 'lng', 'radius_m', 'aktif', 'user_id'];
 
     protected $casts = ['lat' => 'float', 'lng' => 'float', 'aktif' => 'boolean'];
 
@@ -19,9 +19,10 @@ class LokasiAbsen extends Model
         return $this->hasMany(Absensi::class, 'lokasi_absen_id');
     }
 
-    public function proyek(): BelongsTo
+    /** Proyek detail (tahap di Daftar Proyek). */
+    public function tahap(): BelongsTo
     {
-        return $this->belongsTo(Proyek::class);
+        return $this->belongsTo(ProyekTahap::class, 'proyek_tahap_id');
     }
 
     /** Jarak (meter) titik ini ke koordinat lain — rumus haversine. */

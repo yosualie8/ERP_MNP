@@ -17,9 +17,10 @@
         <h3 style="margin: 0 0 14px;">{{ $lokasi->exists ? 'Edit lokasi absen' : 'Tambah lokasi absen' }}</h3>
         <div class="baris">
             <div><label for="nama">Nama lokasi</label><input id="nama" name="nama" value="{{ old('nama', $lokasi->nama) }}" required placeholder="mis. ASG Tahap 116 / Pool ASG" autocomplete="off"></div>
-            <div><label for="proyek_id">Proyek</label>
-                <select id="proyek_id" name="proyek_id"><option value="">— tanpa proyek —</option>
-                    @foreach ($proyek as $p)<option value="{{ $p->id }}" @selected((string) old('proyek_id', $lokasi->proyek_id) === (string) $p->id)>{{ $p->nama }}</option>@endforeach</select></div>
+            <div><label for="proyek">Proyek (tahap di Daftar Proyek)</label>
+                <input id="proyek" name="proyek" list="daftar-tahap" value="{{ old('proyek', $lokasi->tahap?->nama) }}" autocomplete="off" placeholder="Ketik / pilih, mis. ASG Tahap 116" required>
+                <datalist id="daftar-tahap">@foreach ($tahapSaran as $t)<option value="{{ $t }}">@endforeach</datalist>
+                <div id="galat-proyek" style="color: var(--merah); font-size: 12px; margin-top: 4px;" hidden></div></div>
         </div>
         <div class="baris">
             <div><label for="lat">Latitude</label><input id="lat" name="lat" value="{{ old('lat', $lokasi->lat) }}" inputmode="decimal" autocomplete="off" placeholder="-6.1234567"></div>
@@ -29,7 +30,11 @@
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
             <button type="button" class="tombol polos" id="ambil-titik">📍 Ambil titik saya</button>
             <span class="redup" id="info-titik" style="font-size: 13px;">Tekan saat berada di lokasi proyek. Bisa juga menempel koordinat dari Google Maps ("-6.12, 106.45") ke kolom Latitude.</span>
-            <a id="lihat-peta" href="#" target="_blank" rel="noopener" style="font-size: 13px;">Lihat di Google Maps</a>
+            <a id="lihat-peta" href="#" target="_blank" rel="noopener" style="font-size: 13px;" hidden>Buka di Google Maps ↗</a>
+        </div>
+        <div id="peta-wadah" style="margin-bottom: 14px;" hidden>
+            <iframe id="peta" title="Peta lokasi absen" style="width: 100%; height: 320px; border: 0; border-radius: 10px;" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+            <div class="redup" style="font-size: 12px; margin-top: 4px;">Pratinjau titik. Karyawan bisa absen dalam radius <b id="info-radius"></b> m dari titik ini.</div>
         </div>
         <label style="display: flex; gap: 8px; align-items: center; margin-bottom: 14px; color: var(--teks);"><input type="checkbox" name="aktif" value="1" style="width: auto;" @checked(old('aktif', $lokasi->aktif))> Lokasi aktif (karyawan bisa absen di sini)</label>
         <div style="display: flex; gap: 10px;">
@@ -40,7 +45,28 @@
     <script>
         (() => {
             const lat = document.getElementById('lat'), lng = document.getElementById('lng'), info = document.getElementById('info-titik'), peta = document.getElementById('lihat-peta');
-            const segar = () => { peta.href = lat.value && lng.value ? `https://www.google.com/maps?q=${lat.value},${lng.value}` : '#'; };
+            // Peta tampil langsung di form begitu titik valid (tidak perlu membuka tab baru).
+            const segar = () => {
+                const a = parseFloat(lat.value), b = parseFloat(lng.value), ok = !isNaN(a) && !isNaN(b) && Math.abs(a) <= 90 && Math.abs(b) <= 180;
+                peta.hidden = !ok; document.getElementById('peta-wadah').hidden = !ok;
+                document.getElementById('info-radius').textContent = document.getElementById('radius_m').value || 100;
+                if (!ok) return;
+                peta.href = `https://www.google.com/maps?q=${a},${b}`;
+                const src = `https://maps.google.com/maps?q=${a},${b}&z=17&output=embed`;
+                const f = document.getElementById('peta'); if (f.src !== src) f.src = src;
+            };
+            document.getElementById('radius_m').addEventListener('input', segar);
+            // Proyek harus persis nama tahap yang terdaftar.
+            const TAHAP = @json($tahapSemua), proyek = document.getElementById('proyek'), galat = document.getElementById('galat-proyek'), simpan = document.querySelector('.form-l button[type=submit]');
+            const cekProyek = () => {
+                const v = proyek.value, ada = TAHAP.includes(v);
+                const mirip = !ada && v ? TAHAP.find(t => t.replace(/\s+/g, '').toLowerCase() === v.replace(/\s+/g, '').toLowerCase()) : null;
+                galat.hidden = !v || ada;
+                galat.textContent = mirip ? `Harus ditulis persis "${mirip}".` : 'Proyek tidak terdaftar di Daftar Proyek — pilih dari daftar.';
+                proyek.style.borderColor = v && !ada ? 'var(--aksen)' : '';
+                simpan.disabled = !ada;
+            };
+            proyek.addEventListener('input', cekProyek); cekProyek();
             // Tempel "lat, lng" dari Google Maps ke kolom Latitude → dipecah otomatis.
             lat.addEventListener('input', () => { const m = lat.value.match(/^\s*(-?\d+[.,]\d+)\s*[,;\s]\s*(-?\d+[.,]\d+)\s*$/); if (m) { lat.value = m[1].replace(',', '.'); lng.value = m[2].replace(',', '.'); } segar(); });
             lng.addEventListener('input', segar); segar();

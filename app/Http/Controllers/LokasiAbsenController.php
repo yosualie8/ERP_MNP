@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\KasRiwayat;
 use App\Models\LokasiAbsen;
-use App\Models\Proyek;
+use App\Models\ProyekTahap;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -14,17 +14,17 @@ class LokasiAbsenController extends Controller
 {
     public function index(): View
     {
-        return view('lokasi-absen.index', ['lokasi' => LokasiAbsen::with('proyek')->withCount('absensi')->orderByDesc('aktif')->orderBy('nama')->get()]);
+        return view('lokasi-absen.index', ['lokasi' => LokasiAbsen::with('tahap')->withCount('absensi')->orderByDesc('aktif')->orderBy('nama')->get()]);
     }
 
     public function create(): View
     {
-        return view('lokasi-absen.form', ['lokasi' => new LokasiAbsen(['radius_m' => 100, 'aktif' => true]), 'proyek' => Proyek::orderBy('nama')->get()]);
+        return view('lokasi-absen.form', ['lokasi' => new LokasiAbsen(['radius_m' => 100, 'aktif' => true]), ...$this->daftarTahap()]);
     }
 
     public function edit(LokasiAbsen $lokasi): View
     {
-        return view('lokasi-absen.form', ['lokasi' => $lokasi, 'proyek' => Proyek::orderBy('nama')->get()]);
+        return view('lokasi-absen.form', ['lokasi' => $lokasi->load('tahap'), ...$this->daftarTahap()]);
     }
 
     public function store(Request $request): RedirectResponse
@@ -44,13 +44,29 @@ class LokasiAbsenController extends Controller
         return redirect()->route('lokasi-absen.index')->with('success', "Lokasi {$lokasi->nama} disimpan.");
     }
 
+    /** Proyek detail yang boleh dipilih: tahap di Daftar Proyek (bukan baris "biaya lokasi"); saran = yang belum selesai. */
+    private function daftarTahap(): array
+    {
+        $semua = ProyekTahap::where('nama', 'not like', '%(biaya%')->orderBy('nama')->get(['id', 'nama', 'status']);
+
+        return ['tahapSemua' => $semua->pluck('nama')->all(), 'tahapSaran' => $semua->whereIn('status', ['belum', 'progress'])->pluck('nama')->all()];
+    }
+
     private function baca(Request $request): array
     {
+        // Proyek diketik/dipilih dengan nama tahap; harus PERSIS terdaftar di Daftar Proyek.
+        $nama = (string) $request->input('proyek');
+        $tahap = ProyekTahap::where('nama', $nama)->where('nama', 'not like', '%(biaya%')->first();
+        if (! $tahap || $tahap->nama !== $nama) {
+            throw \Illuminate\Validation\ValidationException::withMessages(['proyek' => $nama === ''
+                ? 'Proyek belum dipilih.' : "Proyek \"{$nama}\" tidak terdaftar di Daftar Proyek — pilih dari daftar (ketik persis sama)."]);
+        }
+        $request->merge(['proyek_tahap_id' => $tahap->id]);
         $request->merge(['nama' => trim(preg_replace('/\s+/', ' ', (string) $request->input('nama'))), 'aktif' => $request->boolean('aktif'),
             'lat' => str_replace(',', '.', (string) $request->input('lat')), 'lng' => str_replace(',', '.', (string) $request->input('lng'))]);
 
         return $request->validate([
-            'nama' => ['required', 'string', 'max:120'], 'proyek_id' => ['nullable', 'exists:proyek,id'],
+            'nama' => ['required', 'string', 'max:120'], 'proyek_tahap_id' => ['required', 'exists:proyek_tahap,id'],
             'lat' => ['required', 'numeric', 'between:-90,90'], 'lng' => ['required', 'numeric', 'between:-180,180'],
             'radius_m' => ['required', 'integer', 'min:20', 'max:2000'], 'aktif' => ['boolean'],
         ], ['lat.required' => 'Titik GPS belum diisi — tekan "Ambil titik saya" saat berada di lokasi, atau tempel koordinat dari Google Maps.']);
