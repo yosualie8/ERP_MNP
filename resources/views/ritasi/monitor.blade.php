@@ -173,7 +173,7 @@
                 </div>
             @endif
             <div class="kartu gulir" style="padding: 0;">
-                <table class="kas bongkar">
+                <table class="kas bongkar" data-saring-kolom="grup">
                     <thead><tr><th>No DO</th><th>Nomor Mobil</th><th>Jenis Mobil</th><th>Nama Supir</th><th>Tanggal UJ</th><th>Galian</th>
                         <th>Tanggal Bongkar</th><th>Jam Bongkar</th><th>Tujuan Bongkar</th><th>Jenis Tanah / Barang</th><th>No Surat Jalan</th><th>Keterangan</th></tr></thead>
                     @forelse ($daftar as $d)

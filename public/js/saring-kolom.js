@@ -37,6 +37,9 @@
         const m = String(s).replace(/\./g, '').replace(',', '.').match(/-?\d+(\.\d+)?/);
         return m ? parseFloat(m[0]) : NaN;
     };
+    // Sel berisi kotak isian (mis. grid form Monitor Ritasi) ikut disaring berdasarkan isiannya.
+    const isianSel = td => td.querySelector('input[type=text], input[type=search], input:not([type]), textarea, select');
+    const teksSel = td => td.dataset.v ?? (td.textContent + (isianSel(td) ? ' ' + isianSel(td).value : ''));
     const cocok = (td, q) => {
         q = q.trim().toLowerCase();
         if (!q) return true;
@@ -50,7 +53,7 @@
             if (tgl ? a === '' : (isNaN(a) || isNaN(b))) return false;
             return m[1] === '>' ? a > b : m[1] === '<' ? a < b : m[1] === '>=' ? a >= b : a <= b;
         }
-        return (td.dataset.v ?? td.textContent).replace(/\s+/g, ' ').toLowerCase().includes(q);
+        return teksSel(td).replace(/\s+/g, ' ').toLowerCase().includes(q);
     };
     // Nilai sel tanpa hiasan (panah buka, jumlah detail, kotak centang/isian).
     const nilaiSel = td => {
@@ -58,7 +61,8 @@
         if (td.dataset.nilai !== undefined) return td.dataset.nilai;
         const c = td.cloneNode(true);
         c.querySelectorAll('.panah, .jumlah-bon, input, button, select').forEach(x => x.remove());
-        return c.textContent.replace(/\s+/g, ' ').trim();
+        const t = c.textContent.replace(/\s+/g, ' ').trim();
+        return t || (isianSel(td)?.value ?? '').trim();
     };
     const esc = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 
