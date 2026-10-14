@@ -30,7 +30,13 @@
         .saring-pop label span.isi { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .saring-pop label span.n { color: var(--redup, #9aa0a6); font-size: 11px; }
         .saring-pop .aksi { display: flex; gap: 6px; justify-content: space-between; margin-top: 6px; }
-        .saring-pop .aksi button { padding: 3px 10px; font-size: 12px; }`;
+        .saring-pop .aksi button { padding: 3px 10px; font-size: 12px; }
+        /* Semua grid: garis pemisah antar kolom & judul kolom (+ baris saringan) dibekukan saat digulir. Garis judul memakai
+           box-shadow karena border pada sel sticky (border-collapse) ikut tergulir. */
+        table.grid-beku > thead { position: sticky; top: var(--beku-atas, 0px); z-index: 5; }
+        table.grid-beku > thead th { background: var(--kartu, #1e2229); box-shadow: inset 1px 0 0 var(--garis, #333), inset 0 -1px 0 var(--garis-kuat, #4a5160); }
+        table.grid-beku > tbody > tr > td + td { border-left: 1px solid var(--garis, #333); }
+        .grid-gulir { overflow: auto !important; }`;
     document.head.appendChild(gaya);
 
     const angka = s => {
@@ -71,9 +77,28 @@
     document.addEventListener('mousedown', e => { if (popTerbuka && !popTerbuka.contains(e.target) && !e.target.closest('.saring-nilai')) tutupPop(); });
     document.addEventListener('keydown', e => { if (e.key === 'Escape') tutupPop(); });
 
+    // Judul kolom tetap terlihat saat digulir: bila grid dibungkus kotak bergulir (.gulir), kotak itu diberi tinggi setinggi layar
+    // dan digulir sendiri (judul menempel di atas kotak); bila tidak, judul menempel di bawah header aplikasi.
+    const bekukan = tabel => {
+        tabel.classList.add('grid-beku');
+        const atasApp = document.querySelector('body > header, header')?.offsetHeight || 0;
+        let kotak = tabel.parentElement;
+        for (let i = 0; kotak && i < 3 && kotak !== document.body; i++, kotak = kotak.parentElement) {
+            const o = getComputedStyle(kotak).overflowX;
+            if (o === 'auto' || o === 'scroll') break;
+        }
+        if (kotak && kotak !== document.body && ['auto', 'scroll'].includes(getComputedStyle(kotak).overflowX)) {
+            kotak.classList.add('grid-gulir');
+            kotak.style.maxHeight = `calc(100vh - ${atasApp + 16}px)`;
+        } else {
+            tabel.style.setProperty('--beku-atas', atasApp + 'px');
+        }
+    };
+
     const pasang = tabel => {
         if (tabel.dataset.saringSiap) return;
         tabel.dataset.saringSiap = '1';
+        bekukan(tabel);
         const grup = (tabel.dataset.saringKolom || (tabel.querySelector(':scope > tbody.grup') ? 'grup' : '')) === 'grup';
         const kepala = tabel.tHead.rows[0];
         const barisSaring = document.createElement('tr');
