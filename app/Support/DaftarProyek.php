@@ -167,12 +167,17 @@ class DaftarProyek
                     continue;
                 }
                 $tgl = is_numeric($x[0] ?? null) ? date('Y-m-d', (int) round(($x[0] - 25569) * 86400)) : null;
-                if ($id = self::tahapId('bbm', $p)) {
-                    $per[$id]['liter'] = ($per[$id]['liter'] ?? 0) + $liter;
-                    $per[$id]['hm'] = ($per[$id]['hm'] ?? 0) + $hm;
-                    if ($tgl) {
-                        $per[$id]['mulai'] = min($per[$id]['mulai'] ?? '9999', $tgl);
-                        $per[$id]['selesai'] = max($per[$id]['selesai'] ?? '0000', $tgl);
+                // "Tahap A + Tahap B" = dibagi rata ke beberapa tahap yang sedang berjalan (proyek diisi otomatis);
+                // baris bagi rata tidak menggeser tanggal mulai/akhir tahap.
+                $ids = array_map(fn ($b) => self::tahapId('bbm', trim($b)), explode(' + ', $p));
+                if (! in_array(null, $ids, true)) {
+                    foreach ($ids as $id) {
+                        $per[$id]['liter'] = ($per[$id]['liter'] ?? 0) + $liter / count($ids);
+                        $per[$id]['hm'] = ($per[$id]['hm'] ?? 0) + $hm / count($ids);
+                        if ($tgl && count($ids) === 1) {
+                            $per[$id]['mulai'] = min($per[$id]['mulai'] ?? '9999', $tgl);
+                            $per[$id]['selesai'] = max($per[$id]['selesai'] ?? '0000', $tgl);
+                        }
                     }
                 } else {
                     $k = ProyekAlias::kunci($p);
