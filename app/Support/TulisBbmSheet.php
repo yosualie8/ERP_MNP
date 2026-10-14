@@ -34,10 +34,20 @@ class TulisBbmSheet
             $akhir = $this->barisAkhir();
             $mulai = $akhir + 1;
             $sampai = $mulai + count($baris) - 1;
-            $this->sheets->permintaan($this->id, [['insertDimension' => [
-                'range' => ['sheetId' => $this->sheetId(), 'dimension' => 'ROWS', 'startIndex' => $mulai - 1, 'endIndex' => $sampai],
-                'inheritFromBefore' => true,
-            ]]], 'menyisipkan baris Penggunaan BBM');
+            // Format angka ditetapkan (bukan warisan baris di atas, yang kadang salah format — mis. Total HM berformat jam).
+            $sid = $this->sheetId();
+            $format = fn (int $dari, int $sampaiKolom, ?array $nf) => ['repeatCell' => [
+                'range' => ['sheetId' => $sid, 'startRowIndex' => $mulai - 1, 'endRowIndex' => $sampai, 'startColumnIndex' => $dari, 'endColumnIndex' => $sampaiKolom + 1],
+                'cell' => ['userEnteredFormat' => $nf ? ['numberFormat' => $nf] : (object) []], 'fields' => 'userEnteredFormat.numberFormat',
+            ]];
+            $this->sheets->permintaan($this->id, [
+                ['insertDimension' => ['range' => ['sheetId' => $sid, 'dimension' => 'ROWS', 'startIndex' => $mulai - 1, 'endIndex' => $sampai], 'inheritFromBefore' => true]],
+                $format(0, 0, ['type' => 'DATE', 'pattern' => 'd-mmm-yy']),
+                $format(2, 6, null),
+                $format(7, 7, ['type' => 'NUMBER', 'pattern' => '#,##0']),
+                $format(8, 10, ['type' => 'TIME', 'pattern' => 'h:mm']),
+                $format(13, 13, null),
+            ], 'menyisipkan baris Penggunaan BBM');
             $data = [];
             foreach (array_values($baris) as $i => $b) {
                 $n = $mulai + $i;
