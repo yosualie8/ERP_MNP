@@ -26,14 +26,14 @@ class UnggahBongkar
         'jenis_tanah' => ['jenis tanah / barang', 'jenis tanah/barang', 'jenis tanah', 'jenis barang', 'tanah'],
         'no_seri' => ['no surat jalan', 'nomor surat jalan', 'no sj', 'surat jalan', 'no seri'],
         'galian' => ['galian'],
-        'keterangan' => ['keterangan', 'catatan'],
         'kubikasi' => ['kubikasi', 'kubikasi (m3)', 'kubikasi (m³)', 'kubikasi m3', 'kubik', 'volume', 'm3', 'm³'],
+        'keterangan' => ['keterangan', 'catatan'],
     ];
 
     /** DO yang UJ-nya lebih dari sekian hari sebelum bongkar dianggap tertinggal lama (dipakai terakhir, ditandai). */
     public const HARI_LAMA = 30;
 
-    public const JUDUL_TEMPLAT = ['No Mobil', 'Tanggal Bongkar', 'Jam Bongkar', 'Tujuan Bongkar', 'Jenis Tanah', 'No Surat Jalan', 'Galian', 'Keterangan', 'Kubikasi'];
+    public const JUDUL_TEMPLAT = ['No Mobil', 'Tanggal Bongkar', 'Jam Bongkar', 'Tujuan Bongkar', 'Jenis Tanah', 'No Surat Jalan', 'Galian', 'Kubikasi', 'Keterangan'];
 
     /** @return array<int, array> baris surat jalan (baris = nomor baris Excel) */
     public static function baca(UploadedFile $file): array

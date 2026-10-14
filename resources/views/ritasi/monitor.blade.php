@@ -100,7 +100,7 @@
                 <button class="tombol polos" type="submit" style="padding: 6px 12px;">Upload &amp; isi otomatis</button>
                 <a href="{{ route('ritasi.monitor.templat') }}" class="redup" style="font-size: 13px;">⬇ Templat Excel</a>
             </form>
-            <div class="redup" style="font-size: 12.5px; margin-top: 6px;">Kolom: No Mobil (DT), Tanggal Bongkar, Jam Bongkar, Tujuan Bongkar, Jenis Tanah, No Surat Jalan, Galian (bila kosong ditebak dari keterangan UJ) &amp; Keterangan.
+            <div class="redup" style="font-size: 12.5px; margin-top: 6px;">Kolom: No Mobil (DT), Tanggal Bongkar, Jam Bongkar, Tujuan Bongkar, Jenis Tanah, No Surat Jalan, Galian (bila kosong ditebak dari keterangan UJ), <b>Kubikasi</b> (m³; bila kosong = kubikasi standar jenis kendaraan) &amp; Keterangan.
                 Surat jalan tiap DT dipasangkan ke DO belum bongkar DT itu sesuai urutan waktu; jumlah surat jalan tidak boleh melebihi jumlah DO belum bongkarnya. Hasilnya hanya mengisi form di bawah — periksa dulu, lalu klik <b>Simpan bongkar</b>.</div>
             @if ($errors->unggah->any())
                 <div class="pesan galat" style="margin-top: 8px;"><b>Excel belum bisa dipakai:</b>
