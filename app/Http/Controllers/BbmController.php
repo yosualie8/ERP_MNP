@@ -185,9 +185,9 @@ class BbmController extends Controller
                 'liter' => $pakai->sum('keluar'), 'hm' => $pakai->sum($hm), 'masuk' => $baris->where('jenis', 'masuk')->sum('masuk'),
                 'rasio' => $hOk > 0 ? round($lOk / $hOk, 2) : null,
                 'stok' => Bbm::whereNotNull('stok')->orderByDesc('baris')->value('stok'),
-                // hanya alat yang HM-nya biasa dicatat (punya jam HM di periode ini) — DT/Selfloader tanpa HM meter tidak dihitung
-                'tanpa_hm' => $pakai->filter(fn ($b) => $b->keluar > 0 && $hm($b) <= 0 && ($ringkasAlat[$b->unit]['hm'] ?? 0) > 0)->count(),
-                'isi' => $pakai->filter(fn ($b) => $b->keluar > 0 && ($ringkasAlat[$b->unit]['hm'] ?? 0) > 0)->count(),
+                // hanya ALAT BERAT (kategori Data Aset) — dump truck / engkel / selfloader tidak punya HM meter
+                'tanpa_hm' => $pakai->filter(fn ($b) => $b->keluar > 0 && $hm($b) <= 0 && ($kategori[$b->unit] ?? null) === 'alat_berat')->count(),
+                'isi' => $pakai->filter(fn ($b) => $b->keluar > 0 && ($kategori[$b->unit] ?? null) === 'alat_berat')->count(),
                 'isi_semua' => $pakai->where('keluar', '>', 0)->count(),
             ],
         ]);

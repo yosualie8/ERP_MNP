@@ -44,8 +44,8 @@
         <div class="kartu"><span class="redup">Jam HM tercatat</span><b>{{ $l($kartu['hm']) }} jam</b></div>
         <div class="kartu"><span class="redup">Rasio rata-rata</span><b>{{ $l($kartu['rasio'], 2) }} L/jam</b><small>dari alat-bulan yang HM-nya tercatat wajar</small></div>
         <div class="kartu"><span class="redup">Solar masuk</span><b>{{ $l($kartu['masuk'], 0) }} L</b><small>stok sekarang {{ $l($kartu['stok'], 0) }} L</small></div>
-        <div class="kartu"><span class="redup">Isian alat ber-HM tanpa HM</span><b @if ($kartu['isi'] && $kartu['tanpa_hm'] / $kartu['isi'] > .2) style="color: var(--merah);" @endif>{{ number_format($kartu['tanpa_hm'], 0, ',', '.') }}</b>
-            <small>{{ $kartu['isi'] ? round($kartu['tanpa_hm'] / $kartu['isi'] * 100) : 0 }}% dari {{ number_format($kartu['isi'], 0, ',', '.') }} isian alat ber-HM tanpa jam HM di baris itu</small></div>
+        <div class="kartu"><span class="redup">Isi solar alat berat tanpa catatan HM</span><b @if ($kartu['isi'] && $kartu['tanpa_hm'] / $kartu['isi'] > .2) style="color: var(--merah);" @endif>{{ number_format($kartu['tanpa_hm'], 0, ',', '.') }}</b>
+            <small>{{ $kartu['isi'] ? round($kartu['tanpa_hm'] / $kartu['isi'] * 100) : 0 }}% dari {{ number_format($kartu['isi'], 0, ',', '.') }} kali isi solar excavator/dozer, jam HM hari itu tidak dicatat — rasionya jadi tidak bisa dihitung</small></div>
     </div>
 
     <div class="kartu">
