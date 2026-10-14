@@ -63,6 +63,12 @@ class UnggahBongkar
                 }
             }
             if (isset($p['dt'], $p['no_seri'])) {
+                // Beberapa kolom kandidat No Mobil (mis. plat & No DT): pakai yang paling banyak berisi nomor DT.
+                $calon = array_keys(array_filter($teks, fn ($t) => in_array($t, self::KOLOM['dt'], true)));
+                if (count($calon) > 1) {
+                    $skor = fn ($k) => collect(array_slice($semua, $i + 1, 200))->filter(fn ($x) => preg_match('/^\s*DT\s*\d/i', (string) ($x[$k] ?? '')))->count();
+                    $p['dt'] = collect($calon)->sortByDesc($skor)->first();
+                }
                 [$judul, $posisi] = [$i, $p];
                 break;
             }
@@ -75,6 +81,14 @@ class UnggahBongkar
             throw new RuntimeException('Kolom belum ada: '.implode(', ', array_map(fn ($k) => self::JUDUL_TEMPLAT[array_search($k, array_keys(self::KOLOM))], $kurang)).'.');
         }
 
+        // No Mobil berupa plat (mis. "B 9064 UIR") → nomor DT dari kolom Plat di Data Aset (plat di data Ritasi berpindah-pindah antar
+        // DT, tidak dipakai). Plat ganda di Data Aset dipilih saat dicocokkan: DT yang punya DO belum bongkar.
+        $kunciPlat = fn ($p) => strtoupper(preg_replace('/\s+/', '', (string) $p));
+        $plat = [];
+        foreach (\App\Models\AsetTruk::whereNotNull('plat')->get(['no_lambung', 'plat']) as $a) {
+            $plat[$kunciPlat($a->plat)][$a->no_lambung] = true;
+        }
+        $plat = collect($plat)->map(fn ($dt) => array_keys($dt));
         $hasil = [];
         foreach (array_slice($semua, $judul + 1, null, true) as $i => $r) {
             $sel = fn (string $k) => isset($posisi[$k]) ? ($r[$posisi[$k]] ?? null) : null;
@@ -84,7 +98,7 @@ class UnggahBongkar
             }
             $hasil[] = [
                 'baris' => $i + 1,
-                'dt' => NomorMobil::rapikan($teks('dt')),
+                ...self::dtDariIsian(NomorMobil::rapikan($teks('dt')), $plat),
                 'tanggal' => self::tanggal($sel('tanggal')),
                 'tanggal_asli' => is_scalar($sel('tanggal')) ? (string) $sel('tanggal') : ($sel('tanggal') instanceof \DateTimeInterface ? $sel('tanggal')->format('d/m/Y') : ''),
                 'jam' => self::jam($sel('jam')),
@@ -115,6 +129,18 @@ class UnggahBongkar
         $isian = [];
         $perDt = [];
         $galat = [];
+        // Plat dengan beberapa calon DT: pakai calon yang punya DO belum bongkar (hanya bila tepat satu).
+        foreach ($sj as $i => $s) {
+            if (! empty($s['dt_calon'])) {
+                $punya = array_values(array_filter($s['dt_calon'], fn ($dt) => $belum->contains(fn ($d) => in_array($dt, $d['mobil'], true)
+                    && (! $s['galian'] || self::galianSama($s['galian'], $d)))));
+                if (count($punya) === 1) {
+                    $sj[$i] = [...$s, 'dt' => $punya[0], 'dt_galat' => null];
+                } elseif (count($punya) > 1) {
+                    $sj[$i]['dt_galat'] = "No Mobil \"{$s['plat_asli']}\": plat ini dipakai beberapa DT yang sama-sama punya DO belum bongkar (".implode(', ', $punya).') — tulis nomor DT-nya';
+                }
+            }
+        }
         foreach ($sj as $s) {
             $salah = array_filter([
                 $s['dt'] ? null : 'No Mobil kosong',
@@ -153,6 +179,16 @@ class UnggahBongkar
             $doDt = $semuaDt->filter(fn ($d) => ! $galianSj || self::galianSama($galianSj, $d))
                 ->sortBy(fn ($d) => ($d['pertama']?->format('Ymd') ?? '0').str_pad($d['do'], 10, '0', STR_PAD_LEFT))->values();
             $info = ['dt' => $dt, 'galian' => $galianSj, 'sj' => $daftarSj->count(), 'do_belum' => $doDt->count(), 'pasangan' => [], 'galat' => null, 'catatan' => []];
+            // Plat yang tidak bisa diterjemahkan ke satu DT: hanya kelompok ini yang tidak diisi, kelompok lain tetap jalan.
+            if ($galatPlat = $daftarSj->first()['dt_galat'] ?? null) {
+                $info['do_belum'] = 0;
+                $info['galat'] = $galatPlat.'. Tidak ada yang diisi untuk kelompok ini.';
+                $perDt[] = $info;
+                continue;
+            }
+            if ($plat = $daftarSj->pluck('plat_asli')->filter()->unique()->implode(', ')) {
+                $info['catatan'][] = "No Mobil di Excel berupa plat {$plat} → {$dt} (dari Data Aset).";
+            }
             $lain = $semuaDt->reject(fn ($d) => $doDt->contains('do', $d['do']));
             $sebutLain = fn () => $lain->map(fn ($d) => $d['do'].' ('.(self::galianDo($d) ?? 'galian tidak diketahui').')')->implode(', ');
             if (! $galianSj) {
@@ -207,6 +243,26 @@ class UnggahBongkar
         }
 
         return ['isian' => $isian, 'per_dt' => $perDt, 'galat' => []];
+    }
+
+    /**
+     * No Mobil dari Excel → ['dt' => nomor DT, 'plat_asli' => plat bila diterjemahkan, 'dt_galat' => pesan bila plat tidak dikenal].
+     *
+     * @param  \Illuminate\Support\Collection<string, array<int, string>>  $plat  plat tanpa spasi → nomor DT di Data Aset
+     */
+    private static function dtDariIsian(?string $v, $plat): array
+    {
+        if ($v === null || preg_match('/^DT \d{3}$/', $v)) {
+            return ['dt' => $v, 'plat_asli' => null, 'dt_galat' => null];
+        }
+        $dt = $plat[strtoupper(preg_replace('/\s+/', '', $v))] ?? [];
+        if (count($dt) === 1) {
+            return ['dt' => $dt[0], 'plat_asli' => $v, 'dt_galat' => null];
+        }
+
+        return ['dt' => $v, 'plat_asli' => $v, 'dt_calon' => $dt, 'dt_galat' => $dt
+            ? "No Mobil \"{$v}\": plat ini tercatat di beberapa DT (".implode(', ', $dt).') — tulis nomor DT-nya'
+            : "No Mobil \"{$v}\" bukan nomor DT dan platnya tidak ada di Data Aset — tulis nomor DT (mis. DT 027) atau lengkapi plat di Data Aset"];
     }
 
     /** Angka kubikasi dari sel Excel (22 / 22,5 / "22.5" / "22 m3"); null bila kosong / bukan angka / di luar 0–100. */
