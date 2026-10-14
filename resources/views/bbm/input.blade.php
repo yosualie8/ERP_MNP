@@ -113,7 +113,7 @@
             const jamKerja = (mulai, rest, selesai) => {
                 const a = menit(mulai), b = menit(selesai);
                 if (a === null || b === null) return null;
-                let t = b - a; if (t <= 0) t += 1440;
+                let t = b - a; if (t < 0) t += 1440;
                 const r = menit(rest); if (r !== null) t -= r;
                 return t;
             };

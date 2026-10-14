@@ -32,7 +32,7 @@ class LembarBbm
             return null;
         }
         $t = $b - $a;
-        if ($t <= 0) {
+        if ($t < 0) {
             $t += 1440;
         }
 
