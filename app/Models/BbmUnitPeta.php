@@ -12,7 +12,7 @@ class BbmUnitPeta extends Model
 
     protected $fillable = ['nama', 'kunci', 'jenis', 'aset_id', 'sumber', 'catatan', 'user_id'];
 
-    public const JENIS = ['pakai' => 'Pemakaian aset', 'masuk' => 'Solar masuk', 'pindah' => 'Solar pindah lokasi', 'susut' => 'Solar rusak / susut', 'operasional' => 'Kendaraan operasional (biaya, bukan aset)', 'cek' => 'Perlu dicek'];
+    public const JENIS = ['pakai' => 'Pemakaian aset', 'masuk' => 'Solar masuk', 'pindah' => 'Solar pindah lokasi', 'susut' => 'Solar rusak / susut', 'opname' => 'Stock opname (selisih stok fisik)', 'operasional' => 'Kendaraan operasional (biaya, bukan aset)', 'cek' => 'Perlu dicek'];
 
     public static function kunci(?string $v): string
     {
