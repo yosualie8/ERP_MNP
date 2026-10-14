@@ -111,7 +111,9 @@ class LembarBbm
                 'hm_awal' => self::angka($r[2] ?? null), 'hm_akhir' => self::angka($r[3] ?? null), 'total_hm' => self::angka($r[4] ?? null),
                 'masuk' => self::angka($r[5] ?? null), 'keluar' => self::angka($r[6] ?? null), 'stok' => self::angka($r[7] ?? null),
                 'jam_mulai' => LembarRitasi::jam($r[8] ?? null), 'istirahat' => LembarRitasi::jam($r[9] ?? null), 'jam_selesai' => LembarRitasi::jam($r[10] ?? null),
-                'status' => $teks(11, 40), 'keterangan' => $teks(12, 300), 'rental' => self::angka($r[13] ?? null),
+                'status' => $teks(11, 40), 'keterangan' => $teks(12, 300),
+                // Rental = jam kerja/sewa sehari; angka di luar 0–24 (mis. No DO salah kolom) tidak dipakai.
+                'rental' => ($jam = self::angka($r[13] ?? null)) !== null && $jam >= 0 && $jam <= 24 ? $jam : null,
                 'proyek' => $proyek, 'tahap_ids' => $proyek === null ? null : json_encode($tahap[$proyek] ??= self::tahapIds($proyek)),
                 'keterangan_kerja' => $teks(15, 500),
             ];
