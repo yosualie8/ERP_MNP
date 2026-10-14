@@ -90,10 +90,10 @@
                         <td>{{ $b->status }}</td>
                         <td style="min-width: 160px;">{{ $b->keterangan }}</td>
                         <td class="angka" data-n="{{ $b->rental }}">{{ $l($b->rental) }}</td>
-                        <td @if ($b->jenis === 'pakai' && $b->keluar > 0 && ! $b->tahap_ids && $b->proyek !== 'Pool') style="color: var(--merah);" @endif>
+                        <td @if ($b->jenis === 'pakai' && ($b->keluar > 0 || ($b->total_hm > 0 && $b->total_hm <= 24)) && ! $b->tahap_ids && $b->proyek !== 'Pool') style="color: var(--merah);" @endif>
                             @if ($b->proyek && str_contains($b->proyek, ' + '))
                                 <span title="{{ $b->proyek }}">Bagi rata {{ count(explode(' + ', $b->proyek)) }} tahap</span>
-                            @else{{ $b->proyek ?? ($b->jenis === 'pakai' && $b->keluar > 0 ? 'belum diisi' : '') }}@endif
+                            @else{{ $b->proyek ?? ($b->jenis === 'pakai' && ($b->keluar > 0 || $b->total_hm > 0) ? 'belum diisi' : '') }}@endif
                         </td>
                         <td style="min-width: 280px;">{{ $b->keterangan_kerja }}</td>
                         <td style="white-space: nowrap;">

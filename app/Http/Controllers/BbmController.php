@@ -23,7 +23,10 @@ class BbmController extends Controller
     /** Baris yang perlu dilengkapi admin: pemakaian solar tanpa proyek yang dikenali, unit belum dikenal. */
     private function perlu()
     {
-        return Bbm::where(fn ($q) => $q->where(fn ($w) => $w->where('jenis', 'pakai')->where('keluar', '>', 0)->whereNull('tahap_ids')->where(fn ($p) => $p->whereNull('proyek')->orWhere('proyek', '!=', 'Pool')))
+        // Alat yang bekerja (liter keluar ATAU jam HM > 0) tanpa proyek yang dikenali, dan unit yang belum dikenal.
+        return Bbm::where(fn ($q) => $q->where(fn ($w) => $w->where('jenis', 'pakai')
+            ->where(fn ($k) => $k->where('keluar', '>', 0)->orWhere(fn ($h) => $h->where('total_hm', '>', 0)->where('total_hm', '<=', 24)))
+            ->whereNull('tahap_ids')->where(fn ($p) => $p->whereNull('proyek')->orWhere('proyek', '!=', 'Pool')))
             ->orWhere('jenis', 'cek'));
     }
 
