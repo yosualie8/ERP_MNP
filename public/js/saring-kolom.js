@@ -36,7 +36,9 @@
         table.grid-beku > thead { position: sticky; top: var(--beku-atas, 0px); z-index: 5; background: var(--kartu, #1e2229); }
         table.grid-beku > thead th { background: var(--kartu, #1e2229); box-shadow: inset 1px 0 0 var(--garis, #333), inset 0 -1px 0 var(--garis-kuat, #4a5160); }
         table.grid-beku > tbody > tr > td + td { border-left: 1px solid var(--garis, #333); }
-        .grid-gulir { overflow: auto !important; }`;
+        .grid-gulir { overflow: auto !important; }
+        /* Sel yang dipilih untuk navigasi panah. */
+        table.grid-beku td.sel-aktif { outline: 2px solid var(--aksen, #e5484d); outline-offset: -2px; background: rgba(229, 72, 77, .10); }`;
     document.head.appendChild(gaya);
 
     const angka = s => {
@@ -277,6 +279,111 @@
         if (tunda || !daftar.some(m => [...m.addedNodes].some(x => x.nodeType === 1 && (x.tagName === 'TABLE' || x.querySelector?.('table'))))) return;
         tunda = setTimeout(() => { tunda = null; pindai(); }, 50);
     }).observe(document.documentElement, {childList: true, subtree: true});
+    // ── Navigasi panah di SEMUA grid ─────────────────────────────────────────────────────────────────────────────────
+    // Grid berisi isian: ↑↓ pindah ke isian kolom yang sama di baris atas/bawah; ←→ ke isian sebelah bila kursor di ujung teks.
+    // Grid data: klik sel → sel terpilih; ←↑→↓ menggeser pilihan (baris tersembunyi/tersaring dilewati), Enter = klik isi sel,
+    // Ctrl+C = salin isi sel, Esc = lepas. Halaman yang punya navigasi sendiri (preventDefault) didahulukan.
+    // Pengecualian: tabel ber-atribut data-tanpa-navigasi.
+    const gridNav = el => { const t = el?.closest?.('table.grid-beku'); return t && !t.hasAttribute('data-tanpa-navigasi') ? t : null; };
+    const barisTampil = t => [...t.tBodies].flatMap(tb => [...tb.rows]).filter(tr => tr.offsetParent !== null && tr.cells.length);
+    // Posisi kolom visual (memperhitungkan colspan) ↔ sel.
+    const kolomSel = td => { let k = 0; for (const c of td.parentElement.cells) { if (c === td) return k; k += c.colSpan || 1; } return k; };
+    const selDiKolom = (tr, k) => { let x = 0; for (const c of tr.cells) { x += c.colSpan || 1; if (x > k) return c; } return tr.cells[tr.cells.length - 1]; };
+    const ISIAN = 'input:not([type=hidden]):not(:disabled), select:not(:disabled), textarea:not(:disabled)';
+    const isianDi = td => td?.querySelector(ISIAN);
+    const tampilkan = (td, t) => {
+        const atas = (t.tHead?.offsetHeight || 0) + (t.closest('.grid-gulir') ? 0 : (document.querySelector('header')?.offsetHeight || 0));
+        td.style.scrollMarginTop = (atas + 4) + 'px';
+        td.scrollIntoView({block: 'nearest', inline: 'nearest'});
+    };
+    const fokusIsian = (el, t) => { tampilkan(el.closest('td'), t); el.focus(); try { el.select(); } catch { /* bukan teks */ } };
+    // Cari sel tujuan: baris atas/bawah pada kolom yang sama, atau sel kiri/kanan di baris yang sama.
+    const tujuan = (td, t, arah, perluIsian) => {
+        const tr = td.parentElement;
+        if (arah === 'ArrowLeft' || arah === 'ArrowRight') {
+            const sel = [...tr.cells];
+            for (let i = sel.indexOf(td) + (arah === 'ArrowLeft' ? -1 : 1); i >= 0 && i < sel.length; i += arah === 'ArrowLeft' ? -1 : 1) {
+                if (!perluIsian || isianDi(sel[i])) return sel[i];
+            }
+            return null;
+        }
+        const semua = barisTampil(t), k = kolomSel(td);
+        for (let i = semua.indexOf(tr) + (arah === 'ArrowUp' ? -1 : 1); i >= 0 && i < semua.length; i += arah === 'ArrowUp' ? -1 : 1) {
+            const c = selDiKolom(semua[i], k);
+            if (!perluIsian || isianDi(c)) return c;
+        }
+        return null;
+    };
+    let aktif = null;
+    const pilih = (td, t) => {
+        aktif?.classList.remove('sel-aktif');
+        aktif = td;
+        if (!td) return;
+        const isian = isianDi(td);
+        if (isian) { aktif = null; fokusIsian(isian, t); return; }
+        td.classList.add('sel-aktif');
+        tampilkan(td, t);
+    };
+    document.addEventListener('click', e => {
+        const td = e.target.closest?.('td');
+        const t = gridNav(td);
+        if (!t || td.closest('thead')) { if (!e.target.closest?.('.saring-pop')) pilih(null); return; }
+        if (e.target.closest('a, button, input, select, textarea, label')) { pilih(null); return; }
+        pilih(td, t);
+    });
+    document.addEventListener('keydown', e => {
+        if (e.defaultPrevented || e.altKey || e.metaKey || e.isComposing) return;
+        const el = e.target;
+        const panah = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key);
+        // Mode isian: kursor di dalam isian sel grid.
+        if (el.matches?.(ISIAN) && el.closest('td')) {
+            const t = gridNav(el);
+            if (!t || !panah || e.ctrlKey || e.shiftKey) return;
+            const td = el.closest('td');
+            if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+                if (el.tagName === 'TEXTAREA' || (el.tagName === 'INPUT' && !['checkbox', 'radio'].includes(el.type))) {
+                    let a, b; try { [a, b] = [el.selectionStart, el.selectionEnd]; } catch { a = null; }
+                    if (a !== null && a !== undefined) {
+                        const semua = a === 0 && b === el.value.length;
+                        const ujung = e.key === 'ArrowLeft' ? a === 0 && b === 0 : a === el.value.length && b === el.value.length;
+                        if (!semua && !ujung) return;
+                    }
+                }
+                // isian lain di sel yang sama dulu, baru sel sebelah
+                const dlmSel = [...td.querySelectorAll(ISIAN)];
+                const lain = dlmSel[dlmSel.indexOf(el) + (e.key === 'ArrowLeft' ? -1 : 1)];
+                const sebelah = lain ? null : tujuan(td, t, e.key, true);
+                const ke = lain || (sebelah && [...sebelah.querySelectorAll(ISIAN)].at(e.key === 'ArrowLeft' ? -1 : 0));
+                if (ke) { e.preventDefault(); fokusIsian(ke, t); }
+                return;
+            }
+            if (el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') return; // ↑↓ bawaan (ganti pilihan / pindah baris teks)
+            const c = tujuan(td, t, e.key, true);
+            e.preventDefault(); // ↑↓ tidak membuka daftar saran
+            if (c) { el.dispatchEvent(new Event('blur')); fokusIsian(isianDi(c), t); }
+            return;
+        }
+        // Mode sel: ada sel terpilih & kursor tidak sedang di isian lain.
+        if (!aktif || !aktif.isConnected || aktif.offsetParent === null) { aktif = null; return; }
+        if (el.matches?.('input, select, textarea, [contenteditable]')) return;
+        const t = gridNav(aktif);
+        if (!t) return;
+        if (e.key === 'Escape') { pilih(null); return; }
+        if (e.key === 'c' && e.ctrlKey && !String(getSelection())) {
+            navigator.clipboard?.writeText(aktif.innerText.trim());
+            return;
+        }
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            (aktif.querySelector('a, button') || aktif).click();
+            return;
+        }
+        if (!panah || e.ctrlKey || e.shiftKey) return;
+        const c = tujuan(aktif, t, e.key, false);
+        e.preventDefault();
+        if (c) pilih(c, t);
+    });
+
     window.SaringKolom = {pindai, pasang};
     pindai();
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', pindai);
