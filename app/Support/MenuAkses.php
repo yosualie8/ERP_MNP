@@ -50,7 +50,7 @@ class MenuAkses
         'kas' => ['Kas Harian', '🏦', ['input-kas', 'kas-harian', 'validasi-reimburse', 'riwayat-reimburse', 'kas-belum-reimburse', 'rekap', 'kode-gl']],
         'uj' => ['Uang Jalan', '🚚', ['pengajuan-uj', 'input-uj', 'kas-uj', 'reimburse-uj', 'rapikan-uj']],
         'ritasi' => ['Ritasi', '⛰️', ['input-ritasi', 'ritasi', 'buangan-truk', 'monitor-ritasi', 'bayar-tanah', 'performa-ritasi', 'kubikasi-kendaraan']],
-        'bbm' => ['BBM', '⛽', ['input-bbm', 'bbm']],
+        'bbm' => ['BBM & HM', '⛽', ['input-bbm', 'bbm']],
         'aset' => ['Aset', '🚛', ['aset']],
     ];
 
