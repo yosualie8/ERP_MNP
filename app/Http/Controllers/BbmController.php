@@ -191,6 +191,12 @@ class BbmController extends Controller
             if ($pesan = self::bedaMaster($b['status'], $master['status'], 'Status')) {
                 $g[] = $pesan;
             }
+            foreach (['jam_mulai' => 'Jam mulai', 'istirahat' => 'Rest', 'jam_selesai' => 'Jam selesai'] as $k => $nama) {
+                $asli = trim((string) ($r[$k] ?? ''));
+                if ($asli !== '' && ! preg_match('/^\d{1,2}[:.]\d{2}$/', $asli)) {
+                    $g[] = "$nama harus format jam, mis. 8:00 — sekarang \"$asli\".";
+                }
+            }
             if ($b['hm_awal'] !== null && $b['hm_akhir'] !== null) {
                 if ($b['hm_akhir'] < $b['hm_awal']) {
                     $g[] = 'HM akhir lebih kecil dari HM awal.';

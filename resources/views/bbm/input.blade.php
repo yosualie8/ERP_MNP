@@ -20,8 +20,13 @@
         table.isian td.jenis { font-size: 11px; color: var(--redup); white-space: nowrap; padding-top: 10px; }
         table.isian td.total { text-align: right; padding-top: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
         .hapus { background: none; border: 0; color: var(--merah); cursor: pointer; font-size: 18px; line-height: 1; padding: 6px 4px; }
-        .catatan { font-size: 12px; color: #f0c05a; padding: 0 3px 8px; }
-        tr.ada-salah + tr .catatan { color: var(--merah); }
+        .catatan { padding: 0 3px 10px; }
+        .kurang { border: 1px solid rgba(255, 92, 97, .35); border-left: 4px solid var(--aksen); background: var(--merah-muda); color: var(--merah);
+            border-radius: 8px; padding: 6px 12px; font-size: 13px; }
+        .kurang ul { margin: 2px 0 0; padding-left: 18px; }
+        .info-baris { border: 1px solid #6b4f10; border-left: 4px solid #e0a526; background: #1d1810; color: #f0c05a; border-radius: 8px; padding: 5px 12px; font-size: 12px; margin-top: 4px; }
+        tr.baris.valid td:first-child { box-shadow: inset 4px 0 0 var(--sukses); }
+        #hasil-validasi ul { margin: 6px 0 0; padding-left: 18px; }
     </style>
 
     <form method="POST" action="{{ $edit ? route('bbm.update', $edit['baris']) : route('bbm.store') }}" class="form-bbm" id="form-bbm">
@@ -69,6 +74,7 @@
                     <span class="redup" style="font-size: 12px;">Baris yang dibiarkan kosong tidak ikut disimpan.</span>
                 </div>
             @endif
+            <div id="hasil-validasi" class="pesan" style="margin: 14px 0 0;" hidden></div>
             <div style="margin-top: 14px; display: flex; gap: 10px;">
                 <button type="submit" class="tombol" id="simpan">{{ $edit ? 'Simpan perubahan' : 'Simpan ke sheet' }}</button>
                 <a href="{{ route('bbm.index') }}" class="tombol polos">Batal</a>
@@ -146,9 +152,11 @@
                 tr.querySelector('td.jenis').textContent = sel(tr, 'unit').value.trim() ? (jenis ? JENIS[jenis] : '⚠️ tidak dikenal') : '';
                 // Kolom yang tidak berlaku untuk jenisnya dimatikan (solar masuk hanya di baris sumber, bukan di baris alat).
                 const alat = jenis === 'pakai';
-                sel(tr, 'masuk').disabled = !!jenis && jenis !== 'masuk';
-                sel(tr, 'keluar').disabled = jenis === 'masuk';
-                ['hm_awal', 'hm_akhir', 'total_hm', 'jam_mulai', 'istirahat', 'jam_selesai', 'rental'].forEach(k => sel(tr, k).disabled = !!jenis && !alat && jenis !== 'operasional');
+                // Yang sudah terisi tetap bisa disunting (supaya isian yang salah bisa dihapus).
+                const matikan = (k, mati) => { const x = sel(tr, k); x.disabled = mati && !x.value.trim(); };
+                matikan('masuk', !!jenis && jenis !== 'masuk');
+                matikan('keluar', jenis === 'masuk');
+                ['hm_awal', 'hm_akhir', 'total_hm', 'jam_mulai', 'istirahat', 'jam_selesai', 'rental'].forEach(k => matikan(k, !!jenis && !alat && jenis !== 'operasional'));
                 if (isiOtomatis && alat) {
                     const hm = sel(tr, 'hm_awal');
                     if (!hm.value && u.hm != null) { hm.value = String(u.hm).replace('.', ','); hm.classList.add('otomatis'); }
@@ -158,31 +166,94 @@
                 hitung(tr);
             };
 
+            // Validasi per baris — aturannya sama dengan pemeriksaan server (BbmController::rapikan). Galat (merah) memblokir
+            // tombol Simpan; info (kuning) hanya pengingat. Baris yang kosong seluruhnya diabaikan.
+            const ANGKA = {hm_awal: 'HM awal', hm_akhir: 'HM akhir', total_hm: 'Total HM', masuk: 'Masuk', keluar: 'Keluar', rental: 'Rental'};
+            const JAM = {jam_mulai: 'Jam mulai', istirahat: 'Rest', jam_selesai: 'Jam selesai'};
+            const pola = /^\d{1,2}[:.]\d{2}$/;
+            const periksaBaris = tr => {
+                const galat = [], info = [], salahDi = new Set();
+                const v = k => sel(tr, k).value;
+                if (!KOLOM.some(k => v(k).trim())) return {kosong: true, galat, info, salahDi};
+                const unit = v('unit'), u = UNIT[unit] || null, jenis = u?.jenis;
+                if (!unit.trim()) { galat.push('Unit belum diisi.'); salahDi.add('unit'); }
+                else if (unit === 'Stock Opname') { galat.push('Stock opname dicatat lewat tombol Stock Opname di menu Data BBM.'); salahDi.add('unit'); }
+                ['unit', 'proyek', 'status'].forEach(k => { const p = bedaMaster(k, v(k)); if (p && !(k === 'unit' && !unit.trim())) { galat.push(p); salahDi.add(k); } });
+                const n = {};
+                Object.entries(ANGKA).forEach(([k, label]) => {
+                    n[k] = angka(v(k));
+                    if (Number.isNaN(n[k])) { galat.push(`${label} harus angka (mis. 8786,9) — sekarang "${v(k).trim()}".`); salahDi.add(k); n[k] = null; }
+                    else if (n[k] !== null && n[k] < 0) { galat.push(`${label} tidak boleh minus.`); salahDi.add(k); }
+                });
+                Object.entries(JAM).forEach(([k, label]) => {
+                    if (v(k).trim() && !pola.test(v(k).trim())) { galat.push(`${label} harus format jam, mis. 8:00 — sekarang "${v(k).trim()}".`); salahDi.add(k); }
+                });
+                if (n.hm_awal !== null && n.hm_akhir !== null) {
+                    if (n.hm_akhir < n.hm_awal) { galat.push('HM akhir lebih kecil dari HM awal.'); salahDi.add('hm_akhir'); }
+                    else if (n.hm_akhir - n.hm_awal > 24) { galat.push('Total HM lebih dari 24 jam — periksa HM awal/akhir.'); salahDi.add('hm_akhir'); }
+                }
+                if (jenis === 'pakai') {
+                    if (n.masuk) { galat.push('Solar masuk tidak dicatat di baris alat — kosongkan Masuk, buat baris sendiri dengan unit sumber solar (mis. "Isi Solar dari Luar").'); salahDi.add('masuk'); }
+                    if (n.keluar && !v('proyek').trim()) { galat.push('Pemakaian solar wajib diisi Proyek.'); salahDi.add('proyek'); }
+                } else if (jenis === 'masuk') {
+                    if (!n.masuk) { galat.push('Isi jumlah liter di kolom Masuk.'); salahDi.add('masuk'); }
+                    if (n.keluar) { galat.push('Baris solar masuk tidak boleh berisi Keluar — kosongkan Keluar.'); salahDi.add('keluar'); }
+                } else if (['pindah', 'susut', 'operasional'].includes(jenis)) {
+                    if (!n.keluar) { galat.push('Isi jumlah liter di kolom Keluar.'); salahDi.add('keluar'); }
+                    if (n.masuk) { galat.push('Baris ini tidak boleh berisi Masuk — kosongkan Masuk.'); salahDi.add('masuk'); }
+                }
+                if (jenis === 'pakai' && u.hm != null && n.hm_awal !== null && Math.abs(n.hm_awal - u.hm) > 0.05)
+                    info.push(`HM awal berbeda dari HM akhir terakhir unit ini (${String(u.hm).replace('.', ',')}).`);
+                return {kosong: false, galat, info, salahDi};
+            };
+
             const hitung = tr => {
                 const a = angka(sel(tr, 'hm_awal').value), b = angka(sel(tr, 'hm_akhir').value);
                 const t = sel(tr, 'total_hm');
-                const catatan = [];
                 if (a != null && b != null && !isNaN(a) && !isNaN(b)) {
                     t.value = String(Math.round((b - a) * 100) / 100).replace('.', ',');
                     t.readOnly = true; t.classList.add('otomatis');
-                    if (b < a) catatan.push('HM akhir lebih kecil dari HM awal.');
-                    else if (b - a > 24) catatan.push('Total HM lebih dari 24 jam.');
                 } else if (t.readOnly) { t.value = ''; t.readOnly = false; t.classList.remove('otomatis'); }
-                const u = UNIT[sel(tr, 'unit').value] || null;
-                const salah = ['unit', 'proyek', 'status'].map(k => {
-                    const pesan = bedaMaster(k, sel(tr, k).value);
-                    sel(tr, k).classList.toggle('salah', !!pesan);
-                    return pesan;
-                }).filter(Boolean);
-                tr.classList.toggle('ada-salah', salah.length > 0);
-                catatan.push(...salah);
-                if (u?.jenis === 'pakai' && u.hm != null && a != null && Math.abs(a - u.hm) > 0.05 && !sel(tr, 'hm_awal').classList.contains('otomatis'))
-                    catatan.push(`HM awal berbeda dari HM akhir terakhir unit ini (${String(u.hm).replace('.', ',')}).`);
-                if (u?.jenis === 'pakai' && angka(sel(tr, 'keluar').value) > 0 && !sel(tr, 'proyek').value.trim()) catatan.push('Pemakaian solar wajib diisi Proyek.');
-
+                const h = periksaBaris(tr);
+                tr.hasil = h;
+                KOLOM.forEach(k => sel(tr, k).classList.toggle('salah', h.salahDi.has(k)));
+                tr.classList.toggle('ada-salah', h.galat.length > 0);
+                tr.classList.toggle('valid', !h.kosong && !h.galat.length);
+                const no = [...tbody.querySelectorAll('tr.baris')].indexOf(tr) + 1;
                 const c = tr.nextElementSibling.querySelector('.catatan');
-                c.hidden = !catatan.length; c.textContent = catatan.map(x => '⚠️ ' + x).join('  ');
+                c.hidden = !h.galat.length && !h.info.length;
+                c.innerHTML = (h.galat.length ? `<div class="kurang">✎ Baris ${no}${sel(tr, 'unit').value.trim() ? ' (' + esc(sel(tr, 'unit').value) + ')' : ''}:<ul>${h.galat.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : '')
+                    + h.info.map(x => `<div class="info-baris">ⓘ ${esc(x)}</div>`).join('');
                 ringkas();
+                evaluasi();
+            };
+            const esc = s => String(s).replace(/[&<>"]/g, ch => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'})[ch]);
+
+            // Tombol Simpan hanya menyala bila tanggal benar, ada minimal satu baris terisi, dan TIDAK ada baris bergalat.
+            const tombol = document.getElementById('simpan');
+            const kotak = document.getElementById('hasil-validasi');
+            const teksSimpan = tombol.textContent;
+            const evaluasi = () => {
+                if (!kotak) return;
+                const masalah = [];
+                const tgl = document.querySelector('[name=tanggal]').value.trim();
+                const d = window.TanggalId ? TanggalId.urai(tgl) : (tgl ? new Date() : null);
+                if (!d) masalah.push(tgl ? `Tanggal "${tgl}" tidak dikenali (mis. 14-Okt-2026).` : 'Tanggal belum diisi.');
+                else if (d > new Date()) masalah.push('Tanggal tidak boleh lewat dari hari ini.');
+                const semua = [...tbody.querySelectorAll('tr.baris')];
+                const terisi = semua.filter(tr => tr.hasil && !tr.hasil.kosong);
+                semua.forEach((tr, i) => { if (tr.hasil?.galat.length) masalah.push(`Baris ${i + 1}${sel(tr, 'unit').value.trim() ? ' (' + sel(tr, 'unit').value + ')' : ''}: ${tr.hasil.galat.join(' ')}`); });
+                if (!terisi.length) masalah.push('Isi minimal satu baris.');
+                tombol.disabled = masalah.length > 0;
+                tombol.title = masalah.length ? 'Perbaiki dulu isian yang ditandai merah' : '';
+                kotak.hidden = false;
+                if (masalah.length) {
+                    kotak.className = 'pesan galat';
+                    kotak.innerHTML = `<b>Simpan belum aktif — perbaiki dulu:</b><ul>${masalah.slice(0, 12).map(x => `<li>${esc(x)}</li>`).join('')}${masalah.length > 12 ? `<li>… dan ${masalah.length - 12} lagi</li>` : ''}</ul>`;
+                } else {
+                    kotak.className = 'pesan sukses';
+                    kotak.textContent = `✓ ${terisi.length} baris valid — siap disimpan.`;
+                }
             };
 
             const ringkas = () => {
@@ -209,7 +280,7 @@
             tbody.addEventListener('click', e => {
                 if (!e.target.classList.contains('hapus')) return;
                 const tr = e.target.closest('tr');
-                tr.nextElementSibling.remove(); tr.remove(); ringkas();
+                tr.nextElementSibling.remove(); tr.remove(); tbody.querySelectorAll('tr.baris').forEach(hitung); ringkas(); evaluasi();
             });
             document.getElementById('tambah')?.addEventListener('click', () => sel(tambah(), 'unit').focus());
             document.getElementById('muat-terakhir')?.addEventListener('click', () => {
@@ -218,13 +289,16 @@
                 const ada = new Set([...tbody.querySelectorAll('[data-k="unit"]')].map(x => kunci(x.value)));
                 TERAKHIR.forEach(n => { if (!ada.has(kunci(n))) { const tr = tambah({unit: PETA[kunci(n)] || n}); perbarui(tr, true); } });
             });
+            document.querySelector('[name=tanggal]').addEventListener('input', evaluasi);
+            document.querySelector('[name=tanggal]').addEventListener('change', evaluasi);
+            document.querySelector('[name=tanggal]').addEventListener('blur', () => setTimeout(evaluasi));
+            window.addEventListener('load', evaluasi); // tanggal-id.js termuat sesudah skrip ini
             document.getElementById('form-bbm').addEventListener('submit', e => {
                 tbody.querySelectorAll('tr.baris').forEach(tr => hitung(tr));
-                const salah = tbody.querySelector('tr.baris.ada-salah');
-                if (salah) {
+                if (tombol.disabled) {
                     e.preventDefault();
-                    alert(`Ada ${tbody.querySelectorAll('tr.baris.ada-salah').length} baris yang Unit / Proyek / Status-nya tidak persis sama dengan data master (lihat tanda ⚠️ merah). Perbaiki dulu — pilih dari daftar.`);
-                    salah.querySelector('input.salah')?.focus();
+                    (tbody.querySelector('input.salah') || kotak).scrollIntoView({block: 'center'});
+                    tbody.querySelector('input.salah')?.focus();
                     return;
                 }
                 tbody.querySelectorAll('input:disabled').forEach(x => { x.disabled = false; });
