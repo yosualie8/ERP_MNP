@@ -59,7 +59,7 @@ class KaryawanController extends Controller
             'nama' => $t($request->input('nama')), 'nik' => ($n = preg_replace('/\s+/', '', (string) $request->input('nik'))) === '' ? null : $n,
             'npwp' => $t($request->input('npwp')), 'site' => Karyawan::rapikanSite($request->input('site')), 'jabatan' => $t($request->input('jabatan')),
             'bank' => $t($request->input('bank')), 'no_rekening' => ($r = preg_replace('/\s+/', '', (string) $request->input('no_rekening'))) === '' ? null : $r,
-            'nama_rekening' => $t($request->input('nama_rekening')), 'pic_gaji' => $t($request->input('pic_gaji')),
+            'nama_rekening' => $t($request->input('nama_rekening')),
         ]);
 
         return $request->validate([
@@ -70,8 +70,7 @@ class KaryawanController extends Controller
             'status' => ['required', Rule::in(array_keys(Karyawan::STATUS))],
             'site' => ['nullable', 'string', 'max:40'], 'jabatan' => ['nullable', 'string', 'max:80'],
             'bank' => ['nullable', 'string', 'max:40'], 'no_rekening' => ['nullable', 'regex:/^\d{5,30}$/'],
-            'nama_rekening' => ['nullable', 'string', 'max:120'], 'pic_gaji' => ['nullable', 'string', 'max:120'],
-            'catatan' => ['nullable', 'string', 'max:2000'],
+            'nama_rekening' => ['nullable', 'string', 'max:120'],
         ], [
             'nama.required' => 'Nama belum diisi.',
             'nik.regex' => 'NIK harus 16 digit angka (sesuai KTP).',

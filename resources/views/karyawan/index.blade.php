@@ -18,7 +18,7 @@
     <div class="kartu gulir" style="padding: 0;">
         <table class="kas">
             <thead>
-                <tr><th>Nama</th><th>NIK</th><th>Status</th><th>Site</th><th>Jabatan</th><th>Bank</th><th>No rekening</th><th>Nama rekening</th><th>PIC gaji</th><th>Catatan</th><th data-tanpa-saring></th></tr>
+                <tr><th>Nama</th><th>NIK</th><th>Status</th><th>Site</th><th>Jabatan</th><th>Bank</th><th>No rekening</th><th>Nama rekening</th><th data-tanpa-saring></th></tr>
             </thead>
             <tbody>
                 @forelse ($karyawan as $k)
@@ -31,12 +31,10 @@
                         <td>{{ $k->bank }}</td>
                         <td class="i">{{ $k->no_rekening }}</td>
                         <td>{{ $k->nama_rekening }}</td>
-                        <td>{{ $k->pic_gaji }}</td>
-                        <td class="redup" style="font-size: 12px; min-width: 200px;">{{ $k->catatan }}</td>
                         <td>@if ($bolehUbah)<a href="{{ route('karyawan.edit', $k) }}" class="tombol-edit">Edit</a>@endif</td>
                     </tr>
                 @empty
-                    <tr><td colspan="11" class="redup" style="padding: 20px 14px;">Belum ada data karyawan.</td></tr>
+                    <tr><td colspan="9" class="redup" style="padding: 20px 14px;">Belum ada data karyawan.</td></tr>
                 @endforelse
             </tbody>
         </table>

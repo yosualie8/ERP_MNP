@@ -9,7 +9,7 @@ class Karyawan extends Model
 {
     protected $table = 'karyawan';
 
-    protected $fillable = ['no_master', 'nama', 'nik', 'npwp', 'status', 'site', 'jabatan', 'bank', 'no_rekening', 'nama_rekening', 'pic_gaji', 'catatan', 'user_id'];
+    protected $fillable = ['no_master', 'nama', 'nik', 'npwp', 'status', 'site', 'jabatan', 'bank', 'no_rekening', 'nama_rekening', 'user_id'];
 
     public const STATUS = ['aktif' => 'Aktif', 'nonaktif' => 'Non Aktif'];
 

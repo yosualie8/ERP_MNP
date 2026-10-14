@@ -10,8 +10,8 @@ use OpenSpout\Reader\XLSX\Reader;
 
 /**
  * Impor awal Data Karyawan dari sheet "Master" file Format Gaji MNP (.xlsx).
- * Kolom: B No, C Nama, D NPWP, E NIK, F Status, G Site, H Bank, I No Rekening, J Nama Rekening, K PIC Gaji.
- * Keputusan user 14 Okt 2026: status apa adanya ("Tidak Aktif"/kosong = Non Aktif); NIK dobel tetap disimpan + catatan perlu dicek;
+ * Kolom: B No, C Nama, D NPWP, E NIK, F Status, G Site, H Bank, I No Rekening, J Nama Rekening (K PIC Gaji tidak dipakai).
+ * Keputusan user 14 Okt 2026: status apa adanya ("Tidak Aktif"/kosong = Non Aktif); NIK dobel tetap disimpan (ditandai di Data Karyawan);
  * kolom L–N (rekening lama) diabaikan; gaji belum diimpor. Aman diulang: baris dicocokkan lewat kolom No (no_master).
  */
 class ImporKaryawan extends Command
@@ -52,19 +52,11 @@ class ImporKaryawan extends Command
                 'nik' => ($n = preg_replace('/\D/', '', (string) ($x[4] ?? ''))) === '' ? null : $n,
                 'status' => $status === 'Aktif' ? 'aktif' : 'nonaktif', 'site' => Karyawan::rapikanSite($x[6] ?? null),
                 'bank' => $teks($x[7] ?? null), 'no_rekening' => ($v = preg_replace('/\s+/', '', (string) ($x[8] ?? ''))) === '' ? null : $v,
-                'nama_rekening' => $teks($x[9] ?? null), 'pic_gaji' => $teks($x[10] ?? null),
-                'catatan' => $status === null ? 'Status kosong di sheet Master — dianggap Non Aktif.' : null,
+                'nama_rekening' => $teks($x[9] ?? null),
             ];
         }
-        // NIK dobel antar orang berbeda → tetap disimpan, diberi catatan perlu dicek.
+        // NIK dobel antar orang berbeda tetap disimpan (di Data Karyawan ditandai "dobel" supaya dicek dari KTP).
         $perNik = collect($data)->filter(fn ($d) => $d['nik'])->groupBy('nik')->filter(fn ($g) => $g->count() > 1);
-        foreach ($data as &$d) {
-            if ($d['nik'] && isset($perNik[$d['nik']])) {
-                $lain = $perNik[$d['nik']]->where('no_master', '!=', $d['no_master'])->pluck('nama')->implode(', ');
-                $d['catatan'] = trim(($d['catatan'] ?? '')." NIK sama dengan {$lain} — perlu dicek dari KTP.");
-            }
-        }
-        unset($d);
         $this->info(count($data).' karyawan: '.collect($data)->countBy('status')->toJson().' | site '.collect($data)->countBy(fn ($d) => $d['site'] ?? '(kosong)')->toJson()
             .' | NIK dobel '.$perNik->count().' pasang');
         if (! $this->option('simpan')) {

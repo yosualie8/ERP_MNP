@@ -33,9 +33,7 @@
                 <datalist id="saran-bank">@foreach ($saranBank as $s)<option value="{{ $s }}">@endforeach</datalist></div>
             <div><label for="no_rekening">No rekening</label><input id="no_rekening" name="no_rekening" inputmode="numeric" value="{{ old('no_rekening', $karyawan->no_rekening) }}" autocomplete="off"></div>
             <div><label for="nama_rekening">Nama rekening</label><input id="nama_rekening" name="nama_rekening" value="{{ old('nama_rekening', $karyawan->nama_rekening) }}" autocomplete="off"></div>
-            <div><label for="pic_gaji">PIC gaji</label><input id="pic_gaji" name="pic_gaji" value="{{ old('pic_gaji', $karyawan->pic_gaji) }}" autocomplete="off"></div>
         </div>
-        <div style="margin-bottom: 14px;"><label for="catatan">Catatan</label><textarea id="catatan" name="catatan" rows="3">{{ old('catatan', $karyawan->catatan) }}</textarea></div>
         <div style="display: flex; gap: 10px;">
             <button type="submit" class="tombol">Simpan</button>
             <a href="{{ route('karyawan.index') }}" class="tombol polos">Batal</a>
