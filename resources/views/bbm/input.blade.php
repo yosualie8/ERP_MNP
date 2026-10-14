@@ -335,9 +335,11 @@
                 const ada = new Set([...tbody.querySelectorAll('[data-k="unit"]')].map(x => kunci(x.value)));
                 TERAKHIR.forEach(n => { if (!ada.has(kunci(n))) { const tr = tambah({jenis: 'pakai', unit: PETA[kunci(n)] || n}); perbarui(tr, true); } });
             });
-            document.querySelector('[name=tanggal]').addEventListener('input', evaluasi);
-            document.querySelector('[name=tanggal]').addEventListener('change', evaluasi);
-            document.querySelector('[name=tanggal]').addEventListener('blur', () => setTimeout(evaluasi));
+            // Tanggal berubah → semua baris diperiksa ulang (aturan wajib HM alat berat bergantung tanggal).
+            const cekSemua = () => { tbody.querySelectorAll('tr.baris').forEach(hitung); evaluasi(); };
+            document.querySelector('[name=tanggal]').addEventListener('input', cekSemua);
+            document.querySelector('[name=tanggal]').addEventListener('change', cekSemua);
+            document.querySelector('[name=tanggal]').addEventListener('blur', () => setTimeout(cekSemua));
             window.addEventListener('load', evaluasi); // tanggal-id.js termuat sesudah skrip ini
             document.getElementById('form-bbm').addEventListener('submit', e => {
                 tbody.querySelectorAll('tr.baris').forEach(tr => hitung(tr));
