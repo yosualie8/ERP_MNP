@@ -285,7 +285,8 @@
     // Ctrl+C = salin isi sel, Esc = lepas. Halaman yang punya navigasi sendiri (preventDefault) didahulukan.
     // Pengecualian: tabel ber-atribut data-tanpa-navigasi.
     const gridNav = el => { const t = el?.closest?.('table.grid-beku'); return t && !t.hasAttribute('data-tanpa-navigasi') ? t : null; };
-    const barisTampil = t => [...t.tBodies].flatMap(tb => [...tb.rows]).filter(tr => tr.offsetParent !== null && tr.cells.length);
+    // Baris judul rincian (tr.bh) & baris yang tersembunyi/tersaring dilewati.
+    const barisTampil = t => [...t.tBodies].flatMap(tb => [...tb.rows]).filter(tr => tr.offsetParent !== null && tr.cells.length && !tr.classList.contains('bh'));
     // Posisi kolom visual (memperhitungkan colspan) ↔ sel.
     const kolomSel = td => { let k = 0; for (const c of td.parentElement.cells) { if (c === td) return k; k += c.colSpan || 1; } return k; };
     const selDiKolom = (tr, k) => { let x = 0; for (const c of tr.cells) { x += c.colSpan || 1; if (x > k) return c; } return tr.cells[tr.cells.length - 1]; };
