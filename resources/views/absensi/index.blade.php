@@ -23,7 +23,7 @@
     </div>
     <div class="kartu gulir" style="padding: 0;">
         <table class="kas">
-            <thead><tr><th>Karyawan</th><th>Site</th><th>Masuk</th><th>Pulang</th><th>Mulai lembur</th><th>Selesai lembur</th><th class="angka">Jam kerja</th><th>Lokasi</th><th>Keterangan</th></tr></thead>
+            <thead><tr><th>Karyawan</th><th>Site</th><th>Masuk</th><th>Pulang</th><th>Mulai lembur</th><th>Selesai lembur</th><th class="angka">Jam kerja</th><th>Proyek · lokasi</th><th>Keterangan</th></tr></thead>
             <tbody>
                 @foreach ($baris as $b)
                     @php($a = $b['absen'])
@@ -33,10 +33,10 @@
                         <td><b>{{ $b['k']->nama }}</b></td>
                         <td>{{ $b['k']->site }}</td>
                         @foreach (['masuk', 'pulang', 'lembur_mulai', 'lembur_selesai'] as $j)
-                            <td class="sel-absen">@if (isset($a[$j])){{ $a[$j]->waktu->format('H:i') }}<a href="{{ route('absen.foto', $a[$j]) }}" target="_blank" title="Selfie · {{ $a[$j]->jarak_m }} m dari titik · akurasi ±{{ $a[$j]->akurasi_m }} m">📷</a>@endif</td>
+                            <td class="sel-absen">@if (isset($a[$j])){{ $a[$j]->waktu->translatedFormat('j M Y H:i') }}<a href="{{ route('absen.foto', $a[$j]) }}" target="_blank" title="Selfie · {{ $a[$j]->jarak_m }} m dari titik · akurasi ±{{ $a[$j]->akurasi_m }} m">📷</a>@endif</td>
                         @endforeach
                         <td class="angka">{{ $kerja !== null ? intdiv($kerja, 60).' j '.($kerja % 60).' m' : '' }}@if ($lembur)<br><span class="redup">+ lembur {{ intdiv($lembur, 60) }} j {{ $lembur % 60 }} m</span>@endif</td>
-                        <td>{{ $a->first()?->lokasi?->nama }}</td>
+                        <td>{{ $a->first()?->lokasi?->tahap?->nama }}@if ($a->first()?->lokasi) <span class="redup">· {{ $a->first()->lokasi->nama }}</span>@endif</td>
                         <td>@if ($a->isEmpty())<span class="label merah">Tidak absen</span>@elseif (! isset($a['pulang']))<span class="label kuning">Belum / lupa absen pulang</span>@endif</td>
                     </tr>
                 @endforeach

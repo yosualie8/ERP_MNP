@@ -61,7 +61,7 @@ class AbsenController extends Controller
             return back()->with('error', "Sinyal GPS kurang akurat (±{$akurasi} m). Pindah ke tempat terbuka, tunggu sebentar, lalu coba lagi.");
         }
         // Lokasi absen aktif terdekat; harus di dalam radiusnya.
-        $lokasi = LokasiAbsen::where('aktif', true)->get()
+        $lokasi = LokasiAbsen::with('tahap')->where('aktif', true)->get()
             ->map(fn ($l) => [$l, $l->jarakKe((float) $data['lat'], (float) $data['lng'])])->sortBy(1)->first();
         if (! $lokasi) {
             return back()->with('error', 'Belum ada lokasi absen yang aktif. Hubungi admin.');
@@ -73,6 +73,15 @@ class AbsenController extends Controller
 
         $waktu = now();
         $path = $request->file('foto')->storeAs('absen/'.$waktu->format('Y/m'), $k->id.'-'.$waktu->format('Ymd-His').'-'.$data['jenis'].'.jpg');
+        // Watermark dari data yang sudah divalidasi server (jenis, waktu server, GPS, proyek & lokasi, nama).
+        \App\Support\WatermarkAbsen::pasang(Storage::path($path), [
+            mb_strtoupper(Absensi::JENIS[$data['jenis']]),
+            $waktu->translatedFormat('j M Y H:i:s').' WIB',
+            sprintf('GPS %.7f, %.7f', $data['lat'], $data['lng']).($akurasi !== null ? " (±{$akurasi} m)" : ''),
+            'Proyek: '.($l->tahap?->nama ?? '-'),
+            "Lokasi: {$l->nama} ({$jarak} m dari titik)",
+            $k->nama,
+        ]);
         Absensi::create([
             'karyawan_id' => $k->id, 'tanggal' => $berikut['tanggal'], 'jenis' => $data['jenis'], 'waktu' => $waktu,
             'lokasi_absen_id' => $l->id, 'lat' => $data['lat'], 'lng' => $data['lng'], 'akurasi_m' => $akurasi, 'jarak_m' => $jarak,
