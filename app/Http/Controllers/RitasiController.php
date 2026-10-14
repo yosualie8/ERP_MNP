@@ -59,7 +59,7 @@ class RitasiController extends Controller
     {
         $data = $request->validate(['bongkar' => ['required', 'array'], 'bongkar.*' => ['array']]);
         $rapi = fn ($v) => ($v = trim(preg_replace('/\s+/', ' ', (string) $v))) === '' ? null : $v;
-        $isian = collect($data['bongkar'])->map(fn ($b) => collect(['tanggal', 'jam', 'tahap', 'galian', 'jenis_tanah', 'no_seri', 'keterangan', 'konfirmasi'])
+        $isian = collect($data['bongkar'])->map(fn ($b) => collect(['tanggal', 'jam', 'tahap', 'galian', 'jenis_tanah', 'no_seri', 'keterangan', 'konfirmasi', 'kubikasi'])
             ->mapWithKeys(fn ($k) => [$k => $rapi($b[$k] ?? null)])->all())
             // Baris yang tidak diisi sama sekali dilewati (galian terisi otomatis, jadi tidak dihitung). Jam bongkar tidak wajib.
             ->filter(fn ($b) => $b['tanggal'] || $b['jam'] || $b['tahap'] || $b['jenis_tanah'] || $b['no_seri'] || $b['keterangan']);
@@ -75,6 +75,9 @@ class RitasiController extends Controller
                 $salah[] = "Tanggal Bongkar \"{$b['tanggal']}\" tidak dikenali (format dd-MMM-yyyy, mis. 09-Okt-2026)";
             } elseif ($b['tanggal'] && $tgl->isAfter(today())) {
                 $salah[] = 'Tanggal Bongkar tidak boleh sesudah hari ini';
+            }
+            if ($b['kubikasi'] !== null && UnggahBongkar::kubik($b['kubikasi']) === null) {
+                $salah[] = "Kubikasi \"{$b['kubikasi']}\" bukan angka (0–100 m³)";
             }
             if ($kosong || $salah) {
                 $kurang["bongkar.{$do}"] = "DO {$do}: ".implode('; ', array_filter([$kosong ? implode(', ', $kosong).' belum diisi' : null, ...$salah])).'.';
@@ -100,6 +103,8 @@ class RitasiController extends Controller
                 'no_seri' => $b['no_seri'], 'plat' => $info['plat'] ?? null, 'pemilik' => $pemilik, 'no_do' => $do,
                 'harga_jual' => (string) (self::cariHarga($harga, $b['tahap'], $b['galian'], $uj['jenis_kendaraan'] ?? null, $pemilik) ?? ''),
                 'keterangan' => $b['keterangan'], 'konfirmasi' => $b['konfirmasi'],
+                // Kubikasi dari form/Excel; kosong = standar jenis kendaraan (diisi di rapikan()).
+                'kubikasi' => $b['kubikasi'] === null ? '' : (string) UnggahBongkar::kubik($b['kubikasi']),
             ];
         })->all();
         [$rit, $uj] = $this->rapikan(new Request(['rit' => $baris]), false);

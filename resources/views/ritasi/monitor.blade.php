@@ -175,7 +175,8 @@
             <div class="kartu gulir" style="padding: 0;">
                 <table class="kas bongkar" data-saring-kolom="grup">
                     <thead><tr><th>No DO</th><th>Nomor Mobil</th><th>Jenis Mobil</th><th>Nama Supir</th><th>Tanggal UJ</th><th>Galian</th>
-                        <th>Tanggal Bongkar</th><th>Jam Bongkar</th><th>Tujuan Bongkar</th><th>Jenis Tanah / Barang</th><th>No Surat Jalan</th><th>Keterangan</th></tr></thead>
+                        <th>Tanggal Bongkar</th><th>Jam Bongkar</th><th>Tujuan Bongkar</th><th>Jenis Tanah / Barang</th><th>No Surat Jalan</th><th title="Kosong = kubikasi standar jenis kendaraan (Kubikasi Kendaraan)">Kubikasi (m³)</th><th>Keterangan</th></tr></thead>
+                    @php($petaKubik = \App\Models\KubikasiKendaraan::peta())
                     @forelse ($daftar as $d)
                         @php($n = 'bongkar['.$d['do'].']')
                         @php($lama = old('bongkar.'.$d['do'], []))
@@ -194,6 +195,9 @@
                                 <td><input type="text" name="{{ $n }}[tahap]" value="{{ $lama['tahap'] ?? '' }}" list="saran-tahap" autocomplete="off" class="isi-bongkar wajib" placeholder="mis. ASG Tahap 116"></td>
                                 <td><input type="text" name="{{ $n }}[jenis_tanah]" value="{{ $lama['jenis_tanah'] ?? '' }}" list="saran-tanah" autocomplete="off" class="isi-bongkar wajib"></td>
                                 <td><input type="text" name="{{ $n }}[no_seri]" value="{{ $lama['no_seri'] ?? '' }}" autocomplete="off" class="isi-bongkar wajib" inputmode="numeric"></td>
+                                @php($kubikStd = \App\Models\KubikasiKendaraan::untuk($d['jenis'][0] ?? null, $petaKubik))
+                                <td><input type="text" name="{{ $n }}[kubikasi]" value="{{ $lama['kubikasi'] ?? '' }}" autocomplete="off" class="isi-bongkar" inputmode="decimal" style="min-width: 64px; text-align: right;"
+                                    placeholder="{{ $kubikStd !== null ? rtrim(rtrim(number_format($kubikStd, 2, ',', ''), '0'), ',') : '' }}" title="Kosong = standar {{ $d['jenis'][0] ?? 'tanpa jenis' }}"></td>
                                 <td><input type="text" name="{{ $n }}[keterangan]" value="{{ $lama['keterangan'] ?? '' }}" autocomplete="off" class="isi-bongkar" maxlength="300" placeholder="catatan admin">
                                     @if ($errors->has('konfirmasi.'.$d['do']) || ($lama['konfirmasi'] ?? ''))
                                         <input type="text" name="{{ $n }}[konfirmasi]" value="{{ $lama['konfirmasi'] ?? '' }}" autocomplete="off" class="isi-bongkar" maxlength="1000"
@@ -202,7 +206,7 @@
                                 </td>
                             </tr>
                             <template class="rinci-uj">
-                            <tr class="bh"><td>ID UJ</td><td>Tanggal</td><td>Status</td><td>No Mobil · Jenis</td><td>Supir</td><td colspan="5">Keterangan UJ</td><td>Kategori</td><td class="angka">Nominal</td></tr>
+                            <tr class="bh"><td>ID UJ</td><td>Tanggal</td><td>Status</td><td>No Mobil · Jenis</td><td>Supir</td><td colspan="6">Keterangan UJ</td><td>Kategori</td><td class="angka">Nominal</td></tr>
                             @foreach ($d['detail'] as $x)
                                 <tr class="b">
                                     <td class="i">{{ $x->id_uj ?: 'baris '.$x->baris }}</td>
@@ -210,7 +214,7 @@
                                     <td class="redup" style="font-size: 12px;">{{ $x->status }}</td>
                                     <td>{{ $x->no_mobil }}@if ($x->jenis_kendaraan) <span class="redup">· {{ $x->jenis_kendaraan }}</span>@endif</td>
                                     <td class="p">{{ $x->nama }}</td>
-                                    <td colspan="5">{{ $x->keterangan }}</td>
+                                    <td colspan="6">{{ $x->keterangan }}</td>
                                     <td>{{ $x->kategori }}</td>
                                     <td class="angka">{{ rp((int) $x->nominal) }}</td>
                                 </tr>
@@ -218,7 +222,7 @@
                             </template>
                         </tbody>
                     @empty
-                        <tbody><tr><td colspan="12" class="redup" style="padding: 20px 14px;">{{ $q || $umur || $tujuan !== '' || $galian !== '' ? 'Tidak ada DO yang cocok dengan saringan ini.' : 'Semua DO di Kas UJ sudah ada di data Ritasi.' }}</td></tr></tbody>
+                        <tbody><tr><td colspan="13" class="redup" style="padding: 20px 14px;">{{ $q || $umur || $tujuan !== '' || $galian !== '' ? 'Tidak ada DO yang cocok dengan saringan ini.' : 'Semua DO di Kas UJ sudah ada di data Ritasi.' }}</td></tr></tbody>
                     @endforelse
                 </table>
             </div>

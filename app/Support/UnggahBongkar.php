@@ -27,12 +27,13 @@ class UnggahBongkar
         'no_seri' => ['no surat jalan', 'nomor surat jalan', 'no sj', 'surat jalan', 'no seri'],
         'galian' => ['galian'],
         'keterangan' => ['keterangan', 'catatan'],
+        'kubikasi' => ['kubikasi', 'kubikasi (m3)', 'kubikasi (m³)', 'kubikasi m3', 'kubik', 'volume', 'm3', 'm³'],
     ];
 
     /** DO yang UJ-nya lebih dari sekian hari sebelum bongkar dianggap tertinggal lama (dipakai terakhir, ditandai). */
     public const HARI_LAMA = 30;
 
-    public const JUDUL_TEMPLAT = ['No Mobil', 'Tanggal Bongkar', 'Jam Bongkar', 'Tujuan Bongkar', 'Jenis Tanah', 'No Surat Jalan', 'Galian', 'Keterangan'];
+    public const JUDUL_TEMPLAT = ['No Mobil', 'Tanggal Bongkar', 'Jam Bongkar', 'Tujuan Bongkar', 'Jenis Tanah', 'No Surat Jalan', 'Galian', 'Keterangan', 'Kubikasi'];
 
     /** @return array<int, array> baris surat jalan (baris = nomor baris Excel) */
     public static function baca(UploadedFile $file): array
@@ -92,6 +93,8 @@ class UnggahBongkar
                 'no_seri' => is_float($sel('no_seri')) ? (string) (int) $sel('no_seri') : $teks('no_seri'),
                 'galian' => $teks('galian'),
                 'keterangan' => $teks('keterangan'),
+                // Kubikasi (m³) dari Excel; kosong = standar jenis kendaraan saat disimpan.
+                'kubikasi' => self::kubik($sel('kubikasi')), 'kubikasi_asli' => $teks('kubikasi'),
             ];
         }
 
@@ -120,6 +123,7 @@ class UnggahBongkar
                 $s['tahap'] ? null : 'Tujuan Bongkar kosong',
                 $s['jenis_tanah'] ? null : 'Jenis Tanah kosong',
                 $s['no_seri'] ? null : 'No Surat Jalan kosong',
+                $s['kubikasi_asli'] !== null && $s['kubikasi'] === null ? "Kubikasi \"{$s['kubikasi_asli']}\" bukan angka" : null,
             ]);
             if ($salah) {
                 $galat[] = "Baris {$s['baris']}".($s['dt'] ? " ({$s['dt']})" : '').': '.implode(', ', $salah).'.';
@@ -181,6 +185,7 @@ class UnggahBongkar
                 $isian[$d['do']] = [
                     'tanggal' => $s['tanggal']->toDateString(), 'jam' => $s['jam'], 'tahap' => $s['tahap'], 'galian' => $s['galian'],
                     'jenis_tanah' => $s['jenis_tanah'], 'no_seri' => $s['no_seri'], 'keterangan' => $s['keterangan'],
+                    'kubikasi' => $s['kubikasi'] === null ? null : rtrim(rtrim(number_format($s['kubikasi'], 2, ',', ''), '0'), ','),
                 ];
                 // Galian wajib saat simpan: dari Excel, atau tebakan dari keterangan UJ DO itu.
                 $galian = $s['galian'] ?? self::galianDo($d);
@@ -202,6 +207,22 @@ class UnggahBongkar
         }
 
         return ['isian' => $isian, 'per_dt' => $perDt, 'galat' => []];
+    }
+
+    /** Angka kubikasi dari sel Excel (22 / 22,5 / "22.5" / "22 m3"); null bila kosong / bukan angka / di luar 0–100. */
+    public static function kubik(mixed $v): ?float
+    {
+        if (is_int($v) || is_float($v)) {
+            $k = (float) $v;
+        } else {
+            $t = str_replace(',', '.', preg_replace('/\s*(m3|m³)$/i', '', trim((string) $v)));
+            if ($t === '' || ! is_numeric($t)) {
+                return null;
+            }
+            $k = (float) $t;
+        }
+
+        return $k >= 0 && $k <= 100 ? round($k, 2) : null;
     }
 
     /** Galian DO dari keterangan UJ-nya (nama galian baku bila dikenal), null bila tidak diketahui. */
