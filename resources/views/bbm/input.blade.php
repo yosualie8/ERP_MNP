@@ -45,7 +45,8 @@
                 <h3 style="margin: 0 0 4px;">@if ($edit) Edit BBM <span class="redup" style="font-size: 13px; font-weight: normal;">sheet Penggunaan BBM baris {{ $edit['baris'] }}</span> @else Input BBM @endif</h3>
                 <span class="redup">keluar <b id="jml-keluar">0</b> L · masuk <b id="jml-masuk">0</b> L · <b id="jml-baris">0</b> baris</span>
             </div>
-            <p class="redup" style="margin: 0 0 12px; font-size: 13px;"><b style="color: var(--teks);">Unit, Proyek & Status harus persis sama dengan data master</b> (pilih dari daftar) — beda huruf besar/kecil atau spasi pun ditolak. Satu baris = satu unit per hari. <b>Pemakaian alat</b>: isi HM & Keluar (liter) + Proyek. <b>Solar masuk</b> dicatat di baris sendiri dengan unit sumbernya
+            <p class="redup" style="margin: 0 0 12px; font-size: 13px;"><b style="color: var(--teks);">Setiap baris harus berisi transaksi</b> (liter Keluar/Masuk, atau HM / jam Rental untuk alat yang bekerja tanpa isi solar).
+                <b style="color: var(--teks);">Unit, Proyek & Status harus persis sama dengan data master</b> (pilih dari daftar) — beda huruf besar/kecil atau spasi pun ditolak. Satu baris = satu unit per hari. <b>Pemakaian alat</b>: isi HM & Keluar (liter) + Proyek. <b>Solar masuk</b> dicatat di baris sendiri dengan unit sumbernya
                 (mis. "Isi Solar dari Luar", "Isi Solar dari DT 035"), bukan di baris alat. HM awal & proyek terisi otomatis dari catatan terakhir unit itu (ungu = otomatis, boleh diganti). Stok dihitung otomatis di sheet.</p>
 
             <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px;">
@@ -194,7 +195,10 @@
                 }
                 if (jenis === 'pakai') {
                     if (n.masuk) { galat.push('Solar masuk tidak dicatat di baris alat — kosongkan Masuk, buat baris sendiri dengan unit sumber solar (mis. "Isi Solar dari Luar").'); salahDi.add('masuk'); }
-                    if (n.keluar && !v('proyek').trim()) { galat.push('Pemakaian solar wajib diisi Proyek.'); salahDi.add('proyek'); }
+                    // Baris alat harus berisi transaksi: liter Keluar, jam HM (> 0), atau jam sewa (Rental).
+                    const hm = n.hm_awal !== null && n.hm_akhir !== null ? n.hm_akhir - n.hm_awal : n.total_hm;
+                    if (!n.keluar && !(hm > 0) && !n.rental) { galat.push('Isi liter Keluar — atau HM awal & akhir / jam Rental bila alat bekerja tanpa isi solar. Baris tanpa transaksi tidak bisa disimpan.'); salahDi.add('keluar'); }
+                    else if (!v('proyek').trim()) { galat.push('Pemakaian solar / jam kerja alat wajib diisi Proyek.'); salahDi.add('proyek'); }
                 } else if (jenis === 'masuk') {
                     if (!n.masuk) { galat.push('Isi jumlah liter di kolom Masuk.'); salahDi.add('masuk'); }
                     if (n.keluar) { galat.push('Baris solar masuk tidak boleh berisi Keluar — kosongkan Keluar.'); salahDi.add('keluar'); }

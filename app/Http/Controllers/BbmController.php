@@ -208,8 +208,12 @@ class BbmController extends Controller
                 if ($b['masuk']) {
                     $g[] = 'Solar masuk tidak dicatat di baris alat — buat baris sendiri dengan unit sumber solar (mis. "Isi Solar dari Luar").';
                 }
-                if ($b['keluar'] && ! $b['proyek']) {
-                    $g[] = 'Pemakaian solar wajib diisi Proyek.';
+                // Baris alat harus berisi transaksi: liter Keluar, jam HM (> 0), atau jam sewa (Rental). Tanpa itu = tidak jelas tujuannya.
+                $hm = $b['hm_awal'] !== null && $b['hm_akhir'] !== null ? $b['hm_akhir'] - $b['hm_awal'] : $b['total_hm'];
+                if (! $b['keluar'] && ! ($hm > 0) && ! $b['rental']) {
+                    $g[] = 'Isi liter Keluar — atau HM awal & akhir / jam Rental bila alat bekerja tanpa isi solar. Baris tanpa transaksi tidak bisa disimpan.';
+                } elseif (! $b['proyek']) {
+                    $g[] = 'Pemakaian solar / jam kerja alat wajib diisi Proyek.';
                 }
             } elseif ($jenis === 'masuk') {
                 if (! $b['masuk']) {

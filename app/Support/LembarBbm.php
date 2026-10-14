@@ -108,7 +108,9 @@ class LembarBbm
             $proyek = $teks(14, 500);
             $hasil[] = [
                 'baris' => $mulai + $i, 'tanggal' => KasSeabank::tanggal($r[0] ?? null)?->toDateString(), 'unit' => $unit, 'jenis' => $jenis, 'aset_id' => $aset,
-                'hm_awal' => self::angka($r[2] ?? null), 'hm_akhir' => self::angka($r[3] ?? null), 'total_hm' => self::angka($r[4] ?? null),
+                'hm_awal' => self::angka($r[2] ?? null), 'hm_akhir' => self::angka($r[3] ?? null),
+                // Total HM kosong tetapi HM awal & akhir ada → dihitung (akhir − awal).
+                'total_hm' => self::angka($r[4] ?? null) ?? (self::angka($r[2] ?? null) !== null && self::angka($r[3] ?? null) !== null ? round(self::angka($r[3]) - self::angka($r[2]), 2) : null),
                 'masuk' => self::angka($r[5] ?? null), 'keluar' => self::angka($r[6] ?? null), 'stok' => self::angka($r[7] ?? null),
                 'jam_mulai' => LembarRitasi::jam($r[8] ?? null), 'istirahat' => LembarRitasi::jam($r[9] ?? null), 'jam_selesai' => LembarRitasi::jam($r[10] ?? null),
                 'status' => $teks(11, 40), 'keterangan' => $teks(12, 300),
