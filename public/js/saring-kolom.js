@@ -1,12 +1,16 @@
 /**
- * Saringan per kolom untuk tabel ber-atribut data-saring-kolom: baris kotak saring di bawah judul kolom.
- * - data-saring-kolom=""     : tiap <tr> di tbody satu baris data.
- * - data-saring-kolom="grup" : tiap <tbody> satu grup (baris master tr.t + detail tr.b); grup cocok bila tiap saringan
- *                              cocok di master ATAU salah satu detailnya (yang cocok di detail → grup dibuka).
+ * Saringan per kolom — SEMUA grid di aplikasi (dimuat di layout). Dipasang otomatis pada setiap tabel data yang punya judul
+ * kolom (thead) dan minimal 5 baris, kecuali tabel isian form (berisi kotak isian) atau ber-atribut data-tanpa-saring-kolom.
+ * Tabel ber-atribut data-saring-kolom selalu dipasang. Grid baru cukup memakai <table> ber-thead seperti biasa.
+ * - Baris biasa: tiap <tr> di tbody satu baris data (baris rincian ber-colspan di bawahnya ikut tersembunyi).
+ * - Grup (otomatis bila ada tbody.grup, atau data-saring-kolom="grup"): tiap <tbody> satu grup (master tr.t + detail tr.b);
+ *   kolom yang ada di detail disaring per baris detail, yang tidak cocok disembunyikan.
+ * Sel boleh membawa data-v (teks untuk dicari) & data-n (nilai angka/tanggal yyyy-mm-dd untuk > <).
  * Teks: "mengandung" (huruf besar/kecil diabaikan). Angka: boleh ">100000", "<= 50.000".
  * Tombol ▾ di tiap kolom: pilih nilai seperti filter Excel (daftar nilai unik + jumlahnya, centang, cari, pilih semua).
  */
 (() => {
+    if (window.SaringKolom) { window.SaringKolom.pindai(); return; } // skrip termuat dua kali (layout + halaman)
     const gaya = document.createElement('style');
     gaya.textContent = `
         tr.saring-kolom th { padding: 4px !important; background: var(--kartu, #1e2229); }
@@ -33,16 +37,20 @@
         const m = String(s).replace(/\./g, '').replace(',', '.').match(/-?\d+(\.\d+)?/);
         return m ? parseFloat(m[0]) : NaN;
     };
-    const cocok = (teks, q) => {
+    const cocok = (td, q) => {
         q = q.trim().toLowerCase();
         if (!q) return true;
+        if (!td) return false;
         const m = q.match(/^([<>]=?)\s*(.+)$/);
         if (m) {
-            const a = angka(teks), b = angka(m[2]);
-            if (isNaN(a) || isNaN(b)) return false;
+            // Tanggal yyyy-mm-dd dibandingkan sebagai teks (data-n), selain itu angka.
+            const tgl = /^\d{4}-\d{2}(-\d{2})?$/.test(m[2].trim());
+            const a = tgl ? (td.dataset.n ?? '') : (td.dataset.n !== undefined ? parseFloat(td.dataset.n) : angka(td.textContent));
+            const b = tgl ? m[2].trim() : angka(m[2]);
+            if (tgl ? a === '' : (isNaN(a) || isNaN(b))) return false;
             return m[1] === '>' ? a > b : m[1] === '<' ? a < b : m[1] === '>=' ? a >= b : a <= b;
         }
-        return teks.replace(/\s+/g, ' ').toLowerCase().includes(q);
+        return (td.dataset.v ?? td.textContent).replace(/\s+/g, ' ').toLowerCase().includes(q);
     };
     // Nilai sel tanpa hiasan (panah buka, jumlah detail, kotak centang/isian).
     const nilaiSel = td => {
@@ -59,8 +67,10 @@
     document.addEventListener('mousedown', e => { if (popTerbuka && !popTerbuka.contains(e.target) && !e.target.closest('.saring-nilai')) tutupPop(); });
     document.addEventListener('keydown', e => { if (e.key === 'Escape') tutupPop(); });
 
-    document.querySelectorAll('table[data-saring-kolom]').forEach(tabel => {
-        const grup = tabel.dataset.saringKolom === 'grup';
+    const pasang = tabel => {
+        if (tabel.dataset.saringSiap) return;
+        tabel.dataset.saringSiap = '1';
+        const grup = (tabel.dataset.saringKolom || (tabel.querySelector(':scope > tbody.grup') ? 'grup' : '')) === 'grup';
         const kepala = tabel.tHead.rows[0];
         const barisSaring = document.createElement('tr');
         barisSaring.className = 'saring-kolom';
@@ -122,10 +132,9 @@
         // Grup: kolom yang punya nilai di baris detail disaring PER BARIS DETAIL (detail yang tidak cocok disembunyikan; semua
         // saringan detail harus cocok di baris yang sama); kolom yang hanya ada di master (mis. Tanggal) disaring di master.
         const terapkan = () => {
-            const aktif = isian.filter(x => x.value.trim()).map(x => ({k: +x.dataset.kolom, cek: v => cocok(v, x.value), teks: true}));
-            const kolomNilai = Object.keys(pilihan).filter(k => pilihan[k]).map(k => ({k: +k, cek: v => pilihan[k].has(v)}));
+            const aktif = isian.filter(x => x.value.trim()).map(x => ({k: +x.dataset.kolom, cek: td => cocok(td, x.value)}));
+            const kolomNilai = Object.keys(pilihan).filter(k => pilihan[k]).map(k => ({k: +k, cek: td => pilihan[k].has(nilaiSel(td))}));
             const saringan = [...aktif, ...kolomNilai];
-            const nilaiCek = (f, td) => f.teks ? (td ? td.textContent : '') : nilaiSel(td);
             const diDetail = grup ? Object.fromEntries([...new Set(saringan.map(f => f.k))].map(k => [k, pakaiDetail(k)])) : {};
             const semua = unit();
             let n = 0;
@@ -133,20 +142,23 @@
                 const [master, detail] = bagian(u);
                 const fMaster = saringan.filter(f => !diDetail[f.k]);
                 const fDetail = saringan.filter(f => diDetail[f.k]);
-                const okMaster = fMaster.every(f => f.cek(nilaiCek(f, master.cells[f.k])));
+                const okMaster = fMaster.every(f => f.cek(master.cells[f.k]));
                 let ok = okMaster;
                 if (grup) {
                     // Sel master berupa ringkasan detail (class ringkas-gl, mis. daftar DO) tidak dipakai; sel master biasa (mis. penerima)
                     // yang cocok berlaku untuk semua detailnya.
                     const masterCocok = Object.fromEntries(fDetail.map((f, i) => [i, !!master.cells[f.k] && !master.cells[f.k].classList.contains('ringkas-gl')
-                        && f.cek(nilaiCek(f, master.cells[f.k]))]));
-                    const cocokDetail = detail.map(r => fDetail.every((f, i) => masterCocok[i] || f.cek(nilaiCek(f, r.cells[f.k]))));
+                        && f.cek(master.cells[f.k])]));
+                    const cocokDetail = detail.map(r => fDetail.every((f, i) => masterCocok[i] || f.cek(r.cells[f.k])));
                     if (fDetail.length) ok = okMaster && (detail.length ? cocokDetail.some(Boolean) : fDetail.every((f, i) => masterCocok[i]));
                     // Hanya detail yang cocok yang tampil (judul kolom detail tetap tampil).
                     detail.forEach((r, i) => { r.style.display = fDetail.length && !cocokDetail[i] ? 'none' : ''; });
                     if (ok && fDetail.length) u.classList.add('buka');
                 }
                 u.style.display = ok ? '' : 'none';
+                // Baris biasa: baris rincian ber-colspan tepat di bawahnya (mis. tr.d Daftar Proyek) ikut tersembunyi.
+                const rinci = !grup ? u.nextElementSibling : null;
+                if (rinci && rinci.cells.length === 1) rinci.style.display = ok ? '' : 'none';
                 n += ok;
             });
             info.hidden = !saringan.length;
@@ -209,5 +221,21 @@
             tampilkan();
             cari.focus();
         };
-    });
+    };
+
+    // Tabel yang dipasang otomatis: ber-thead (≥ 2 kolom), ≥ 5 baris data, bukan tabel isian form.
+    const layak = t => {
+        if (t.dataset.saringSiap || t.hasAttribute('data-tanpa-saring-kolom') || t.closest('template, .saring-pop') || t.parentElement?.closest('table')) return false;
+        if (t.hasAttribute('data-saring-kolom')) return true;
+        if (!t.tHead?.rows[0] || t.tHead.rows[0].cells.length < 2) return false;
+        if (t.querySelector('tbody input:not([type=checkbox]):not([type=hidden]), tbody select, tbody textarea')) return false;
+        const baris = t.querySelector(':scope > tbody.grup')
+            ? t.querySelectorAll(':scope > tbody.grup > tr.t').length
+            : [...t.tBodies].reduce((s, tb) => s + [...tb.rows].filter(r => r.cells.length > 1).length, 0);
+        return baris >= 5;
+    };
+    const pindai = () => document.querySelectorAll('main table, .isi table, table[data-saring-kolom]').forEach(t => { if (layak(t)) pasang(t); });
+    window.SaringKolom = {pindai, pasang};
+    pindai();
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', pindai);
 })();

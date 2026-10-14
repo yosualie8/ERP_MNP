@@ -11,8 +11,6 @@
         table.grid { width: 100%; border-collapse: collapse; font-size: 13px; }
         table.grid th, table.grid td { border: 1px solid var(--garis); padding: 6px 8px; vertical-align: top; }
         table.grid thead th { position: sticky; top: 0; background: var(--kartu, #1e2229); z-index: 1; text-align: left; }
-        table.grid .saring th { padding: 4px; }
-        table.grid .saring input { width: 100%; box-sizing: border-box; padding: 4px 6px; font-size: 12px; border-radius: 5px; min-width: 60px; }
         table.grid tfoot td { font-weight: 700; }
         .angka { text-align: right !important; white-space: nowrap; }
     </style>
@@ -49,14 +47,10 @@
         <div style="padding: 12px 14px; display: flex; gap: 10px; align-items: center;">
             <h4 style="margin: 0; color: var(--aksen-terang);">Transaksi Kas Harian</h4>
             <span id="jumlah-tampil" class="redup" style="font-size: 13px;"></span>
-            <button type="button" class="tombol polos" id="hapus-saring" style="padding: 5px 10px; margin-left: auto;">Hapus saringan</button>
         </div>
-        <table class="grid" id="grid">
+        <table class="grid" id="grid" data-saring-kolom>
             <thead>
                 <tr><th>Tanggal</th><th>No ID</th><th>Kode GL</th><th>Akun</th><th>PIC</th><th>Keterangan</th>@if ($super)<th class="angka">Nominal</th>@endif</tr>
-                <tr class="saring">
-                    @foreach (range(0, $super ? 6 : 5) as $i)<th><input data-kolom="{{ $i }}" placeholder="{{ $i === 6 ? 'mis. >1000000' : 'Saring…' }}"></th>@endforeach
-                </tr>
             </thead>
             <tbody>
                 @foreach ($transaksi as $r)
@@ -80,33 +74,20 @@
     <script>
         (() => {
             const baris = [...document.querySelectorAll('#grid tbody tr')];
-            const saring = [...document.querySelectorAll('#grid [data-kolom]')];
             const total = document.getElementById('total-tampil');
             const rp = n => n.toLocaleString('id-ID');
-            const cocok = (td, q) => {
-                q = q.trim().toLowerCase();
-                if (!q) return true;
-                const m = q.match(/^([<>]=?)\s*(.+)$/);
-                if (m && td.dataset.n !== undefined) {
-                    const a = td.dataset.n, b = m[2].replace(/\./g, '');
-                    const [x, y] = /^\d{4}-/.test(b) ? [a, b] : [parseFloat(a), parseFloat(b)];
-                    return m[1] === '>' ? x > y : m[1] === '<' ? x < y : m[1] === '>=' ? x >= y : x <= y;
-                }
-                return (td.dataset.v ?? td.textContent).toLowerCase().includes(q);
-            };
-            const terapkan = () => {
+            // Saringan kolom = saring-kolom.js (seragam di semua grid); jumlah & total ikut baris yang tampil.
+            const hitung = () => {
                 let n = 0, s = 0;
                 baris.forEach(tr => {
-                    const tampil = saring.every(f => cocok(tr.cells[f.dataset.kolom], f.value));
-                    tr.style.display = tampil ? '' : 'none';
-                    if (tampil) { n++; if (total) s += parseFloat(tr.cells[6].dataset.n) || 0; }
+                    if (tr.style.display === 'none') return;
+                    n++; if (total) s += parseFloat(tr.cells[6]?.dataset.n) || 0;
                 });
                 document.getElementById('jumlah-tampil').textContent = `${n} dari ${baris.length} transaksi`;
                 if (total) total.textContent = rp(s);
             };
-            saring.forEach(f => f.addEventListener('input', terapkan));
-            document.getElementById('hapus-saring').addEventListener('click', () => { saring.forEach(f => f.value = ''); terapkan(); });
-            terapkan();
+            document.querySelector('#grid thead').addEventListener('input', () => setTimeout(hitung));
+            hitung();
         })();
     </script>
 @endsection

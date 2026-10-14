@@ -44,8 +44,6 @@
                 <a href="{{ route('proyek.index', ['tahun' => $th] + $tambah) }}" @class(['chip', 'aktif' => $tahun === [$th]]) title="Tahap yang berjalan di tahun {{ $th }}">{{ $th }} · {{ $n }}</a>
             @endforeach
             <a href="{{ route('proyek.index', ['tahun' => 'semua'] + $tambah) }}" @class(['chip', 'aktif' => ! $tahun])>Semua tahun · {{ $jumlahSemua }}</a>
-            <span id="jumlah-tampil" class="redup"></span>
-            <button type="button" class="tombol polos" id="hapus-saring" style="padding: 6px 12px;">Hapus saringan</button>
             <button type="button" class="tombol polos" id="buka-semua" style="padding: 6px 12px;">Buka semua</button>
             <span class="redup" style="margin-left: auto;">Data solar & jam HM dari lembar Penggunaan BBM{{ $waktuBbm ? ', diambil '.\Illuminate\Support\Carbon::parse($waktuBbm)->translatedFormat('d-M H:i') : ' (sheet belum terhubung)' }}</span>
             <a href="{{ route('proyek.index', ['segarkan' => 1] + request()->only('tahun', 'semua')) }}" class="tombol polos" style="padding: 6px 12px;">↻ Segarkan BBM</a>
@@ -98,19 +96,10 @@
     @endif
 
     <div class="kartu gulir" style="padding: 0;">
-        <table class="grid" id="grid">
+        <table class="grid" id="grid" data-saring-kolom>
             <thead>
                 <tr><th style="width: 40px;">No</th><th>Tahap</th><th>Status</th><th>Surveyor</th><th>Tanggal mulai</th><th>Tanggal akhir</th>
                     @if ($super)<th class="angka">Total biaya</th>@endif</tr>
-                <tr class="saring">
-                    <th></th>
-                    <th><input data-kolom="1" placeholder="Saring…"></th>
-                    <th><select data-kolom="2"><option value="">Semua</option>@foreach (\App\Models\ProyekTahap::STATUS as $l)<option>{{ $l }}</option>@endforeach</select></th>
-                    <th><input data-kolom="3" placeholder="Saring…"></th>
-                    <th><input data-kolom="4" placeholder="mis. 2026 / >2026-07-01"></th>
-                    <th><input data-kolom="5" placeholder="Saring…"></th>
-                    @if ($super)<th><input data-kolom="6" placeholder="mis. >100000000"></th>@endif
-                </tr>
             </thead>
             <tbody>
                 @foreach ($baris as $i => $x)
@@ -155,36 +144,13 @@
         (() => {
             const grid = document.getElementById('grid');
             const master = [...grid.querySelectorAll('tbody tr.m')];
-            const saring = [...grid.querySelectorAll('[data-kolom]')];
-            const info = document.getElementById('jumlah-tampil');
             const tombol = document.getElementById('buka-semua');
-            const cocok = (td, q) => {
-                q = q.trim().toLowerCase();
-                if (!q) return true;
-                const m = q.match(/^([<>]=?)\s*(.+)$/);
-                if (m && td.dataset.n !== undefined) {
-                    const a = td.dataset.n, b = m[2].replace(/\./g, '');
-                    if (a === '') return false;
-                    const [x, y] = /^\d{4}-/.test(b) ? [a, b] : [parseFloat(a), parseFloat(b)];
-                    return m[1] === '>' ? x > y : m[1] === '<' ? x < y : m[1] === '>=' ? x >= y : x <= y;
-                }
-                return (td.dataset.v ?? td.textContent).toLowerCase().includes(q);
-            };
-            const terapkan = () => {
-                let n = 0;
-                master.forEach(tr => {
-                    const tampil = saring.every(s => cocok(tr.cells[s.dataset.kolom], s.value));
-                    tr.style.display = tampil ? '' : 'none';
-                    tr.nextElementSibling.style.display = tampil ? '' : 'none';
-                    n += tampil;
-                });
-                info.textContent = `${n} dari ${master.length} tahap`;
-            };
-            saring.forEach(s => s.addEventListener('input', terapkan));
-            document.getElementById('hapus-saring').addEventListener('click', () => { saring.forEach(s => s.value = ''); terapkan(); });
+            // Saringan kolom = saring-kolom.js (seragam di semua grid). ?q=… mengisi saringan kolom Tahap.
             const q = new URLSearchParams(location.search).get('q');
-            if (q) saring[0].value = q;
-            terapkan();
+            if (q) window.addEventListener('DOMContentLoaded', () => {
+                const x = grid.querySelector('tr.saring-kolom input[data-kolom="1"]');
+                if (x) { x.value = q; x.dispatchEvent(new Event('input')); }
+            });
 
             const atur = () => tombol.textContent = master.every(m => m.classList.contains('buka')) ? 'Tutup semua' : 'Buka semua';
             const buka = (tr, b) => { tr.classList.toggle('buka', b); tr.nextElementSibling.classList.toggle('buka', b); };

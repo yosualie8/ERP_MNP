@@ -181,7 +181,7 @@
                 target.setSelectionRange(target.value.length - pos, target.value.length - pos);
                 pilihOtomatis();
             });
-            document.getElementById('pilih-semua').addEventListener('click', () => { grup.forEach(g => g.querySelector('input').checked = true); hitung(); });
+            document.getElementById('pilih-semua').addEventListener('click', () => { grup.filter(g => g.style.display !== 'none').forEach(g => g.querySelector('input').checked = true); hitung(); });
             document.getElementById('kosongkan').addEventListener('click', () => { grup.forEach(g => g.querySelector('input').checked = false); hitung(); });
             grup.forEach(g => {
                 g.querySelector('input[type=checkbox]').addEventListener('change', hitung);

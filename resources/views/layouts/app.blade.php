@@ -10,6 +10,8 @@
     <script src="{{ asset('js/kecilkan-foto.js') }}?v={{ filemtime(public_path('js/kecilkan-foto.js')) }}"></script>
     <script src="{{ asset('js/pilih-bank.js') }}?v={{ filemtime(public_path('js/pilih-bank.js')) }}"></script>
     <script src="{{ asset('js/tempel-tabel.js') }}?v={{ filemtime(public_path('js/tempel-tabel.js')) }}"></script>
+    {{-- Saringan per kolom: otomatis di semua grid (tabel data ber-thead, ≥ 5 baris). --}}
+    <script src="{{ asset('js/saring-kolom.js') }}?v={{ filemtime(public_path('js/saring-kolom.js')) }}" defer></script>
     <title>{{ $judul ?? 'MNP' }} · PT Multi Niaga Putra</title>
     <style>
         /* Tema gelap dengan aksen merah. --hijau-muda tetap ada (dipakai halaman lama) = latar aksen tipis. */
