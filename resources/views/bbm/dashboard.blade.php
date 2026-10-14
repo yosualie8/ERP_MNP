@@ -4,7 +4,8 @@
 
 @section('isi')
     @php
-        $l = fn ($v, $d = 1) => $v === null ? '–' : rtrim(rtrim(number_format((float) $v, $d, ',', '.'), '0'), ',');
+        // Angka Indonesia; nol di belakang koma dibuang (hanya bagian desimal — 78.070 tetap 78.070).
+        $l = function ($v, $d = 1) { if ($v === null) return '–'; $t = number_format((float) $v, $d, ',', '.'); return $d > 0 ? rtrim(rtrim($t, '0'), ',') : $t; };
         $namaBulan = fn ($m) => \Illuminate\Support\Carbon::parse($m.'-01')->translatedFormat('M y');
     @endphp
     <style>
@@ -39,12 +40,12 @@
     </div>
 
     <div class="ringkas">
-        <div class="kartu"><span class="redup">Solar keluar ke alat</span><b>{{ $l($kartu['liter'], 0) }} L</b><small>{{ number_format($kartu['isi'], 0, ',', '.') }} kali isi</small></div>
+        <div class="kartu"><span class="redup">Solar keluar ke alat</span><b>{{ $l($kartu['liter'], 0) }} L</b><small>{{ number_format($kartu['isi_semua'], 0, ',', '.') }} kali isi</small></div>
         <div class="kartu"><span class="redup">Jam HM tercatat</span><b>{{ $l($kartu['hm']) }} jam</b></div>
-        <div class="kartu"><span class="redup">Rasio rata-rata</span><b>{{ $l($kartu['rasio'], 2) }} L/jam</b><small>dari alat-bulan yang HM-nya tercatat</small></div>
+        <div class="kartu"><span class="redup">Rasio rata-rata</span><b>{{ $l($kartu['rasio'], 2) }} L/jam</b><small>dari alat-bulan yang HM-nya tercatat wajar</small></div>
         <div class="kartu"><span class="redup">Solar masuk</span><b>{{ $l($kartu['masuk'], 0) }} L</b><small>stok sekarang {{ $l($kartu['stok'], 0) }} L</small></div>
-        <div class="kartu"><span class="redup">Isian tanpa HM</span><b @if ($kartu['isi'] && $kartu['tanpa_hm'] / $kartu['isi'] > .2) style="color: var(--merah);" @endif>{{ number_format($kartu['tanpa_hm'], 0, ',', '.') }}</b>
-            <small>{{ $kartu['isi'] ? round($kartu['tanpa_hm'] / $kartu['isi'] * 100) : 0 }}% isian solar tanpa jam HM di baris itu</small></div>
+        <div class="kartu"><span class="redup">Isian alat ber-HM tanpa HM</span><b @if ($kartu['isi'] && $kartu['tanpa_hm'] / $kartu['isi'] > .2) style="color: var(--merah);" @endif>{{ number_format($kartu['tanpa_hm'], 0, ',', '.') }}</b>
+            <small>{{ $kartu['isi'] ? round($kartu['tanpa_hm'] / $kartu['isi'] * 100) : 0 }}% dari {{ number_format($kartu['isi'], 0, ',', '.') }} isian alat ber-HM tanpa jam HM di baris itu</small></div>
     </div>
 
     <div class="kartu">
@@ -119,7 +120,7 @@
         jam kerja dalam sebulan, makin kecil pengaruhnya.
         <ul>
             <li>Bulan yang ada solar tetapi <b>tanpa jam HM</b> tidak ikut dihitung rasionya (ditandai "Bulan HM kosong").</li>
-            <li>Bulan yang rasionya jauh dari median alat itu ditandai "Bulan janggal" — biasanya karena HM sebagian hari tidak dicatat.</li>
+            <li>Bulan yang rasionya jauh dari median alat itu ditandai "Bulan janggal" — biasanya karena HM sebagian hari tidak dicatat. Bulan janggal tidak ikut dalam rasio keseluruhan.</li>
             <li>Patokan wajar tiap alat = <b>median bulanan</b>.</li>
         </ul>
     </div>

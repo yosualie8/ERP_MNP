@@ -147,7 +147,8 @@ class BbmController extends Controller
                 $x = $a['bulan'][$m];
                 $l += $x['l'];
                 $h += $x['h'];
-                if ($x['r'] !== null) {
+                // rasio keseluruhan hanya dari alat-bulan yang wajar (HM tercatat & tidak janggal terhadap median alat itu)
+                if ($x['r'] !== null && (! $a['median'] || ($x['r'] <= $a['median'] * 1.6 && $x['r'] >= $a['median'] / 1.6))) {
                     $lOk += $x['l'];
                     $hOk += $x['h'];
                 }
@@ -184,8 +185,10 @@ class BbmController extends Controller
                 'liter' => $pakai->sum('keluar'), 'hm' => $pakai->sum($hm), 'masuk' => $baris->where('jenis', 'masuk')->sum('masuk'),
                 'rasio' => $hOk > 0 ? round($lOk / $hOk, 2) : null,
                 'stok' => Bbm::whereNotNull('stok')->orderByDesc('baris')->value('stok'),
-                'tanpa_hm' => $pakai->filter(fn ($b) => $b->keluar > 0 && $hm($b) <= 0)->count(),
-                'isi' => $pakai->where('keluar', '>', 0)->count(),
+                // hanya alat yang HM-nya biasa dicatat (punya jam HM di periode ini) — DT/Selfloader tanpa HM meter tidak dihitung
+                'tanpa_hm' => $pakai->filter(fn ($b) => $b->keluar > 0 && $hm($b) <= 0 && ($ringkasAlat[$b->unit]['hm'] ?? 0) > 0)->count(),
+                'isi' => $pakai->filter(fn ($b) => $b->keluar > 0 && ($ringkasAlat[$b->unit]['hm'] ?? 0) > 0)->count(),
+                'isi_semua' => $pakai->where('keluar', '>', 0)->count(),
             ],
         ]);
     }
