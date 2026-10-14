@@ -48,24 +48,59 @@ class BbmController extends Controller
         ]);
     }
 
-    /** Nama unit yang bisa dipilih + info terakhirnya (jenis, HM akhir, proyek) untuk mengisi otomatis. */
+    /**
+     * Data master Input BBM — isian harus PERSIS sama (huruf besar/kecil & spasi): unit = nama di Data Aset (semua status),
+     * sumber solar / pindah / susut / operasional yang sudah dipakai di data BBM, "Isi Solar dari DT xxx" untuk tiap DT;
+     * proyek = nama tahap di Daftar Proyek atau "Pool"; status = daftar baku.
+     *
+     * @return array{unit: array<string, string>, tahap: array<int, string>, status: array<int, string>}
+     */
+    private function master(): array
+    {
+        if ($this->master) {
+            return $this->master;
+        }
+        $unit = [];
+        foreach (AsetTruk::orderBy('no_lambung')->pluck('no_lambung') as $n) {
+            $unit[$n] = 'pakai';
+        }
+        foreach (Bbm::whereIn('jenis', ['masuk', 'pindah', 'susut', 'operasional'])->whereNotNull('unit')->distinct()->get(['unit', 'jenis']) as $b) {
+            $unit[$b->unit] ??= $b->jenis;
+        }
+        foreach (array_keys($unit) as $n) {
+            if (preg_match('/^DT \d{3}$/', $n)) {
+                $unit["Isi Solar dari {$n}"] ??= 'masuk';
+            }
+        }
+        $tahap = ProyekTahap::where('nama', 'not like', '%(biaya%')->where('nama', 'not like', 'Biaya Umum%')->orderBy('nama')->pluck('nama')->prepend('Pool')->all();
+
+        return $this->master = ['unit' => $unit, 'tahap' => $tahap, 'status' => LembarBbm::STATUS];
+    }
+
+    private ?array $master = null;
+
+    /** Pesan bila isian tidak persis sama dengan master (null bila cocok / kosong). */
+    private static function bedaMaster(?string $v, array $daftar, string $label): ?string
+    {
+        if ($v === null || $v === '' || in_array($v, $daftar, true)) {
+            return null;
+        }
+        $kunci = fn ($x) => mb_strtolower(preg_replace('/\s+/', '', (string) $x));
+        $mirip = collect($daftar)->first(fn ($d) => $kunci($d) === $kunci($v));
+
+        return $mirip !== null
+            ? "{$label} \"{$v}\" harus ditulis persis \"{$mirip}\" (beda huruf besar/kecil atau spasi)."
+            : "{$label} \"{$v}\" tidak ada di data master — pilih dari daftar.";
+    }
+
+    /** Nama unit master + info terakhirnya (jenis, HM akhir, proyek) untuk mengisi otomatis. */
     private function infoUnit(): array
     {
-        $info = [];
-        foreach (AsetTruk::whereIn('status', ['aktif', 'perbaikan'])->orderBy('no_lambung')->pluck('no_lambung') as $n) {
-            $info[$n] = ['jenis' => 'pakai'];
-        }
-        foreach (BbmUnitPeta::whereIn('jenis', ['masuk', 'pindah', 'susut', 'operasional'])->orderBy('nama')->get() as $p) {
-            $info[$p->nama] ??= ['jenis' => $p->jenis];
-        }
+        $info = array_map(fn ($j) => ['jenis' => $j], $this->master()['unit']);
         // HM akhir & proyek terakhir per unit (dari data setahun terakhir).
-        $nama = [];
-        foreach (array_keys($info) as $n) {
-            $nama[BbmUnitPeta::kunci($n)] = $n;
-        }
         foreach (Bbm::where('tanggal', '>=', now()->subYear())->whereNotNull('unit')->orderBy('baris')->get(['unit', 'jenis', 'hm_akhir', 'proyek', 'tanggal']) as $b) {
-            $k = $nama[BbmUnitPeta::kunci($b->unit)] ??= $b->unit;
-            if ($b->jenis === 'cek' || $b->jenis === 'opname') {
+            $k = $b->unit;
+            if (! isset($info[$k]) || $b->jenis === 'cek' || $b->jenis === 'opname') {
                 continue;
             }
             $info[$k] = [...($info[$k] ?? []), 'jenis' => $b->jenis, 'terakhir' => $b->tanggal?->toDateString()];
@@ -90,7 +125,7 @@ class BbmController extends Controller
         $hariTerakhir = Bbm::where('jenis', 'pakai')->max('tanggal');
 
         return view('bbm.input', [
-            'unit' => $this->infoUnit(), 'tahap' => $tahap, 'status' => LembarBbm::STATUS,
+            'unit' => $this->infoUnit(), 'tahap' => $tahap, 'tahapSemua' => $this->master()['tahap'], 'status' => LembarBbm::STATUS,
             'unitTerakhir' => $hariTerakhir ? Bbm::where('jenis', 'pakai')->where('tanggal', $hariTerakhir)->orderBy('baris')->pluck('unit')->unique()->values() : collect(),
             'hariTerakhir' => $hariTerakhir,
         ]);
@@ -104,6 +139,9 @@ class BbmController extends Controller
     private function rapikan(Request $request): array
     {
         $rapi = fn ($v) => ($v = trim(preg_replace('/\s+/', ' ', (string) $v))) === '' ? null : $v;
+        // Isian ber-master (unit, proyek, status) TIDAK dirapikan: harus persis sama dengan master, beda spasi pun ditolak.
+        $mentah = fn ($v) => ($v = (string) $v) === '' ? null : $v;
+        $master = $this->master();
         $angka = fn ($v) => ($v = trim(str_replace(' ', '', (string) $v))) === '' ? null : (is_numeric($x = str_replace(',', '.', $v)) ? (float) $x : false);
         $tanggal = RitasiController::tanggal($request->input('tanggal'));
         $galat = [];
@@ -114,14 +152,13 @@ class BbmController extends Controller
         }
         $peta = BbmUnitPeta::get()->keyBy('kunci')->all();
         $hasil = [];
-        $ejaan = null;
         foreach ((array) $request->input('baris', []) as $i => $r) {
             $b = [
-                'tanggal' => $tanggal, 'unit' => $rapi($r['unit'] ?? null), 'hm_awal' => $angka($r['hm_awal'] ?? null), 'hm_akhir' => $angka($r['hm_akhir'] ?? null),
+                'tanggal' => $tanggal, 'unit' => $mentah($r['unit'] ?? null), 'hm_awal' => $angka($r['hm_awal'] ?? null), 'hm_akhir' => $angka($r['hm_akhir'] ?? null),
                 'total_hm' => $angka($r['total_hm'] ?? null), 'masuk' => $angka($r['masuk'] ?? null), 'keluar' => $angka($r['keluar'] ?? null),
                 'jam_mulai' => LembarRitasi::jam($rapi($r['jam_mulai'] ?? null)), 'istirahat' => LembarRitasi::jam($rapi($r['istirahat'] ?? null)),
-                'jam_selesai' => LembarRitasi::jam($rapi($r['jam_selesai'] ?? null)), 'status' => $rapi($r['status'] ?? null),
-                'keterangan' => $rapi($r['keterangan'] ?? null), 'rental' => $angka($r['rental'] ?? null), 'proyek' => $rapi($r['proyek'] ?? null),
+                'jam_selesai' => LembarRitasi::jam($rapi($r['jam_selesai'] ?? null)), 'status' => $mentah($r['status'] ?? null),
+                'keterangan' => $rapi($r['keterangan'] ?? null), 'rental' => $angka($r['rental'] ?? null), 'proyek' => $mentah($r['proyek'] ?? null),
                 'keterangan_kerja' => $rapi($r['keterangan_kerja'] ?? null),
             ];
             $isi = array_filter(array_diff_key($b, ['tanggal' => 1]), fn ($v) => $v !== null);
@@ -138,19 +175,21 @@ class BbmController extends Controller
                     $g[] = "$nama tidak boleh minus.";
                 }
             }
-            [$jenis, $aset] = $b['unit'] ? LembarBbm::arti($b['unit'], $peta) : ['cek', null];
-            // Ejaan baku: nama di Data Aset, selain itu ejaan yang paling sering dipakai di data BBM.
-            if ($jenis !== 'cek') {
-                $ejaan ??= Bbm::whereNotNull('unit')->selectRaw('unit, COUNT(*) n')->groupBy('unit')->orderBy('n')->pluck('unit')
-                    ->mapWithKeys(fn ($u) => [BbmUnitPeta::kunci($u) => $u])->all();
-                $b['unit'] = ($aset ? AsetTruk::find($aset)?->no_lambung : null) ?? $ejaan[BbmUnitPeta::kunci($b['unit'])] ?? $b['unit'];
-            }
-            if (! $b['unit']) {
-                $g[] = 'Unit belum diisi.';
-            } elseif ($jenis === 'cek') {
-                $g[] = "Unit \"{$b['unit']}\" belum dikenal — tambahkan dulu di Data Aset, atau pilih nama dari daftar.";
-            } elseif ($jenis === 'opname') {
+            $jenis = $master['unit'][$b['unit'] ?? ''] ?? 'cek';
+            if ($b['unit'] === 'Stock Opname') {
                 $g[] = 'Stock opname dicatat lewat tombol Stock Opname di menu Data BBM.';
+            } elseif ($b['unit'] === null) {
+                $g[] = 'Unit belum diisi.';
+            } elseif ($pesan = self::bedaMaster($b['unit'], array_keys($master['unit']), 'Unit')) {
+                $g[] = $pesan;
+            } else {
+                LembarBbm::arti($b['unit'], $peta); // pemetaan dibuat bila belum ada (mis. "Isi Solar dari DT 0xx" yang baru dipakai)
+            }
+            if ($pesan = self::bedaMaster($b['proyek'], $master['tahap'], 'Proyek')) {
+                $g[] = $pesan;
+            }
+            if ($pesan = self::bedaMaster($b['status'], $master['status'], 'Status')) {
+                $g[] = $pesan;
             }
             if ($b['hm_awal'] !== null && $b['hm_akhir'] !== null) {
                 if ($b['hm_akhir'] < $b['hm_awal']) {
@@ -180,9 +219,6 @@ class BbmController extends Controller
                 if ($b['masuk']) {
                     $g[] = 'Baris ini tidak boleh berisi Masuk.';
                 }
-            }
-            if ($b['proyek'] && $b['proyek'] !== 'Pool' && ! LembarBbm::tahapIds($b['proyek'])) {
-                $g[] = "Proyek \"{$b['proyek']}\" tidak ada di Daftar Proyek — pilih dari daftar.";
             }
             if ($g) {
                 $galat["baris.{$i}"] = $no.implode(' ', $g);

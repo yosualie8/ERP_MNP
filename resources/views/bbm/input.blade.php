@@ -21,6 +21,7 @@
         table.isian td.total { text-align: right; padding-top: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
         .hapus { background: none; border: 0; color: var(--merah); cursor: pointer; font-size: 18px; line-height: 1; padding: 6px 4px; }
         .catatan { font-size: 12px; color: #f0c05a; padding: 0 3px 8px; }
+        tr.ada-salah + tr .catatan { color: var(--merah); }
     </style>
 
     <form method="POST" action="{{ $edit ? route('bbm.update', $edit['baris']) : route('bbm.store') }}" class="form-bbm" id="form-bbm">
@@ -39,7 +40,7 @@
                 <h3 style="margin: 0 0 4px;">@if ($edit) Edit BBM <span class="redup" style="font-size: 13px; font-weight: normal;">sheet Penggunaan BBM baris {{ $edit['baris'] }}</span> @else Input BBM @endif</h3>
                 <span class="redup">keluar <b id="jml-keluar">0</b> L · masuk <b id="jml-masuk">0</b> L · <b id="jml-baris">0</b> baris</span>
             </div>
-            <p class="redup" style="margin: 0 0 12px; font-size: 13px;">Satu baris = satu unit per hari. <b>Pemakaian alat</b>: isi HM & Keluar (liter) + Proyek. <b>Solar masuk</b> dicatat di baris sendiri dengan unit sumbernya
+            <p class="redup" style="margin: 0 0 12px; font-size: 13px;"><b style="color: var(--teks);">Unit, Proyek & Status harus persis sama dengan data master</b> (pilih dari daftar) — beda huruf besar/kecil atau spasi pun ditolak. Satu baris = satu unit per hari. <b>Pemakaian alat</b>: isi HM & Keluar (liter) + Proyek. <b>Solar masuk</b> dicatat di baris sendiri dengan unit sumbernya
                 (mis. "Isi Solar dari Luar", "Isi Solar dari DT 035"), bukan di baris alat. HM awal & proyek terisi otomatis dari catatan terakhir unit itu (ungu = otomatis, boleh diganti). Stok dihitung otomatis di sheet.</p>
 
             <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px;">
@@ -82,6 +83,16 @@
     <script>
         (() => {
             const UNIT = @json($unit);
+            // Isian ber-master harus PERSIS sama (huruf besar/kecil & spasi) — beda sedikit pun ditandai dan tidak bisa disimpan.
+            const MASTER = {unit: Object.keys(UNIT), proyek: @json($tahapSemua), status: @json($status)};
+            const LABEL = {unit: 'Unit', proyek: 'Proyek', status: 'Status'};
+            const bedaMaster = (k, v) => {
+                if (v === '' || MASTER[k].includes(v)) return null;
+                const kk = x => String(x).replace(/\s+/g, '').toLowerCase();
+                const mirip = MASTER[k].find(d => kk(d) === kk(v));
+                return mirip !== undefined ? `${LABEL[k]} "${v}" harus ditulis persis "${mirip}" (beda huruf besar/kecil atau spasi).`
+                    : `${LABEL[k]} "${v}" tidak ada di data master — pilih dari daftar.`;
+            };
             const JENIS = @json($jenisLabel);
             const TERAKHIR = @json($unitTerakhir);
             const AWAL = @json(array_values($awal));
@@ -128,11 +139,11 @@
 
             const sel = (tr, k) => tr.querySelector(`[data-k="${k}"]`);
             const perbarui = (tr, isiOtomatis = true) => {
-                const nama = PETA[kunci(sel(tr, 'unit').value)];
+                // Hanya nama yang persis sama dengan master yang dikenali (tidak dibetulkan otomatis).
+                const nama = UNIT[sel(tr, 'unit').value] ? sel(tr, 'unit').value : null;
                 const u = nama ? UNIT[nama] : null;
                 const jenis = u?.jenis;
-                tr.querySelector('td.jenis').textContent = sel(tr, 'unit').value.trim() ? (jenis ? JENIS[jenis] : '⚠️ belum dikenal') : '';
-                if (isiOtomatis && nama && sel(tr, 'unit').value !== nama) sel(tr, 'unit').value = nama;
+                tr.querySelector('td.jenis').textContent = sel(tr, 'unit').value.trim() ? (jenis ? JENIS[jenis] : '⚠️ tidak dikenal') : '';
                 // Kolom yang tidak berlaku untuk jenisnya dimatikan (solar masuk hanya di baris sumber, bukan di baris alat).
                 const alat = jenis === 'pakai';
                 sel(tr, 'masuk').disabled = !!jenis && jenis !== 'masuk';
@@ -157,12 +168,18 @@
                     if (b < a) catatan.push('HM akhir lebih kecil dari HM awal.');
                     else if (b - a > 24) catatan.push('Total HM lebih dari 24 jam.');
                 } else if (t.readOnly) { t.value = ''; t.readOnly = false; t.classList.remove('otomatis'); }
-                const nama = PETA[kunci(sel(tr, 'unit').value)];
-                const u = nama ? UNIT[nama] : null;
+                const u = UNIT[sel(tr, 'unit').value] || null;
+                const salah = ['unit', 'proyek', 'status'].map(k => {
+                    const pesan = bedaMaster(k, sel(tr, k).value);
+                    sel(tr, k).classList.toggle('salah', !!pesan);
+                    return pesan;
+                }).filter(Boolean);
+                tr.classList.toggle('ada-salah', salah.length > 0);
+                catatan.push(...salah);
                 if (u?.jenis === 'pakai' && u.hm != null && a != null && Math.abs(a - u.hm) > 0.05 && !sel(tr, 'hm_awal').classList.contains('otomatis'))
                     catatan.push(`HM awal berbeda dari HM akhir terakhir unit ini (${String(u.hm).replace('.', ',')}).`);
                 if (u?.jenis === 'pakai' && angka(sel(tr, 'keluar').value) > 0 && !sel(tr, 'proyek').value.trim()) catatan.push('Pemakaian solar wajib diisi Proyek.');
-                if (sel(tr, 'unit').value.trim() && !u) catatan.push('Unit belum dikenal — pilih dari daftar, atau tambahkan dulu di Data Aset.');
+
                 const c = tr.nextElementSibling.querySelector('.catatan');
                 c.hidden = !catatan.length; c.textContent = catatan.map(x => '⚠️ ' + x).join('  ');
                 ringkas();
@@ -202,6 +219,14 @@
                 TERAKHIR.forEach(n => { if (!ada.has(kunci(n))) { const tr = tambah({unit: PETA[kunci(n)] || n}); perbarui(tr, true); } });
             });
             document.getElementById('form-bbm').addEventListener('submit', e => {
+                tbody.querySelectorAll('tr.baris').forEach(tr => hitung(tr));
+                const salah = tbody.querySelector('tr.baris.ada-salah');
+                if (salah) {
+                    e.preventDefault();
+                    alert(`Ada ${tbody.querySelectorAll('tr.baris.ada-salah').length} baris yang Unit / Proyek / Status-nya tidak persis sama dengan data master (lihat tanda ⚠️ merah). Perbaiki dulu — pilih dari daftar.`);
+                    salah.querySelector('input.salah')?.focus();
+                    return;
+                }
                 tbody.querySelectorAll('input:disabled').forEach(x => { x.disabled = false; });
                 const b = document.getElementById('simpan');
                 b.disabled = true; b.textContent = 'Menyimpan…';
