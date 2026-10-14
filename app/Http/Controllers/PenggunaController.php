@@ -15,7 +15,7 @@ class PenggunaController extends Controller
     public function index(): View
     {
         return view('pengguna.index', [
-            'pengguna' => User::orderByRaw("role = 'super_admin' desc")->orderBy('name')->get(),
+            'pengguna' => User::where('role', '!=', User::ROLE_KARYAWAN)->orderByRaw("role = 'super_admin' desc")->orderBy('name')->get(),
         ]);
     }
 

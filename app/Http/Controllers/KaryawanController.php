@@ -56,7 +56,7 @@ class KaryawanController extends Controller
     {
         $t = fn ($v) => ($v = trim(preg_replace('/\s+/', ' ', (string) $v))) === '' ? null : $v;
         $request->merge([
-            'nama' => $t($request->input('nama')), 'nik' => ($n = preg_replace('/\s+/', '', (string) $request->input('nik'))) === '' ? null : $n,
+            'nama' => $t($request->input('nama')), 'email' => ($e = strtolower(trim((string) $request->input('email')))) === '' ? null : $e, 'nik' => ($n = preg_replace('/\s+/', '', (string) $request->input('nik'))) === '' ? null : $n,
             'npwp' => $t($request->input('npwp')), 'site' => Karyawan::rapikanSite($request->input('site')), 'jabatan' => $t($request->input('jabatan')),
             'bank' => $t($request->input('bank')), 'no_rekening' => ($r = preg_replace('/\s+/', '', (string) $request->input('no_rekening'))) === '' ? null : $r,
             'nama_rekening' => $t($request->input('nama_rekening')),
@@ -64,6 +64,7 @@ class KaryawanController extends Controller
 
         return $request->validate([
             'nama' => ['required', 'string', 'max:120'],
+            'email' => ['nullable', 'email', 'max:191', Rule::unique('karyawan', 'email')->ignore($k?->id)],
             // NIK unik — kecuali NIK lama yang memang sudah dobel sejak impor & tidak diubah (supaya data lain tetap bisa diedit).
             'nik' => ['nullable', 'regex:/^\d{16}$/', ...($k && $request->input('nik') === $k->nik ? [] : [Rule::unique('karyawan', 'nik')->ignore($k?->id)])],
             'npwp' => ['nullable', 'string', 'max:30'],
@@ -75,6 +76,7 @@ class KaryawanController extends Controller
             'nama.required' => 'Nama belum diisi.',
             'nik.regex' => 'NIK harus 16 digit angka (sesuai KTP).',
             'nik.unique' => 'NIK ini sudah dipakai karyawan lain — periksa KTP-nya.',
+            'email.email' => 'Email tidak valid.', 'email.unique' => 'Email ini sudah dipakai karyawan lain.',
             'no_rekening.regex' => 'No rekening hanya angka (5–30 digit).',
         ]);
     }

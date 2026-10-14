@@ -59,6 +59,14 @@ class User extends Authenticatable
         return \App\Support\MenuAkses::boleh($this, $menu);
     }
 
+    /** Peran khusus karyawan (dibuat otomatis saat login Google bila email terdaftar di Data Karyawan aktif): hanya halaman Absen. */
+    public const ROLE_KARYAWAN = 'karyawan';
+
+    public function isKaryawan(): bool
+    {
+        return $this->role === self::ROLE_KARYAWAN && ! $this->isSuperAdmin();
+    }
+
     /** Super admin = email di SUPER_ADMIN_EMAILS (.env) atau peran super_admin di menu Pengguna. */
     public function isSuperAdmin(): bool
     {

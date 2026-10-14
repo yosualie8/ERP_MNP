@@ -21,6 +21,9 @@
                 <select id="status" name="status">@foreach (\App\Models\Karyawan::STATUS as $k => $l)<option value="{{ $k }}" @selected(old('status', $karyawan->status) === $k)>{{ $l }}</option>@endforeach</select></div>
         </div>
         <div class="baris">
+            <div style="grid-column: span 2;"><label for="email">Email Google (untuk login absen dari HP)</label><input id="email" name="email" type="email" value="{{ old('email', $karyawan->email) }}" autocomplete="off" placeholder="nama@gmail.com"></div>
+        </div>
+        <div class="baris">
             <div><label for="nik">NIK (16 digit, sesuai KTP)</label><input id="nik" name="nik" inputmode="numeric" maxlength="16" value="{{ old('nik', $karyawan->nik) }}" autocomplete="off"></div>
             <div><label for="npwp">NPWP</label><input id="npwp" name="npwp" value="{{ old('npwp', $karyawan->npwp) }}" autocomplete="off"></div>
             <div><label for="site">Site</label><input id="site" name="site" list="saran-site" value="{{ old('site', $karyawan->site) }}" autocomplete="off" placeholder="mis. ASG, Site 21">

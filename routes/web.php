@@ -72,6 +72,15 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::put('/proyek/tahap/{tahap}', [DaftarProyekController::class, 'update'])->whereNumber('tahap')->name('proyek.update');
     Route::post('/proyek/alias', [DaftarProyekController::class, 'petakan'])->name('proyek.petakan');
     Route::delete('/proyek/alias/{alias}', [DaftarProyekController::class, 'hapusAlias'])->whereNumber('alias')->name('proyek.alias.hapus');
+    Route::get('/absen', [\App\Http\Controllers\AbsenController::class, 'index'])->name('absen.index');
+    Route::post('/absen', [\App\Http\Controllers\AbsenController::class, 'simpan'])->name('absen.simpan');
+    Route::get('/absen/foto/{absensi}', [\App\Http\Controllers\AbsenController::class, 'foto'])->whereNumber('absensi')->name('absen.foto');
+    Route::get('/absensi', [\App\Http\Controllers\AbsensiController::class, 'index'])->name('absensi.index');
+    Route::get('/lokasi-absen', [\App\Http\Controllers\LokasiAbsenController::class, 'index'])->name('lokasi-absen.index');
+    Route::get('/lokasi-absen/tambah', [\App\Http\Controllers\LokasiAbsenController::class, 'create'])->name('lokasi-absen.create');
+    Route::post('/lokasi-absen', [\App\Http\Controllers\LokasiAbsenController::class, 'store'])->name('lokasi-absen.store');
+    Route::get('/lokasi-absen/{lokasi}/edit', [\App\Http\Controllers\LokasiAbsenController::class, 'edit'])->whereNumber('lokasi')->name('lokasi-absen.edit');
+    Route::put('/lokasi-absen/{lokasi}', [\App\Http\Controllers\LokasiAbsenController::class, 'update'])->whereNumber('lokasi')->name('lokasi-absen.update');
     Route::get('/karyawan', [\App\Http\Controllers\KaryawanController::class, 'index'])->name('karyawan.index');
     Route::get('/karyawan/tambah', [\App\Http\Controllers\KaryawanController::class, 'create'])->name('karyawan.create');
     Route::post('/karyawan', [\App\Http\Controllers\KaryawanController::class, 'store'])->name('karyawan.store');

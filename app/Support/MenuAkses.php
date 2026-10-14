@@ -39,6 +39,9 @@ class MenuAkses
         'input-bbm' => ['Input BBM & HM', 'bbm.input', ['bbm.input', 'bbm.store', 'bbm.edit', 'bbm.update', 'bbm.hapus', 'bbm.opname'], 'Input, edit & hapus pemakaian / solar masuk dan stock opname (ditulis ke sheet Penggunaan BBM)'],
         'dashboard-bbm' => ['Dashboard BBM & HM', 'bbm.dashboard', ['bbm.dashboard'], 'Tren konsumsi solar & jam HM proyek dan per alat, rasio liter/jam, kelengkapan data HM'],
         'bbm' => ['Data BBM & HM', 'bbm.index', ['bbm.index'], 'Penggunaan BBM per bulan: pemakaian per unit, solar masuk, stok solar, baris yang perlu dilengkapi'],
+        'absen' => ['Absen', 'absen.index', ['absen.index', 'absen.simpan'], 'Absen dari HP sendiri: selfie + GPS (radius lokasi proyek), waktu dari server'],
+        'absensi' => ['Data Absensi', 'absensi.index', ['absensi.*'], 'Rekap absensi per tanggal: jam masuk/pulang/lembur, selfie, lokasi; karyawan yang tidak absen'],
+        'lokasi-absen' => ['Lokasi Absen', 'lokasi-absen.index', ['lokasi-absen.*'], 'Titik GPS + radius per proyek tempat karyawan boleh absen'],
         'karyawan' => ['Data Karyawan', 'karyawan.index', ['karyawan.*'], 'Data induk karyawan (NIK, site, jabatan, rekening) — dasar modul absensi'],
         'aset' => ['Data Aset', 'aset.index', ['aset.*'], 'Semua aset MNP (dump truck, alat berat, LV, engkel, …): lihat, tambah & ubah'],
         'kode-gl' => ['Kode GL', 'kas.kode-gl', ['kas.kode-gl'], 'Daftar Kode GL'],
@@ -53,12 +56,12 @@ class MenuAkses
         'uj' => ['Uang Jalan', '🚚', ['pengajuan-uj', 'input-uj', 'kas-uj', 'reimburse-uj', 'rapikan-uj']],
         'ritasi' => ['Ritasi', '⛰️', ['input-ritasi', 'ritasi', 'buangan-truk', 'monitor-ritasi', 'bayar-tanah', 'performa-ritasi', 'kubikasi-kendaraan']],
         'bbm' => ['BBM & HM', '⛽', ['input-bbm', 'bbm']],
-        'karyawan' => ['Karyawan', '👷', ['karyawan']],
+        'karyawan' => ['Karyawan', '👷', ['absen', 'absensi', 'karyawan', 'lokasi-absen']],
         'aset' => ['Aset', '🚛', ['aset']],
     ];
 
     /** Foto bon dipakai Input Kas dan Input UJ: boleh bila salah satunya boleh. */
-    private const BERSAMA = ['kas.foto' => ['input-kas', 'kas-harian', 'input-uj', 'kas-uj'], 'kas.foto.destroy' => ['input-kas', 'input-uj']];
+    private const BERSAMA = ['absen.foto' => ['absen', 'absensi'], 'kas.foto' => ['input-kas', 'kas-harian', 'input-uj', 'kas-uj'], 'kas.foto.destroy' => ['input-kas', 'input-uj']];
 
     /** Menu yang hanya untuk Super Admin (tidak bisa diberikan ke Admin). */
     public const KHUSUS_SUPER = ['dashboard-aktivitas'];

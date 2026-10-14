@@ -12,6 +12,10 @@ class CekMenu
 {
     public function handle(Request $request, Closure $next): Response
     {
+        // Akun karyawan hanya boleh membuka halaman Absen (Beranda & menu lain dialihkan).
+        if ($request->user()?->isKaryawan() && ! in_array($request->route()?->getName(), ['absen.index', 'absen.simpan', 'absen.foto', 'logout'], true)) {
+            return redirect()->route('absen.index');
+        }
         if (! MenuAkses::bolehRute($request->user(), $request->route()?->getName())) {
             if ($request->expectsJson()) {
                 return response()->json(['galat' => ['Akun Anda tidak punya akses ke menu ini.']], 403);
