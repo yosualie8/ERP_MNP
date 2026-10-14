@@ -1,4 +1,4 @@
-@extends('layouts.app', ['judul' => 'Input BBM'])
+@extends('layouts.app', ['judul' => 'Input BBM & HM'])
 
 @section('lebar', '1900px')
 
@@ -44,12 +44,12 @@
 
         <div class="kartu">
             <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px;">
-                <h3 style="margin: 0 0 4px;">@if ($edit) Edit BBM <span class="redup" style="font-size: 13px; font-weight: normal;">sheet Penggunaan BBM baris {{ $edit['baris'] }}</span> @else Input BBM @endif</h3>
+                <h3 style="margin: 0 0 4px;">@if ($edit) Edit BBM & HM <span class="redup" style="font-size: 13px; font-weight: normal;">sheet Penggunaan BBM baris {{ $edit['baris'] }}</span> @else Input BBM & HM @endif</h3>
                 <span class="redup">keluar <b id="jml-keluar">0</b> L · masuk <b id="jml-masuk">0</b> L · <b id="jml-baris">0</b> baris</span>
             </div>
             <p class="redup" style="margin: 0 0 12px; font-size: 13px;">Pilih <b style="color: var(--teks);">Jenis</b> dulu di tiap baris. <b style="color: var(--teks);">Setiap baris harus berisi transaksi</b> (liter Keluar/Masuk, atau HM untuk alat yang bekerja tanpa isi solar).
                 <b>Pemakaian alat</b>: Unit = nama di Data Aset, isi HM & Keluar (liter) + Proyek. <b>Solar masuk</b>: Unit bebas diketik (sumber solarnya, mis. "Isi Solar dari Luar", "Isi Solar dari DT 035"); tulis No DO di Keterangan bila ada.
-                Unit (selain solar masuk), Proyek & Status harus persis sama dengan data master — beda huruf besar/kecil atau spasi pun ditolak. Total jam kerja dihitung otomatis dari jam Mulai–Selesai (dikurangi Rest bila diisi).
+                Unit (selain solar masuk), Proyek & Status harus persis sama dengan data master — beda huruf besar/kecil atau spasi pun ditolak. Total jam kerja dihitung otomatis dari jam Mulai–Selesai.
                 HM awal & proyek terisi otomatis dari catatan terakhir unit itu (ungu = otomatis, boleh diganti). Stok dihitung otomatis di sheet.</p>
 
             <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px;">
@@ -65,8 +65,8 @@
                 <table class="isian" id="tabel">
                     <thead><tr>
                         <th style="width: 150px;">Jenis</th><th style="width: 210px;">Unit</th><th style="width: 80px;">HM awal</th><th style="width: 80px;">HM akhir</th><th style="width: 64px;">Total HM</th>
-                        <th style="width: 76px;">Masuk (L)</th><th style="width: 76px;">Keluar (L)</th><th style="width: 62px;">Mulai</th><th style="width: 62px;" title="Lama istirahat, mis. 1:00 (dikurangkan dari total jam kerja)">Rest</th><th style="width: 62px;">Selesai</th>
-                        <th style="width: 92px;" title="Selesai − Mulai − Rest (otomatis)">Total jam kerja</th>
+                        <th style="width: 76px;">Masuk (L)</th><th style="width: 76px;">Keluar (L)</th><th style="width: 62px;">Mulai</th><th style="width: 62px;">Selesai</th>
+                        <th style="width: 92px;" title="Selesai − Mulai (otomatis)">Total jam kerja</th>
                         <th style="width: 104px;">Status</th><th style="width: 230px;">Proyek</th><th style="width: 200px;">Keterangan / No DO</th>@if (! $edit)<th></th>@endif
                     </tr></thead>
                     <tbody></tbody>
@@ -121,7 +121,7 @@
             const TERAKHIR = @json($unitTerakhir);
             const AWAL = @json(array_values($awal));
             const EDIT = {{ $edit ? 'true' : 'false' }};
-            const KOLOM = ['unit', 'hm_awal', 'hm_akhir', 'total_hm', 'masuk', 'keluar', 'jam_mulai', 'istirahat', 'jam_selesai', 'status', 'keterangan', 'proyek'];
+            const KOLOM = ['unit', 'hm_awal', 'hm_akhir', 'total_hm', 'masuk', 'keluar', 'jam_mulai', 'jam_selesai', 'status', 'keterangan', 'proyek'];
             const tbody = document.querySelector('#tabel tbody');
             const kunci = v => String(v || '').trim().replace(/\s+/g, ' ').toLowerCase();
             const PETA = Object.fromEntries(Object.keys(UNIT).map(n => [kunci(n), n]));
@@ -144,7 +144,6 @@
                     <td>${isian('masuk', i, isi.masuk, 'class="angka-input" inputmode="decimal"')}</td>
                     <td>${isian('keluar', i, isi.keluar, 'class="angka-input" inputmode="decimal"')}</td>
                     <td>${isian('jam_mulai', i, isi.jam_mulai, 'placeholder="8:00"')}</td>
-                    <td>${isian('istirahat', i, isi.istirahat)}</td>
                     <td>${isian('jam_selesai', i, isi.jam_selesai, 'placeholder="17:00"')}</td>
                     <td class="jam-kerja"></td>
                     <td>${isian('status', i, isi.status, 'list="daftar-status"')}</td>
@@ -172,7 +171,7 @@
                 const matikan = (k, mati) => { const x = sel(tr, k); x.disabled = mati && !x.value.trim(); };
                 matikan('masuk', !!jenis && jenis !== 'masuk');
                 matikan('keluar', jenis === 'masuk');
-                ['hm_awal', 'hm_akhir', 'total_hm', 'jam_mulai', 'istirahat', 'jam_selesai'].forEach(k => matikan(k, !!jenis && !alat && jenis !== 'operasional'));
+                ['hm_awal', 'hm_akhir', 'total_hm', 'jam_mulai', 'jam_selesai'].forEach(k => matikan(k, !!jenis && !alat && jenis !== 'operasional'));
                 if (isiOtomatis && alat && u) {
                     const hm = sel(tr, 'hm_awal');
                     if (!hm.value && u.hm != null) { hm.value = String(u.hm).replace('.', ','); hm.classList.add('otomatis'); }
@@ -185,7 +184,7 @@
             // Validasi per baris — aturannya sama dengan pemeriksaan server (BbmController::rapikan). Galat (merah) memblokir
             // tombol Simpan; info (kuning) hanya pengingat. Baris yang kosong seluruhnya diabaikan.
             const ANGKA = {hm_awal: 'HM awal', hm_akhir: 'HM akhir', total_hm: 'Total HM', masuk: 'Masuk', keluar: 'Keluar'};
-            const JAM = {jam_mulai: 'Jam mulai', istirahat: 'Rest', jam_selesai: 'Jam selesai'};
+            const JAM = {jam_mulai: 'Jam mulai', jam_selesai: 'Jam selesai'};
             const pola = /^\d{1,2}[:.]\d{2}$/;
             const periksaBaris = tr => {
                 const galat = [], info = [], salahDi = new Set();
@@ -238,8 +237,8 @@
                     if (!n.keluar) { galat.push('Isi jumlah liter di kolom Keluar.'); salahDi.add('keluar'); }
                     if (n.masuk) { galat.push('Baris ini tidak boleh berisi Masuk — kosongkan Masuk.'); salahDi.add('masuk'); }
                 }
-                const tj = jamKerja(v('jam_mulai'), v('istirahat'), v('jam_selesai'));
-                if (tj !== null && tj <= 0) { galat.push('Total jam kerja 0 atau minus — periksa jam Mulai, Rest & Selesai.'); salahDi.add('jam_selesai'); }
+                const tj = jamKerja(v('jam_mulai'), '', v('jam_selesai'));
+                if (tj !== null && tj <= 0) { galat.push('Total jam kerja 0 — periksa jam Mulai & Selesai.'); salahDi.add('jam_selesai'); }
                 if (jenis === 'pakai' && u && u.hm != null && n.hm_awal !== null && Math.abs(n.hm_awal - u.hm) > 0.05)
                     info.push(`HM awal berbeda dari HM akhir terakhir unit ini (${String(u.hm).replace('.', ',')}).`);
                 return {kosong: false, galat, info, salahDi};
@@ -252,7 +251,7 @@
                     t.value = String(Math.round((b - a) * 100) / 100).replace('.', ',');
                     t.readOnly = true; t.classList.add('otomatis');
                 } else if (t.readOnly) { t.value = ''; t.readOnly = false; t.classList.remove('otomatis'); }
-                tr.querySelector('td.jam-kerja').textContent = teksJam(jamKerja(sel(tr, 'jam_mulai').value, sel(tr, 'istirahat').value, sel(tr, 'jam_selesai').value));
+                tr.querySelector('td.jam-kerja').textContent = teksJam(jamKerja(sel(tr, 'jam_mulai').value, '', sel(tr, 'jam_selesai').value));
                 const h = periksaBaris(tr);
                 tr.hasil = h;
                 [...KOLOM, 'jenis'].forEach(k => sel(tr, k).classList.toggle('salah', h.salahDi.has(k)));

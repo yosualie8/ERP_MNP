@@ -118,6 +118,7 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/ritasi/buangan', [BuanganTrukController::class, 'index'])->name('ritasi.buangan');
     Route::post('/ritasi/buangan', [BuanganTrukController::class, 'simpan'])->name('ritasi.buangan.simpan');
     Route::get('/bbm', [\App\Http\Controllers\BbmController::class, 'index'])->name('bbm.index');
+    Route::get('/bbm/dashboard', [\App\Http\Controllers\BbmController::class, 'dashboard'])->name('bbm.dashboard');
     Route::get('/bbm/input', [\App\Http\Controllers\BbmController::class, 'create'])->name('bbm.input');
     Route::post('/bbm/input', [\App\Http\Controllers\BbmController::class, 'store'])->name('bbm.store');
     Route::post('/bbm/opname', [\App\Http\Controllers\BbmController::class, 'opname'])->name('bbm.opname');

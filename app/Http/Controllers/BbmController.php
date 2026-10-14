@@ -96,6 +96,100 @@ class BbmController extends Controller
             : "{$label} \"{$v}\" tidak ada di data master — pilih dari daftar.";
     }
 
+    /**
+     * Dashboard BBM & HM: tren liter keluar, jam HM & rasio liter/jam per bulan (keseluruhan & per alat), konsumsi per proyek,
+     * dan kelengkapan data HM. Rasio dihitung dari JUMLAH sebulan (isian sebagian-sebagian saling menutup), hanya dari
+     * alat-bulan yang HM-nya tercatat; bulan dengan liter tetapi tanpa HM ditandai "HM kosong".
+     */
+    public function dashboard(Request $request): View
+    {
+        $bulan = in_array($request->integer('bulan'), [3, 6, 12, 24], true) ? $request->integer('bulan') : 12;
+        $mulai = now()->startOfMonth()->subMonths($bulan - 1);
+        $daftarBulan = collect(range(0, $bulan - 1))->map(fn ($i) => $mulai->copy()->addMonths($i)->format('Y-m'))->all();
+        $baris = Bbm::where('tanggal', '>=', $mulai)->whereIn('jenis', ['pakai', 'masuk'])
+            ->get(['tanggal', 'jenis', 'unit', 'masuk', 'keluar', 'total_hm', 'tahap_ids']);
+        $hm = fn ($b) => $b->total_hm !== null && $b->total_hm > 0 && $b->total_hm <= 24 ? (float) $b->total_hm : 0.0;
+        $pakai = $baris->where('jenis', 'pakai');
+
+        // per alat per bulan
+        $alat = [];
+        foreach ($pakai as $b) {
+            $m = $b->tanggal->format('Y-m');
+            $alat[$b->unit][$m]['l'] = ($alat[$b->unit][$m]['l'] ?? 0) + (float) $b->keluar;
+            $alat[$b->unit][$m]['h'] = ($alat[$b->unit][$m]['h'] ?? 0) + $hm($b);
+        }
+        $kategori = AsetTruk::pluck('kategori', 'no_lambung');
+        $ringkasAlat = [];
+        foreach ($alat as $unit => $perBulan) {
+            // rasio hanya dari bulan yang liter & HM-nya sama-sama tercatat
+            $ok = array_filter($perBulan, fn ($x) => $x['h'] > 0 && $x['l'] > 0);
+            $rasioBulan = array_map(fn ($x) => round($x['l'] / $x['h'], 2), $ok);
+            $median = $rasioBulan ? (float) collect($rasioBulan)->median() : null;
+            $hOk = array_sum(array_column($ok, 'h'));
+            $ringkasAlat[$unit] = [
+                'unit' => $unit, 'kategori' => AsetTruk::KATEGORI[$kategori[$unit] ?? ''] ?? '',
+                'liter' => round(array_sum(array_column($perBulan, 'l')), 1), 'hm' => round(array_sum(array_column($perBulan, 'h')), 1),
+                'rasio' => $hOk > 0 ? round(array_sum(array_column($ok, 'l')) / $hOk, 2) : null, 'median' => $median !== null ? round($median, 2) : null,
+                'bulan' => array_combine($daftarBulan, array_map(fn ($m) => ['l' => round($perBulan[$m]['l'] ?? 0, 1), 'h' => round($perBulan[$m]['h'] ?? 0, 1),
+                    'r' => $rasioBulan[$m] ?? null], $daftarBulan)),
+                'hm_kosong' => count(array_filter($perBulan, fn ($x) => $x['l'] > 0 && $x['h'] <= 0)),
+                // bulan yang rasionya jauh dari median (> 1,6× atau < 1/1,6) — biasanya HM tidak lengkap / salah ketik
+                'janggal' => $median ? count(array_filter($rasioBulan, fn ($r) => $r > $median * 1.6 || $r < $median / 1.6)) : 0,
+            ];
+        }
+        uasort($ringkasAlat, fn ($a, $b) => $b['liter'] <=> $a['liter']);
+
+        // keseluruhan per bulan (rasio dari alat-bulan yang HM-nya tercatat)
+        $total = [];
+        foreach ($daftarBulan as $m) {
+            $l = $h = $lOk = $hOk = 0;
+            foreach ($ringkasAlat as $a) {
+                $x = $a['bulan'][$m];
+                $l += $x['l'];
+                $h += $x['h'];
+                if ($x['r'] !== null) {
+                    $lOk += $x['l'];
+                    $hOk += $x['h'];
+                }
+            }
+            $total[$m] = ['l' => round($l, 1), 'h' => round($h, 1), 'r' => $hOk > 0 ? round($lOk / $hOk, 2) : null, 'lOk' => $lOk, 'hOk' => $hOk,
+                'masuk' => round((float) $baris->where('jenis', 'masuk')->filter(fn ($b) => $b->tanggal->format('Y-m') === $m)->sum('masuk'), 1)];
+        }
+
+        // per tahap & per proyek (baris berproyek gabungan dibagi rata)
+        $tahap = ProyekTahap::with('proyek')->get()->keyBy('id');
+        $perTahap = [];
+        foreach ($pakai as $b) {
+            $ids = $b->tahap_ids ?: [];
+            foreach ($ids as $id) {
+                if (! $t = $tahap[$id] ?? null) {
+                    continue;
+                }
+                $perTahap[$id]['tahap'] = $t->nama;
+                $perTahap[$id]['proyek'] = $t->proyek?->nama ?? '–';
+                $perTahap[$id]['l'] = ($perTahap[$id]['l'] ?? 0) + (float) $b->keluar / count($ids);
+                $perTahap[$id]['h'] = ($perTahap[$id]['h'] ?? 0) + $hm($b) / count($ids);
+            }
+        }
+        uasort($perTahap, fn ($a, $b) => $b['l'] <=> $a['l']);
+        $perProyek = collect($perTahap)->groupBy('proyek')->map(fn ($g) => ['l' => $g->sum('l'), 'h' => $g->sum('h'), 'tahap' => $g->count()])->sortByDesc('l');
+
+        $lOk = array_sum(array_column($total, 'lOk'));
+        $hOk = array_sum(array_column($total, 'hOk'));
+
+        return view('bbm.dashboard', [
+            'bulan' => $bulan, 'daftarBulan' => $daftarBulan, 'total' => $total, 'alat' => array_values($ringkasAlat),
+            'perTahap' => array_values($perTahap), 'perProyek' => $perProyek,
+            'kartu' => [
+                'liter' => $pakai->sum('keluar'), 'hm' => $pakai->sum($hm), 'masuk' => $baris->where('jenis', 'masuk')->sum('masuk'),
+                'rasio' => $hOk > 0 ? round($lOk / $hOk, 2) : null,
+                'stok' => Bbm::whereNotNull('stok')->orderByDesc('baris')->value('stok'),
+                'tanpa_hm' => $pakai->filter(fn ($b) => $b->keluar > 0 && $hm($b) <= 0)->count(),
+                'isi' => $pakai->where('keluar', '>', 0)->count(),
+            ],
+        ]);
+    }
+
     /** Nama unit master + info terakhirnya (jenis, HM akhir, proyek) untuk mengisi otomatis. */
     private function infoUnit(): array
     {
@@ -159,7 +253,7 @@ class BbmController extends Controller
             $b = [
                 'tanggal' => $tanggal, 'unit' => $mentah($r['unit'] ?? null), 'hm_awal' => $angka($r['hm_awal'] ?? null), 'hm_akhir' => $angka($r['hm_akhir'] ?? null),
                 'total_hm' => $angka($r['total_hm'] ?? null), 'masuk' => $angka($r['masuk'] ?? null), 'keluar' => $angka($r['keluar'] ?? null),
-                'jam_mulai' => LembarRitasi::jam($rapi($r['jam_mulai'] ?? null)), 'istirahat' => LembarRitasi::jam($rapi($r['istirahat'] ?? null)),
+                'jam_mulai' => LembarRitasi::jam($rapi($r['jam_mulai'] ?? null)), 'istirahat' => null, // kolom Rest tidak dipakai lagi
                 'jam_selesai' => LembarRitasi::jam($rapi($r['jam_selesai'] ?? null)), 'status' => $mentah($r['status'] ?? null),
                 // Kolom Rental & Keterangan kerja tidak diisi lagi dari form (data lama di sheet dipertahankan saat Edit).
                 'keterangan' => $rapi($r['keterangan'] ?? null), 'rental' => null, 'proyek' => $mentah($r['proyek'] ?? null),
@@ -208,14 +302,14 @@ class BbmController extends Controller
             if ($pesan = self::bedaMaster($b['status'], $master['status'], 'Status')) {
                 $g[] = $pesan;
             }
-            foreach (['jam_mulai' => 'Jam mulai', 'istirahat' => 'Rest', 'jam_selesai' => 'Jam selesai'] as $k => $nama) {
+            foreach (['jam_mulai' => 'Jam mulai', 'jam_selesai' => 'Jam selesai'] as $k => $nama) {
                 $asli = trim((string) ($r[$k] ?? ''));
                 if ($asli !== '' && ! preg_match('/^\d{1,2}[:.]\d{2}$/', $asli)) {
                     $g[] = "$nama harus format jam, mis. 8:00 — sekarang \"$asli\".";
                 }
             }
             if (($tj = LembarBbm::jamKerja($b['jam_mulai'], $b['istirahat'], $b['jam_selesai'])) !== null && $tj <= 0) {
-                $g[] = 'Total jam kerja 0 atau minus — periksa jam Mulai, Rest & Selesai.';
+                $g[] = 'Total jam kerja 0 — periksa jam Mulai & Selesai.';
             }
             if ($b['hm_awal'] !== null && $b['hm_akhir'] !== null) {
                 if ($b['hm_akhir'] < $b['hm_awal']) {

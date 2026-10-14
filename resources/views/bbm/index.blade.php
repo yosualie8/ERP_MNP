@@ -1,4 +1,4 @@
-@extends('layouts.app', ['judul' => 'Data BBM'])
+@extends('layouts.app', ['judul' => 'Data BBM & HM'])
 
 @section('lebar', '1600px')
 
@@ -50,7 +50,7 @@
             <span class="redup">{{ $baris->count() }} baris · terbaru di atas</span>
         @endif
         <span class="redup" style="margin-left: auto;">@if ($diimpor)Data diperbarui otomatis dari sheet · terakhir {{ \Illuminate\Support\Carbon::parse($diimpor)->translatedFormat('j M Y H:i') }}@endif</span>
-        @if ($bolehInput)<a href="{{ route('bbm.input') }}" class="tombol" style="padding: 8px 14px;">+ Input BBM</a>@endif
+        @if ($bolehInput)<a href="{{ route('bbm.input') }}" class="tombol" style="padding: 8px 14px;">+ Input BBM & HM</a>@endif
     </div>
 
     @if ($bolehInput)

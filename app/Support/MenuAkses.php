@@ -36,8 +36,9 @@ class MenuAkses
         'daftar-proyek' => ['Daftar Proyek', 'proyek.index', ['proyek.*'], 'Daftar proyek & tahap, pemetaan nama lama (Ritasi/BBM/Kas); data keuangan hanya Super Admin'],
         'pengaturan-proyek' => ['Pengaturan Daftar Proyek', 'pengaturan-proyek', ['pengaturan-proyek', 'pengaturan-proyek.*'], 'Filter bawaan grid Daftar Proyek (periode, status, cost center, tipe) untuk semua pengguna'],
         'kubikasi-kendaraan' => ['Kubikasi Kendaraan', 'kubikasi.index', ['kubikasi.*'], 'Kubikasi standar per jenis kendaraan (nilai awal kolom Kubikasi saat input ritasi)'],
-        'input-bbm' => ['Input BBM', 'bbm.input', ['bbm.input', 'bbm.store', 'bbm.edit', 'bbm.update', 'bbm.hapus', 'bbm.opname'], 'Input, edit & hapus pemakaian / solar masuk dan stock opname (ditulis ke sheet Penggunaan BBM)'],
-        'bbm' => ['Data BBM', 'bbm.index', ['bbm.index'], 'Penggunaan BBM per bulan: pemakaian per unit, solar masuk, stok solar, baris yang perlu dilengkapi'],
+        'input-bbm' => ['Input BBM & HM', 'bbm.input', ['bbm.input', 'bbm.store', 'bbm.edit', 'bbm.update', 'bbm.hapus', 'bbm.opname'], 'Input, edit & hapus pemakaian / solar masuk dan stock opname (ditulis ke sheet Penggunaan BBM)'],
+        'dashboard-bbm' => ['Dashboard BBM & HM', 'bbm.dashboard', ['bbm.dashboard'], 'Tren konsumsi solar & jam HM proyek dan per alat, rasio liter/jam, kelengkapan data HM'],
+        'bbm' => ['Data BBM & HM', 'bbm.index', ['bbm.index'], 'Penggunaan BBM per bulan: pemakaian per unit, solar masuk, stok solar, baris yang perlu dilengkapi'],
         'aset' => ['Data Aset', 'aset.index', ['aset.*'], 'Semua aset MNP (dump truck, alat berat, LV, engkel, …): lihat, tambah & ubah'],
         'kode-gl' => ['Kode GL', 'kas.kode-gl', ['kas.kode-gl'], 'Daftar Kode GL'],
     ];
@@ -50,7 +51,7 @@ class MenuAkses
         'kas' => ['Kas Harian', '🏦', ['input-kas', 'kas-harian', 'validasi-reimburse', 'riwayat-reimburse', 'kas-belum-reimburse', 'rekap', 'kode-gl']],
         'uj' => ['Uang Jalan', '🚚', ['pengajuan-uj', 'input-uj', 'kas-uj', 'reimburse-uj', 'rapikan-uj']],
         'ritasi' => ['Ritasi', '⛰️', ['input-ritasi', 'ritasi', 'buangan-truk', 'monitor-ritasi', 'bayar-tanah', 'performa-ritasi', 'kubikasi-kendaraan']],
-        'bbm' => ['BBM & HM', '⛽', ['input-bbm', 'bbm']],
+        'bbm' => ['BBM & HM', '⛽', ['dashboard-bbm', 'input-bbm', 'bbm']],
         'aset' => ['Aset', '🚛', ['aset']],
     ];
 
