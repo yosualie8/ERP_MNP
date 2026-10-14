@@ -72,7 +72,7 @@
             @if (! $edit)
                 <div style="margin-top: 8px; display: flex; gap: 10px; align-items: center;">
                     <button type="button" class="tombol polos" id="tambah" style="padding: 6px 12px;">+ Tambah baris</button>
-                    <span class="redup" style="font-size: 12px;">Baris yang dibiarkan kosong tidak ikut disimpan.</span>
+                    <span class="redup" style="font-size: 12px;">Baris yang dibiarkan kosong — atau hanya berisi Unit & isian otomatis (ungu) — tidak ikut disimpan.</span>
                 </div>
             @endif
             <div id="hasil-validasi" class="pesan" style="margin: 14px 0 0;" hidden></div>
@@ -175,7 +175,9 @@
             const periksaBaris = tr => {
                 const galat = [], info = [], salahDi = new Set();
                 const v = k => sel(tr, k).value;
-                if (!KOLOM.some(k => v(k).trim())) return {kosong: true, galat, info, salahDi};
+                // Baris kosong = tidak ada isian selain Unit & isian otomatis (ungu: HM awal / proyek dari catatan terakhir) —
+                // mis. unit dari "Muat unit hari terakhir" yang hari itu tidak dipakai. Diabaikan & tidak ikut terkirim.
+                if (!KOLOM.some(k => k !== 'unit' && v(k).trim() && !sel(tr, k).classList.contains('otomatis'))) return {kosong: true, galat, info, salahDi};
                 const unit = v('unit'), u = UNIT[unit] || null, jenis = u?.jenis;
                 if (!unit.trim()) { galat.push('Unit belum diisi.'); salahDi.add('unit'); }
                 else if (unit === 'Stock Opname') { galat.push('Stock opname dicatat lewat tombol Stock Opname di menu Data BBM.'); salahDi.add('unit'); }
@@ -306,6 +308,8 @@
                     return;
                 }
                 tbody.querySelectorAll('input:disabled').forEach(x => { x.disabled = false; });
+                // Baris kosong (hanya unit / isian otomatis) tidak dikirim.
+                tbody.querySelectorAll('tr.baris').forEach(tr => { if (tr.hasil?.kosong) tr.querySelectorAll('input').forEach(x => { x.disabled = true; }); });
                 const b = document.getElementById('simpan');
                 b.disabled = true; b.textContent = 'Menyimpan…';
             });
