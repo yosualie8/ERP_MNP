@@ -161,16 +161,17 @@ class BbmController extends Controller
                 'total_hm' => $angka($r['total_hm'] ?? null), 'masuk' => $angka($r['masuk'] ?? null), 'keluar' => $angka($r['keluar'] ?? null),
                 'jam_mulai' => LembarRitasi::jam($rapi($r['jam_mulai'] ?? null)), 'istirahat' => LembarRitasi::jam($rapi($r['istirahat'] ?? null)),
                 'jam_selesai' => LembarRitasi::jam($rapi($r['jam_selesai'] ?? null)), 'status' => $mentah($r['status'] ?? null),
-                'keterangan' => $rapi($r['keterangan'] ?? null), 'rental' => $angka($r['rental'] ?? null), 'proyek' => $mentah($r['proyek'] ?? null),
-                'keterangan_kerja' => $rapi($r['keterangan_kerja'] ?? null),
+                // Kolom Rental & Keterangan kerja tidak diisi lagi dari form (data lama di sheet dipertahankan saat Edit).
+                'keterangan' => $rapi($r['keterangan'] ?? null), 'rental' => null, 'proyek' => $mentah($r['proyek'] ?? null),
+                'keterangan_kerja' => null, 'jenis' => $rapi($r['jenis'] ?? null),
             ];
-            $isi = array_filter(array_diff_key($b, ['tanggal' => 1]), fn ($v) => $v !== null);
+            $isi = array_filter(array_diff_key($b, ['tanggal' => 1, 'jenis' => 1]), fn ($v) => $v !== null);
             if (! $isi) {
                 continue;
             }
             $no = 'Baris '.($i + 1).($b['unit'] ? " ({$b['unit']})" : '').': ';
             $g = [];
-            foreach (['hm_awal' => 'HM awal', 'hm_akhir' => 'HM akhir', 'total_hm' => 'Total HM', 'masuk' => 'Masuk', 'keluar' => 'Keluar', 'rental' => 'Rental'] as $k => $nama) {
+            foreach (['hm_awal' => 'HM awal', 'hm_akhir' => 'HM akhir', 'total_hm' => 'Total HM', 'masuk' => 'Masuk', 'keluar' => 'Keluar'] as $k => $nama) {
                 if ($b[$k] === false) {
                     $g[] = "$nama harus angka.";
                     $b[$k] = null;
@@ -178,15 +179,28 @@ class BbmController extends Controller
                     $g[] = "$nama tidak boleh minus.";
                 }
             }
-            $jenis = $master['unit'][$b['unit'] ?? ''] ?? 'cek';
-            if ($b['unit'] === 'Stock Opname') {
-                $g[] = 'Stock opname dicatat lewat tombol Stock Opname di menu Data BBM.';
+            // Jenis dipilih admin. Unit dicocokkan PERSIS ke master jenis itu; jenis Solar masuk boleh nama sumber bebas
+            // (asal bukan nama aset / unit jenis lain), dan didaftarkan sebagai sumber solar saat disimpan.
+            $jenis = $b['jenis'];
+            $kunci = fn ($x) => mb_strtolower(preg_replace('/\s+/', '', (string) $x));
+            $lain = $b['unit'] === null ? null : collect($master['unit'])->first(fn ($j, $n) => $kunci($n) === $kunci($b['unit']) && $j !== $jenis);
+            $namaLain = $b['unit'] === null ? null : collect(array_keys($master['unit']))->first(fn ($n) => $kunci($n) === $kunci($b['unit']) && $master['unit'][$n] !== $jenis);
+            if (! isset(LembarBbm::JENIS_INPUT[$jenis])) {
+                $g[] = 'Pilih Jenis dulu.';
             } elseif ($b['unit'] === null) {
                 $g[] = 'Unit belum diisi.';
-            } elseif ($pesan = self::bedaMaster($b['unit'], array_keys($master['unit']), 'Unit')) {
-                $g[] = $pesan;
-            } else {
-                LembarBbm::arti($b['unit'], $peta); // pemetaan dibuat bila belum ada (mis. "Isi Solar dari DT 0xx" yang baru dipakai)
+            } elseif ($kunci($b['unit']) === $kunci('Stock Opname')) {
+                $g[] = 'Stock opname dicatat lewat tombol Stock Opname di menu Data BBM.';
+            } elseif ($jenis === 'masuk') {
+                if ($lain) {
+                    $g[] = "\"{$b['unit']}\" adalah ".(LembarBbm::JENIS_INPUT[$lain] ?? $lain).", bukan sumber solar — tulis sumbernya, mis. \"Isi Solar dari {$namaLain}\".";
+                } elseif ($b['unit'] !== trim($b['unit']) || preg_match('/\s{2,}/', $b['unit'])) {
+                    $g[] = 'Unit tidak boleh diawali/diakhiri spasi atau berisi spasi ganda.';
+                } elseif (mb_strlen($b['unit']) > 100) {
+                    $g[] = 'Unit terlalu panjang (maks. 100 huruf).';
+                }
+            } elseif ($pesan = self::bedaMaster($b['unit'], array_keys(array_filter($master['unit'], fn ($j) => $j === $jenis)), 'Unit')) {
+                $g[] = $lain ? "Unit \"{$b['unit']}\" berjenis ".(LembarBbm::JENIS_INPUT[$lain] ?? $lain).', bukan '.LembarBbm::JENIS_INPUT[$jenis].' — ganti Jenis-nya.' : $pesan;
             }
             if ($pesan = self::bedaMaster($b['proyek'], $master['tahap'], 'Proyek')) {
                 $g[] = $pesan;
@@ -200,6 +214,9 @@ class BbmController extends Controller
                     $g[] = "$nama harus format jam, mis. 8:00 — sekarang \"$asli\".";
                 }
             }
+            if (($tj = LembarBbm::jamKerja($b['jam_mulai'], $b['istirahat'], $b['jam_selesai'])) !== null && $tj <= 0) {
+                $g[] = 'Total jam kerja 0 atau minus — periksa jam Mulai, Rest & Selesai.';
+            }
             if ($b['hm_awal'] !== null && $b['hm_akhir'] !== null) {
                 if ($b['hm_akhir'] < $b['hm_awal']) {
                     $g[] = 'HM akhir lebih kecil dari HM awal.';
@@ -211,10 +228,10 @@ class BbmController extends Controller
                 if ($b['masuk']) {
                     $g[] = 'Solar masuk tidak dicatat di baris alat — buat baris sendiri dengan unit sumber solar (mis. "Isi Solar dari Luar").';
                 }
-                // Baris alat harus berisi transaksi: liter Keluar, jam HM (> 0), atau jam sewa (Rental). Tanpa itu = tidak jelas tujuannya.
+                // Baris alat harus berisi transaksi: liter Keluar atau jam HM (> 0). Tanpa itu = tidak jelas tujuannya.
                 $hm = $b['hm_awal'] !== null && $b['hm_akhir'] !== null ? $b['hm_akhir'] - $b['hm_awal'] : $b['total_hm'];
-                if (! $b['keluar'] && ! ($hm > 0) && ! $b['rental']) {
-                    $g[] = 'Isi liter Keluar — atau HM awal & akhir / jam Rental bila alat bekerja tanpa isi solar. Baris tanpa transaksi tidak bisa disimpan.';
+                if (! $b['keluar'] && ! ($hm > 0)) {
+                    $g[] = 'Isi liter Keluar — atau HM awal & akhir bila alat bekerja tanpa isi solar. Baris tanpa transaksi tidak bisa disimpan.';
                 } elseif (! $b['proyek']) {
                     $g[] = 'Pemakaian solar / jam kerja alat wajib diisi Proyek.';
                 }
@@ -245,12 +262,24 @@ class BbmController extends Controller
         return [array_values($hasil), $galat];
     }
 
+    /** Unit solar masuk yang baru diketik admin didaftarkan sebagai sumber solar (supaya impor mengenalinya). */
+    private static function daftarkanSumber(array $baris): void
+    {
+        foreach ($baris as $b) {
+            if ($b['jenis'] === 'masuk' && ! BbmUnitPeta::where('kunci', BbmUnitPeta::kunci($b['unit']))->exists()) {
+                BbmUnitPeta::create(['nama' => $b['unit'], 'kunci' => BbmUnitPeta::kunci($b['unit']), 'jenis' => 'masuk', 'sumber' => $b['unit'],
+                    'catatan' => 'Dibuat dari Input BBM & HM', 'user_id' => auth()->id()]);
+            }
+        }
+    }
+
     public function store(Request $request): RedirectResponse
     {
         [$baris, $galat] = $this->rapikan($request);
         if ($galat) {
             return back()->withInput()->withErrors($galat);
         }
+        self::daftarkanSumber($baris);
         try {
             $hasil = (new TulisBbmSheet(GoogleSheets::wajib()))->tulis($baris);
         } catch (\Throwable $e) {
@@ -277,7 +306,7 @@ class BbmController extends Controller
 
         return $this->create()->with('edit', [
             'baris' => $b->baris, 'versi' => $this->versi($b), 'tanggal' => $b->tanggal?->format('d-m-Y'),
-            'isi' => [['unit' => $b->unit, 'hm_awal' => $a($b->hm_awal), 'hm_akhir' => $a($b->hm_akhir), 'total_hm' => $b->hm_awal === null || $b->hm_akhir === null ? $a($b->total_hm) : '',
+            'isi' => [['jenis' => $b->jenis, 'unit' => $b->unit, 'hm_awal' => $a($b->hm_awal), 'hm_akhir' => $a($b->hm_akhir), 'total_hm' => $b->hm_awal === null || $b->hm_akhir === null ? $a($b->total_hm) : '',
                 'masuk' => $a($b->masuk), 'keluar' => $a($b->keluar), 'jam_mulai' => $b->jam_mulai, 'istirahat' => $b->istirahat, 'jam_selesai' => $b->jam_selesai,
                 'status' => $b->status, 'keterangan' => $b->keterangan, 'rental' => $a($b->rental), 'proyek' => $b->proyek, 'keterangan_kerja' => $b->keterangan_kerja]],
         ]);
@@ -296,6 +325,10 @@ class BbmController extends Controller
         if ($galat) {
             return back()->withInput()->withErrors($galat);
         }
+        self::daftarkanSumber($isi);
+        // Rental & Keterangan kerja tidak ada lagi di form: isi lamanya dipertahankan.
+        $isi[0]['rental'] = $b->rental;
+        $isi[0]['keterangan_kerja'] = $b->keterangan_kerja;
         $lama = "{$b->unit} {$b->tanggal?->translatedFormat('j M Y')} keluar ".self::liter($b->keluar).' masuk '.self::liter($b->masuk);
         try {
             (new TulisBbmSheet(GoogleSheets::wajib()))->ubah($b, $isi[0]);

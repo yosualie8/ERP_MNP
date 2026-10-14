@@ -20,6 +20,31 @@ class LembarBbm
 
     public const STATUS = ['Running', 'Stand By', 'Breakdown', 'Lembur', 'Libur'];
 
+    /** Jenis yang dipilih admin di Input BBM & HM. */
+    public const JENIS_INPUT = ['pakai' => 'Pemakaian alat', 'masuk' => 'Solar masuk', 'pindah' => 'Pindah lokasi', 'susut' => 'Susut', 'operasional' => 'Kendaraan operasional'];
+
+    /** Total jam kerja (menit) = Selesai − Mulai − Rest; lewat tengah malam = hari berikutnya. Null bila Mulai/Selesai kosong. */
+    public static function jamKerja(?string $mulai, ?string $rest, ?string $selesai): ?int
+    {
+        $menit = fn ($v) => preg_match('/^(\d{1,2})[:.](\d{2})$/', trim((string) $v), $m) ? (int) $m[1] * 60 + (int) $m[2] : null;
+        [$a, $b] = [$menit($mulai), $menit($selesai)];
+        if ($a === null || $b === null) {
+            return null;
+        }
+        $t = $b - $a;
+        if ($t <= 0) {
+            $t += 1440;
+        }
+
+        return $t - ($menit($rest) ?? 0);
+    }
+
+    /** "8 jam 30 mnt" dari menit. */
+    public static function teksJam(?int $menit): string
+    {
+        return $menit === null ? '' : intdiv(max($menit, 0), 60).' jam'.($menit % 60 ? ' '.($menit % 60).' mnt' : '');
+    }
+
     public static function id(): string
     {
         return config('mnp.sheet_ritasi');

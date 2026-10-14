@@ -71,8 +71,7 @@
         <table class="kas" data-saring-kolom>
             <thead>
                 <tr><th>Tanggal</th><th>Unit</th><th>Jenis</th><th class="angka">HM awal</th><th class="angka">HM akhir</th><th class="angka">Total HM</th>
-                    <th class="angka">Masuk</th><th class="angka">Keluar</th><th class="angka">Stok</th><th>Jam kerja</th><th>Status</th><th>Keterangan</th>
-                    <th class="angka">Rental</th><th>Proyek</th><th>Keterangan kerja</th><th data-tanpa-saring></th></tr>
+                    <th class="angka">Masuk</th><th class="angka">Keluar</th><th class="angka">Stok</th><th>Jam kerja</th><th>Status</th><th>Proyek</th><th>Keterangan / No DO</th><th data-tanpa-saring></th></tr>
             </thead>
             <tbody>
                 @forelse ($baris as $b)
@@ -86,16 +85,15 @@
                         <td class="angka" data-n="{{ $b->masuk }}">{{ $l($b->masuk) }}</td>
                         <td class="angka" data-n="{{ $b->keluar }}">{{ $l($b->keluar) }}</td>
                         <td class="angka stok" data-n="{{ $b->stok }}">{{ $l($b->stok) }}</td>
-                        <td style="white-space: nowrap;">{{ $b->jam_mulai }}@if ($b->jam_selesai)–{{ $b->jam_selesai }}@endif @if ($b->istirahat)<span class="redup">(rest {{ $b->istirahat }})</span>@endif</td>
+                        @php($tj = \App\Support\LembarBbm::jamKerja($b->jam_mulai, $b->istirahat, $b->jam_selesai))
+                        <td style="white-space: nowrap;" data-n="{{ $tj !== null ? round($tj / 60, 2) : '' }}">@if ($tj !== null)<b>{{ \App\Support\LembarBbm::teksJam($tj) }}</b> <span class="redup">{{ $b->jam_mulai }}–{{ $b->jam_selesai }}@if ($b->istirahat), rest {{ $b->istirahat }}@endif</span>@else{{ $b->jam_mulai }}@endif</td>
                         <td>{{ $b->status }}</td>
-                        <td style="min-width: 160px;">{{ $b->keterangan }}</td>
-                        <td class="angka" data-n="{{ $b->rental }}">{{ $l($b->rental) }}</td>
                         <td @if ($b->jenis === 'pakai' && ($b->keluar > 0 || ($b->total_hm > 0 && $b->total_hm <= 24)) && ! $b->tahap_ids && $b->proyek !== 'Pool') style="color: var(--merah);" @endif>
                             @if ($b->proyek && str_contains($b->proyek, ' + '))
                                 <span title="{{ $b->proyek }}">Bagi rata {{ count(explode(' + ', $b->proyek)) }} tahap</span>
                             @else{{ $b->proyek ?? ($b->jenis === 'pakai' && ($b->keluar > 0 || $b->total_hm > 0) ? 'belum diisi' : '') }}@endif
                         </td>
-                        <td style="min-width: 280px;">{{ $b->keterangan_kerja }}</td>
+                        <td style="min-width: 160px;">{{ $b->keterangan }}</td>
                         <td style="white-space: nowrap;">
                             @if ($bolehInput)
                                 @if ($b->jenis !== 'opname')<a href="{{ route('bbm.edit', $b->baris) }}" class="tombol-edit">Edit</a>@endif
@@ -105,7 +103,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr><td colspan="16" class="redup" style="padding: 20px 14px;">{{ $perlu ? 'Tidak ada baris yang perlu dilengkapi. 👍' : 'Belum ada data.' }}</td></tr>
+                    <tr><td colspan="14" class="redup" style="padding: 20px 14px;">{{ $perlu ? 'Tidak ada baris yang perlu dilengkapi. 👍' : 'Belum ada data.' }}</td></tr>
                 @endforelse
             </tbody>
         </table>
