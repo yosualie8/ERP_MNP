@@ -88,14 +88,14 @@
                         <td class="angka stok" data-n="{{ $b->stok }}">{{ $l($b->stok) }}</td>
                         <td style="white-space: nowrap;">{{ $b->jam_mulai }}@if ($b->jam_selesai)–{{ $b->jam_selesai }}@endif @if ($b->istirahat)<span class="redup">(rest {{ $b->istirahat }})</span>@endif</td>
                         <td>{{ $b->status }}</td>
-                        <td>{{ $b->keterangan }}</td>
+                        <td style="min-width: 160px;">{{ $b->keterangan }}</td>
                         <td class="angka" data-n="{{ $b->rental }}">{{ $l($b->rental) }}</td>
                         <td @if ($b->jenis === 'pakai' && $b->keluar > 0 && ! $b->tahap_ids && $b->proyek !== 'Pool') style="color: var(--merah);" @endif>
                             @if ($b->proyek && str_contains($b->proyek, ' + '))
                                 <span title="{{ $b->proyek }}">Bagi rata {{ count(explode(' + ', $b->proyek)) }} tahap</span>
                             @else{{ $b->proyek ?? ($b->jenis === 'pakai' && $b->keluar > 0 ? 'belum diisi' : '') }}@endif
                         </td>
-                        <td>{{ $b->keterangan_kerja }}</td>
+                        <td style="min-width: 280px;">{{ $b->keterangan_kerja }}</td>
                         <td style="white-space: nowrap;">
                             @if ($bolehInput)
                                 @if ($b->jenis !== 'opname')<a href="{{ route('bbm.edit', $b->baris) }}" class="tombol-edit">Edit</a>@endif

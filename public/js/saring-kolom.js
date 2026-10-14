@@ -33,7 +33,7 @@
         .saring-pop .aksi button { padding: 3px 10px; font-size: 12px; }
         /* Semua grid: garis pemisah antar kolom & judul kolom (+ baris saringan) dibekukan saat digulir. Garis judul memakai
            box-shadow karena border pada sel sticky (border-collapse) ikut tergulir. */
-        table.grid-beku > thead { position: sticky; top: var(--beku-atas, 0px); z-index: 5; }
+        table.grid-beku > thead { position: sticky; top: var(--beku-atas, 0px); z-index: 5; background: var(--kartu, #1e2229); }
         table.grid-beku > thead th { background: var(--kartu, #1e2229); box-shadow: inset 1px 0 0 var(--garis, #333), inset 0 -1px 0 var(--garis-kuat, #4a5160); }
         table.grid-beku > tbody > tr > td + td { border-left: 1px solid var(--garis, #333); }
         .grid-gulir { overflow: auto !important; }`;
