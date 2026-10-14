@@ -67,6 +67,7 @@
             <h4 style="margin-top: 0;">Nama lama yang dipetakan ke tahap ini (alias)</h4>
             <p class="redup" style="margin: 0 0 8px; font-size: 13px;">Data di Ritasi / BBM / Cost Project / Kas Harian yang memakai nama ini ikut terhitung ke {{ $tahap->nama }}.</p>
             <table class="alias" style="width: 100%; border-collapse: collapse;">
+                <thead><tr><th style="width: 200px;">Sumber</th><th>Nama lama</th><th></th></tr></thead>
                 @forelse ($tahap->alias->sortBy(['sumber', 'nama']) as $a)
                     <tr><td style="width: 200px;"><span class="label">{{ \App\Models\ProyekAlias::SUMBER[$a->sumber] }}</span></td><td>{{ $a->nama }}</td>
                         <td style="text-align: right;"><form method="POST" action="{{ route('proyek.alias.hapus', $a) }}" onsubmit="return confirm('Hapus pemetaan &quot;{{ $a->nama }}&quot;?')">@csrf @method('DELETE')<button class="tombol-hapus">Hapus</button></form></td></tr>

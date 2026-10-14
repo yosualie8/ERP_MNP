@@ -67,6 +67,7 @@
             <h4 style="margin: 0 0 6px; color: #f0c05a;">⚠ Nama yang belum terpetakan ke tahap</h4>
             <p class="redup" style="margin: 0 0 8px; font-size: 13px;">Data dengan nama ini belum ikut terhitung di tahap mana pun. Pilih tahapnya lalu klik Petakan.</p>
             <table>
+                <thead><tr><th>Sumber</th><th>Nama</th><th>Data</th><th>Petakan ke tahap</th></tr></thead>
                 @foreach ([['ritasi', $lepasRitasi], ['bbm', $lepasBbm], ['kas_cc', $lepasKas]] as [$sumber, $daftar])
                     @foreach ($daftar as $l)
                         <tr>

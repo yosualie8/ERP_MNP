@@ -263,7 +263,20 @@
             : [...t.tBodies].reduce((s, tb) => s + [...tb.rows].filter(r => r.cells.length > 1).length, 0);
         return baris >= 5;
     };
-    const pindai = () => document.querySelectorAll('main table, .isi table, table[data-saring-kolom]').forEach(t => { if (layak(t)) pasang(t); });
+    // Judul beku & garis kolom: SEMUA tabel ber-judul (thead), termasuk form input & tabel kecil yang tidak diberi saringan.
+    // Kecuali tabel di dalam tabel lain / template / popup saringan, atau ber-atribut data-tanpa-beku.
+    const bisaBeku = t => !t.classList.contains('grid-beku') && !t.hasAttribute('data-tanpa-beku') && t.tHead?.rows[0]?.cells.length > 1
+        && !t.closest('template, .saring-pop') && !t.parentElement?.closest('table');
+    const pindai = () => document.querySelectorAll('main table, .isi table, table[data-saring-kolom]').forEach(t => {
+        if (layak(t)) pasang(t);
+        else if (bisaBeku(t)) bekukan(t);
+    });
+    // Tabel yang muncul belakangan (dibuat JavaScript, mis. panel rincian) ikut dibekukan.
+    let tunda = null;
+    new MutationObserver(daftar => {
+        if (tunda || !daftar.some(m => [...m.addedNodes].some(x => x.nodeType === 1 && (x.tagName === 'TABLE' || x.querySelector?.('table'))))) return;
+        tunda = setTimeout(() => { tunda = null; pindai(); }, 50);
+    }).observe(document.documentElement, {childList: true, subtree: true});
     window.SaringKolom = {pindai, pasang};
     pindai();
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', pindai);
