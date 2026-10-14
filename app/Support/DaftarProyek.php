@@ -139,37 +139,31 @@ class DaftarProyek
     public const SQL_KUNCI = "CASE WHEN b.id_transaksi REGEXP '^[0-9]{6}-.*[^-]$' THEN b.id_transaksi ELSE CONCAT(m.lembar, ':', b.baris) END";
 
     /**
-     * Ringkasan Penggunaan BBM per tahap (sementara dibaca dari lembar sheet, sampai menu BBM ada di aplikasi):
-     * solar keluar (liter) & jam HM (0–24 jam per baris; salah ketik tidak ikut). Disimpan 30 menit.
+     * Ringkasan Penggunaan BBM per tahap (dari tabel bbm = cermin lembar Penggunaan BBM, diimpor tiap 5 menit):
+     * solar keluar (liter) & jam HM (0–24 jam per baris; salah ketik tidak ikut). Disimpan 30 menit (dibuang tiap impor).
      *
      * @return array{per_tahap: array<int, array{liter: float, hm: float}>, lepas: array<int, array>, waktu: string}
      */
     public static function bbm(bool $segarkan = false): array
     {
-        if ($segarkan) {
-            \Illuminate\Support\Facades\Cache::forget('daftar-proyek-bbm');
+        if ($segarkan && ($sheets = GoogleSheets::terhubung())) {
+            LembarBbm::impor($sheets);
         }
 
-        // Sheet belum terhubung: kosong & tidak disimpan, supaya begitu terhubung langsung terbaca.
-        if (! $sheets = GoogleSheets::terhubung()) {
-            return ['per_tahap' => [], 'lepas' => [], 'waktu' => ''];
-        }
-
-        return \Illuminate\Support\Facades\Cache::remember('daftar-proyek-bbm', now()->addMinutes(30), function () use ($sheets) {
+        return \Illuminate\Support\Facades\Cache::remember('daftar-proyek-bbm', now()->addMinutes(30), function () {
             $per = [];
             $lepas = [];
-            $r = "'Penggunaan BBM'!A2:O";
-            foreach ($sheets->nilaiMentah(config('mnp.sheet_ritasi'), [$r])[$r] as $x) {
-                $p = trim(preg_replace('/\s+/', ' ', (string) ($x[14] ?? '')));
-                $liter = is_numeric($x[6] ?? null) ? (float) $x[6] : 0;
-                $hm = is_numeric($x[4] ?? null) && $x[4] >= 0 && $x[4] <= 24 ? (float) $x[4] : 0;
-                if ($p === '' || (! $liter && ! $hm)) {
+            foreach (\App\Models\Bbm::whereNotNull('proyek')->get(['tanggal', 'proyek', 'tahap_ids', 'keluar', 'total_hm']) as $x) {
+                $p = $x->proyek;
+                $liter = (float) $x->keluar;
+                $hm = $x->total_hm !== null && $x->total_hm >= 0 && $x->total_hm <= 24 ? (float) $x->total_hm : 0;
+                if (! $liter && ! $hm) {
                     continue;
                 }
-                $tgl = is_numeric($x[0] ?? null) ? date('Y-m-d', (int) round(($x[0] - 25569) * 86400)) : null;
+                $tgl = $x->tanggal?->toDateString();
                 // "Tahap A + Tahap B" = dibagi rata ke beberapa tahap yang sedang berjalan (proyek diisi otomatis);
                 // baris bagi rata tidak menggeser tanggal mulai/akhir tahap.
-                $ids = array_map(fn ($b) => self::tahapId('bbm', trim($b)), explode(' + ', $p));
+                $ids = $x->tahap_ids ?? [null];
                 if (! in_array(null, $ids, true)) {
                     foreach ($ids as $id) {
                         $per[$id]['liter'] = ($per[$id]['liter'] ?? 0) + $liter / count($ids);

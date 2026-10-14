@@ -117,6 +117,13 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::post('/ritasi/kubikasi', [\App\Http\Controllers\KubikasiKendaraanController::class, 'simpan'])->name('kubikasi.simpan');
     Route::get('/ritasi/buangan', [BuanganTrukController::class, 'index'])->name('ritasi.buangan');
     Route::post('/ritasi/buangan', [BuanganTrukController::class, 'simpan'])->name('ritasi.buangan.simpan');
+    Route::get('/bbm', [\App\Http\Controllers\BbmController::class, 'index'])->name('bbm.index');
+    Route::get('/bbm/input', [\App\Http\Controllers\BbmController::class, 'create'])->name('bbm.input');
+    Route::post('/bbm/input', [\App\Http\Controllers\BbmController::class, 'store'])->name('bbm.store');
+    Route::post('/bbm/opname', [\App\Http\Controllers\BbmController::class, 'opname'])->name('bbm.opname');
+    Route::get('/bbm/{baris}/edit', [\App\Http\Controllers\BbmController::class, 'edit'])->whereNumber('baris')->name('bbm.edit');
+    Route::put('/bbm/{baris}', [\App\Http\Controllers\BbmController::class, 'update'])->whereNumber('baris')->name('bbm.update');
+    Route::delete('/bbm/{baris}', [\App\Http\Controllers\BbmController::class, 'hapus'])->whereNumber('baris')->name('bbm.hapus');
     Route::get('/ritasi/input', [RitasiController::class, 'create'])->name('ritasi.input');
     Route::post('/ritasi/input', [RitasiController::class, 'store'])->name('ritasi.store');
     Route::post('/ritasi/periksa', [RitasiController::class, 'periksa'])->name('ritasi.periksa');

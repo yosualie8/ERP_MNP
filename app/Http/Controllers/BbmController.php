@@ -1,0 +1,320 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\AsetTruk;
+use App\Models\Bbm;
+use App\Models\BbmUnitPeta;
+use App\Models\KasRiwayat;
+use App\Models\ProyekTahap;
+use App\Support\GoogleSheets;
+use App\Support\LembarBbm;
+use App\Support\LembarRitasi;
+use App\Support\TulisBbmSheet;
+use Carbon\Carbon;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\View\View;
+
+/** Menu Data BBM & Input BBM (lembar "Penggunaan BBM"). */
+class BbmController extends Controller
+{
+    /** Baris yang perlu dilengkapi admin: pemakaian solar tanpa proyek yang dikenali, unit belum dikenal. */
+    private function perlu()
+    {
+        return Bbm::where(fn ($q) => $q->where(fn ($w) => $w->where('jenis', 'pakai')->where('keluar', '>', 0)->whereNull('tahap_ids')->where(fn ($p) => $p->whereNull('proyek')->orWhere('proyek', '!=', 'Pool')))
+            ->orWhere('jenis', 'cek'));
+    }
+
+    public function index(Request $request): View
+    {
+        $daftarBulan = Bbm::whereNotNull('tanggal')->selectRaw("DATE_FORMAT(tanggal, '%Y-%m') as bulan")->distinct()->orderBy('bulan')->pluck('bulan');
+        $perlu = $request->boolean('perlu');
+        $bulan = $perlu ? null : ($daftarBulan->contains($request->query('bulan')) ? $request->query('bulan') : $daftarBulan->last());
+        $baris = collect();
+        if ($perlu) {
+            $baris = $this->perlu()->orderByDesc('baris')->get();
+        } elseif ($bulan) {
+            $awal = Carbon::parse($bulan.'-01');
+            $baris = Bbm::whereBetween('tanggal', [$awal, $awal->copy()->endOfMonth()])->orderByDesc('baris')->get();
+        }
+        $terakhir = Bbm::whereNotNull('stok')->orderByDesc('baris')->first();
+
+        return view('bbm.index', [
+            'daftarBulan' => $daftarBulan, 'bulan' => $bulan, 'baris' => $baris, 'perlu' => $perlu, 'jumlahPerlu' => $this->perlu()->count(),
+            'stokSekarang' => $terakhir?->stok, 'stokPada' => $terakhir?->tanggal,
+            'diimpor' => Cache::get('bbm-diimpor-pada'), 'bolehInput' => $request->user()->bolehMenu('input-bbm'),
+        ]);
+    }
+
+    /** Nama unit yang bisa dipilih + info terakhirnya (jenis, HM akhir, proyek) untuk mengisi otomatis. */
+    private function infoUnit(): array
+    {
+        $info = [];
+        foreach (AsetTruk::whereIn('status', ['aktif', 'perbaikan'])->orderBy('no_lambung')->pluck('no_lambung') as $n) {
+            $info[$n] = ['jenis' => 'pakai'];
+        }
+        foreach (BbmUnitPeta::whereIn('jenis', ['masuk', 'pindah', 'susut', 'operasional'])->orderBy('nama')->get() as $p) {
+            $info[$p->nama] ??= ['jenis' => $p->jenis];
+        }
+        // HM akhir & proyek terakhir per unit (dari data setahun terakhir).
+        $nama = [];
+        foreach (array_keys($info) as $n) {
+            $nama[BbmUnitPeta::kunci($n)] = $n;
+        }
+        foreach (Bbm::where('tanggal', '>=', now()->subYear())->whereNotNull('unit')->orderBy('baris')->get(['unit', 'jenis', 'hm_akhir', 'proyek', 'tanggal']) as $b) {
+            $k = $nama[BbmUnitPeta::kunci($b->unit)] ??= $b->unit;
+            if ($b->jenis === 'cek' || $b->jenis === 'opname') {
+                continue;
+            }
+            $info[$k] = [...($info[$k] ?? []), 'jenis' => $b->jenis, 'terakhir' => $b->tanggal?->toDateString()];
+            if ($b->hm_akhir !== null) {
+                $info[$k]['hm'] = $b->hm_akhir;
+            }
+            if ($b->proyek && ! str_contains($b->proyek, ' + ')) {
+                $info[$k]['proyek'] = $b->proyek;
+            }
+        }
+        // Yang paling baru dipakai di atas.
+        uksort($info, fn ($a, $b) => [$info[$b]['terakhir'] ?? '', $a] <=> [$info[$a]['terakhir'] ?? '', $b]);
+
+        return $info;
+    }
+
+    public function create(): View
+    {
+        $tahap = ProyekTahap::where('nama', 'not like', '%(biaya%')->where('nama', 'not like', 'Biaya Umum%')
+            ->whereIn('status', ['belum', 'progress'])->orderBy('nama')->pluck('nama')->prepend('Pool');
+        $hariTerakhir = Bbm::where('jenis', 'pakai')->max('tanggal');
+
+        return view('bbm.input', [
+            'unit' => $this->infoUnit(), 'tahap' => $tahap, 'status' => LembarBbm::STATUS,
+            'unitTerakhir' => $hariTerakhir ? Bbm::where('jenis', 'pakai')->where('tanggal', $hariTerakhir)->orderBy('baris')->pluck('unit')->unique()->values() : collect(),
+            'hariTerakhir' => $hariTerakhir,
+        ]);
+    }
+
+    /**
+     * Baris yang sudah dirapikan & galatnya.
+     *
+     * @return array{0: array<int, array>, 1: array<string, string>}
+     */
+    private function rapikan(Request $request): array
+    {
+        $rapi = fn ($v) => ($v = trim(preg_replace('/\s+/', ' ', (string) $v))) === '' ? null : $v;
+        $angka = fn ($v) => ($v = trim(str_replace(' ', '', (string) $v))) === '' ? null : (is_numeric($x = str_replace(',', '.', $v)) ? (float) $x : false);
+        $tanggal = RitasiController::tanggal($request->input('tanggal'));
+        $galat = [];
+        if (! $tanggal) {
+            $galat['tanggal'] = 'Tanggal belum diisi / tidak dikenali.';
+        } elseif ($tanggal->gt(now()->endOfDay())) {
+            $galat['tanggal'] = 'Tanggal tidak boleh lewat dari hari ini.';
+        }
+        $peta = BbmUnitPeta::get()->keyBy('kunci')->all();
+        $hasil = [];
+        foreach ((array) $request->input('baris', []) as $i => $r) {
+            $b = [
+                'tanggal' => $tanggal, 'unit' => $rapi($r['unit'] ?? null), 'hm_awal' => $angka($r['hm_awal'] ?? null), 'hm_akhir' => $angka($r['hm_akhir'] ?? null),
+                'total_hm' => $angka($r['total_hm'] ?? null), 'masuk' => $angka($r['masuk'] ?? null), 'keluar' => $angka($r['keluar'] ?? null),
+                'jam_mulai' => LembarRitasi::jam($rapi($r['jam_mulai'] ?? null)), 'istirahat' => LembarRitasi::jam($rapi($r['istirahat'] ?? null)),
+                'jam_selesai' => LembarRitasi::jam($rapi($r['jam_selesai'] ?? null)), 'status' => $rapi($r['status'] ?? null),
+                'keterangan' => $rapi($r['keterangan'] ?? null), 'rental' => $angka($r['rental'] ?? null), 'proyek' => $rapi($r['proyek'] ?? null),
+                'keterangan_kerja' => $rapi($r['keterangan_kerja'] ?? null),
+            ];
+            $isi = array_filter(array_diff_key($b, ['tanggal' => 1]), fn ($v) => $v !== null);
+            if (! $isi) {
+                continue;
+            }
+            $no = 'Baris '.($i + 1).($b['unit'] ? " ({$b['unit']})" : '').': ';
+            $g = [];
+            foreach (['hm_awal' => 'HM awal', 'hm_akhir' => 'HM akhir', 'total_hm' => 'Total HM', 'masuk' => 'Masuk', 'keluar' => 'Keluar', 'rental' => 'Rental'] as $k => $nama) {
+                if ($b[$k] === false) {
+                    $g[] = "$nama harus angka.";
+                    $b[$k] = null;
+                } elseif ($b[$k] !== null && $b[$k] < 0) {
+                    $g[] = "$nama tidak boleh minus.";
+                }
+            }
+            [$jenis] = $b['unit'] ? LembarBbm::arti($b['unit'], $peta) : ['cek'];
+            if (! $b['unit']) {
+                $g[] = 'Unit belum diisi.';
+            } elseif ($jenis === 'cek') {
+                $g[] = "Unit \"{$b['unit']}\" belum dikenal — tambahkan dulu di Data Aset, atau pilih nama dari daftar.";
+            } elseif ($jenis === 'opname') {
+                $g[] = 'Stock opname dicatat lewat tombol Stock Opname di menu Data BBM.';
+            }
+            if ($b['hm_awal'] !== null && $b['hm_akhir'] !== null) {
+                if ($b['hm_akhir'] < $b['hm_awal']) {
+                    $g[] = 'HM akhir lebih kecil dari HM awal.';
+                } elseif ($b['hm_akhir'] - $b['hm_awal'] > 24) {
+                    $g[] = 'Total HM lebih dari 24 jam — periksa HM awal/akhir.';
+                }
+            }
+            if ($jenis === 'pakai') {
+                if ($b['masuk']) {
+                    $g[] = 'Solar masuk tidak dicatat di baris alat — buat baris sendiri dengan unit sumber solar (mis. "Isi Solar dari Luar").';
+                }
+                if ($b['keluar'] && ! $b['proyek']) {
+                    $g[] = 'Pemakaian solar wajib diisi Proyek.';
+                }
+            } elseif ($jenis === 'masuk') {
+                if (! $b['masuk']) {
+                    $g[] = 'Isi jumlah liter di kolom Masuk.';
+                }
+                if ($b['keluar']) {
+                    $g[] = 'Baris solar masuk tidak boleh berisi Keluar.';
+                }
+            } elseif (in_array($jenis, ['pindah', 'susut', 'operasional'], true)) {
+                if (! $b['keluar']) {
+                    $g[] = 'Isi jumlah liter di kolom Keluar.';
+                }
+                if ($b['masuk']) {
+                    $g[] = 'Baris ini tidak boleh berisi Masuk.';
+                }
+            }
+            if ($b['proyek'] && $b['proyek'] !== 'Pool' && ! LembarBbm::tahapIds($b['proyek'])) {
+                $g[] = "Proyek \"{$b['proyek']}\" tidak ada di Daftar Proyek — pilih dari daftar.";
+            }
+            if ($g) {
+                $galat["baris.{$i}"] = $no.implode(' ', $g);
+            }
+            $hasil[(int) $i] = $b;
+        }
+        if (! $hasil && ! $galat) {
+            $galat['baris'] = 'Isi minimal satu baris.';
+        }
+
+        return [array_values($hasil), $galat];
+    }
+
+    public function store(Request $request): RedirectResponse
+    {
+        [$baris, $galat] = $this->rapikan($request);
+        if ($galat) {
+            return back()->withInput()->withErrors($galat);
+        }
+        try {
+            $hasil = (new TulisBbmSheet(GoogleSheets::wajib()))->tulis($baris);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->withInput()->with('error', 'Gagal menulis ke sheet: '.$e->getMessage());
+        }
+        $ringkas = count($baris).' baris · '.$baris[0]['tanggal']->translatedFormat('j M Y').' · keluar '.self::liter(array_sum(array_column($baris, 'keluar')))
+            .' · masuk '.self::liter(array_sum(array_column($baris, 'masuk')));
+        KasRiwayat::create(['aksi' => 'bbm-tambah', 'lembar' => 'BBM', 'baris_awal' => $hasil['baris_awal'], 'baris_akhir' => $hasil['baris_akhir'],
+            'ringkasan' => $ringkas, 'isi' => ['baris' => self::untukRiwayat($baris)], 'user_id' => $request->user()->id]);
+
+        return redirect()->route('bbm.index', ['bulan' => $baris[0]['tanggal']->format('Y-m')])
+            ->with('success', "Tersimpan di sheet Penggunaan BBM baris {$hasil['baris_awal']}–{$hasil['baris_akhir']}: {$ringkas}.");
+    }
+
+    public function edit(int $baris): View|RedirectResponse
+    {
+        $b = Bbm::where('baris', $baris)->first();
+        if (! $b || $b->jenis === 'opname') {
+            return redirect()->route('bbm.index')->with('error', $b ? 'Baris Stock Opname tidak bisa diedit; hapus lalu catat ulang.' : "Baris {$baris} tidak ditemukan — mungkin sheet berubah. Tunggu beberapa menit, lalu muat ulang.");
+        }
+        $a = fn ($v) => $v === null ? '' : rtrim(rtrim(number_format((float) $v, 2, ',', ''), '0'), ',');
+
+        return $this->create()->with('edit', [
+            'baris' => $b->baris, 'versi' => $this->versi($b), 'tanggal' => $b->tanggal?->format('d-m-Y'),
+            'isi' => [['unit' => $b->unit, 'hm_awal' => $a($b->hm_awal), 'hm_akhir' => $a($b->hm_akhir), 'total_hm' => $b->hm_awal === null || $b->hm_akhir === null ? $a($b->total_hm) : '',
+                'masuk' => $a($b->masuk), 'keluar' => $a($b->keluar), 'jam_mulai' => $b->jam_mulai, 'istirahat' => $b->istirahat, 'jam_selesai' => $b->jam_selesai,
+                'status' => $b->status, 'keterangan' => $b->keterangan, 'rental' => $a($b->rental), 'proyek' => $b->proyek, 'keterangan_kerja' => $b->keterangan_kerja]],
+        ]);
+    }
+
+    public function update(Request $request, int $baris): RedirectResponse
+    {
+        $b = Bbm::where('baris', $baris)->first();
+        if (! $b || $request->input('versi') !== $this->versi($b)) {
+            return back()->withInput()->with('error', 'Baris ini sudah berubah di sheet sejak form dibuka. Buka Edit lagi.');
+        }
+        [$isi, $galat] = $this->rapikan($request);
+        if (! $galat && count($isi) !== 1) {
+            $galat['baris'] = 'Edit hanya untuk satu baris.';
+        }
+        if ($galat) {
+            return back()->withInput()->withErrors($galat);
+        }
+        $lama = "{$b->unit} {$b->tanggal?->translatedFormat('j M Y')} keluar ".self::liter($b->keluar).' masuk '.self::liter($b->masuk);
+        try {
+            (new TulisBbmSheet(GoogleSheets::wajib()))->ubah($b, $isi[0]);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->withInput()->with('error', 'Gagal mengubah di sheet: '.$e->getMessage());
+        }
+        KasRiwayat::create(['aksi' => 'bbm-ubah', 'lembar' => 'BBM', 'baris_awal' => $baris, 'baris_akhir' => $baris,
+            'ringkasan' => mb_strimwidth("{$lama} → {$isi[0]['unit']} {$isi[0]['tanggal']->translatedFormat('j M Y')} keluar ".self::liter($isi[0]['keluar']).' masuk '.self::liter($isi[0]['masuk']), 0, 490, '…'),
+            'isi' => ['lama' => $b->toArray(), 'baru' => self::untukRiwayat($isi)], 'user_id' => $request->user()->id]);
+
+        return redirect()->route('bbm.index', ['bulan' => $isi[0]['tanggal']->format('Y-m')])->with('success', "Baris {$baris} diperbarui di sheet Penggunaan BBM.");
+    }
+
+    public function hapus(Request $request, int $baris): RedirectResponse
+    {
+        $b = Bbm::where('baris', $baris)->firstOrFail();
+        $ringkas = "{$b->unit} · {$b->tanggal?->translatedFormat('j M Y')} · keluar ".self::liter($b->keluar).' · masuk '.self::liter($b->masuk).($b->proyek ? " · {$b->proyek}" : '');
+        try {
+            (new TulisBbmSheet(GoogleSheets::wajib()))->hapus($b);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->with('error', 'Gagal menghapus: '.$e->getMessage());
+        }
+        KasRiwayat::create(['aksi' => 'bbm-hapus', 'lembar' => 'BBM', 'baris_awal' => $baris, 'baris_akhir' => $baris, 'ringkasan' => mb_strimwidth($ringkas, 0, 490, '…'),
+            'isi' => ['baris' => $b->toArray()], 'user_id' => $request->user()->id]);
+
+        return redirect()->route('bbm.index', $request->boolean('perlu') ? ['perlu' => 1] : ['bulan' => $b->tanggal?->format('Y-m')])
+            ->with('success', "Dihapus dari sheet Penggunaan BBM baris {$baris}: {$ringkas}.");
+    }
+
+    /** Stock opname: stok fisik → baris "Stock Opname" dengan selisih terhadap stok catatan (Masuk bila lebih, Keluar bila kurang). */
+    public function opname(Request $request): RedirectResponse
+    {
+        $data = $request->validate(['tanggal' => ['required', 'string', 'max:20'], 'stok_fisik' => ['required', 'string', 'max:20']],
+            ['tanggal.required' => 'Tanggal opname belum diisi.', 'stok_fisik.required' => 'Stok fisik belum diisi.']);
+        $tanggal = RitasiController::tanggal($data['tanggal']);
+        $fisik = str_replace(',', '.', str_replace('.', '', trim($data['stok_fisik'])));
+        if (! $tanggal || $tanggal->gt(now()->endOfDay()) || ! is_numeric($fisik) || $fisik < 0) {
+            return back()->withInput()->withErrors(['opname' => 'Tanggal atau stok fisik tidak valid.']);
+        }
+        $fisik = (float) $fisik;
+        $stok = (float) (Bbm::whereNotNull('stok')->orderByDesc('baris')->value('stok') ?? 0);
+        $selisih = round($fisik - $stok, 2);
+        $b = ['tanggal' => $tanggal, 'unit' => 'Stock Opname', 'hm_awal' => null, 'hm_akhir' => null, 'total_hm' => null,
+            'masuk' => $selisih > 0 ? $selisih : null, 'keluar' => $selisih < 0 ? -$selisih : null,
+            'keterangan' => 'Stok fisik '.rtrim(rtrim(number_format($fisik, 2, '.', ''), '0'), '.').' liter',
+            'keterangan_kerja' => $request->input('catatan') ? mb_substr(trim($request->input('catatan')), 0, 300) : null];
+        try {
+            $hasil = (new TulisBbmSheet(GoogleSheets::wajib()))->tulis([$b]);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return back()->withInput()->with('error', 'Gagal menulis ke sheet: '.$e->getMessage());
+        }
+        $ringkas = "Stock opname {$tanggal->translatedFormat('j M Y')}: catatan ".self::liter($stok).', fisik '.self::liter($fisik).', selisih '.($selisih >= 0 ? '+' : '').self::liter($selisih);
+        KasRiwayat::create(['aksi' => 'bbm-opname', 'lembar' => 'BBM', 'baris_awal' => $hasil['baris_awal'], 'baris_akhir' => $hasil['baris_akhir'],
+            'ringkasan' => $ringkas, 'isi' => ['baris' => self::untukRiwayat([$b])], 'user_id' => $request->user()->id]);
+
+        return redirect()->route('bbm.index', ['bulan' => $tanggal->format('Y-m')])->with('success', "{$ringkas} (sheet baris {$hasil['baris_awal']}).");
+    }
+
+    public static function liter(?float $v): string
+    {
+        return rtrim(rtrim(number_format((float) $v, 2, ',', '.'), '0'), ',').' L';
+    }
+
+    private static function untukRiwayat(array $baris): array
+    {
+        return array_map(fn ($b) => [...$b, 'tanggal' => $b['tanggal']->toDateString()], $baris);
+    }
+
+    private function versi(Bbm $b): string
+    {
+        return sha1(json_encode([$b->baris, $b->tanggal?->toDateString(), $b->unit, $b->masuk, $b->keluar, $b->hm_awal, $b->hm_akhir, $b->proyek]));
+    }
+}

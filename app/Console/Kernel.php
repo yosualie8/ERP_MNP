@@ -25,6 +25,8 @@ class Kernel extends ConsoleKernel
         $schedule->command('mnp:impor-uj')->everyFiveMinutes()->withoutOverlapping();
         // Lembar Ritasi (Proyek ASG - Gsheet) ikut ke aplikasi.
         $schedule->command('mnp:impor-ritasi')->everyFiveMinutes()->withoutOverlapping();
+        // Lembar Penggunaan BBM ikut ke aplikasi.
+        $schedule->command('mnp:impor-bbm')->everyFiveMinutes()->withoutOverlapping();
     }
 
     /**
