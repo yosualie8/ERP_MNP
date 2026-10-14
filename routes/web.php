@@ -72,6 +72,11 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::put('/proyek/tahap/{tahap}', [DaftarProyekController::class, 'update'])->whereNumber('tahap')->name('proyek.update');
     Route::post('/proyek/alias', [DaftarProyekController::class, 'petakan'])->name('proyek.petakan');
     Route::delete('/proyek/alias/{alias}', [DaftarProyekController::class, 'hapusAlias'])->whereNumber('alias')->name('proyek.alias.hapus');
+    Route::get('/karyawan', [\App\Http\Controllers\KaryawanController::class, 'index'])->name('karyawan.index');
+    Route::get('/karyawan/tambah', [\App\Http\Controllers\KaryawanController::class, 'create'])->name('karyawan.create');
+    Route::post('/karyawan', [\App\Http\Controllers\KaryawanController::class, 'store'])->name('karyawan.store');
+    Route::get('/karyawan/{karyawan}/edit', [\App\Http\Controllers\KaryawanController::class, 'edit'])->whereNumber('karyawan')->name('karyawan.edit');
+    Route::put('/karyawan/{karyawan}', [\App\Http\Controllers\KaryawanController::class, 'update'])->whereNumber('karyawan')->name('karyawan.update');
     Route::get('/aset', [AsetController::class, 'index'])->name('aset.index');
     Route::get('/aset/tambah', [AsetController::class, 'create'])->name('aset.create');
     Route::post('/aset', [AsetController::class, 'store'])->name('aset.store');
