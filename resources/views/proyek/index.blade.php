@@ -44,7 +44,6 @@
                 <a href="{{ route('proyek.index', ['tahun' => $th] + $tambah) }}" @class(['chip', 'aktif' => $tahun === [$th]]) title="Tahap yang berjalan di tahun {{ $th }}">{{ $th }} · {{ $n }}</a>
             @endforeach
             <a href="{{ route('proyek.index', ['tahun' => 'semua'] + $tambah) }}" @class(['chip', 'aktif' => ! $tahun])>Semua tahun · {{ $jumlahSemua }}</a>
-            <button type="button" class="tombol polos" id="buka-semua" style="padding: 6px 12px;">Buka semua</button>
             <span class="redup" style="margin-left: auto;">Data solar & jam HM dari lembar Penggunaan BBM{{ $waktuBbm ? ', diambil '.\Illuminate\Support\Carbon::parse($waktuBbm)->translatedFormat('d-M H:i') : ' (sheet belum terhubung)' }}</span>
             <a href="{{ route('proyek.index', ['segarkan' => 1] + request()->only('tahun', 'semua')) }}" class="tombol polos" style="padding: 6px 12px;">↻ Segarkan BBM</a>
         </div>
@@ -96,6 +95,10 @@
         </div>
     @endif
 
+    <div style="display: flex; gap: 6px; justify-content: flex-end; margin-bottom: 6px;">
+        <button type="button" class="tombol polos" id="buka-semua" style="padding: 5px 12px; font-size: 13px;" title="Tampilkan rincian biaya semua tahap">⊞ Buka semua</button>
+        <button type="button" class="tombol polos" id="tutup-semua" style="padding: 5px 12px; font-size: 13px;" title="Sembunyikan rincian biaya semua tahap">⊟ Tutup semua</button>
+    </div>
     <div class="kartu gulir" style="padding: 0;">
         <table class="grid" id="grid" data-saring-kolom>
             <thead>
@@ -145,22 +148,20 @@
         (() => {
             const grid = document.getElementById('grid');
             const master = [...grid.querySelectorAll('tbody tr.m')];
-            const tombol = document.getElementById('buka-semua');
             // Saringan kolom = saring-kolom.js (seragam di semua grid). ?q=… mengisi saringan kolom Tahap.
             const q = new URLSearchParams(location.search).get('q');
             if (q) window.addEventListener('DOMContentLoaded', () => {
-                const x = grid.querySelector('tr.saring-kolom input[data-kolom="1"]');
+                const x = grid.querySelector('tr.saring-kolom input[data-kolom="0"]');
                 if (x) { x.value = q; x.dispatchEvent(new Event('input')); }
             });
 
-            const atur = () => tombol.textContent = master.every(m => m.classList.contains('buka')) ? 'Tutup semua' : 'Buka semua';
             const buka = (tr, b) => { tr.classList.toggle('buka', b); tr.nextElementSibling.classList.toggle('buka', b); };
             master.forEach(tr => tr.addEventListener('click', e => {
                 if (e.target.closest('a, button, form')) return;
-                buka(tr, !tr.classList.contains('buka')); atur();
+                buka(tr, !tr.classList.contains('buka'));
             }));
-            tombol.addEventListener('click', () => { const b = !master.every(m => m.classList.contains('buka')); master.forEach(m => buka(m, b)); atur(); });
-            atur();
+            document.getElementById('buka-semua').addEventListener('click', () => master.forEach(m => buka(m, true)));
+            document.getElementById('tutup-semua').addEventListener('click', () => master.forEach(m => buka(m, false)));
         })();
     </script>
 @endsection
