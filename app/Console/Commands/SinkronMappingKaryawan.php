@@ -46,6 +46,9 @@ class SinkronMappingKaryawan extends Command
             $lengkap = ['nik' => $nik, 'bank' => $teks($m['bank'] ?? null), 'no_rekening' => $teks($m['no_rekening'] ?? null), 'nama_rekening' => $teks($m['nama_rekening'] ?? null)];
             if ($k) {
                 $dipakai[$k->id] = true;
+                if (! empty($m['no_master'])) {
+                    $isi['no_master'] = (int) $m['no_master']; // No di sheet Master bisa bergeser bila baris dirapatkan
+                }
                 foreach ($lengkap as $f => $v) {
                     if ($v !== null && ! $k->{$f}) {
                         $isi[$f] = $v; // hanya mengisi yang kosong
