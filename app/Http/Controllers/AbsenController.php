@@ -75,11 +75,9 @@ class AbsenController extends Controller
         $path = $request->file('foto')->storeAs('absen/'.$waktu->format('Y/m'), $k->id.'-'.$waktu->format('Ymd-His').'-'.$data['jenis'].'.jpg');
         // Watermark dari data yang sudah divalidasi server (jenis, waktu server, GPS, proyek & lokasi, nama).
         \App\Support\WatermarkAbsen::pasang(Storage::path($path), [
-            mb_strtoupper(Absensi::JENIS[$data['jenis']]),
-            $waktu->translatedFormat('j M Y H:i:s').' WIB',
-            sprintf('GPS %.7f, %.7f', $data['lat'], $data['lng']).($akurasi !== null ? " (±{$akurasi} m)" : ''),
-            'Proyek: '.($l->tahap?->nama ?? '-'),
-            "Lokasi: {$l->nama} ({$jarak} m dari titik)",
+            mb_strtoupper(Absensi::JENIS[$data['jenis']]).' · '.$waktu->translatedFormat('j M Y H:i:s').' WIB',
+            sprintf('GPS %.7f, %.7f', $data['lat'], $data['lng']).($akurasi !== null ? " ±{$akurasi} m" : ''),
+            ($l->tahap?->nama ?? '-')." · {$l->nama} ({$jarak} m)",
             $k->nama,
         ]);
         Absensi::create([
