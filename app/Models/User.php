@@ -59,7 +59,32 @@ class User extends Authenticatable
         return \App\Support\MenuAkses::boleh($this, $menu);
     }
 
-    /** Peran khusus karyawan (dibuat otomatis saat login Google bila email terdaftar di Data Karyawan aktif): hanya halaman Absen. */
+    /** @var array{0: ?Karyawan, 1: array<int, string>}|null */
+    private ?array $aksesJabatan = null;
+
+    /** Karyawan AKTIF yang email-nya sama dengan akun ini (penghubung akun ↔ jabatan). */
+    public function karyawanAktif(): ?Karyawan
+    {
+        return $this->hitungAkses()[0];
+    }
+
+    /** Menu dari jabatan karyawan aktif yang terhubung (halaman Hak Akses Jabatan); tidak terhubung / tanpa jabatan = tanpa menu. */
+    public function menuJabatan(): array
+    {
+        return $this->hitungAkses()[1];
+    }
+
+    private function hitungAkses(): array
+    {
+        if ($this->aksesJabatan === null) {
+            $k = Karyawan::where('email', strtolower((string) $this->email))->where('status', 'aktif')->first();
+            $this->aksesJabatan = [$k, JabatanMenu::untuk($k?->jabatan)];
+        }
+
+        return $this->aksesJabatan;
+    }
+
+    /** Peran akun yang dibuat otomatis saat karyawan aktif login Google pertama kali; menunya tetap mengikuti jabatan. */
     public const ROLE_KARYAWAN = 'karyawan';
 
     public function isKaryawan(): bool

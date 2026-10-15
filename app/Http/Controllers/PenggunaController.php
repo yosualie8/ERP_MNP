@@ -3,19 +3,19 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
-use App\Support\MenuAkses;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
-/** Daftar pengguna yang boleh login (super admin saja). */
+/** Daftar akun yang boleh login & perannya (super admin saja). Menu tiap akun mengikuti jabatan (Hak Akses Jabatan). */
 class PenggunaController extends Controller
 {
     public function index(): View
     {
         return view('pengguna.index', [
-            'pengguna' => User::where('role', '!=', User::ROLE_KARYAWAN)->orderByRaw("role = 'super_admin' desc")->orderBy('name')->get(),
+            // Semua akun (termasuk yang dibuat otomatis saat karyawan login); menu mengikuti jabatan karyawan yang terhubung.
+            'pengguna' => User::orderByRaw("role = 'super_admin' desc")->orderBy('name')->get(),
         ]);
     }
 
@@ -44,21 +44,6 @@ class PenggunaController extends Controller
         return back()->with('success', "Peran {$user->email} diubah menjadi ".User::ROLE[$role].'.');
     }
 
-    /** Atur menu yang boleh dilihat akun Admin (Super Admin selalu semua menu). */
-    public function menu(Request $request, User $user): RedirectResponse
-    {
-        $menu = $request->validate([
-            'menu' => ['nullable', 'array'],
-            'menu.*' => [Rule::in(array_keys(MenuAkses::DAFTAR))],
-        ])['menu'] ?? [];
-        if ($user->isSuperAdmin()) {
-            return back()->with('error', 'Super Admin selalu bisa melihat semua menu.');
-        }
-        $user->update(['menu' => array_values(array_intersect(array_keys(MenuAkses::DAFTAR), $menu))]);
-        $nama = collect($user->menu)->map(fn ($k) => MenuAkses::DAFTAR[$k][0]);
-
-        return back()->with('success', "Menu {$user->email}: ".($nama->isEmpty() ? 'hanya Beranda' : 'Beranda, '.$nama->implode(', ')).'.');
-    }
 
     public function destroy(Request $request, User $user): RedirectResponse
     {

@@ -73,10 +73,10 @@ class GoogleController extends Controller
         } else {
             // Pengguna lain harus sudah didaftarkan super admin di menu Pengguna.
             $user = User::where('email', $email)->first();
-            // Karyawan aktif yang email Google-nya terdaftar di Data Karyawan → akun absen (hanya halaman Absen).
+            // Karyawan aktif yang email Google-nya terdaftar di Data Karyawan → akun dibuat otomatis; menunya mengikuti jabatan.
             $karyawan = \App\Models\Karyawan::where('email', $email)->where('status', 'aktif')->first();
             if (! $user && $karyawan) {
-                $user = User::create(['email' => $email, ...$profil, 'role' => User::ROLE_KARYAWAN, 'menu' => ['absen']]);
+                $user = User::create(['email' => $email, ...$profil, 'role' => User::ROLE_KARYAWAN]);
             }
             if ($user?->isKaryawan() && ! $karyawan) {
                 return redirect()->route('login')->withErrors(['email' => "Akun {$email} tidak lagi terdaftar sebagai karyawan aktif. Hubungi admin."]);

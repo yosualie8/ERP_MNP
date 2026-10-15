@@ -167,7 +167,8 @@ Route::middleware(['auth', 'menu'])->group(function () {
         Route::get('/pengguna', [PenggunaController::class, 'index'])->name('pengguna.index');
         Route::post('/pengguna', [PenggunaController::class, 'store'])->name('pengguna.store');
         Route::patch('/pengguna/{user}', [PenggunaController::class, 'update'])->name('pengguna.update');
-        Route::patch('/pengguna/{user}/menu', [PenggunaController::class, 'menu'])->name('pengguna.menu');
+        Route::get('/hak-akses-jabatan', [\App\Http\Controllers\JabatanMenuController::class, 'index'])->name('jabatan-menu.index');
+        Route::patch('/hak-akses-jabatan', [\App\Http\Controllers\JabatanMenuController::class, 'update'])->name('jabatan-menu.update');
         Route::delete('/pengguna/{user}', [PenggunaController::class, 'destroy'])->name('pengguna.destroy');
     });
 });

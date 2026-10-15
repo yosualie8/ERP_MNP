@@ -197,10 +197,11 @@
                     </details>
                 @endforeach
                 @can('super-admin')
-                    @php($adaAktif = request()->routeIs('pengguna.*'))
+                    @php($adaAktif = request()->routeIs('pengguna.*', 'jabatan-menu.*'))
                     <details data-kategori="pengaturan" @class(['ada-aktif' => $adaAktif]) @if ($adaAktif) data-aktif open @endif>
-                        <summary><span>⚙️</span> Pengaturan <span class="jumlah">1</span><span class="panah">▶</span></summary>
-                        <a href="{{ route('pengguna.index') }}" @class(['menu', 'aktif' => $adaAktif])>Pengguna</a>
+                        <summary><span>⚙️</span> Pengaturan <span class="jumlah">2</span><span class="panah">▶</span></summary>
+                        <a href="{{ route('jabatan-menu.index') }}" @class(['menu', 'aktif' => request()->routeIs('jabatan-menu.*')])>Hak Akses Jabatan</a>
+                        <a href="{{ route('pengguna.index') }}" @class(['menu', 'aktif' => request()->routeIs('pengguna.*')])>Pengguna</a>
                     </details>
                 @endcan
             </aside>

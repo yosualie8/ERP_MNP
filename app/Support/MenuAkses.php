@@ -5,8 +5,9 @@ namespace App\Support;
 use App\Models\User;
 
 /**
- * Menu yang bisa diatur per akun (halaman Pengguna). Super Admin selalu boleh semua; Admin hanya menu yang dicentang
- * (belum pernah diatur = semua menu). Setiap rute dipetakan ke menunya supaya halaman juga ditolak bila dibuka lewat URL.
+ * Menu yang bisa diatur per JABATAN karyawan (halaman Hak Akses Jabatan). Super Admin selalu boleh semua; akun lain
+ * mengikuti jabatan karyawan aktif yang email-nya sama (tidak terhubung = tanpa menu). Setiap rute dipetakan ke menunya
+ * supaya halaman juga ditolak bila dibuka lewat URL.
  */
 class MenuAkses
 {
@@ -61,7 +62,8 @@ class MenuAkses
     ];
 
     /** Foto bon dipakai Input Kas dan Input UJ: boleh bila salah satunya boleh. */
-    private const BERSAMA = ['absen.foto' => ['absen', 'absensi'], 'kas.foto' => ['input-kas', 'kas-harian', 'input-uj', 'kas-uj'], 'kas.foto.destroy' => ['input-kas', 'input-uj']];
+    // oauth.* = izin ChatGPT (MCP) membaca data ERP → hanya akun dengan menu Tanya AI.
+    private const BERSAMA = ['oauth.izin' => ['tanya-ai'], 'oauth.putuskan' => ['tanya-ai'], 'absen.foto' => ['absen', 'absensi'], 'kas.foto' => ['input-kas', 'kas-harian', 'input-uj', 'kas-uj'], 'kas.foto.destroy' => ['input-kas', 'input-uj']];
 
     /** Menu yang hanya untuk Super Admin (tidak bisa diberikan ke Admin). */
     public const KHUSUS_SUPER = ['dashboard-aktivitas'];
@@ -74,11 +76,12 @@ class MenuAkses
         if (in_array($menu, self::KHUSUS_SUPER, true)) {
             return $user->isSuperAdmin();
         }
-        if ($user->isSuperAdmin() || $user->menu === null) {
+        if ($user->isSuperAdmin()) {
             return true;
         }
 
-        return in_array($menu, $user->menu, true);
+        // Selain Super Admin: menu mengikuti JABATAN karyawan aktif yang email-nya sama dengan akun (Hak Akses Jabatan).
+        return in_array($menu, $user->menuJabatan(), true);
     }
 
     /** Menu-menu yang mencakup rute ini (kosong = rute tidak dibatasi menu, mis. Beranda). */

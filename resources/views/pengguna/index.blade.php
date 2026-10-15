@@ -13,7 +13,7 @@
     </style>
     <div class="kartu">
         <h3 style="margin-top: 0;">Tambah pengguna</h3>
-        <p class="redup" style="margin-top: 0;">Pengguna login dengan akun Google sesuai email di bawah. Super Admin melihat semua menu dan mengatur pengguna; menu yang boleh dilihat tiap Admin diatur di tabel bawah.</p>
+        <p class="redup" style="margin-top: 0;">Pengguna login dengan akun Google sesuai email di bawah. Super Admin melihat semua menu. Menu akun lain mengikuti <b>jabatan</b> karyawan aktif yang email-nya sama (atur di <a href="{{ route('jabatan-menu.index') }}">Hak Akses Jabatan</a>). Karyawan aktif yang emailnya terisi di Data Karyawan bisa login tanpa ditambahkan di sini.</p>
         @if ($errors->any())
             <div class="pesan galat">{{ $errors->first() }}</div>
         @endif
@@ -32,7 +32,7 @@
 
     <div class="kartu" style="padding: 0;">
         <table style="font-size: 14px;">
-            <thead><tr><th style="padding-left: 16px;">Nama</th><th>Email</th><th>Peran</th><th>Menu yang bisa dilihat</th><th>Login</th><th></th></tr></thead>
+            <thead><tr><th style="padding-left: 16px;">Nama</th><th>Email</th><th>Peran</th><th>Karyawan · jabatan → menu (<a href="{{ route('jabatan-menu.index') }}">atur per jabatan</a>)</th><th>Login</th><th></th></tr></thead>
             <tbody>
                 @foreach ($pengguna as $u)
                     <tr>
@@ -49,21 +49,13 @@
                         <td>
                             @if ($u->isSuperAdmin())
                                 <span class="label hijau">Semua menu</span> <span class="redup">(Super Admin, termasuk Pengguna)</span>
+                            @elseif ($k = $u->karyawanAktif())
+                                <div><b>{{ $k->nama }}</b> · {{ $k->jabatan ?: 'jabatan belum diisi' }}</div>
+                                <div class="redup" style="font-size: 12px; margin-top: 2px;">
+                                    {{ collect($u->menuJabatan())->map(fn ($m) => \App\Support\MenuAkses::DAFTAR[$m][0] ?? $m)->implode(', ') ?: 'tidak ada menu' }}
+                                </div>
                             @else
-                                <form method="POST" action="{{ route('pengguna.menu', $u) }}" class="menu-akun">
-                                    @csrf @method('PATCH')
-                                    <div class="grup"><b>Umum</b><label title="Selalu tampil"><input type="checkbox" checked disabled> Beranda</label></div>
-                                    @foreach (\App\Support\MenuAkses::KATEGORI as [$judul, $ikon, $isi])
-                                        <div class="grup"><b>{{ $ikon }} {{ $judul }}</b>
-                                            @foreach (array_diff($isi, \App\Support\MenuAkses::KHUSUS_SUPER) as $kunci)
-                                                @php([$nama, , , $ket] = \App\Support\MenuAkses::DAFTAR[$kunci])
-                                                <label title="{{ $ket }}"><input type="checkbox" name="menu[]" value="{{ $kunci }}" @checked($u->bolehMenu($kunci))> {{ $nama }}</label>
-                                            @endforeach
-                                        </div>
-                                    @endforeach
-                                    <button type="submit" class="tombol polos simpan">Simpan menu</button>
-                                    @if ($u->menu === null)<span class="redup" style="font-size: 12px;">belum diatur — semua menu</span>@endif
-                                </form>
+                                <span class="label merah">Belum terhubung ke karyawan aktif</span> <span class="redup" style="font-size: 12px;">— isi email ini di Data Karyawan</span>
                             @endif
                         </td>
                         <td class="redup">{{ $u->google_id ? 'sudah pernah login' : 'belum pernah login' }}</td>
