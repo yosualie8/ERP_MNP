@@ -54,7 +54,7 @@
                     <div class="kamera"><video id="video" autoplay playsinline muted></video><img id="hasil" hidden alt="selfie"></div>
                     <div class="area tunggu" id="area">📍 Mencari lokasi GPS…</div>
                     <div class="status-gps" id="status-gps"></div>
-                    <button type="button" class="tombol polos tombol-besar" id="ambil">📸 Ambil selfie</button>
+                    <button type="button" class="tombol polos tombol-besar" id="ambil" disabled title="Masuk ke area lokasi absen dulu">📸 Ambil selfie</button>
                     <button type="submit" class="tombol tombol-besar" id="kirim" disabled>Absen {{ \App\Models\Absensi::JENIS[$berikut['jenis']] }}</button>
                     <p class="redup" style="font-size: 12px; margin: 10px 0 0;">Waktu absen dicatat dari server. Absen hanya bisa di area lokasi proyek (radius ±100 m).</p>
                 </form>
@@ -80,11 +80,16 @@
                 (() => {
                     const video = document.getElementById('video'), hasil = document.getElementById('hasil'), kirim = document.getElementById('kirim');
                     const ambil = document.getElementById('ambil'), status = document.getElementById('status-gps');
-                    let adaFoto = false, adaGps = false, stream = null;
+                    let adaFoto = false, adaGps = false, stream = null, kameraGagal = false;
                     const area = document.getElementById('area');
                     // Tombol absen hanya aktif bila selfie ada DAN posisi di dalam area lokasi absen (dicek server realtime).
                     const siap = () => {
                         kirim.disabled = !(adaFoto && adaGps);
+                        // Selfie juga hanya bisa diambil bila sudah di dalam area lokasi absen.
+                        if (!kameraGagal) {
+                            ambil.disabled = !adaGps;
+                            ambil.title = adaGps ? '' : 'Masuk ke area lokasi absen dulu';
+                        }
                         kirim.title = !adaGps ? 'Anda belum berada di area lokasi absen' : (!adaFoto ? 'Ambil selfie dulu' : '');
                     };
                     let terakhir = null, cekJalan = false, cekLagi = false;
@@ -114,7 +119,7 @@
                         try {
                             stream = await navigator.mediaDevices.getUserMedia({video: {facingMode: 'user', width: {ideal: 960}, height: {ideal: 1280}}, audio: false});
                             video.srcObject = stream; video.hidden = false; hasil.hidden = true;
-                        } catch (e) { ambil.disabled = true; ambil.textContent = '⚠️ Kamera tidak bisa dibuka — izinkan akses kamera'; }
+                        } catch (e) { kameraGagal = true; ambil.disabled = true; ambil.textContent = '⚠️ Kamera tidak bisa dibuka — izinkan akses kamera'; }
                     };
                     ambil.addEventListener('click', () => {
                         if (adaFoto) { adaFoto = false; ambil.textContent = '📸 Ambil selfie'; siap(); nyalakan(); return; }
