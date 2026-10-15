@@ -70,7 +70,7 @@ class DaftarProyek
     {
         $per = [];
         $lepas = [];
-        foreach (Ritasi::selectRaw('tahap, jenis_buangan, count(*) n, sum(harga_jual) h, min(tanggal) a, max(tanggal) b')->groupBy('tahap', 'jenis_buangan')->get() as $r) {
+        foreach (Ritasi::selectRaw('tahap, jenis_buangan, count(*) n, sum(harga_jual) h, sum(kubikasi) k, min(tanggal) a, max(tanggal) b')->groupBy('tahap', 'jenis_buangan')->get() as $r) {
             $id = self::tahapId('ritasi', $r->tahap);
             $ngepok = strcasecmp((string) $r->jenis_buangan, 'Ngepok') === 0;
             if ($id) {
@@ -82,12 +82,37 @@ class DaftarProyek
             $tujuan[$ngepok ? 'ngepok' : 'rit'] = ($tujuan[$ngepok ? 'ngepok' : 'rit'] ?? 0) + $r->n;
             // Biaya ritasi/ngepok = "Harga Jual" per rit di lembar Ritasi (sama dengan Cost Project).
             $tujuan[$ngepok ? 'rp_ngepok' : 'rp_rit'] = ($tujuan[$ngepok ? 'rp_ngepok' : 'rp_rit'] ?? 0) + (int) $r->h;
+            // Volume fisik (m³) = kubikasi ritasi urug (ngepok tidak menambah volume) — dasar progres fisik anggaran.
+            if (! $ngepok) {
+                $tujuan['m3'] = ($tujuan['m3'] ?? 0) + (float) $r->k;
+            }
             $tujuan['mulai'] = min($tujuan['mulai'] ?? '9999', substr((string) $r->a, 0, 10));
             $tujuan['selesai'] = max($tujuan['selesai'] ?? '0000', substr((string) $r->b, 0, 10));
             unset($tujuan);
         }
 
         return ['per_tahap' => $per, 'lepas' => collect($lepas)->sortByDesc('selesai')->values()->all()];
+    }
+
+    /**
+     * Rincian biaya aktual satu tahap (sama dengan grid Daftar Proyek): [kunci => [jumlah, rupiah]] untuk ritasi & ngepok
+     * (Harga Jual Ritasi), solar (liter × tarif BBM), rental (jam HM × tarif rental), operasional Kas Harian.
+     *
+     * @return array<string, array{0: float|int, 1: int}>
+     */
+    public static function rincian(\App\Models\ProyekTahap $t, array $ritasi, array $kas, array $bbm): array
+    {
+        $r = $ritasi['per_tahap'][$t->id] ?? [];
+        $k = $kas['per_tahap'][$t->id] ?? [];
+        $b = $bbm['per_tahap'][$t->id] ?? [];
+
+        return [
+            'rit' => [$r['rit'] ?? 0, $r['rp_rit'] ?? 0],
+            'ngepok' => [$r['ngepok'] ?? 0, $r['rp_ngepok'] ?? 0],
+            'solar' => [$b['liter'] ?? 0, (int) round(($b['liter'] ?? 0) * ($t->tarif_bbm ?? \App\Models\ProyekTahap::BAWAAN['tarif_bbm']))],
+            'rental' => [$b['hm'] ?? 0, (int) round(($b['hm'] ?? 0) * ($t->tarif_rental ?? \App\Models\ProyekTahap::BAWAAN['tarif_rental']))],
+            'kas' => [$k['n'] ?? 0, $k['rp'] ?? 0],
+        ];
     }
 
     /**

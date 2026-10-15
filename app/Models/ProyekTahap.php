@@ -15,7 +15,7 @@ class ProyekTahap extends Model
         'komisi_lapangan', 'komisi_yosua', 'komisi_verlix', 'bayar_lapangan', 'bayar_yosua', 'bayar_verlix', 'catatan', 'user_id'];
 
     protected $casts = ['volume' => 'float', 'luas' => 'float', 'komisi_lapangan' => 'float', 'komisi_yosua' => 'float', 'komisi_verlix' => 'float',
-        'bayar_lapangan' => 'date', 'bayar_yosua' => 'date', 'bayar_verlix' => 'date'];
+        'bayar_lapangan' => 'date', 'bayar_yosua' => 'date', 'bayar_verlix' => 'date', 'anggaran_baseline' => 'array', 'anggaran_dikunci_at' => 'datetime'];
 
     public const TIPE = ['luas' => 'Luas & volume', 'ritasi' => 'Ritasi', 'biaya' => 'Biaya umum']; // biaya = biaya tanpa tahap / biaya lokasi
 
@@ -68,6 +68,12 @@ class ProyekTahap extends Model
     public function proyek(): BelongsTo
     {
         return $this->belongsTo(Proyek::class);
+    }
+
+    /** Baris anggaran (rencana omset & HPP) — lihat App\Support\Anggaran. */
+    public function anggaran(): HasMany
+    {
+        return $this->hasMany(AnggaranTahap::class)->orderBy('urutan');
     }
 
     public function alias(): HasMany

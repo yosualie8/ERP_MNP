@@ -36,13 +36,7 @@ class DaftarProyekController extends Controller
             $b = $bbm['per_tahap'][$t->id] ?? [];
             [$mulai, $akhir] = isset($r['mulai']) ? [$r['mulai'], $r['selesai']]
                 : (isset($b['mulai']) ? [$b['mulai'], $b['selesai']] : [$k['mulai'] ?? null, $k['selesai'] ?? null]);
-            $c = [
-                'rit' => [$r['rit'] ?? 0, $r['rp_rit'] ?? 0],
-                'ngepok' => [$r['ngepok'] ?? 0, $r['rp_ngepok'] ?? 0],
-                'solar' => [$b['liter'] ?? 0, (int) round(($b['liter'] ?? 0) * ($t->tarif_bbm ?? ProyekTahap::BAWAAN['tarif_bbm']))],
-                'rental' => [$b['hm'] ?? 0, (int) round(($b['hm'] ?? 0) * ($t->tarif_rental ?? ProyekTahap::BAWAAN['tarif_rental']))],
-                'kas' => [$k['n'] ?? 0, $k['rp'] ?? 0],
-            ];
+            $c = DaftarProyek::rincian($t, $ritasi, $kas, $bbm);
 
             return (object) ['t' => $t, 'mulai' => $mulai, 'akhir' => $akhir, 'biaya' => $c, 'total' => array_sum(array_column($c, 1))];
         })->sortBy(fn ($x) => [$x->mulai ?? '9999', $x->t->nama])->values();

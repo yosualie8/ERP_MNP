@@ -1,0 +1,165 @@
+@extends('layouts.app', ['judul' => 'Anggaran '.$tahap->nama])
+
+@section('lebar', '1400px')
+
+@section('isi')
+    @php
+        $h = \App\Support\Anggaran::hitung($baris);
+        $biaya = array_sum(array_column($rincian, 1));
+        $vol = \App\Support\Anggaran::volumeRencana($baris);
+        $ang = fn ($v, $d = 0) => $v === null || $v === '' ? '' : rtrim(rtrim(number_format((float) $v, $d, ',', '.'), '0'), ',');
+        $persen = fn ($v) => $v === null ? '–' : number_format($v, 1, ',', '.').'%';
+        $b = $tahap->anggaran_baseline;
+        $dataKomponen = $komponen->mapWithKeys(fn ($k) => [$k->id => ['nama' => $k->nama, 'jenis' => $k->jenis, 'cara' => $k->cara, 'satuan' => $k->satuan, 'aktif' => $k->aktif, 'bawaan' => $k->nilai_bawaan]]);
+        $dataAwal = $baris->map(fn ($x) => ['komponen_id' => $x->komponen_id, 'uraian' => $x->uraian, 'volume' => $ang($x->volume, 3), 'harga' => $ang($x->harga, 2), 'persen' => $ang($x->persen, 3)])->values();
+    @endphp
+    <style>
+        .ringkas { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin-bottom: 12px; }
+        .ringkas .kartu { margin: 0; padding: 10px 14px; }
+        .ringkas b { display: block; font-size: 19px; margin-top: 2px; }
+        .ringkas small { font-size: 12px; color: var(--redup); }
+        table.ang { width: 100%; border-collapse: collapse; font-size: 13px; }
+        table.ang th, table.ang td { border: 1px solid var(--garis); padding: 4px 6px; vertical-align: middle; }
+        table.ang th { text-align: left; background: var(--kartu-2, #262b33); }
+        table.ang input, table.ang select { width: 100%; box-sizing: border-box; padding: 5px 7px; font-size: 13px; }
+        table.ang input.angka-input { text-align: right; }
+        table.ang td.nilai { text-align: right; white-space: nowrap; font-weight: 600; }
+        table.ang tfoot td { font-weight: 700; text-align: right; }
+        table.ang .tanpa { opacity: .3; }
+        .judul-bagian { display: flex; gap: 10px; align-items: center; margin: 14px 0 6px; }
+        .judul-bagian h4 { margin: 0; color: var(--aksen-terang); }
+    </style>
+
+    <div class="kartu">
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+            <a href="{{ route('anggaran.index') }}" class="tombol polos" style="padding: 6px 12px;">← Anggaran Proyek</a>
+            <h3 style="margin: 0; color: var(--aksen-terang);">{{ $tahap->nama }}</h3>
+            <span class="redup">{{ $tahap->proyek->nama }} · {{ \App\Models\ProyekTahap::TIPE[$tahap->tipe] }} · {{ \App\Models\ProyekTahap::STATUS[$tahap->status] }}</span>
+            @if (auth()->user()->bolehMenu('daftar-proyek'))<a href="{{ route('proyek.show', $tahap) }}" style="font-size: 13px;">detail tahap →</a>@endif
+        </div>
+    </div>
+
+    <div class="ringkas">
+        <div class="kartu"><small>Omset rencana</small><b>{{ rp((int) round($h['omset'])) }}</b>@if ($vol)<small>{{ $ang($vol, 2) }} m³</small>@endif</div>
+        <div class="kartu"><small>HPP rencana</small><b>{{ rp((int) round($h['hpp'])) }}</b></div>
+        <div class="kartu"><small>Margin rencana</small><b @if ($h['margin'] < 0) style="color: var(--merah);" @endif>{{ rp((int) round($h['margin'])) }}</b><small>{{ $persen($h['persen_margin']) }} dari omset</small></div>
+        <div class="kartu"><small>Biaya aktual s/d hari ini</small><b>{{ rp($biaya) }}</b><small>{{ $h['hpp'] > 0 ? $persen($biaya / $h['hpp'] * 100).' dari HPP rencana' : 'HPP rencana belum diisi' }} · tanpa overhead</small></div>
+        <div class="kartu"><small>Progres fisik (kubikasi Ritasi)</small><b>{{ $vol > 0 ? $persen($m3 / $vol * 100) : '–' }}</b><small>{{ $ang($m3, 2) }} m³{{ $vol ? ' dari '.$ang($vol, 2).' m³' : ' (volume m³ rencana belum diisi)' }}</small></div>
+    </div>
+
+    @if ($errors->any())
+        <div class="pesan galat"><b>Periksa lagi:</b><ul style="margin: 6px 0 0; padding-left: 18px;">@foreach ($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul></div>
+    @endif
+    @if ($pakaiTemplate)
+        <div class="pesan" style="background: rgba(240, 192, 90, .12); border: 1px solid rgba(240, 192, 90, .4);">Baris di bawah diisi dari <b>template tipe {{ \App\Models\ProyekTahap::TIPE[$tahap->tipe] }}</b> dan data tahap — <b>belum disimpan</b>. Lengkapi volume/harga lalu tekan Simpan anggaran.</div>
+    @endif
+
+    <form method="POST" action="{{ route('anggaran.simpan', $tahap) }}" class="kartu" id="form-anggaran">
+        @csrf
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+            <button type="submit" class="tombol">Simpan anggaran</button>
+            <a href="{{ route('anggaran.edit', [$tahap, 'template' => 1]) }}" class="tombol polos" id="isi-template">Isi dari template</a>
+            <span class="redup" style="font-size: 13px;">Angka boleh ditulis 139.000 atau 2.551,75. Komisi & overhead dihitung dari total omset.</span>
+        </div>
+        @foreach (['omset' => 'Omset (pendapatan)', 'hpp' => 'HPP (biaya)'] as $jenis => $judul)
+            <div class="judul-bagian"><h4>{{ $judul }}</h4><button type="button" class="tombol polos" data-tambah="{{ $jenis }}" style="padding: 3px 10px; font-size: 12px;">+ baris</button></div>
+            <table class="ang" data-tanpa-saring-kolom data-tanpa-beku>
+                <thead><tr><th style="width: 260px;">Komponen</th><th>Uraian / catatan</th><th style="width: 120px;">Volume</th><th style="width: 70px;">Satuan</th><th style="width: 150px;">Harga satuan / %</th><th style="width: 150px;">Nilai (Rp)</th><th style="width: 36px;"></th></tr></thead>
+                <tbody data-jenis="{{ $jenis }}"></tbody>
+                <tfoot><tr><td colspan="5">Total {{ $jenis === 'omset' ? 'omset' : 'HPP' }}</td><td data-total="{{ $jenis }}"></td><td></td></tr></tfoot>
+            </table>
+        @endforeach
+        <div style="margin-top: 10px; text-align: right; font-size: 15px;"><span class="redup">Margin rencana:</span> <b id="margin"></b></div>
+    </form>
+
+    <div class="kartu">
+        <h4 style="margin: 0 0 6px; color: var(--aksen-terang);">Baseline (rencana awal)</h4>
+        @if ($b)
+            <p style="margin: 0 0 8px;">Dikunci {{ $tahap->anggaran_dikunci_at->translatedFormat('j M Y H:i') }}: omset <b>{{ rp((int) round($b['omset'])) }}</b>, HPP <b>{{ rp((int) round($b['hpp'])) }}</b>
+                @if (abs($b['omset'] - $h['omset']) > 1 || abs($b['hpp'] - $h['hpp']) > 1)
+                    — <span style="color: #f0c05a;">anggaran sekarang berbeda (omset {{ rp((int) round($h['omset'] - $b['omset'])) }}, HPP {{ rp((int) round($h['hpp'] - $b['hpp'])) }} dari baseline)</span>
+                @endif
+            </p>
+        @else
+            <p class="redup" style="margin: 0 0 8px;">Belum dikunci. Kunci setelah anggaran disepakati supaya rencana awal tersimpan; perubahan berikutnya (addendum) tetap bisa dibandingkan.</p>
+        @endif
+        @if ($tahap->anggaran->isNotEmpty())
+            <form method="POST" action="{{ route('anggaran.kunci', $tahap) }}" onsubmit="return confirm('{{ $b ? 'Ganti baseline dengan anggaran yang tersimpan sekarang?' : 'Kunci anggaran yang tersimpan sekarang sebagai baseline?' }}')">
+                @csrf
+                <button type="submit" class="tombol polos">{{ $b ? 'Perbarui baseline (addendum)' : 'Kunci sebagai baseline' }}</button>
+            </form>
+        @endif
+    </div>
+
+    <template id="tpl-baris">
+        <tr>
+            <td><select data-k="komponen_id"></select></td>
+            <td><input data-k="uraian" maxlength="150" autocomplete="off"></td>
+            <td><input data-k="volume" class="angka-input" inputmode="decimal" autocomplete="off"></td>
+            <td class="satuan redup"></td>
+            <td><input data-k="harga" class="angka-input" inputmode="decimal" autocomplete="off"><input data-k="persen" class="angka-input" inputmode="decimal" autocomplete="off" placeholder="%" hidden></td>
+            <td class="nilai"></td>
+            <td><button type="button" class="tombol-hapus" title="Hapus baris" style="padding: 2px 8px;">✕</button></td>
+        </tr>
+    </template>
+    <script>
+        (() => {
+            const KOMPONEN = @json($dataKomponen);
+            const AWAL = @json($dataAwal);
+            const LAMA = @json(old('baris'));
+            const form = document.getElementById('form-anggaran'), tpl = document.getElementById('tpl-baris');
+            const angka = v => { v = String(v ?? '').replace(/[\s%]|Rp/gi, ''); if (!v) return 0; v = v.includes(',') ? v.replace(/\./g, '').replace(',', '.') : (/^\d+\.\d{1,2}$/.test(v) ? v : v.replace(/\./g, '')); return parseFloat(v) || 0; };
+            const rp = n => Math.round(n).toLocaleString('id-ID');
+            let no = 0;
+            const tambah = (jenis, isi = {}) => {
+                const tr = tpl.content.firstElementChild.cloneNode(true), sel = tr.querySelector('[data-k=komponen_id]');
+                sel.append(new Option('— pilih —', ''));
+                Object.entries(KOMPONEN).filter(([id, k]) => k.jenis === jenis && (k.aktif || String(id) === String(isi.komponen_id))).forEach(([id, k]) => sel.append(new Option(k.nama, id)));
+                const i = no++;
+                tr.querySelectorAll('[data-k]').forEach(x => { x.name = `baris[${i}][${x.dataset.k}]`; if (isi[x.dataset.k] != null) x.value = isi[x.dataset.k]; });
+                tr.querySelector('.tombol-hapus').addEventListener('click', () => { tr.remove(); hitung(); });
+                sel.addEventListener('change', () => {
+                    // Komponen baru dipilih: harga/persen bawaan diisi bila masih kosong.
+                    const k = KOMPONEN[sel.value];
+                    if (k && k.bawaan != null) { const f = tr.querySelector(k.cara === 'persen' ? '[data-k=persen]' : '[data-k=harga]'); if (!f.value) f.value = String(k.bawaan).replace('.', ','); }
+                    hitung();
+                });
+                form.querySelector(`tbody[data-jenis=${jenis}]`).append(tr);
+                return tr;
+            };
+            const hitung = () => {
+                let omset = 0, hpp = 0;
+                const baris = [...form.querySelectorAll('tbody tr')];
+                const nilai = tr => {
+                    const k = KOMPONEN[tr.querySelector('[data-k=komponen_id]').value], persen = k?.cara === 'persen';
+                    tr.querySelector('.satuan').textContent = k?.satuan ?? '';
+                    tr.querySelector('[data-k=harga]').hidden = persen; tr.querySelector('[data-k=persen]').hidden = !persen;
+                    tr.querySelector('[data-k=volume]').disabled = persen; tr.querySelector('[data-k=volume]').classList.toggle('tanpa', persen);
+                    return {k, persen};
+                };
+                baris.filter(tr => tr.closest('tbody').dataset.jenis === 'omset').forEach(tr => {
+                    nilai(tr); const v = angka(tr.querySelector('[data-k=volume]').value) * angka(tr.querySelector('[data-k=harga]').value);
+                    tr.querySelector('.nilai').textContent = v ? rp(v) : ''; omset += v;
+                });
+                baris.filter(tr => tr.closest('tbody').dataset.jenis === 'hpp').forEach(tr => {
+                    const {persen} = nilai(tr);
+                    const v = persen ? angka(tr.querySelector('[data-k=persen]').value) / 100 * omset : angka(tr.querySelector('[data-k=volume]').value) * angka(tr.querySelector('[data-k=harga]').value);
+                    tr.querySelector('.nilai').textContent = v ? rp(v) : ''; hpp += v;
+                });
+                form.querySelector('[data-total=omset]').textContent = rp(omset);
+                form.querySelector('[data-total=hpp]').textContent = rp(hpp);
+                const m = document.getElementById('margin');
+                m.textContent = `${rp(omset - hpp)}` + (omset ? ` (${((omset - hpp) / omset * 100).toFixed(1).replace('.', ',')}%)` : '');
+                m.style.color = omset - hpp < 0 ? 'var(--merah)' : '';
+            };
+            (LAMA ? Object.values(LAMA) : AWAL).forEach(isi => { const k = KOMPONEN[isi.komponen_id]; tambah(k ? k.jenis : (isi.jenis ?? 'hpp'), isi); });
+            ['omset', 'hpp'].forEach(j => { if (!form.querySelector(`tbody[data-jenis=${j}] tr`)) tambah(j); });
+            form.querySelectorAll('[data-tambah]').forEach(b => b.addEventListener('click', () => { tambah(b.dataset.tambah).querySelector('select').focus(); hitung(); }));
+            form.addEventListener('input', hitung); hitung();
+            // Template menimpa isian yang belum disimpan → konfirmasi bila sudah ada anggaran.
+            document.getElementById('isi-template').addEventListener('click', e => {
+                if ({{ $tahap->anggaran->isNotEmpty() ? 'true' : 'false' }} && !confirm('Isi ulang dari template? Baris yang tampil sekarang diganti (anggaran tersimpan baru berubah setelah Simpan).')) e.preventDefault();
+            });
+        })();
+    </script>
+@endsection

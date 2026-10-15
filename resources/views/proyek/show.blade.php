@@ -26,6 +26,22 @@
         </div>
     </div>
 
+    @if (auth()->user()->bolehMenu('anggaran-proyek'))
+        @php($ag = \App\Support\Anggaran::hitung($tahap->anggaran()->with('komponen')->get()))
+        <div class="kartu" style="display: flex; gap: 18px; align-items: center; flex-wrap: wrap;">
+            <h4 style="margin: 0; color: var(--aksen-terang);">Anggaran</h4>
+            @if ($ag['omset'] || $ag['hpp'])
+                <span>Omset <b>{{ rp((int) round($ag['omset'])) }}</b></span>
+                <span>HPP <b>{{ rp((int) round($ag['hpp'])) }}</b></span>
+                <span>Margin <b @if ($ag['margin'] < 0) style="color: var(--merah);" @endif>{{ $ag['persen_margin'] !== null ? number_format($ag['persen_margin'], 1, ',', '.').'%' : '–' }}</b></span>
+                @if ($tahap->anggaran_dikunci_at)<span class="label hijau">baseline {{ $tahap->anggaran_dikunci_at->translatedFormat('j M Y') }}</span>@endif
+            @else
+                <span class="redup">Belum ada anggaran omset & HPP untuk tahap ini.</span>
+            @endif
+            <a href="{{ route('anggaran.edit', $tahap) }}" class="tombol polos" style="margin-left: auto; padding: 6px 12px;">{{ $ag['omset'] || $ag['hpp'] ? 'Buka anggaran' : 'Isi anggaran' }} →</a>
+        </div>
+    @endif
+
     @include('proyek._form')
 
     <div class="kartu">

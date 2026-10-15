@@ -35,6 +35,8 @@ class MenuAkses
         'kas-belum-reimburse' => ['⬇ Excel Belum Reimburse', 'kas.belum-reimburse', ['kas.belum-reimburse'], 'Unduh daftar transaksi Kas Harian yang belum reimburse (Excel)'],
         'rekap' => ['Rekap Biaya', 'kas.rekap', ['kas.rekap'], 'Rekap biaya per akun × bulan'],
         'daftar-proyek' => ['Daftar Proyek', 'proyek.index', ['proyek.*'], 'Daftar proyek & tahap, pemetaan nama lama (Ritasi/BBM/Kas); data keuangan hanya Super Admin'],
+        'anggaran-proyek' => ['Anggaran Proyek', 'anggaran.index', ['anggaran.*'], 'Rencana omset & HPP per tahap (komponen, baseline), dibanding biaya aktual & progres fisik dari kubikasi'],
+        'komponen-anggaran' => ['Master Komponen Anggaran', 'komponen-anggaran.index', ['komponen-anggaran.*'], 'Komponen HPP & omset: sumber realisasi, cara hitung, nilai bawaan, template per tipe tahap'],
         'pengaturan-proyek' => ['Pengaturan Daftar Proyek', 'pengaturan-proyek', ['pengaturan-proyek', 'pengaturan-proyek.*'], 'Filter bawaan grid Daftar Proyek (periode, status, cost center, tipe) untuk semua pengguna'],
         'kubikasi-kendaraan' => ['Kubikasi Kendaraan', 'kubikasi.index', ['kubikasi.*'], 'Kubikasi standar per jenis kendaraan (nilai awal kolom Kubikasi saat input ritasi)'],
         'input-bbm' => ['Input BBM & HM', 'bbm.input', ['bbm.input', 'bbm.store', 'bbm.edit', 'bbm.update', 'bbm.hapus', 'bbm.opname'], 'Input, edit & hapus pemakaian / solar masuk dan stock opname (ditulis ke sheet Penggunaan BBM)'],
@@ -53,7 +55,7 @@ class MenuAkses
     public const KATEGORI = [
         'asisten' => ['Asisten AI', '🤖', ['tanya-ai']],
         'dashboard' => ['Dashboard', '📊', ['dashboard-kas', 'dashboard-uj', 'dashboard-bbm', 'dashboard-aktivitas']],
-        'proyek' => ['Proyek', '🏗️', ['daftar-proyek', 'pengaturan-proyek']],
+        'proyek' => ['Proyek', '🏗️', ['daftar-proyek', 'anggaran-proyek', 'komponen-anggaran', 'pengaturan-proyek']],
         'kas' => ['Kas Harian', '🏦', ['input-kas', 'kas-harian', 'validasi-reimburse', 'riwayat-reimburse', 'kas-belum-reimburse', 'rekap', 'kode-gl']],
         'uj' => ['Uang Jalan', '🚚', ['pengajuan-uj', 'input-uj', 'kas-uj', 'reimburse-uj', 'rapikan-uj']],
         'ritasi' => ['Ritasi', '⛰️', ['input-ritasi', 'ritasi', 'buangan-truk', 'monitor-ritasi', 'bayar-tanah', 'performa-ritasi', 'kubikasi-kendaraan']],

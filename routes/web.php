@@ -71,6 +71,15 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/proyek/tahap/{tahap}/edit', [DaftarProyekController::class, 'edit'])->whereNumber('tahap')->name('proyek.edit');
     Route::put('/proyek/tahap/{tahap}', [DaftarProyekController::class, 'update'])->whereNumber('tahap')->name('proyek.update');
     Route::post('/proyek/alias', [DaftarProyekController::class, 'petakan'])->name('proyek.petakan');
+    // Anggaran (rencana omset & HPP) per tahap + master komponennya.
+    Route::get('/anggaran', [\App\Http\Controllers\AnggaranController::class, 'index'])->name('anggaran.index');
+    Route::get('/anggaran/tahap/{tahap}', [\App\Http\Controllers\AnggaranController::class, 'edit'])->whereNumber('tahap')->name('anggaran.edit');
+    Route::post('/anggaran/tahap/{tahap}', [\App\Http\Controllers\AnggaranController::class, 'simpan'])->whereNumber('tahap')->name('anggaran.simpan');
+    Route::post('/anggaran/tahap/{tahap}/kunci', [\App\Http\Controllers\AnggaranController::class, 'kunci'])->whereNumber('tahap')->name('anggaran.kunci');
+    Route::get('/komponen-anggaran', [\App\Http\Controllers\KomponenAnggaranController::class, 'index'])->name('komponen-anggaran.index');
+    Route::post('/komponen-anggaran', [\App\Http\Controllers\KomponenAnggaranController::class, 'store'])->name('komponen-anggaran.store');
+    Route::patch('/komponen-anggaran/{komponen}', [\App\Http\Controllers\KomponenAnggaranController::class, 'update'])->whereNumber('komponen')->name('komponen-anggaran.update');
+    Route::delete('/komponen-anggaran/{komponen}', [\App\Http\Controllers\KomponenAnggaranController::class, 'hapus'])->whereNumber('komponen')->name('komponen-anggaran.hapus');
     Route::delete('/proyek/alias/{alias}', [DaftarProyekController::class, 'hapusAlias'])->whereNumber('alias')->name('proyek.alias.hapus');
     Route::get('/absen', [\App\Http\Controllers\AbsenController::class, 'index'])->name('absen.index');
     Route::post('/absen', [\App\Http\Controllers\AbsenController::class, 'simpan'])->name('absen.simpan');
