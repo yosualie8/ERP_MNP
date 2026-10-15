@@ -75,10 +75,10 @@ class ProyekTahap extends Model
         return $this->hasMany(ProyekAlias::class);
     }
 
-    /** Cost center tahap: isian tahap, kalau kosong ikut proyek induk. */
+    /** Cost center tahap (per proyek detail; tidak ada pewarisan dari proyek induk). */
     public function costCenter(): ?string
     {
-        return $this->cost_center ?: $this->proyek?->cost_center;
+        return $this->cost_center;
     }
 
     public function tinggiUrugan(): ?float

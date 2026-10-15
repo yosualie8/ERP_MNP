@@ -10,7 +10,7 @@ class Proyek extends Model
 {
     protected $table = 'proyek';
 
-    protected $fillable = ['nama', 'cost_center', 'urutan'];
+    protected $fillable = ['nama', 'urutan']; // cost center dimiliki tiap tahap, bukan induk
 
     public function tahap(): HasMany
     {

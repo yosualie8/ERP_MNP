@@ -30,7 +30,7 @@
         <div class="baris">
             <div><label for="tipe">Tipe</label><select id="tipe" name="tipe">@foreach (\App\Models\ProyekTahap::TIPE as $k => $l)<option value="{{ $k }}" @selected($isi('tipe') === $k)>{{ $l }}</option>@endforeach</select></div>
             <div><label for="status">Status</label><select id="status" name="status">@foreach (\App\Models\ProyekTahap::STATUS as $k => $l)<option value="{{ $k }}" @selected($isi('status') === $k)>{{ $l }}</option>@endforeach</select></div>
-            <div><label for="cost_center">Cost center</label><select id="cost_center" name="cost_center"><option value="">Ikut proyek induk{{ $tahap->proyek?->cost_center ? ' ('.$tahap->proyek->cost_center.')' : '' }}</option>@foreach (\App\Models\CostCenter::orderBy('kode')->pluck('kode') as $c)<option @selected($isi('cost_center') === $c)>{{ $c }}</option>@endforeach</select></div>
+            <div><label for="cost_center">Cost center</label><select id="cost_center" name="cost_center"><option value="">— tanpa cost center —</option>@foreach (\App\Models\CostCenter::orderBy('kode')->pluck('kode') as $c)<option @selected($isi('cost_center') === $c)>{{ $c }}</option>@endforeach</select></div>
         </div>
         <div class="baris">
             <div><label for="surveyor">Surveyor</label><input id="surveyor" name="surveyor" value="{{ $isi('surveyor') }}" list="daftar-surveyor" placeholder="mis. Bobby" autocomplete="off">

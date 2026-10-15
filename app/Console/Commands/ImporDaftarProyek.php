@@ -62,9 +62,6 @@ class ImporDaftarProyek extends Command
                     continue;
                 }
                 $proyek = Proyek::firstOrCreate(['nama' => trim((string) $r[1])], ['urutan' => ++$urutan]);
-                if (! $proyek->cost_center && ! in_array(trim((string) $r[6]), ['', '-'], true)) {
-                    $proyek->update(['cost_center' => preg_replace('/\s*\(.*\)$/', '', trim((string) $r[6]))]); // "AB (Alat Berat)" → AB
-                }
                 $hitung['proyek'] = Proyek::count();
 
                 $tipe = match (trim((string) $r[3])) { 'proyek (luas & volume)' => 'luas', 'ritasi' => 'ritasi', default => 'biaya' };
@@ -80,6 +77,8 @@ class ImporDaftarProyek extends Command
                 $tahap = ProyekTahap::create([
                     'proyek_id' => $proyek->id, 'nama' => $namaTahap, 'tipe' => $tipe, 'status' => $status,
                     ...array_combine(['surveyor', 'lokasi'], ProyekTahap::pisahSurveyor($r[5])),
+                    // cost center per tahap: "AB (Alat Berat)" → AB, "-" = tanpa cost center
+                    'cost_center' => in_array(trim((string) $r[6]), ['', '-'], true) ? null : preg_replace('/\s*\(.*\)$/', '', trim((string) $r[6])),
                     'volume' => is_numeric($r[7]) ? $r[7] : null, 'luas' => is_numeric($r[8]) ? $r[8] : null,
                     'omset' => is_numeric($r[11]) ? (int) round($r[11]) : null,
                     'harga_m3' => $luas ? ProyekTahap::BAWAAN['harga_m3'] : null,
