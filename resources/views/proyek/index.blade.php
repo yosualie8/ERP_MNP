@@ -102,7 +102,7 @@
     <div class="kartu gulir" style="padding: 0;">
         <table class="grid" id="grid" data-saring-kolom>
             <thead>
-                <tr><th>Tahap</th><th>Status</th><th>Surveyor</th><th>Lokasi</th><th>Tanggal mulai</th><th>Tanggal akhir</th>
+                <tr><th>Tahap</th><th>Status</th><th>Tanggal mulai</th><th>Tanggal akhir</th>
                     @if ($super)<th class="angka">Total biaya</th>@endif</tr>
             </thead>
             <tbody>
@@ -111,14 +111,12 @@
                     <tr class="m">
                         <td data-v="{{ $t->nama }} {{ $t->proyek->nama }} {{ $t->costCenter() }} {{ $t->lokasi }} {{ $t->surveyor }}"><span class="panah">▸</span> <a href="{{ route('proyek.show', $t) }}" title="Lihat transaksi Kas Harian tahap ini"><b>{{ $t->nama }}</b></a> <span class="redup" style="font-size: 11px;">· {{ $t->proyek->nama }}{{ $t->costCenter() ? " · ".$t->costCenter() : "" }}</span>@if ($t->tipe !== 'luas') <span class="label">{{ \App\Models\ProyekTahap::TIPE[$t->tipe] }}</span>@endif<div style="padding-left: 16px;">@include('proyek._sub', ['t' => $t])</div></td>
                         <td data-v="{{ \App\Models\ProyekTahap::STATUS[$t->status] }}"><span class="label {{ $warnaStatus[$t->status] ?? '' }}">{{ \App\Models\ProyekTahap::STATUS[$t->status] }}</span></td>
-                        <td>{{ $t->surveyor }}</td>
-                        <td>{{ $t->lokasi }}</td>
                         <td data-v="{{ $x->mulai }} {{ $tgl($x->mulai) }}" data-n="{{ $x->mulai }}" style="white-space: nowrap;">{{ $tgl($x->mulai) }}</td>
                         <td data-v="{{ $x->akhir }} {{ $tgl($x->akhir) }}" data-n="{{ $x->akhir }}" style="white-space: nowrap;">{{ $tgl($x->akhir) }}</td>
                         @if ($super)<td class="angka" data-n="{{ $x->total }}"><b>{{ $x->total ? rp($x->total) : '' }}</b></td>@endif
                     </tr>
                     <tr class="d">
-                        <td colspan="{{ $super ? 7 : 6 }}">
+                        <td colspan="{{ $super ? 5 : 4 }}">
                             <table class="rinci">
                                 <tr><th style="text-align: left;">Biaya</th><th class="angka">Jumlah</th>@if ($super)<th class="angka">Nominal</th><th style="text-align: left;">Dasar hitung</th>@endif</tr>
                                 @foreach ($rincian as $k => [$label, $satuan])
