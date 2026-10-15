@@ -75,8 +75,8 @@
         @endif
         @if ($pengajuan->isNotEmpty())
             <span style="margin-left: auto; display: flex; gap: 6px;">
-                <button type="button" class="tombol polos" id="buka-semua-pj" style="padding: 6px 12px; font-size: 13px;" title="Buka rincian semua pengajuan">▾ Expand all</button>
-                <button type="button" class="tombol polos" id="tutup-semua-pj" style="padding: 6px 12px; font-size: 13px;" title="Tutup rincian semua pengajuan">▸ Collapse all</button>
+                <button type="button" class="tombol polos" id="buka-semua-pj" style="padding: 5px 12px; font-size: 13px;" title="Buka rincian semua pengajuan">⊞ Buka semua</button>
+                <button type="button" class="tombol polos" id="tutup-semua-pj" style="padding: 5px 12px; font-size: 13px;" title="Tutup rincian semua pengajuan">⊟ Tutup semua</button>
             </span>
         @endif
         <a href="{{ route('pengajuan-uj.buat') }}" class="tombol" style="{{ $pengajuan->isNotEmpty() ? '' : 'margin-left: auto; ' }}padding: 8px 14px;">+ Ajukan uang jalan</a>
@@ -105,7 +105,7 @@
             @forelse ($pengajuan as $p)
                 @php($real = $p->detail->whereIn('status', ['terealisasi', 'dialihkan']))
                 @php($nBeda = $p->detail->filter(fn ($d) => $d->berbeda())->count())
-                <tbody @class(['grup', 'buka' => $beda || in_array($p->status, ['diajukan', 'sebagian'], true)])>
+                <tbody class="grup">{{-- bawaan tertutup semua; buka per pengajuan atau ⊞ Buka semua --}}
                     <tr class="t ada-bon">
                         <td>@if ($bolehRealisasi && $p->detail->where('status', 'menunggu')->isNotEmpty())<input type="checkbox" class="pilih-semua-pj" data-pj="{{ $p->id }}" title="Pilih semua detail {{ $p->kode() }} yang masih menunggu"> @endif<span class="panah">▸</span> <b>{{ $p->kode() }}</b> <span class="jumlah-bon">{{ $p->detail->count() }}</span></td>
                         <td>{{ $p->tanggal->translatedFormat('j M Y') }}</td>
