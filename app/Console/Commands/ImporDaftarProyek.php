@@ -79,7 +79,7 @@ class ImporDaftarProyek extends Command
                 $luas = $tipe === 'luas';
                 $tahap = ProyekTahap::create([
                     'proyek_id' => $proyek->id, 'nama' => $namaTahap, 'tipe' => $tipe, 'status' => $status,
-                    'lokasi' => trim((string) $r[5]) ?: null,
+                    ...array_combine(['surveyor', 'lokasi'], ProyekTahap::pisahSurveyor($r[5])),
                     'volume' => is_numeric($r[7]) ? $r[7] : null, 'luas' => is_numeric($r[8]) ? $r[8] : null,
                     'omset' => is_numeric($r[11]) ? (int) round($r[11]) : null,
                     'harga_m3' => $luas ? ProyekTahap::BAWAAN['harga_m3'] : null,

@@ -208,6 +208,7 @@ class DaftarProyekController extends Controller
             'nama' => ['required', 'string', 'max:150', Rule::unique('proyek_tahap', 'nama')->ignore($tahap?->id)],
             'tipe' => ['required', Rule::in(array_keys(ProyekTahap::TIPE))],
             'status' => ['required', Rule::in(array_keys(ProyekTahap::STATUS))],
+            'surveyor' => ['nullable', 'string', 'max:100'],
             'lokasi' => ['nullable', 'string', 'max:200'],
             'cost_center' => ['nullable', Rule::exists('cost_center', 'kode')],
             'volume' => ['nullable', 'numeric', 'min:0'],

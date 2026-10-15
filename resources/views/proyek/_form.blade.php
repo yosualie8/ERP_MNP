@@ -29,7 +29,11 @@
             <div><label for="tipe">Tipe</label><select id="tipe" name="tipe">@foreach (\App\Models\ProyekTahap::TIPE as $k => $l)<option value="{{ $k }}" @selected($isi('tipe') === $k)>{{ $l }}</option>@endforeach</select></div>
             <div><label for="status">Status</label><select id="status" name="status">@foreach (\App\Models\ProyekTahap::STATUS as $k => $l)<option value="{{ $k }}" @selected($isi('status') === $k)>{{ $l }}</option>@endforeach</select></div>
             <div><label for="cost_center">Cost center</label><select id="cost_center" name="cost_center"><option value="">Ikut proyek induk{{ $tahap->proyek?->cost_center ? ' ('.$tahap->proyek->cost_center.')' : '' }}</option>@foreach (\App\Models\CostCenter::orderBy('kode')->pluck('kode') as $c)<option @selected($isi('cost_center') === $c)>{{ $c }}</option>@endforeach</select></div>
-            <div><label for="lokasi">Lokasi / surveyor</label><input id="lokasi" name="lokasi" value="{{ $isi('lokasi') }}" autocomplete="off"></div>
+        </div>
+        <div class="baris">
+            <div><label for="surveyor">Surveyor</label><input id="surveyor" name="surveyor" value="{{ $isi('surveyor') }}" list="daftar-surveyor" placeholder="mis. Bobby" autocomplete="off">
+                <datalist id="daftar-surveyor">@foreach (\App\Models\ProyekTahap::whereNotNull('surveyor')->distinct()->orderBy('surveyor')->pluck('surveyor') as $s)<option value="{{ $s }}">@endforeach</datalist></div>
+            <div style="grid-column: span 2;"><label for="lokasi">Lokasi pekerjaan</label><input id="lokasi" name="lokasi" value="{{ $isi('lokasi') }}" placeholder="mis. Parkiran Ginza" autocomplete="off"></div>
         </div>
         <div class="baris" data-luas>
             <div><label for="volume">Volume (m³)</label><input id="volume" name="volume" inputmode="decimal" value="{{ $des('volume') }}" autocomplete="off"></div>

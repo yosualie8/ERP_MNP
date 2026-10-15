@@ -22,7 +22,7 @@
             <span class="redup">{{ $tahap->proyek->nama }}</span>
             <span class="label {{ $warnaStatus[$tahap->status] ?? '' }}">{{ \App\Models\ProyekTahap::STATUS[$tahap->status] }}</span>
             <span class="redup">· Cost center: <b>{{ $tahap->costCenter() ?? '–' }}</b></span>
-            @if ($tahap->lokasi)<span class="redup">· Surveyor: {{ $tahap->lokasi }}</span>@endif
+            @if ($tahap->surveyor)<span class="redup">· Surveyor: {{ $tahap->surveyor }}</span>@endif @if ($tahap->lokasi)<span class="redup">· Lokasi: {{ $tahap->lokasi }}</span>@endif
         </div>
     </div>
 
