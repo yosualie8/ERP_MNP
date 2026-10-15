@@ -140,9 +140,12 @@
                         if (adaFoto) { adaFoto = false; ambil.textContent = '📸 Ambil selfie'; siap(); nyalakan(); return; }
                         // Kamera baru menyala & belum mengirim gambar → tunggu sebentar.
                         if (!video.videoWidth || video.readyState < 2) { ambil.textContent = '⏳ Kamera belum siap — coba lagi'; setTimeout(() => { if (!adaFoto) ambil.textContent = '📸 Ambil selfie'; }, 1500); return; }
-                        const w = 720, h = Math.round(w * video.videoHeight / video.videoWidth) || 960;
+                        // Selalu PORTRAIT 3:4 (720×960), dipotong di tengah sama seperti pratinjau kamera —
+                        // kamera laptop / sebagian HP mengirim gambar landscape.
+                        const w = 720, h = 960, vw = video.videoWidth, vh = video.videoHeight;
+                        const sw = Math.min(vw, vh * w / h), sh = Math.min(vh, vw * h / w);
                         const c = Object.assign(document.createElement('canvas'), {width: w, height: h});
-                        const g = c.getContext('2d'); g.translate(w, 0); g.scale(-1, 1); g.drawImage(video, 0, 0, w, h);
+                        const g = c.getContext('2d'); g.translate(w, 0); g.scale(-1, 1); g.drawImage(video, (vw - sw) / 2, (vh - sh) / 2, sw, sh, 0, 0, w, h);
                         c.toBlob(b => {
                             const dt = new DataTransfer(); dt.items.add(new File([b], 'selfie.jpg', {type: 'image/jpeg'}));
                             document.getElementById('foto').files = dt.files;

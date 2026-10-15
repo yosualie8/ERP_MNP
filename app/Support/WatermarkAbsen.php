@@ -19,6 +19,12 @@ class WatermarkAbsen
         if (! $img) {
             return;
         }
+        // Jaga-jaga: foto landscape dipotong tengah menjadi portrait 3:4 (selfie selalu portrait).
+        if (imagesx($img) > imagesy($img)) {
+            $ch = imagesy($img);
+            $cw = (int) round($ch * 3 / 4);
+            $img = imagecrop($img, ['x' => intdiv(imagesx($img) - $cw, 2), 'y' => 0, 'width' => $cw, 'height' => $ch]) ?: $img;
+        }
         $w = imagesx($img);
         $h = imagesy($img);
         $ttf = is_file(self::FONT) && is_file(self::FONT_TEBAL) && function_exists('imagettftext');
