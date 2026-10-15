@@ -109,7 +109,7 @@
                 @foreach ($baris as $x)
                     @php($t = $x->t)
                     <tr class="m">
-                        <td data-v="{{ $t->nama }} {{ $t->proyek->nama }} {{ $t->costCenter() }}"><span class="panah">▸</span> <a href="{{ route('proyek.show', $t) }}" title="Lihat transaksi Kas Harian tahap ini"><b>{{ $t->nama }}</b></a> <span class="redup" style="font-size: 11px;">· {{ $t->proyek->nama }}{{ $t->costCenter() ? " · ".$t->costCenter() : "" }}</span>@if ($t->tipe !== 'luas') <span class="label">{{ \App\Models\ProyekTahap::TIPE[$t->tipe] }}</span>@endif</td>
+                        <td data-v="{{ $t->nama }} {{ $t->proyek->nama }} {{ $t->costCenter() }} {{ $t->lokasi }} {{ $t->surveyor }}"><span class="panah">▸</span> <a href="{{ route('proyek.show', $t) }}" title="Lihat transaksi Kas Harian tahap ini"><b>{{ $t->nama }}</b></a> <span class="redup" style="font-size: 11px;">· {{ $t->proyek->nama }}{{ $t->costCenter() ? " · ".$t->costCenter() : "" }}</span>@if ($t->tipe !== 'luas') <span class="label">{{ \App\Models\ProyekTahap::TIPE[$t->tipe] }}</span>@endif<div style="padding-left: 16px;">@include('proyek._sub', ['t' => $t])</div></td>
                         <td data-v="{{ \App\Models\ProyekTahap::STATUS[$t->status] }}"><span class="label {{ $warnaStatus[$t->status] ?? '' }}">{{ \App\Models\ProyekTahap::STATUS[$t->status] }}</span></td>
                         <td>{{ $t->surveyor }}</td>
                         <td>{{ $t->lokasi }}</td>
