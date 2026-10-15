@@ -76,6 +76,9 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/anggaran/tahap/{tahap}', [\App\Http\Controllers\AnggaranController::class, 'edit'])->whereNumber('tahap')->name('anggaran.edit');
     Route::post('/anggaran/tahap/{tahap}', [\App\Http\Controllers\AnggaranController::class, 'simpan'])->whereNumber('tahap')->name('anggaran.simpan');
     Route::post('/anggaran/tahap/{tahap}/kunci', [\App\Http\Controllers\AnggaranController::class, 'kunci'])->whereNumber('tahap')->name('anggaran.kunci');
+    Route::get('/alokasi-biaya-umum', [\App\Http\Controllers\AlokasiOverheadController::class, 'index'])->name('alokasi-overhead.index');
+    Route::post('/alokasi-biaya-umum', [\App\Http\Controllers\AlokasiOverheadController::class, 'simpan'])->name('alokasi-overhead.simpan');
+    Route::post('/alokasi-biaya-umum/pos', [\App\Http\Controllers\AlokasiOverheadController::class, 'aturPos'])->name('alokasi-overhead.pos');
     Route::get('/komponen-anggaran', [\App\Http\Controllers\KomponenAnggaranController::class, 'index'])->name('komponen-anggaran.index');
     Route::post('/komponen-anggaran', [\App\Http\Controllers\KomponenAnggaranController::class, 'store'])->name('komponen-anggaran.store');
     Route::patch('/komponen-anggaran/{komponen}', [\App\Http\Controllers\KomponenAnggaranController::class, 'update'])->whereNumber('komponen')->name('komponen-anggaran.update');

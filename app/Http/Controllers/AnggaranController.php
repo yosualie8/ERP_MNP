@@ -8,6 +8,7 @@ use App\Models\KomponenAnggaran;
 use App\Models\ProyekTahap;
 use App\Support\Anggaran;
 use App\Support\DaftarProyek;
+use App\Support\Overhead;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -16,7 +17,7 @@ use Illuminate\View\View;
 
 /**
  * Anggaran Proyek: rencana omset & HPP per tahap dari baris komponen (template per tipe tahap), baseline yang bisa dikunci,
- * dibandingkan dengan biaya aktual (sama dengan grid Daftar Proyek) & progres fisik dari kubikasi Ritasi.
+ * dibandingkan dengan realisasi HPP = biaya langsung (seperti grid Daftar Proyek) + biaya umum teralokasi; progres = realisasi ÷ HPP rencana.
  */
 class AnggaranController extends Controller
 {
@@ -24,18 +25,19 @@ class AnggaranController extends Controller
     public function index(Request $request): View
     {
         [$ritasi, $kas, $bbm] = [DaftarProyek::ritasi(), DaftarProyek::kas(), DaftarProyek::bbm()];
+        $overhead = Overhead::teralokasi();
         $semua = $request->boolean('semua');
-        $tahap = ProyekTahap::with(['proyek', 'anggaran.komponen'])
+        $tahap = ProyekTahap::with(['proyek', 'anggaran.komponen'])->whereNull('pos_overhead')
             ->when(! $semua, fn ($q) => $q->where(fn ($w) => $w->whereIn('status', ['belum', 'progress'])->orHas('anggaran')))
             ->get()
-            ->map(function ($t) use ($ritasi, $kas, $bbm) {
-                $h = Anggaran::hitung($t->anggaran);
-                $biaya = array_sum(array_column(DaftarProyek::rincian($t, $ritasi, $kas, $bbm), 1));
-                $vol = Anggaran::volumeRencana($t->anggaran);
-                $m3 = $ritasi['per_tahap'][$t->id]['m3'] ?? 0;
+            ->map(function ($t) use ($ritasi, $kas, $bbm, $overhead) {
+                $h = Anggaran::hitung($t->anggaran, $t);
+                $langsung = array_sum(array_column(DaftarProyek::rincian($t, $ritasi, $kas, $bbm), 1));
+                $oh = $overhead[$t->id] ?? 0;
 
-                return (object) ['t' => $t, 'h' => $h, 'ada' => $t->anggaran->isNotEmpty(), 'biaya' => $biaya,
-                    'pakaiHpp' => $h['hpp'] > 0 ? $biaya / $h['hpp'] * 100 : null, 'm3' => $m3, 'fisik' => $vol > 0 ? $m3 / $vol * 100 : null];
+                // Progres = realisasi HPP (biaya langsung + biaya umum teralokasi) ÷ HPP rencana.
+                return (object) ['t' => $t, 'h' => $h, 'ada' => $t->anggaran->isNotEmpty(), 'langsung' => $langsung, 'overhead' => $oh,
+                    'realisasi' => $langsung + $oh, 'progres' => $h['hpp'] > 0 ? ($langsung + $oh) / $h['hpp'] * 100 : null];
             })
             ->sortBy(fn ($x) => [$x->ada ? 0 : 1, $x->t->proyek->urutan, (int) preg_replace('/\D/', '', $x->t->nama) ?: 99999, $x->t->nama])->values();
 
@@ -53,8 +55,8 @@ class AnggaranController extends Controller
             'tahap' => $tahap, 'baris' => $baris, 'pakaiTemplate' => $pakaiTemplate,
             'komponen' => KomponenAnggaran::where('aktif', true)->orWhereIn('id', $baris->pluck('komponen_id'))->orderBy('urutan')->get(),
             'rincian' => DaftarProyek::rincian($tahap, $ritasi, $kas, $bbm),
+            'overhead' => Overhead::teralokasi()[$tahap->id] ?? 0,
             'm3' => $ritasi['per_tahap'][$tahap->id]['m3'] ?? 0,
-            'rataKubikasi' => Anggaran::rataKubikasi(),
         ]);
     }
 
@@ -94,14 +96,14 @@ class AnggaranController extends Controller
         if ($galat) {
             throw ValidationException::withMessages(['baris' => $galat]);
         }
-        $lama = Anggaran::hitung($tahap->anggaran()->with('komponen')->get());
+        $lama = Anggaran::hitung($tahap->anggaran()->with('komponen')->get(), $tahap);
         DB::transaction(function () use ($tahap, $baris, $request) {
             $tahap->anggaran()->delete();
             foreach ($baris as $b) {
                 $tahap->anggaran()->create([...$b, 'user_id' => $request->user()->id]);
             }
         });
-        $baru = Anggaran::hitung($tahap->anggaran()->with('komponen')->get());
+        $baru = Anggaran::hitung($tahap->anggaran()->with('komponen')->get(), $tahap);
         $rp = fn ($v) => 'Rp '.number_format($v, 0, ',', '.');
         KasRiwayat::create(['aksi' => 'anggaran-simpan', 'lembar' => 'Proyek', 'baris_awal' => 0, 'baris_akhir' => 0,
             'ringkasan' => mb_strimwidth("Anggaran {$tahap->nama}: omset {$rp($lama['omset'])} → {$rp($baru['omset'])}, HPP {$rp($lama['hpp'])} → {$rp($baru['hpp'])}", 0, 490, '…'),
@@ -118,7 +120,7 @@ class AnggaranController extends Controller
         if ($baris->isEmpty()) {
             return back()->with('error', 'Anggaran masih kosong — isi & simpan dulu sebelum dikunci.');
         }
-        $h = Anggaran::hitung($baris);
+        $h = Anggaran::hitung($baris, $tahap);
         $tahap->forceFill([
             'anggaran_baseline' => ['omset' => $h['omset'], 'hpp' => $h['hpp'], 'baris' => $baris->map(fn ($b, $i) => [
                 'komponen' => $b->komponen->nama, 'jenis' => $b->komponen->jenis, 'uraian' => $b->uraian, 'volume' => $b->volume, 'harga' => $b->harga,

@@ -1,0 +1,122 @@
+<?php
+
+namespace App\Support;
+
+use App\Models\AlokasiOverhead;
+use App\Models\Bbm;
+use App\Models\ProyekTahap;
+use App\Models\Ritasi;
+use Illuminate\Support\Collection;
+
+/**
+ * Pembagian biaya umum (pos overhead: tahap "tanpa tahap", kantor, dll.) ke tahap yang berjalan, per bulan.
+ * Rekomendasi tujuan = tahap (bukan pos) yang ada aktivitasnya (Ritasi / BBM / Kas) di bulan itu, dibatasi proyek induk
+ * yang sama bila cakupan pos = "induk". Owner memilih manual dari rekomendasi; hanya alokasi yang disimpan yang dihitung.
+ * Metode: proporsional omset (omset rencana anggaran → omset tahap → volume × harga/m³) atau rata per tahap.
+ */
+class Overhead
+{
+    public const CAKUPAN = ['induk' => 'Proyek induk yang sama', 'semua' => 'Semua proyek berjalan'];
+
+    private static ?array $cache = null;
+
+    /** @return array{kas: array<int, array<string, float>>, aktif: array<int, array<string, true>>} */
+    public static function data(): array
+    {
+        if (self::$cache !== null) {
+            return self::$cache;
+        }
+        $kas = [];
+        $aktif = [];
+        $baris = DaftarProyek::queryKas()->selectRaw('c.kode cc, k.ref, a.nama akun, b.tanggal, al.proyek_tahap_id alokasi, sum(b.nominal) s')
+            ->groupBy('c.kode', 'k.ref', 'a.nama', 'b.tanggal', 'al.proyek_tahap_id')->get();
+        foreach ($baris as $r) {
+            $t = substr((string) $r->tanggal, 0, 10);
+            if ($id = $r->alokasi ?: DaftarProyek::tahapKas($r->cc, $r->ref, $r->akun, $t)) {
+                $ym = substr($t, 0, 7);
+                $kas[$id][$ym] = ($kas[$id][$ym] ?? 0) + (float) $r->s;
+                $aktif[$id][$ym] = true;
+            }
+        }
+        foreach (Ritasi::selectRaw("tahap, DATE_FORMAT(tanggal, '%Y-%m') ym")->distinct()->get() as $r) {
+            if ($id = DaftarProyek::tahapId('ritasi', $r->tahap)) {
+                $aktif[$id][$r->ym] = true;
+            }
+        }
+        foreach (Bbm::whereNotNull('tahap_ids')->get(['tanggal', 'tahap_ids']) as $b) {
+            foreach ((array) $b->tahap_ids as $id) {
+                if ($id && $b->tanggal) {
+                    $aktif[$id][$b->tanggal->format('Y-m')] = true;
+                }
+            }
+        }
+
+        return self::$cache = ['kas' => $kas, 'aktif' => $aktif];
+    }
+
+    /** Basis omset per tahap: omset rencana anggaran → kolom omset tahap → volume × harga/m³ → 0. */
+    public static function basisOmset(Collection $tahap): array
+    {
+        $tahap->loadMissing('anggaran.komponen');
+
+        return $tahap->mapWithKeys(fn (ProyekTahap $t) => [$t->id => ($a = Anggaran::hitung($t->anggaran, $t)['omset']) > 0 ? $a
+            : (float) ($t->omset ?: ($t->volume && $t->harga_m3 ? $t->volume * $t->harga_m3 : 0))])->all();
+    }
+
+    /** Tahap yang berjalan di bulan itu & boleh menerima alokasi (bukan pos biaya umum, bukan tipe biaya). */
+    public static function berjalan(Collection $semua, string $ym): Collection
+    {
+        $aktif = self::data()['aktif'];
+
+        return $semua->filter(fn ($t) => ! $t->pos_overhead && $t->tipe !== 'biaya' && isset($aktif[$t->id][$ym]))->values();
+    }
+
+    /** Rekomendasi tujuan pos di bulan itu. */
+    public static function rekomendasi(ProyekTahap $pos, Collection $berjalan): array
+    {
+        return $berjalan->filter(fn ($t) => $pos->pos_overhead === 'semua' || $t->proyek_id === $pos->proyek_id)->pluck('id')->all();
+    }
+
+    /**
+     * Bagian tiap tahap tujuan: [tahap_id => rupiah]. Metode omset dengan semua basis 0 → dibagi rata.
+     *
+     * @return array<int, float>
+     */
+    public static function bagi(float $biaya, array $tujuan, string $metode, array $basis): array
+    {
+        if (! $tujuan || $biaya == 0) {
+            return [];
+        }
+        $bobot = collect($tujuan)->mapWithKeys(fn ($id) => [$id => $metode === 'omset' ? max(0, $basis[$id] ?? 0) : 1]);
+        if ($bobot->sum() <= 0) {
+            $bobot = $bobot->map(fn () => 1);
+        }
+        $total = $bobot->sum();
+
+        return $bobot->map(fn ($b) => round($biaya * $b / $total, 2))->all();
+    }
+
+    /**
+     * Total overhead teralokasi per tahap dari alokasi yang sudah disimpan (biaya pos bulan itu dihitung ulang dari Kas,
+     * jadi transaksi susulan ikut terbagi).
+     *
+     * @return array<int, float>
+     */
+    public static function teralokasi(): array
+    {
+        $alokasi = AlokasiOverhead::all();
+        if ($alokasi->isEmpty()) {
+            return [];
+        }
+        $kas = self::data()['kas'];
+        $basis = self::basisOmset(ProyekTahap::whereIn('id', $alokasi->pluck('tahap_ids')->flatten()->unique())->get());
+        $hasil = [];
+        foreach ($alokasi as $a) {
+            foreach (self::bagi($kas[$a->pos_tahap_id][$a->bulan] ?? 0, $a->tahap_ids, $a->metode, $basis) as $id => $rp) {
+                $hasil[$id] = ($hasil[$id] ?? 0) + $rp;
+            }
+        }
+
+        return $hasil;
+    }
+}

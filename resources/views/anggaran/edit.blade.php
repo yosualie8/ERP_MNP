@@ -4,13 +4,15 @@
 
 @section('isi')
     @php
-        $h = \App\Support\Anggaran::hitung($baris);
-        $biaya = array_sum(array_column($rincian, 1));
-        $vol = \App\Support\Anggaran::volumeRencana($baris);
+        $h = \App\Support\Anggaran::hitung($baris, $tahap);
+        $langsung = array_sum(array_column($rincian, 1));
+        $realisasi = $langsung + $overhead;
         $ang = fn ($v, $d = 0) => $v === null || $v === '' ? '' : rtrim(rtrim(number_format((float) $v, $d, ',', '.'), '0'), ',');
         $persen = fn ($v) => $v === null ? '–' : number_format($v, 1, ',', '.').'%';
         $b = $tahap->anggaran_baseline;
-        $dataKomponen = $komponen->mapWithKeys(fn ($k) => [$k->id => ['nama' => $k->nama, 'jenis' => $k->jenis, 'cara' => $k->cara, 'satuan' => $k->satuan, 'aktif' => $k->aktif, 'bawaan' => $k->nilai_bawaan]]);
+        // tunda = komponen yang belum masuk HPP rencana sebelum direalisasikan (mis. komisi lapangan sebelum tanggal bayarnya diisi).
+        $dataKomponen = $komponen->mapWithKeys(fn ($k) => [$k->id => ['nama' => $k->nama, 'jenis' => $k->jenis, 'cara' => $k->cara, 'satuan' => $k->satuan, 'aktif' => $k->aktif, 'bawaan' => $k->nilai_bawaan,
+            'tunda' => \App\Support\Anggaran::ditunda($k, $tahap)]]);
         $dataAwal = $baris->map(fn ($x) => ['komponen_id' => $x->komponen_id, 'uraian' => $x->uraian, 'volume' => $ang($x->volume, 3), 'harga' => $ang($x->harga, 2), 'persen' => $ang($x->persen, 3)])->values();
     @endphp
     <style>
@@ -40,11 +42,11 @@
     </div>
 
     <div class="ringkas">
-        <div class="kartu"><small>Omset rencana</small><b>{{ rp((int) round($h['omset'])) }}</b>@if ($vol)<small>{{ $ang($vol, 2) }} m³</small>@endif</div>
-        <div class="kartu"><small>HPP rencana</small><b>{{ rp((int) round($h['hpp'])) }}</b></div>
+        <div class="kartu"><small>Omset rencana</small><b>{{ rp((int) round($h['omset'])) }}</b></div>
+        <div class="kartu"><small>HPP rencana</small><b>{{ rp((int) round($h['hpp'])) }}</b>@if ($h['tunda'])<small>belum termasuk {{ count($h['tunda']) }} komponen yang menunggu realisasi</small>@endif</div>
         <div class="kartu"><small>Margin rencana</small><b @if ($h['margin'] < 0) style="color: var(--merah);" @endif>{{ rp((int) round($h['margin'])) }}</b><small>{{ $persen($h['persen_margin']) }} dari omset</small></div>
-        <div class="kartu"><small>Biaya aktual s/d hari ini</small><b>{{ rp($biaya) }}</b><small>{{ $h['hpp'] > 0 ? $persen($biaya / $h['hpp'] * 100).' dari HPP rencana' : 'HPP rencana belum diisi' }} · tanpa overhead</small></div>
-        <div class="kartu"><small>Progres fisik (kubikasi Ritasi)</small><b>{{ $vol > 0 ? $persen($m3 / $vol * 100) : '–' }}</b><small>{{ $ang($m3, 2) }} m³{{ $vol ? ' dari '.$ang($vol, 2).' m³' : ' (volume m³ rencana belum diisi)' }}</small></div>
+        <div class="kartu"><small>Realisasi HPP s/d hari ini</small><b>{{ rp((int) round($realisasi)) }}</b><small>langsung {{ rp($langsung) }} + biaya umum {{ rp((int) round($overhead)) }}</small></div>
+        <div class="kartu"><small>Progres (realisasi ÷ HPP rencana)</small><b @if ($h['hpp'] > 0 && $realisasi > $h['hpp']) style="color: var(--merah);" @endif>{{ $h['hpp'] > 0 ? $persen($realisasi / $h['hpp'] * 100) : '–' }}</b><small>{{ $h['hpp'] > 0 ? ($realisasi > $h['hpp'] ? 'realisasi melebihi HPP rencana' : 'sisa '.rp((int) round($h['hpp'] - $realisasi))) : 'HPP rencana belum diisi' }}</small></div>
     </div>
 
     @if ($errors->any())
@@ -142,9 +144,11 @@
                     tr.querySelector('.nilai').textContent = v ? rp(v) : ''; omset += v;
                 });
                 baris.filter(tr => tr.closest('tbody').dataset.jenis === 'hpp').forEach(tr => {
-                    const {persen} = nilai(tr);
+                    const {k, persen} = nilai(tr);
                     const v = persen ? angka(tr.querySelector('[data-k=persen]').value) / 100 * omset : angka(tr.querySelector('[data-k=volume]').value) * angka(tr.querySelector('[data-k=harga]').value);
-                    tr.querySelector('.nilai').textContent = v ? rp(v) : ''; hpp += v;
+                    // Komponen "tunda realisasi" (komisi lapangan sebelum dibayar): nilai tampil, tidak masuk total HPP.
+                    tr.querySelector('.nilai').innerHTML = v ? (k?.tunda ? `<span class="redup" title="Belum masuk HPP — dihitung setelah direalisasikan (tanggal bayar diisi di data tahap)">(${rp(v)})<br><small>menunggu realisasi</small></span>` : rp(v)) : '';
+                    if (!k?.tunda) hpp += v;
                 });
                 form.querySelector('[data-total=omset]').textContent = rp(omset);
                 form.querySelector('[data-total=hpp]').textContent = rp(hpp);

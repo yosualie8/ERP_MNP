@@ -27,7 +27,7 @@
     </div>
 
     @if (auth()->user()->bolehMenu('anggaran-proyek'))
-        @php($ag = \App\Support\Anggaran::hitung($tahap->anggaran()->with('komponen')->get()))
+        @php($ag = \App\Support\Anggaran::hitung($tahap->anggaran()->with('komponen')->get(), $tahap))
         <div class="kartu" style="display: flex; gap: 18px; align-items: center; flex-wrap: wrap;">
             <h4 style="margin: 0; color: var(--aksen-terang);">Anggaran</h4>
             @if ($ag['omset'] || $ag['hpp'])

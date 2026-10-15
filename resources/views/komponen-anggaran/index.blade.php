@@ -26,14 +26,14 @@
                         <td><span @class(['label', 'hijau' => $k->jenis === 'omset'])>{{ \App\Models\KomponenAnggaran::JENIS[$k->jenis] }}</span></td>
                         <td><b>{{ $k->nama }}</b></td>
                         <td>{{ $k->satuan }}</td>
-                        <td>{{ \App\Support\Anggaran::CARA[$k->cara] ?? $k->cara }}</td>
+                        <td>{{ \App\Support\Anggaran::CARA[$k->cara] ?? $k->cara }}@if ($k->tunda_realisasi)<br><span class="label kuning" title="Tidak masuk HPP rencana sebelum direalisasikan">setelah realisasi</span>@endif</td>
                         <td class="angka">{{ $k->nilai_bawaan === null ? '' : ($k->cara === 'persen' ? str_replace('.', ',', rtrim(rtrim(number_format($k->nilai_bawaan, 3, '.', ''), '0'), '.')).'%' : rp((int) round($k->nilai_bawaan))) }}</td>
                         <td>{{ \App\Support\Anggaran::SUMBER[$k->jenis][$k->sumber] ?? $k->sumber }}</td>
                         <td>{{ collect($k->tipe_bawaan ?? [])->map(fn ($t) => \App\Models\ProyekTahap::TIPE[$t] ?? $t)->implode(', ') }}</td>
                         <td>@if ($k->aktif)<span class="label hijau">Aktif</span>@else<span class="label">Nonaktif</span>@endif</td>
                         <td class="angka">{{ $dipakai[$k->id] ?? 0 }} tahap</td>
                         <td style="white-space: nowrap; text-align: right;">
-                            <button type="button" class="tombol-edit" data-ubah="{{ json_encode(['url' => route('komponen-anggaran.update', $k), 'jenis' => $k->jenis, 'nama' => $k->nama, 'satuan' => $k->satuan, 'sumber' => $k->sumber, 'cara' => $k->cara, 'nilai' => $k->nilai_bawaan === null ? '' : str_replace('.', ',', rtrim(rtrim(number_format($k->nilai_bawaan, 3, '.', ''), '0'), '.')), 'tipe' => $k->tipe_bawaan ?? [], 'aktif' => $k->aktif]) }}">Ubah</button>
+                            <button type="button" class="tombol-edit" data-ubah="{{ json_encode(['url' => route('komponen-anggaran.update', $k), 'jenis' => $k->jenis, 'nama' => $k->nama, 'satuan' => $k->satuan, 'sumber' => $k->sumber, 'cara' => $k->cara, 'nilai' => $k->nilai_bawaan === null ? '' : str_replace('.', ',', rtrim(rtrim(number_format($k->nilai_bawaan, 3, '.', ''), '0'), '.')), 'tipe' => $k->tipe_bawaan ?? [], 'aktif' => $k->aktif, 'tunda' => $k->tunda_realisasi]) }}">Ubah</button>
                             @unless ($dipakai[$k->id] ?? 0)
                                 <form method="POST" action="{{ route('komponen-anggaran.hapus', $k) }}" style="display: inline;" onsubmit="return confirm('Hapus komponen {{ $k->nama }}?')">@csrf @method('DELETE')<button type="submit" class="tombol-hapus">Hapus</button></form>
                             @endunless
@@ -59,7 +59,8 @@
             <label class="isian">Sumber realisasi</label><select name="sumber"></select>
             <label class="isian">Template (otomatis dipakai tipe tahap)</label>
             @foreach (\App\Models\ProyekTahap::TIPE as $t => $l)<label class="cek"><input type="checkbox" name="tipe_bawaan[]" value="{{ $t }}"> {{ $l }}</label>@endforeach
-            <div style="margin-top: 10px;"><label class="cek"><input type="checkbox" name="aktif" value="1" checked> Aktif (muncul di anggaran baru)</label></div>
+            <div style="margin-top: 10px;"><label class="cek"><input type="checkbox" name="aktif" value="1" checked> Aktif (muncul di anggaran baru)</label>
+                <label class="cek" id="isian-tunda" title="Contoh: komisi lapangan — baru masuk HPP setelah tanggal bayarnya diisi di data tahap"><input type="checkbox" name="tunda_realisasi" value="1"> Dihitung setelah direalisasikan</label></div>
             <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px;">
                 <button type="button" class="tombol polos" onclick="this.closest('dialog').close()">Batal</button>
                 <button type="submit" class="tombol">Simpan</button>
@@ -75,6 +76,7 @@
                 Object.entries(SUMBER[jenis]).forEach(([k, l]) => s.append(new Option(l, k, false, k === pilih)));
                 // Omset selalu volume × harga.
                 f.cara.value = jenis === 'omset' ? 'volume' : f.cara.value; f.cara.disabled = jenis === 'omset';
+                document.getElementById('isian-tunda').hidden = jenis === 'omset';
             };
             f.querySelectorAll('[name=jenis]').forEach(r => r.addEventListener('change', () => isiSumber(r.value)));
             document.querySelector('[data-baru]').addEventListener('click', () => {
@@ -89,7 +91,7 @@
                 f.querySelector(`[name=jenis][value=${d.jenis}]`).checked = true;
                 f.nama.value = d.nama; f.satuan.value = d.satuan ?? ''; f.cara.value = d.cara; f.nilai_bawaan.value = d.nilai;
                 f.querySelectorAll('[name="tipe_bawaan[]"]').forEach(c => { c.checked = d.tipe.includes(c.value); });
-                f.aktif.checked = d.aktif; isiSumber(d.jenis, d.sumber); dlg.showModal();
+                f.aktif.checked = d.aktif; f.tunda_realisasi.checked = !!d.tunda; isiSumber(d.jenis, d.sumber); dlg.showModal();
             }));
             // select cara yang dinonaktifkan tidak ikut terkirim → aktifkan sesaat sebelum kirim.
             f.addEventListener('submit', () => { f.cara.disabled = false; });

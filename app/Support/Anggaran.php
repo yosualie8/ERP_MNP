@@ -9,7 +9,7 @@ use Illuminate\Support\Collection;
 
 /**
  * Anggaran (rencana) HPP & omset per tahap. Nilai baris: volume × harga, atau (komisi/overhead) persen × total omset.
- * Progres fisik = kubikasi Ritasi terealisasi ÷ volume m³ baris omset bersumber kubikasi (keputusan owner 15 Okt 2026).
+ * Progres = realisasi HPP (biaya langsung + biaya umum teralokasi) ÷ HPP rencana (owner 15 Okt 2026 — bukan dari kubikasi/tagihan).
  */
 class Anggaran
 {
@@ -25,13 +25,23 @@ class Anggaran
 
     public const CARA = ['volume' => 'Volume × harga satuan', 'persen' => '% dari total omset'];
 
+    /** Komponen "tunda realisasi" (mis. komisi lapangan) dianggap terealisasi bila tanggal bayarnya di tahap sudah diisi. */
+    public const TANGGAL_REALISASI = ['komisi_lapangan' => 'bayar_lapangan', 'komisi_yosua' => 'bayar_yosua', 'komisi_verlix' => 'bayar_verlix'];
+
+    public static function ditunda($komponen, ?ProyekTahap $t): bool
+    {
+        return (bool) $komponen->tunda_realisasi && ! (($f = self::TANGGAL_REALISASI[$komponen->kode] ?? null) && $t?->{$f});
+    }
+
     /**
      * Nilai tiap baris + total. $baris: iterable berisi komponen (KomponenAnggaran), volume, harga, persen.
+     * Baris komponen "tunda realisasi" yang belum direalisasikan tetap dihitung nilainya tetapi TIDAK masuk total HPP.
      *
-     * @return array{omset: float, hpp: float, margin: float, persen_margin: ?float, nilai: array<int, float>}
+     * @return array{omset: float, hpp: float, margin: float, persen_margin: ?float, nilai: array<int, float>, tunda: array<int, true>}
      */
-    public static function hitung(iterable $baris): array
+    public static function hitung(iterable $baris, ?ProyekTahap $t = null): array
     {
+        $tunda = [];
         $baris = collect($baris)->values();
         $nilai = [];
         $omset = 0.0;
@@ -45,19 +55,18 @@ class Anggaran
         foreach ($baris as $i => $b) {
             if ($b->komponen->jenis === 'hpp') {
                 $nilai[$i] = round($b->komponen->cara === 'persen' ? ($b->persen ?? 0) / 100 * $omset : ($b->volume ?? 0) * ($b->harga ?? 0), 2);
+                if (self::ditunda($b->komponen, $t)) {
+                    $tunda[$i] = true;
+                    continue;
+                }
                 $hpp += $nilai[$i];
             }
         }
         ksort($nilai);
 
-        return ['omset' => $omset, 'hpp' => $hpp, 'margin' => $omset - $hpp, 'persen_margin' => $omset > 0 ? ($omset - $hpp) / $omset * 100 : null, 'nilai' => $nilai];
+        return ['omset' => $omset, 'hpp' => $hpp, 'margin' => $omset - $hpp, 'persen_margin' => $omset > 0 ? ($omset - $hpp) / $omset * 100 : null, 'nilai' => $nilai, 'tunda' => $tunda];
     }
 
-    /** Volume rencana (m³) = jumlah volume baris omset bersumber kubikasi. */
-    public static function volumeRencana(iterable $baris): float
-    {
-        return (float) collect($baris)->filter(fn ($b) => $b->komponen->jenis === 'omset' && $b->komponen->sumber === 'kubikasi')->sum('volume');
-    }
 
     /** Rata-rata kubikasi per rit urug 6 bulan terakhir (untuk memperkirakan jumlah rit dari volume m³). */
     public static function rataKubikasi(): float

@@ -74,7 +74,8 @@ class KomponenAnggaranController extends Controller
         }
 
         return ['jenis' => $jenis, 'nama' => $d['nama'], 'satuan' => trim((string) ($d['satuan'] ?? '')) ?: null, 'sumber' => $d['sumber'], 'cara' => $d['cara'],
-            'nilai_bawaan' => $d['nilai_bawaan'] ?? null, 'tipe_bawaan' => array_values($d['tipe_bawaan'] ?? []), 'aktif' => $request->boolean('aktif')];
+            'nilai_bawaan' => $d['nilai_bawaan'] ?? null, 'tipe_bawaan' => array_values($d['tipe_bawaan'] ?? []), 'aktif' => $request->boolean('aktif'),
+            'tunda_realisasi' => $jenis === 'hpp' && $request->boolean('tunda_realisasi')];
     }
 
     private function catat(Request $request, string $aksi, string $ringkasan, array $isi): void
