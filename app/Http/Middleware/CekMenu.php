@@ -13,7 +13,7 @@ class CekMenu
     public function handle(Request $request, Closure $next): Response
     {
         // Akun karyawan hanya boleh membuka halaman Absen (Beranda & menu lain dialihkan).
-        if ($request->user()?->isKaryawan() && ! in_array($request->route()?->getName(), ['absen.index', 'absen.simpan', 'absen.foto', 'logout'], true)) {
+        if ($request->user()?->isKaryawan() && ! in_array($request->route()?->getName(), ['absen.index', 'absen.simpan', 'absen.cek', 'absen.foto', 'logout'], true)) {
             return redirect()->route('absen.index');
         }
         if (! MenuAkses::bolehRute($request->user(), $request->route()?->getName())) {

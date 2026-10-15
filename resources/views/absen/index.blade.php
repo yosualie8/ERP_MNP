@@ -13,6 +13,10 @@
         .status-gps { font-size: 13px; margin: 8px 0; }
         .status-gps.ok { color: var(--sukses); }
         .status-gps.galat { color: var(--merah); }
+        .area { margin: 8px 0; padding: 10px 12px; border-radius: 10px; font-size: 14px; font-weight: 600; text-align: left; }
+        .area.ok { background: rgba(76, 195, 138, .15); border: 1px solid #2f7a55; color: var(--sukses); }
+        .area.luar { background: var(--merah-muda); border: 1px solid rgba(255, 92, 97, .4); color: var(--merah); }
+        .area.tunggu { background: var(--kartu-2, #262b33); border: 1px solid var(--garis); color: var(--redup); font-weight: 400; }
         .riwayat td { padding: 6px 8px; font-size: 13px; }
         .jam { font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; }
     </style>
@@ -48,7 +52,8 @@
                     <input type="hidden" name="lat" id="lat"><input type="hidden" name="lng" id="lng"><input type="hidden" name="akurasi" id="akurasi">
                     <input type="file" name="foto" id="foto" accept="image/jpeg" hidden>
                     <div class="kamera"><video id="video" autoplay playsinline muted></video><img id="hasil" hidden alt="selfie"></div>
-                    <div class="status-gps" id="status-gps">📍 Mencari lokasi GPS…</div>
+                    <div class="area tunggu" id="area">📍 Mencari lokasi GPS…</div>
+                    <div class="status-gps" id="status-gps"></div>
                     <button type="button" class="tombol polos tombol-besar" id="ambil">📸 Ambil selfie</button>
                     <button type="submit" class="tombol tombol-besar" id="kirim" disabled>Absen {{ \App\Models\Absensi::JENIS[$berikut['jenis']] }}</button>
                     <p class="redup" style="font-size: 12px; margin: 10px 0 0;">Waktu absen dicatat dari server. Absen hanya bisa di area lokasi proyek (radius ±100 m).</p>
@@ -76,7 +81,32 @@
                     const video = document.getElementById('video'), hasil = document.getElementById('hasil'), kirim = document.getElementById('kirim');
                     const ambil = document.getElementById('ambil'), status = document.getElementById('status-gps');
                     let adaFoto = false, adaGps = false, stream = null;
-                    const siap = () => { kirim.disabled = !(adaFoto && adaGps); };
+                    const area = document.getElementById('area');
+                    // Tombol absen hanya aktif bila selfie ada DAN posisi di dalam area lokasi absen (dicek server realtime).
+                    const siap = () => {
+                        kirim.disabled = !(adaFoto && adaGps);
+                        kirim.title = !adaGps ? 'Anda belum berada di area lokasi absen' : (!adaFoto ? 'Ambil selfie dulu' : '');
+                    };
+                    let terakhir = null, cekJalan = false, cekLagi = false;
+                    const cekArea = async () => {
+                        if (cekJalan) { cekLagi = true; return; }
+                        cekJalan = true;
+                        try {
+                            const data = new FormData();
+                            ['lat', 'lng', 'akurasi'].forEach(k => data.append(k, document.getElementById(k).value));
+                            data.append('_token', document.querySelector('input[name=_token]').value);
+                            const res = await fetch(@json(route('absen.cek')), {method: 'POST', body: data, headers: {Accept: 'application/json'}});
+                            const h = await res.json();
+                            area.className = 'area ' + (h.boleh ? 'ok' : 'luar');
+                            area.textContent = (h.boleh ? '✅ ' : '⛔ ') + (h.pesan || 'Lokasi tidak bisa dicek.');
+                            adaGps = !!h.boleh;
+                        } catch (e) {
+                            area.className = 'area tunggu'; area.textContent = '⏳ Memeriksa lokasi… (koneksi lambat)'; adaGps = false;
+                        } finally {
+                            cekJalan = false; siap();
+                            if (cekLagi) { cekLagi = false; cekArea(); }
+                        }
+                    };
                     setInterval(() => { const d = new Date(); document.getElementById('jam').textContent = d.toTimeString().slice(0, 5); }, 10000);
 
                     // Kamera depan langsung (tidak bisa pilih foto dari galeri).
@@ -105,10 +135,13 @@
                     else navigator.geolocation.watchPosition(p => {
                         document.getElementById('lat').value = p.coords.latitude; document.getElementById('lng').value = p.coords.longitude;
                         document.getElementById('akurasi').value = Math.round(p.coords.accuracy);
-                        const baik = p.coords.accuracy <= {{ \App\Http\Controllers\AbsenController::AKURASI_MAKS }};
-                        status.textContent = (baik ? '📍 Lokasi didapat' : '📍 Sinyal GPS lemah') + ` (±${Math.round(p.coords.accuracy)} m)` + (baik ? '' : ' — pindah ke tempat terbuka');
-                        status.className = 'status-gps ' + (baik ? 'ok' : 'galat'); adaGps = baik; siap();
-                    }, e => { status.textContent = '⚠️ Lokasi tidak bisa didapat — izinkan akses lokasi & nyalakan GPS.'; status.className = 'status-gps galat'; adaGps = false; siap(); },
+                        status.textContent = `GPS ±${Math.round(p.coords.accuracy)} m · diperbarui ${new Date().toTimeString().slice(0, 8)}`;
+                        status.className = 'status-gps redup';
+                        // Cek ke server bila posisi pertama / bergeser ≥ 5 m / akurasi berubah banyak (hemat kuota).
+                        const k = [p.coords.latitude, p.coords.longitude, p.coords.accuracy];
+                        const geser = terakhir ? Math.hypot((k[0] - terakhir[0]) * 111320, (k[1] - terakhir[1]) * 111320 * Math.cos(k[0] * Math.PI / 180)) : Infinity;
+                        if (geser >= 5 || Math.abs(k[2] - terakhir[2]) >= 15) { terakhir = k; cekArea(); }
+                    }, e => { area.className = 'area luar'; area.textContent = '⚠️ Lokasi tidak bisa didapat — izinkan akses lokasi & nyalakan GPS.'; status.textContent = ''; adaGps = false; siap(); },
                     {enableHighAccuracy: true, maximumAge: 0, timeout: 30000});
 
                     document.getElementById('form-absen').addEventListener('submit', () => { kirim.disabled = true; kirim.textContent = 'Mengirim…'; });

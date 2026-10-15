@@ -74,6 +74,7 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::delete('/proyek/alias/{alias}', [DaftarProyekController::class, 'hapusAlias'])->whereNumber('alias')->name('proyek.alias.hapus');
     Route::get('/absen', [\App\Http\Controllers\AbsenController::class, 'index'])->name('absen.index');
     Route::post('/absen', [\App\Http\Controllers\AbsenController::class, 'simpan'])->name('absen.simpan');
+    Route::post('/absen/cek', [\App\Http\Controllers\AbsenController::class, 'cek'])->name('absen.cek');
     Route::get('/absen/foto/{absensi}', [\App\Http\Controllers\AbsenController::class, 'foto'])->whereNumber('absensi')->name('absen.foto');
     Route::get('/absensi', [\App\Http\Controllers\AbsensiController::class, 'index'])->name('absensi.index');
     Route::get('/lokasi-absen', [\App\Http\Controllers\LokasiAbsenController::class, 'index'])->name('lokasi-absen.index');

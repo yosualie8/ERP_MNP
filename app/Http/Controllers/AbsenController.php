@@ -37,6 +37,40 @@ class AbsenController extends Controller
         ]);
     }
 
+    /**
+     * Lokasi absen aktif terdekat dari titik ini: [lokasi, jarak meter] atau null bila belum ada lokasi.
+     *
+     * @return array{0: LokasiAbsen, 1: int}|null
+     */
+    private static function terdekat(float $lat, float $lng): ?array
+    {
+        return LokasiAbsen::with('tahap')->where('aktif', true)->get()->map(fn ($l) => [$l, $l->jarakKe($lat, $lng)])->sortBy(1)->first();
+    }
+
+    /**
+     * Cek lokasi realtime saat karyawan di halaman Absen (dipanggil tiap posisi GPS berubah). Dihitung di server —
+     * titik koordinat proyek tidak dikirim ke HP. Hasil: di dalam area (lokasi & proyek mana) atau di luar (jarak ke terdekat).
+     */
+    public function cek(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $d = $request->validate(['lat' => ['required', 'numeric', 'between:-90,90'], 'lng' => ['required', 'numeric', 'between:-180,180'], 'akurasi' => ['nullable', 'numeric', 'min:0']]);
+        $akurasi = isset($d['akurasi']) ? (int) round($d['akurasi']) : null;
+        if ($akurasi !== null && $akurasi > self::AKURASI_MAKS) {
+            return response()->json(['boleh' => false, 'pesan' => "Sinyal GPS lemah (±{$akurasi} m) — pindah ke tempat terbuka."]);
+        }
+        $t = self::terdekat((float) $d['lat'], (float) $d['lng']);
+        if (! $t) {
+            return response()->json(['boleh' => false, 'pesan' => 'Belum ada lokasi absen yang aktif. Hubungi admin.']);
+        }
+        [$l, $jarak] = $t;
+        $proyek = $l->tahap?->nama;
+        $teksJarak = $jarak >= 1000 ? number_format($jarak / 1000, 1, ',', '.').' km' : "{$jarak} m";
+
+        return response()->json($jarak <= $l->radius_m
+            ? ['boleh' => true, 'pesan' => "Anda di area {$l->nama}".($proyek && $proyek !== $l->nama ? " · {$proyek}" : '')." ({$teksJarak} dari titik, maks. {$l->radius_m} m)", 'lokasi' => $l->nama, 'proyek' => $proyek]
+            : ['boleh' => false, 'pesan' => "Di luar area absen — lokasi terdekat {$l->nama}".($proyek && $proyek !== $l->nama ? " ({$proyek})" : '')." berjarak {$teksJarak} (maks. {$l->radius_m} m)."]);
+    }
+
     public function simpan(Request $request): RedirectResponse
     {
         $k = $this->karyawan($request);
@@ -61,8 +95,7 @@ class AbsenController extends Controller
             return back()->with('error', "Sinyal GPS kurang akurat (±{$akurasi} m). Pindah ke tempat terbuka, tunggu sebentar, lalu coba lagi.");
         }
         // Lokasi absen aktif terdekat; harus di dalam radiusnya.
-        $lokasi = LokasiAbsen::with('tahap')->where('aktif', true)->get()
-            ->map(fn ($l) => [$l, $l->jarakKe((float) $data['lat'], (float) $data['lng'])])->sortBy(1)->first();
+        $lokasi = self::terdekat((float) $data['lat'], (float) $data['lng']);
         if (! $lokasi) {
             return back()->with('error', 'Belum ada lokasi absen yang aktif. Hubungi admin.');
         }

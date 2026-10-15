@@ -39,7 +39,7 @@ class MenuAkses
         'input-bbm' => ['Input BBM & HM', 'bbm.input', ['bbm.input', 'bbm.store', 'bbm.edit', 'bbm.update', 'bbm.hapus', 'bbm.opname'], 'Input, edit & hapus pemakaian / solar masuk dan stock opname (ditulis ke sheet Penggunaan BBM)'],
         'dashboard-bbm' => ['Dashboard BBM & HM', 'bbm.dashboard', ['bbm.dashboard'], 'Tren konsumsi solar & jam HM proyek dan per alat, rasio liter/jam, kelengkapan data HM'],
         'bbm' => ['Data BBM & HM', 'bbm.index', ['bbm.index'], 'Penggunaan BBM per bulan: pemakaian per unit, solar masuk, stok solar, baris yang perlu dilengkapi'],
-        'absen' => ['Absen', 'absen.index', ['absen.index', 'absen.simpan'], 'Absen dari HP sendiri: selfie + GPS (radius lokasi proyek), waktu dari server'],
+        'absen' => ['Absen', 'absen.index', ['absen.index', 'absen.simpan', 'absen.cek'], 'Absen dari HP sendiri: selfie + GPS (radius lokasi proyek), waktu dari server'],
         'absensi' => ['Data Absensi', 'absensi.index', ['absensi.*'], 'Rekap absensi per tanggal: jam masuk/pulang/lembur, selfie, lokasi; karyawan yang tidak absen'],
         'lokasi-absen' => ['Lokasi Absen', 'lokasi-absen.index', ['lokasi-absen.*'], 'Titik GPS + radius per proyek tempat karyawan boleh absen'],
         'karyawan' => ['Data Karyawan', 'karyawan.index', ['karyawan.*'], 'Data induk karyawan (NIK, site, jabatan, rekening) — dasar modul absensi'],
