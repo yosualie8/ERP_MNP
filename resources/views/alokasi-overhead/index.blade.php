@@ -68,7 +68,7 @@
                             @endforeach
                         </tbody>
                     </table>
-                    <div class="redup peringatan" style="font-size: 12px; margin-top: 4px;" hidden>Tahap terpilih belum punya omset — porsi dibagi rata.</div>
+                    <div class="peringatan" style="font-size: 12px; margin-top: 4px; color: #f0c05a;" hidden></div>
                 @endif
             </div>
         @empty
@@ -127,7 +127,14 @@
                     tr.querySelector('.porsi').textContent = (p * 100).toFixed(1).replace('.', ',') + '%';
                     tr.querySelector('.bagian').textContent = rp(biaya * p);
                 });
-                const w = kartu.querySelector('.peringatan'); if (w) w.hidden = !rataPaksa;
+                // Metode omset: tahap terpilih tanpa omset mendapat 0 — beri tahu supaya omset/anggarannya diisi atau pakai metode rata.
+                const nol = metode === 'omset' && !rataPaksa ? pilih.filter(tr => !(parseFloat(tr.dataset.basis) > 0)).map(tr => tr.querySelector('td:nth-child(2) b').textContent) : [];
+                const w = kartu.querySelector('.peringatan');
+                if (w) {
+                    w.hidden = !rataPaksa && !nol.length;
+                    w.textContent = rataPaksa ? '⚠ Semua tahap terpilih belum punya omset — porsi dibagi rata.'
+                        : `⚠ ${nol.length} tahap terpilih belum punya omset sehingga mendapat 0: ${nol.join(', ')}. Isi omset/anggarannya, atau pakai metode Rata per proyek.`;
+                }
             };
             document.querySelectorAll('.pos[data-biaya]').forEach(k => { k.addEventListener('change', () => hitung(k)); hitung(k); });
         })();
