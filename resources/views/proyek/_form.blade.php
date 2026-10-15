@@ -21,8 +21,10 @@
         <div class="baris">
             <div><label for="proyek_id">Proyek induk</label>
                 <select id="proyek_id" name="proyek_id"><option value="">— pilih —</option>
-                    @foreach ($proyek as $p)<option value="{{ $p->id }}" @selected((int) old('proyek_id', $tahap->proyek_id) === $p->id)>{{ $p->nama }}</option>@endforeach</select></div>
-            <div><label for="proyek_baru">…atau proyek baru</label><input id="proyek_baru" name="proyek_baru" value="{{ old('proyek_baru') }}" placeholder="mis. Pantai Mutiara 3" autocomplete="off"></div>
+                    @foreach ($proyek as $p)<option value="{{ $p->id }}" @selected((int) old('proyek_id', $tahap->proyek_id) === $p->id)>{{ $p->nama }}</option>@endforeach
+                    <option value="baru" @selected(old('proyek_baru') && ! old('proyek_id'))>+ Proyek induk baru…</option></select></div>
+            {{-- Hanya muncul bila memilih "+ Proyek induk baru…" (sebelumnya isian ini bisa terisi bersamaan & diam-diam menggantikan induk yang dipilih). --}}
+            <div id="induk-baru"><label for="proyek_baru">Nama proyek induk baru</label><input id="proyek_baru" name="proyek_baru" value="{{ old('proyek_baru') }}" placeholder="mis. Pantai Mutiara 3" autocomplete="off"></div>
             <div style="grid-column: span 2;"><label for="nama">Nama tahap (nama baku)</label><input id="nama" name="nama" value="{{ $isi('nama') }}" placeholder="mis. ASG Tahap 118" required autocomplete="off"></div>
         </div>
         <div class="baris">
@@ -95,5 +97,13 @@
             const tipe = document.getElementById('tipe');
             const atur = () => document.querySelectorAll('[data-luas]').forEach(el => el.style.display = tipe.value === 'luas' ? '' : 'none');
             tipe.addEventListener('change', atur); atur();
+            const induk = document.getElementById('proyek_id'), baru = document.getElementById('proyek_baru');
+            const aturInduk = () => {
+                const pilihBaru = induk.value === 'baru';
+                document.getElementById('induk-baru').style.visibility = pilihBaru ? '' : 'hidden';
+                baru.disabled = !pilihBaru; baru.required = pilihBaru;
+                if (pilihBaru && !baru.value) baru.focus();
+            };
+            induk.addEventListener('change', aturInduk); aturInduk();
         })();
     </script>

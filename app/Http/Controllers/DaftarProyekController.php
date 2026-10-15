@@ -156,6 +156,11 @@ class DaftarProyekController extends Controller
         $tahap->update([...$this->baca($request, $tahap), 'user_id' => $request->user()->id]);
         $berubah = collect($tahap->getChanges())->except(['updated_at', 'user_id'])->keys()->implode(', ');
         $this->catat($request, 'proyek-ubah', "Tahap {$tahap->nama} diubah: ".($berubah ?: 'tanpa perubahan'), ['sebelum' => $lama, 'sesudah' => $tahap->fresh()->toArray()]);
+        // Tahap dipindah ke induk lain: induk lama yang jadi kosong (tanpa tahap) dihapus supaya tidak tersisa di daftar.
+        if ($lama['proyek_id'] !== $tahap->proyek_id && ($induk = Proyek::find($lama['proyek_id'])) && ! ProyekTahap::where('proyek_id', $induk->id)->exists()) {
+            $this->catat($request, 'proyek-ubah', "Proyek induk {$induk->nama} dihapus (tidak ada tahap lagi)", $induk->toArray());
+            $induk->delete();
+        }
 
         return redirect()->route('proyek.show', $tahap)->with('success', "Tahap {$tahap->nama} disimpan.");
     }
@@ -196,6 +201,8 @@ class DaftarProyekController extends Controller
 
             return preg_match('/^\d+\.\d{1,2}$/', $v) ? $v : str_replace('.', '', $v);
         };
+        // Induk: pilih dari daftar, ATAU "+ Proyek induk baru…" lalu isi namanya — tidak bisa keduanya.
+        $request->merge($request->input('proyek_id') === 'baru' ? ['proyek_id' => null] : ['proyek_baru' => null]);
         $request->merge(collect(['volume', 'luas', 'harga_m3', 'omset', 'tarif_bbm', 'tarif_rental', 'komisi_lapangan', 'komisi_yosua', 'komisi_verlix'])
             ->mapWithKeys(fn ($k) => [$k => $angka($request->input($k))])->all()
             + ['nama' => trim(preg_replace('/\s+/', ' ', (string) $request->input('nama')))]
