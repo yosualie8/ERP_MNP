@@ -39,7 +39,7 @@
     <div class="kartu">
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
             <a href="{{ route('anggaran.index') }}" class="tombol polos" style="padding: 6px 12px;">← Anggaran Proyek</a>
-            <h3 style="margin: 0; color: var(--aksen-terang);">{{ $tahap->nama }}</h3>
+            <div><h3 style="margin: 0; color: var(--aksen-terang);">{{ $tahap->nama }}</h3>@include('proyek._sub', ['t' => $tahap])</div>
             <span class="redup">{{ $tahap->proyek->nama }} · {{ \App\Models\ProyekTahap::TIPE[$tahap->tipe] }} · {{ \App\Models\ProyekTahap::STATUS[$tahap->status] }}</span>
             @if (auth()->user()->bolehMenu('daftar-proyek'))<a href="{{ route('proyek.show', $tahap) }}" style="font-size: 13px;">detail tahap →</a>@endif
         </div>

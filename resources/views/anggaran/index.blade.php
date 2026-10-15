@@ -20,7 +20,7 @@
             <tbody>
                 @foreach ($baris as $x)
                     <tr class="t">
-                        <td data-v="{{ $x->t->nama }} {{ $x->t->proyek->nama }}"><b>{{ $x->t->nama }}</b> <span class="redup" style="font-size: 11px;">· {{ $x->t->proyek->nama }}</span></td>
+                        <td data-v="{{ $x->t->nama }} {{ $x->t->proyek->nama }} {{ $x->t->lokasi }} {{ $x->t->surveyor }}"><b>{{ $x->t->nama }}</b> <span class="redup" style="font-size: 11px;">· {{ $x->t->proyek->nama }}</span>@include('proyek._sub', ['t' => $x->t])</td>
                         <td>{{ \App\Models\ProyekTahap::STATUS[$x->t->status] }}</td>
                         <td class="angka" data-n="{{ $x->h['omset'] }}">{{ $x->ada ? rp((int) round($x->h['omset'])) : '' }}</td>
                         <td class="angka" data-n="{{ $x->h['hpp'] }}">{{ $x->ada ? rp((int) round($x->h['hpp'])) : '' }}</td>

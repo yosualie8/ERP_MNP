@@ -60,7 +60,7 @@
                             @foreach ($k->calon as $c)
                                 <tr @class(['lain' => ! $c->rekom, 'dipilih' => $c->pilih]) data-basis="{{ $c->basis }}">
                                     <td style="text-align: center;"><input type="checkbox" name="pos[{{ $k->p->id }}][tahap][]" value="{{ $c->t->id }}" @checked($c->pilih)></td>
-                                    <td><b>{{ $c->t->nama }}</b>@if ($c->rekom) <span class="label" style="font-size: 10px;">rekomendasi</span>@endif</td>
+                                    <td><b>{{ $c->t->nama }}</b>@if ($c->rekom) <span class="label" style="font-size: 10px;">rekomendasi</span>@endif @include('proyek._sub', ['t' => $c->t])</td>
                                     <td class="redup">{{ $c->t->proyek->nama }}</td>
                                     <td class="angka">{{ $c->basis ? rp((int) round($c->basis)) : '–' }}</td>
                                     <td class="angka porsi"></td>

@@ -18,11 +18,10 @@
     <div class="kartu">
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
             <a href="{{ route('proyek.index') }}" class="tombol polos" style="padding: 6px 12px;">← Daftar Proyek</a>
-            <h3 class="dash-judul" style="margin: 0; color: var(--aksen-terang);">{{ $tahap->nama }}</h3>
+            <div><h3 class="dash-judul" style="margin: 0; color: var(--aksen-terang);">{{ $tahap->nama }}</h3>@include('proyek._sub', ['t' => $tahap])</div>
             <span class="redup">{{ $tahap->proyek->nama }}</span>
             <span class="label {{ $warnaStatus[$tahap->status] ?? '' }}">{{ \App\Models\ProyekTahap::STATUS[$tahap->status] }}</span>
             <span class="redup">· Cost center: <b>{{ $tahap->costCenter() ?? '–' }}</b></span>
-            @if ($tahap->surveyor)<span class="redup">· Surveyor: {{ $tahap->surveyor }}</span>@endif @if ($tahap->lokasi)<span class="redup">· Lokasi: {{ $tahap->lokasi }}</span>@endif
         </div>
     </div>
 
