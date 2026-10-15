@@ -30,6 +30,7 @@
         table.ang td.nilai { text-align: right; white-space: nowrap; font-weight: 600; }
         table.ang tfoot td { font-weight: 700; text-align: right; }
         table.ang .tanpa { opacity: .3; }
+        table.ang .angka { text-align: right; white-space: nowrap; }
         table.ang input.rekom { color: #c4b5fd; border-color: rgba(167, 139, 250, .6); }
         .judul-bagian { display: flex; gap: 10px; align-items: center; margin: 14px 0 6px; }
         .judul-bagian h4 { margin: 0; color: var(--aksen-terang); }
@@ -59,7 +60,44 @@
         <div class="pesan galat"><b>Periksa lagi:</b><ul style="margin: 6px 0 0; padding-left: 18px;">@foreach ($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul></div>
     @endif
     @if ($pakaiTemplate)
-        <div class="pesan" style="background: rgba(240, 192, 90, .12); border: 1px solid rgba(240, 192, 90, .4);">Baris di bawah diisi dari <b>template tipe {{ \App\Models\ProyekTahap::TIPE[$tahap->tipe] }}</b> dan data tahap — <b>belum disimpan</b>. Lengkapi volume/harga lalu tekan Simpan anggaran.</div>
+        <div class="pesan" style="background: rgba(240, 192, 90, .12); border: 1px solid rgba(240, 192, 90, .4);">Anggaran tahap ini belum ada — baris awal disiapkan otomatis dari <b>template tipe {{ \App\Models\ProyekTahap::TIPE[$tahap->tipe] }}</b> & data tahap, <b>belum disimpan</b>. Lengkapi volume/harga lalu tekan Simpan anggaran.</div>
+    @endif
+
+    @if ($perKomponen)
+        @php
+            $fisik = $volTanah > 0 ? $m3 / $volTanah * 100 : null;
+            $sumR = collect($perKomponen)->reject(fn ($k) => $k['tunda'])->sum('rp_rencana');
+            $sumA = collect($perKomponen)->sum('rp_real');
+        @endphp
+        <div class="kartu gulir" style="padding: 0;">
+            <div style="padding: 12px 14px 6px; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap;">
+                <h4 style="margin: 0; color: var(--aksen-terang);">Progres per komponen — rencana vs realisasi</h4>
+                <span class="redup" style="font-size: 12px;">% terpakai dibanding progres fisik{{ $fisik !== null ? ' ('.$persen($fisik).')' : '' }}: merah = melebihi rencana, kuning = lebih cepat dari progres fisik</span>
+            </div>
+            <table class="ang" data-tanpa-saring-kolom data-tanpa-beku>
+                <thead><tr><th>Komponen</th><th class="angka">Rencana</th><th class="angka">Realisasi</th><th class="angka">Rencana (Rp)</th><th class="angka">Realisasi (Rp)</th><th class="angka">% terpakai</th><th class="angka">Sisa (Rp)</th></tr></thead>
+                <tbody>
+                    @foreach ($perKomponen as $k)
+                        @php
+                            $pakai = $k['rp_rencana'] > 0 ? $k['rp_real'] / $k['rp_rencana'] * 100 : null;
+                            $warna = $pakai === null ? '' : ($pakai > 100 ? 'color: var(--merah); font-weight: 700;' : ($fisik !== null && $pakai > $fisik + 10 ? 'color: #f0c05a; font-weight: 700;' : ''));
+                            $vol = fn ($v) => $v === null ? '' : $ang($v, 2).($k['satuan'] ? ' '.$k['satuan'] : '');
+                        @endphp
+                        <tr>
+                            <td>{{ $k['nama'] }}@if ($k['tunda']) <span class="label kuning" style="font-size: 10px;">menunggu realisasi</span>@endif @if ($k['catatan'])<span class="redup" style="font-size: 11px;"> · {{ $k['catatan'] }}</span>@endif</td>
+                            <td class="angka">{{ $vol($k['v_rencana']) }}</td>
+                            <td class="angka">{{ $vol($k['v_real']) }}</td>
+                            <td class="angka">{{ $k['rp_rencana'] ? rp((int) round($k['rp_rencana'])) : '' }}@if ($k['tunda'] && $k['rp_rencana'])<br><span class="redup" style="font-size: 11px;">tidak dijumlah</span>@endif</td>
+                            <td class="angka">{{ $k['rp_real'] ? rp((int) round($k['rp_real'])) : '–' }}</td>
+                            <td class="angka" style="{{ $warna }}">{{ $pakai === null ? '' : $persen($pakai) }}</td>
+                            <td class="angka">{{ $k['rp_rencana'] > 0 && ! $k['tunda'] ? rp((int) round($k['rp_rencana'] - $k['rp_real'])) : '' }}</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+                <tfoot><tr><td>Total HPP</td><td></td><td></td><td class="angka">{{ rp((int) round($sumR)) }}</td><td class="angka">{{ rp((int) round($sumA)) }}</td>
+                    <td class="angka">{{ $sumR > 0 ? $persen($sumA / $sumR * 100) : '' }}</td><td class="angka">{{ rp((int) round($sumR - $sumA)) }}</td></tr></tfoot>
+            </table>
+        </div>
     @endif
 
     @if ($rekomendasi)
@@ -86,7 +124,6 @@
         @csrf
         <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
             <button type="submit" class="tombol">Simpan anggaran</button>
-            <a href="{{ route('anggaran.edit', [$tahap, 'template' => 1]) }}" class="tombol polos" id="isi-template">Isi dari template</a>
             <span class="redup" style="font-size: 13px;">Angka boleh ditulis 139.000 atau 2.551,75. Komisi & overhead dihitung dari total omset.</span>
         </div>
         @foreach (['omset' => 'Omset (pendapatan)', 'hpp' => 'HPP (biaya)'] as $jenis => $judul)
@@ -215,10 +252,6 @@
                     else alert('Isi omset dulu supaya persen biaya umum bisa dihitung.');
                 }
                 hitung();
-            });
-            // Template menimpa isian yang belum disimpan → konfirmasi bila sudah ada anggaran.
-            document.getElementById('isi-template').addEventListener('click', e => {
-                if ({{ $tahap->anggaran->isNotEmpty() ? 'true' : 'false' }} && !confirm('Isi ulang dari template? Baris yang tampil sekarang diganti (anggaran tersimpan baru berubah setelah Simpan).')) e.preventDefault();
             });
         })();
     </script>

@@ -38,7 +38,7 @@
             @else
                 <span class="redup">Belum ada anggaran omset & HPP untuk tahap ini.</span>
             @endif
-            <a href="{{ route('anggaran.edit', $tahap) }}" class="tombol polos" style="margin-left: auto; padding: 6px 12px;">{{ $ag['omset'] || $ag['hpp'] ? 'Buka anggaran' : 'Isi anggaran' }} →</a>
+            <a href="{{ route('anggaran.edit', $tahap) }}" class="tombol polos" style="margin-left: auto; padding: 6px 12px;">{{ $ag['omset'] || $ag['hpp'] ? 'Buka anggaran & progres' : 'Isi anggaran' }} →</a>
         </div>
     @endif
 

@@ -75,26 +75,97 @@ class Anggaran
             ->where('kubikasi', '>', 0)->avg('kubikasi') ?: 20);
     }
 
+    /** @var array{total: array<int, float>, grup: array<int, array<string, float>>}|null */
     private static ?array $kasDihitung = null;
 
     /** Kas per tahap yang DIHITUNG sebagai realisasi biaya langsung (tanpa akun yang diabaikan — lihat Overhead::diabaikan). */
     public static function kasDihitung(): array
     {
+        return self::kasHitung()['total'];
+    }
+
+    /** Kas dihitung per tahap per grup: gaji (Gaji & Tunjangan), komisi, ops (lainnya) — realisasi komponen kas_gaji/komisi/kas_operasional. */
+    public static function kasGrup(int $id): array
+    {
+        return self::kasHitung()['grup'][$id] ?? [];
+    }
+
+    private static function kasHitung(): array
+    {
         if (self::$kasDihitung !== null) {
             return self::$kasDihitung;
         }
-        $hasil = [];
+        $total = $grup = [];
         foreach (DaftarProyek::queryKas()->selectRaw('c.kode cc, k.ref, a.nama akun, a.kelompok kel, b.tanggal, al.proyek_tahap_id alokasi, sum(b.nominal) s')
             ->groupBy('c.kode', 'k.ref', 'a.nama', 'a.kelompok', 'b.tanggal', 'al.proyek_tahap_id')->get() as $r) {
             if (Overhead::diabaikan($r->kel, $r->akun)) {
                 continue;
             }
             if ($id = $r->alokasi ?: DaftarProyek::tahapKas($r->cc, $r->ref, $r->akun, substr((string) $r->tanggal, 0, 10))) {
-                $hasil[$id] = ($hasil[$id] ?? 0) + (float) $r->s;
+                $g = preg_match('/omis/i', (string) $r->akun) ? 'komisi' : ($r->kel === 'Gaji & Tunjangan' ? 'gaji' : 'ops');
+                $total[$id] = ($total[$id] ?? 0) + (float) $r->s;
+                $grup[$id][$g] = ($grup[$id][$g] ?? 0) + (float) $r->s;
             }
         }
 
-        return self::$kasDihitung = $hasil;
+        return self::$kasDihitung = ['total' => $total, 'grup' => $grup];
+    }
+
+    /**
+     * Rencana vs realisasi per komponen HPP. Realisasi tiap sumber diberikan ke baris PERTAMA bersumber itu; realisasi
+     * yang tidak punya baris anggaran tampil sebagai "tidak dianggarkan". Jumlah realisasi = realisasi HPP total.
+     *
+     * @return array<int, array{nama: string, satuan: ?string, v_rencana: ?float, rp_rencana: float, tunda: bool, v_real: ?float, rp_real: float, catatan: ?string}>
+     */
+    public static function realisasiKomponen(ProyekTahap $t, iterable $baris, array $ritasi, array $bbm, float $overhead): array
+    {
+        $r = $ritasi['per_tahap'][$t->id] ?? [];
+        $b = $bbm['per_tahap'][$t->id] ?? [];
+        $kas = self::kasGrup($t->id);
+        $tarifBbm = $t->tarif_bbm ?? ProyekTahap::BAWAAN['tarif_bbm'];
+        $tarifRental = $t->tarif_rental ?? ProyekTahap::BAWAAN['tarif_rental'];
+        // sumber => [volume realisasi, rupiah realisasi, nama bila tidak dianggarkan, satuan]
+        $real = [
+            'ritasi_m3' => [$r['m3'] ?? 0, $r['rp_rit'] ?? 0, 'Tanah urug & angkutan (Ritasi)', 'm³'],
+            'rit' => [$r['rit'] ?? 0, $r['rp_rit'] ?? 0, 'Tanah urug & angkutan (Ritasi)', 'rit'],
+            'ngepok' => [$r['ngepok'] ?? 0, $r['rp_ngepok'] ?? 0, 'Ngepok', 'rit'],
+            'solar' => [$b['liter'] ?? 0, ($b['liter'] ?? 0) * $tarifBbm, 'Solar alat', 'liter'],
+            'rental' => [$b['hm'] ?? 0, ($b['hm'] ?? 0) * $tarifRental, 'Rental alat berat', 'jam'],
+            'kas_gaji' => [null, $kas['gaji'] ?? 0, 'Gaji & tunjangan (Kas)', null],
+            'kas_operasional' => [null, $kas['ops'] ?? 0, 'Operasional (Kas)', null],
+            'komisi' => [null, $kas['komisi'] ?? 0, 'Komisi (Kas)', null],
+            'overhead' => [null, $overhead, 'Biaya umum teralokasi', null],
+        ];
+        $h = self::hitung($baris, $t);
+        $hasil = [];
+        $terpakai = [];
+        foreach (collect($baris)->values() as $i => $x) {
+            if ($x->komponen->jenis !== 'hpp') {
+                continue;
+            }
+            $s = $x->komponen->sumber;
+            // tanah per rit & per m³ berbagi realisasi Ritasi yang sama
+            $kunci = in_array($s, ['ritasi_m3', 'rit'], true) ? 'tanah' : $s;
+            $ada = isset($real[$s]) && ! isset($terpakai[$kunci]);
+            if ($ada) {
+                $terpakai[$kunci] = true;
+            }
+            $hasil[] = ['nama' => $x->komponen->nama.($x->uraian ? " — {$x->uraian}" : ''), 'satuan' => $x->komponen->cara === 'persen' ? null : $x->komponen->satuan,
+                'v_rencana' => $x->komponen->cara === 'persen' ? null : $x->volume, 'rp_rencana' => $h['nilai'][$i] ?? 0, 'tunda' => isset($h['tunda'][$i]),
+                'v_real' => $ada ? $real[$s][0] : null, 'rp_real' => $ada ? (float) $real[$s][1] : 0.0,
+                'catatan' => isset($real[$s]) ? (! $ada ? 'realisasi sudah di baris sebelumnya' : null) : 'tanpa sumber otomatis'];
+        }
+        // Realisasi yang tidak punya baris anggaran (mis. ngepok terjadi padahal tidak dianggarkan).
+        foreach ($real as $s => [$v, $rp, $nama, $satuan]) {
+            $kunci = in_array($s, ['ritasi_m3', 'rit'], true) ? 'tanah' : $s;
+            if ($s === 'rit' || isset($terpakai[$kunci]) || abs($rp) < 1) {
+                continue;
+            }
+            $terpakai[$kunci] = true;
+            $hasil[] = ['nama' => $nama, 'satuan' => $satuan, 'v_rencana' => null, 'rp_rencana' => 0.0, 'tunda' => false, 'v_real' => $v, 'rp_real' => (float) $rp, 'catatan' => 'tidak dianggarkan'];
+        }
+
+        return $hasil;
     }
 
     /**

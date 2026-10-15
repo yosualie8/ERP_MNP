@@ -53,15 +53,18 @@ class AnggaranController extends Controller
     public function edit(Request $request, ProyekTahap $tahap): View
     {
         $tahap->load('proyek', 'anggaran.komponen');
-        $pakaiTemplate = $request->boolean('template');
+        // Anggaran belum pernah disimpan → baris awal otomatis dari template tipe tahap (tombol template dihapus, owner 15 Okt 2026).
+        $pakaiTemplate = $tahap->anggaran->isEmpty();
         $baris = $pakaiTemplate ? Anggaran::template($tahap) : $tahap->anggaran;
         [$ritasi, $kas, $bbm] = [DaftarProyek::ritasi(), DaftarProyek::kas(), DaftarProyek::bbm()];
+        $overhead = Overhead::teralokasi()[$tahap->id] ?? 0;
 
         return view('anggaran.edit', [
             'tahap' => $tahap, 'baris' => $baris, 'pakaiTemplate' => $pakaiTemplate,
             'komponen' => KomponenAnggaran::where('aktif', true)->orWhereIn('id', $baris->pluck('komponen_id'))->orderBy('urutan')->get(),
             'rincian' => Anggaran::rincianRealisasi($tahap, $ritasi, $kas, $bbm),
-            'overhead' => Overhead::teralokasi()[$tahap->id] ?? 0,
+            'perKomponen' => $pakaiTemplate ? [] : Anggaran::realisasiKomponen($tahap, $baris, $ritasi, $bbm, $overhead),
+            'overhead' => $overhead,
             'rekomendasi' => Anggaran::rekomendasi($tahap),
             'm3' => $ritasi['per_tahap'][$tahap->id]['m3'] ?? 0,
         ]);
