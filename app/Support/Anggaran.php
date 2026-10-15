@@ -17,7 +17,7 @@ class Anggaran
     public const SUMBER = [
         'omset' => ['kubikasi' => 'Kubikasi Ritasi (m³)', 'rit' => 'Jumlah rit Ritasi', 'manual' => 'Manual'],
         'hpp' => [
-            'rit' => 'Ritasi (Harga Jual per rit)', 'ngepok' => 'Ngepok (Ritasi)', 'solar' => 'Solar (Data BBM)', 'rental' => 'Jam HM (Data BBM)',
+            'ritasi_m3' => 'Ritasi (kubikasi m³ & Harga Jual)', 'rit' => 'Ritasi (Harga Jual per rit)', 'ngepok' => 'Ngepok (Ritasi)', 'solar' => 'Solar (Data BBM)', 'rental' => 'Jam HM (Data BBM)',
             'kas_gaji' => 'Kas Harian — Gaji & Tunjangan', 'kas_operasional' => 'Kas Harian — biaya operasional', 'kas_hpp' => 'Kas Harian — akun HPP',
             'komisi' => 'Komisi (% omset)', 'overhead' => 'Overhead (bagian biaya umum)', 'manual' => 'Manual',
         ],
@@ -75,6 +75,15 @@ class Anggaran
             ->where('kubikasi', '>', 0)->avg('kubikasi') ?: 20);
     }
 
+    /** Perkiraan harga tanah & angkutan per m³ = Σ Harga Jual ÷ Σ kubikasi ritasi urug 6 bulan terakhir (dibulatkan ke ratusan). */
+    public static function hargaTanahM3(): ?float
+    {
+        $r = Ritasi::where('tanggal', '>=', now()->subMonths(6))->whereRaw("LOWER(COALESCE(jenis_buangan, '')) <> 'ngepok'")
+            ->where('kubikasi', '>', 0)->where('harga_jual', '>', 0)->selectRaw('sum(harga_jual) h, sum(kubikasi) k')->first();
+
+        return $r && $r->k > 0 ? round($r->h / $r->k, -2) : null;
+    }
+
     /**
      * Baris awal dari template tipe tahap (komponen aktif yang tipe bawaannya memuat tipe ini), diisi dari data tahap
      * (volume, harga/m³, tarif BBM & rental, komisi). Belum disimpan — ditinjau dulu di form.
@@ -94,6 +103,8 @@ class Anggaran
                 [$volume, $harga, $persen] = match ($k->kode) {
                     'urugan_m3' => [$m3, $t->harga_m3 ?? $k->nilai_bawaan, null],
                     'tanah_rit' => [$rit, $k->nilai_bawaan, null],
+                    // luas & volume: tanah bersatuan m³ = volume urugan (owner 15 Okt 2026)
+                    'tanah_m3' => [$m3, $k->nilai_bawaan ?? self::hargaTanahM3(), null],
                     'solar' => [null, $t->tarif_bbm ?? $k->nilai_bawaan, null],
                     'rental' => [null, $t->tarif_rental ?? $k->nilai_bawaan, null],
                     'komisi_lapangan', 'komisi_yosua', 'komisi_verlix' => [null, null, $t->{$k->kode} ?? $k->nilai_bawaan],
