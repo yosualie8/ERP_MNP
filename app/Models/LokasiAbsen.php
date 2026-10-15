@@ -25,6 +25,20 @@ class LokasiAbsen extends Model
         return $this->belongsTo(ProyekTahap::class, 'proyek_tahap_id');
     }
 
+    /** Lokasi proyek = kolom Lokasi tahap di Daftar Proyek (selalu terbaru); bila di sana kosong, nama tahapnya. */
+    public function lokasiProyek(): string
+    {
+        return $this->tahap?->lokasi ?: ($this->tahap?->nama ?? $this->nama);
+    }
+
+    /** "ASG Tahap 116 · Parkiran Ginza" — dipakai di halaman Absen, watermark selfie & Data Absensi. */
+    public function label(): string
+    {
+        $t = $this->tahap;
+
+        return $t ? $t->nama.($t->lokasi ? " · {$t->lokasi}" : '') : $this->nama;
+    }
+
     /** Jarak (meter) titik ini ke koordinat lain — rumus haversine. */
     public function jarakKe(float $lat, float $lng): int
     {

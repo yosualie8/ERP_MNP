@@ -1,4 +1,4 @@
-@extends('layouts.app', ['judul' => $lokasi->exists ? 'Edit lokasi '.$lokasi->nama : 'Tambah lokasi absen'])
+@extends('layouts.app', ['judul' => $lokasi->exists ? 'Edit lokasi '.$lokasi->label() : 'Tambah lokasi absen'])
 
 @section('lebar', '760px')
 
@@ -16,11 +16,13 @@
         @if ($lokasi->exists) @method('PUT') @endif
         <h3 style="margin: 0 0 14px;">{{ $lokasi->exists ? 'Edit lokasi absen' : 'Tambah lokasi absen' }}</h3>
         <div class="baris">
-            <div><label for="nama">Nama lokasi</label><input id="nama" name="nama" value="{{ old('nama', $lokasi->nama) }}" required placeholder="mis. ASG Tahap 116 / Pool ASG" autocomplete="off"></div>
             <div><label for="proyek">Proyek (tahap di Daftar Proyek)</label>
                 <input id="proyek" name="proyek" list="daftar-tahap" value="{{ old('proyek', $lokasi->tahap?->nama) }}" autocomplete="off" placeholder="Ketik / pilih, mis. ASG Tahap 116" required>
                 <datalist id="daftar-tahap">@foreach ($tahapSaran as $t)<option value="{{ $t }}">@endforeach</datalist>
                 <div id="galat-proyek" style="color: var(--merah); font-size: 12px; margin-top: 4px;" hidden></div></div>
+            <div><label for="lokasi-proyek">Lokasi proyek <span style="font-size: 11px;">(otomatis dari Daftar Proyek)</span></label>
+                <input id="lokasi-proyek" value="{{ $lokasi->tahap?->lokasi }}" readonly tabindex="-1" placeholder="— pilih proyek dulu —" style="opacity: .8;">
+                <div id="info-lokasi" class="redup" style="font-size: 12px; margin-top: 4px;" hidden>Lokasi tahap ini belum diisi di Daftar Proyek — sementara ditampilkan nama tahapnya. Lengkapi kolom Lokasi di Daftar Proyek.</div></div>
         </div>
         <div class="baris">
             <div><label for="lat">Latitude</label><input id="lat" name="lat" value="{{ old('lat', $lokasi->lat) }}" inputmode="decimal" autocomplete="off" placeholder="-6.1234567"></div>
@@ -59,8 +61,11 @@
             // Proyek harus persis nama tahap yang terdaftar.
             const TAHAP = @json($tahapSemua), proyek = document.getElementById('proyek'), galat = document.getElementById('galat-proyek'), simpan = document.querySelector('.form-l button[type=submit]');
             const cekProyek = () => {
-                const v = proyek.value, ada = TAHAP.includes(v);
-                const mirip = !ada && v ? TAHAP.find(t => t.replace(/\s+/g, '').toLowerCase() === v.replace(/\s+/g, '').toLowerCase()) : null;
+                const v = proyek.value, ada = Object.hasOwn(TAHAP, v);
+                // Lokasi diisi otomatis dari Daftar Proyek (tidak bisa diketik).
+                document.getElementById('lokasi-proyek').value = ada ? (TAHAP[v] || v) : '';
+                document.getElementById('info-lokasi').hidden = !ada || !!TAHAP[v];
+                const mirip = !ada && v ? Object.keys(TAHAP).find(t => t.replace(/\s+/g, '').toLowerCase() === v.replace(/\s+/g, '').toLowerCase()) : null;
                 galat.hidden = !v || ada;
                 galat.textContent = mirip ? `Harus ditulis persis "${mirip}".` : 'Proyek tidak terdaftar di Daftar Proyek — pilih dari daftar.';
                 proyek.style.borderColor = v && !ada ? 'var(--aksen)' : '';

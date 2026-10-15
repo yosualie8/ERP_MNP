@@ -30,26 +30,27 @@ class LokasiAbsenController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $l = LokasiAbsen::create([...$this->baca($request), 'user_id' => $request->user()->id]);
-        $this->catat($request, 'lokasi-tambah', "Lokasi absen baru {$l->nama} ({$l->lat}, {$l->lng}, radius {$l->radius_m} m)", $l->toArray());
+        $this->catat($request, 'lokasi-tambah', "Lokasi absen baru {$l->load('tahap')->label()} ({$l->lat}, {$l->lng}, radius {$l->radius_m} m)", $l->toArray());
 
-        return redirect()->route('lokasi-absen.index')->with('success', "Lokasi {$l->nama} disimpan.");
+        return redirect()->route('lokasi-absen.index')->with('success', "Lokasi {$l->label()} disimpan.");
     }
 
     public function update(Request $request, LokasiAbsen $lokasi): RedirectResponse
     {
         $lama = $lokasi->toArray();
         $lokasi->update([...$this->baca($request), 'user_id' => $request->user()->id]);
-        $this->catat($request, 'lokasi-ubah', "Lokasi absen {$lokasi->nama} diubah", ['sebelum' => $lama, 'sesudah' => $lokasi->fresh()->toArray()]);
+        $this->catat($request, 'lokasi-ubah', "Lokasi absen {$lokasi->load('tahap')->label()} diubah", ['sebelum' => $lama, 'sesudah' => $lokasi->fresh()->toArray()]);
 
-        return redirect()->route('lokasi-absen.index')->with('success', "Lokasi {$lokasi->nama} disimpan.");
+        return redirect()->route('lokasi-absen.index')->with('success', "Lokasi {$lokasi->label()} disimpan.");
     }
 
     /** Proyek detail yang boleh dipilih: tahap di Daftar Proyek (bukan baris "biaya lokasi"); saran = yang belum selesai. */
     private function daftarTahap(): array
     {
-        $semua = ProyekTahap::where('nama', 'not like', '%(biaya%')->orderBy('nama')->get(['id', 'nama', 'status']);
+        $semua = ProyekTahap::where('nama', 'not like', '%(biaya%')->orderBy('nama')->get(['id', 'nama', 'status', 'lokasi']);
 
-        return ['tahapSemua' => $semua->pluck('nama')->all(), 'tahapSaran' => $semua->whereIn('status', ['belum', 'progress'])->pluck('nama')->all()];
+        // tahapSemua: nama tahap → lokasi (dari Daftar Proyek), untuk mengisi Lokasi otomatis di form.
+        return ['tahapSemua' => $semua->mapWithKeys(fn ($t) => [$t->nama => $t->lokasi])->all(), 'tahapSaran' => $semua->whereIn('status', ['belum', 'progress'])->pluck('nama')->all()];
     }
 
     private function baca(Request $request): array
@@ -61,8 +62,9 @@ class LokasiAbsenController extends Controller
             throw \Illuminate\Validation\ValidationException::withMessages(['proyek' => $nama === ''
                 ? 'Proyek belum dipilih.' : "Proyek \"{$nama}\" tidak terdaftar di Daftar Proyek — pilih dari daftar (ketik persis sama)."]);
         }
-        $request->merge(['proyek_tahap_id' => $tahap->id]);
-        $request->merge(['nama' => trim(preg_replace('/\s+/', ' ', (string) $request->input('nama'))), 'aktif' => $request->boolean('aktif'),
+        // Nama lokasi tidak diketik: diambil dari kolom Lokasi tahap di Daftar Proyek (kosong → nama tahap).
+        $request->merge(['proyek_tahap_id' => $tahap->id, 'nama' => mb_substr($tahap->lokasi ?: $tahap->nama, 0, 120)]);
+        $request->merge(['aktif' => $request->boolean('aktif'),
             'lat' => str_replace(',', '.', (string) $request->input('lat')), 'lng' => str_replace(',', '.', (string) $request->input('lng'))]);
 
         return $request->validate([

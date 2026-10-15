@@ -32,7 +32,7 @@ class AbsenController extends Controller
         return view('absen.index', [
             'karyawan' => $k,
             'berikut' => $k ? Absensi::berikutnya($k) : null,
-            'riwayat' => $k ? Absensi::with('lokasi')->where('karyawan_id', $k->id)->where('waktu', '>=', now()->subDays(7))->orderByDesc('waktu')->get() : collect(),
+            'riwayat' => $k ? Absensi::with('lokasi.tahap')->where('karyawan_id', $k->id)->where('waktu', '>=', now()->subDays(7))->orderByDesc('waktu')->get() : collect(),
             'adaLokasi' => LokasiAbsen::where('aktif', true)->exists(),
         ]);
     }
@@ -63,12 +63,12 @@ class AbsenController extends Controller
             return response()->json(['boleh' => false, 'pesan' => 'Belum ada lokasi absen yang aktif. Hubungi admin.']);
         }
         [$l, $jarak] = $t;
-        $proyek = $l->tahap?->nama;
         $teksJarak = $jarak >= 1000 ? number_format($jarak / 1000, 1, ',', '.').' km' : "{$jarak} m";
 
+        // Tahap & lokasi proyek ditampilkan di halaman Absen saat mengambil selfie.
         return response()->json($jarak <= $l->radius_m
-            ? ['boleh' => true, 'pesan' => "Anda di area {$l->nama}".($proyek && $proyek !== $l->nama ? " · {$proyek}" : '')." ({$teksJarak} dari titik, maks. {$l->radius_m} m)", 'lokasi' => $l->nama, 'proyek' => $proyek]
-            : ['boleh' => false, 'pesan' => "Di luar area absen — lokasi terdekat {$l->nama}".($proyek && $proyek !== $l->nama ? " ({$proyek})" : '')." berjarak {$teksJarak} (maks. {$l->radius_m} m)."]);
+            ? ['boleh' => true, 'pesan' => "{$teksJarak} dari titik, maks. {$l->radius_m} m", 'proyek' => $l->tahap?->nama ?? $l->nama, 'lokasi' => $l->lokasiProyek()]
+            : ['boleh' => false, 'pesan' => "Di luar area absen — lokasi terdekat {$l->label()} berjarak {$teksJarak} (maks. {$l->radius_m} m)."]);
     }
 
     public function simpan(Request $request): RedirectResponse
@@ -101,7 +101,7 @@ class AbsenController extends Controller
         }
         [$l, $jarak] = $lokasi;
         if ($jarak > $l->radius_m) {
-            return back()->with('error', "Anda di luar area absen: {$jarak} m dari {$l->nama} (maks. {$l->radius_m} m). Absen hanya bisa di lokasi proyek.");
+            return back()->with('error', "Anda di luar area absen: {$jarak} m dari {$l->label()} (maks. {$l->radius_m} m). Absen hanya bisa di lokasi proyek.");
         }
 
         $waktu = now();
@@ -110,7 +110,7 @@ class AbsenController extends Controller
         \App\Support\WatermarkAbsen::pasang(Storage::path($path), [
             mb_strtoupper(Absensi::JENIS[$data['jenis']]).' · '.$waktu->translatedFormat('j M Y H:i:s').' WIB',
             sprintf('GPS %.7f, %.7f', $data['lat'], $data['lng']).($akurasi !== null ? " ±{$akurasi} m" : ''),
-            ($l->tahap?->nama ?? '-')." · {$l->nama} ({$jarak} m)",
+            "{$l->label()} ({$jarak} m)",
             $k->nama,
         ]);
         Absensi::create([
@@ -119,7 +119,7 @@ class AbsenController extends Controller
             'foto' => $path, 'ip' => $request->ip(), 'perangkat' => mb_substr((string) $request->userAgent(), 0, 255), 'user_id' => $request->user()->id,
         ]);
 
-        return redirect()->route('absen.index')->with('success', Absensi::JENIS[$data['jenis']].' tercatat pukul '.$waktu->format('H:i').' di '.$l->nama.'.');
+        return redirect()->route('absen.index')->with('success', Absensi::JENIS[$data['jenis']].' tercatat pukul '.$waktu->format('H:i').' di '.$l->label().'.');
     }
 
     /** Foto absen: karyawan hanya fotonya sendiri; admin dengan menu Data Absensi semua. */

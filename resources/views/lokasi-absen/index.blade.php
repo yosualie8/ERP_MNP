@@ -9,12 +9,12 @@
     </div>
     <div class="kartu gulir" style="padding: 0;">
         <table class="kas">
-            <thead><tr><th>Lokasi</th><th>Proyek</th><th>Titik GPS</th><th class="angka">Radius</th><th>Status</th><th class="angka">Absen tercatat</th><th data-tanpa-saring></th></tr></thead>
+            <thead><tr><th>Proyek (tahap)</th><th>Lokasi</th><th>Titik GPS</th><th class="angka">Radius</th><th>Status</th><th class="angka">Absen tercatat</th><th data-tanpa-saring></th></tr></thead>
             <tbody>
                 @forelse ($lokasi as $l)
                     <tr class="t">
-                        <td><b>{{ $l->nama }}</b></td>
-                        <td>{{ $l->tahap?->nama }}</td>
+                        <td><b>{{ $l->tahap?->nama }}</b></td>
+                        <td>{{ $l->lokasiProyek() }}</td>
                         <td><a href="{{ $l->urlPeta() }}" target="_blank" rel="noopener">{{ number_format($l->lat, 6, '.', '') }}, {{ number_format($l->lng, 6, '.', '') }}</a></td>
                         <td class="angka">{{ $l->radius_m }} m</td>
                         <td><span @class(['label', 'hijau' => $l->aktif])>{{ $l->aktif ? 'Aktif' : 'Nonaktif' }}</span></td>

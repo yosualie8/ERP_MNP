@@ -17,6 +17,11 @@
         .area.ok { background: rgba(76, 195, 138, .15); border: 1px solid #2f7a55; color: var(--sukses); }
         .area.luar { background: var(--merah-muda); border: 1px solid rgba(255, 92, 97, .4); color: var(--merah); }
         .area.tunggu { background: var(--kartu-2, #262b33); border: 1px solid var(--garis); color: var(--redup); font-weight: 400; }
+        .area .baris-info { display: flex; gap: 6px; margin-top: 4px; font-size: 15px; color: var(--teks); }
+        .area .baris-info span:first-child { color: var(--redup); font-weight: 400; min-width: 58px; }
+        .area .kecil { font-size: 12px; font-weight: 400; margin-top: 4px; }
+        .kamera .info-proyek { position: absolute; left: 8px; right: 8px; top: 8px; padding: 6px 10px; border-radius: 8px; background: rgba(0, 0, 0, .55);
+            color: #fff; font-size: 13px; font-weight: 600; text-align: left; z-index: 1; }
         .riwayat td { padding: 6px 8px; font-size: 13px; }
         .jam { font-size: 32px; font-weight: 700; font-variant-numeric: tabular-nums; }
     </style>
@@ -51,7 +56,7 @@
                     <input type="hidden" name="jenis" value="{{ $berikut['jenis'] }}">
                     <input type="hidden" name="lat" id="lat"><input type="hidden" name="lng" id="lng"><input type="hidden" name="akurasi" id="akurasi">
                     <input type="file" name="foto" id="foto" accept="image/jpeg" hidden>
-                    <div class="kamera"><video id="video" autoplay playsinline muted></video><img id="hasil" hidden alt="selfie"></div>
+                    <div class="kamera"><div class="info-proyek" id="info-proyek" hidden></div><video id="video" autoplay playsinline muted></video><img id="hasil" hidden alt="selfie"></div>
                     <div class="area tunggu" id="area">📍 Mencari lokasi GPS…</div>
                     <div class="status-gps" id="status-gps"></div>
                     <button type="button" class="tombol polos tombol-besar" id="ambil" disabled title="Masuk ke area lokasi absen dulu">📸 Ambil selfie</button>
@@ -68,7 +73,7 @@
                     <tbody>
                         @foreach ($riwayat as $a)
                             <tr><td>{{ $a->waktu->translatedFormat('D j M') }}</td><td><b>{{ $a->waktu->format('H:i') }}</b></td><td>{{ \App\Models\Absensi::JENIS[$a->jenis] }}</td>
-                                <td class="redup">{{ $a->lokasi?->nama }}</td><td><a href="{{ route('absen.foto', $a) }}" target="_blank">foto</a></td></tr>
+                                <td class="redup">{{ $a->lokasi?->label() }}</td><td><a href="{{ route('absen.foto', $a) }}" target="_blank">foto</a></td></tr>
                         @endforeach
                     </tbody>
                 </table>
@@ -103,7 +108,17 @@
                             const res = await fetch(@json(route('absen.cek')), {method: 'POST', body: data, headers: {Accept: 'application/json'}});
                             const h = await res.json();
                             area.className = 'area ' + (h.boleh ? 'ok' : 'luar');
-                            area.textContent = (h.boleh ? '✅ ' : '⛔ ') + (h.pesan || 'Lokasi tidak bisa dicek.');
+                            const infoProyek = document.getElementById('info-proyek');
+                            if (h.boleh) {
+                                // Di dalam area: tampilkan tahap & lokasi proyek (juga di atas kamera selfie).
+                                const baris = (label, isi) => { const d = document.createElement('div'); d.className = 'baris-info'; d.append(Object.assign(document.createElement('span'), {textContent: label}), Object.assign(document.createElement('b'), {textContent: isi || '-'})); return d; };
+                                area.replaceChildren('✅ Anda di area absen', baris('Proyek', h.proyek), baris('Lokasi', h.lokasi), Object.assign(document.createElement('div'), {className: 'kecil', textContent: h.pesan}));
+                                infoProyek.textContent = '📍 ' + h.proyek + (h.lokasi && h.lokasi !== h.proyek ? ' · ' + h.lokasi : '');
+                                infoProyek.hidden = false;
+                            } else {
+                                area.textContent = '⛔ ' + (h.pesan || 'Lokasi tidak bisa dicek.');
+                                infoProyek.hidden = true;
+                            }
                             adaGps = !!h.boleh;
                         } catch (e) {
                             area.className = 'area tunggu'; area.textContent = '⏳ Memeriksa lokasi… (koneksi lambat)'; adaGps = false;
