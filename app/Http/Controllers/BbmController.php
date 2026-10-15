@@ -328,6 +328,13 @@ class BbmController extends Controller
                     $g[] = 'Total HM lebih dari 24 jam — periksa HM awal/akhir.';
                 }
             }
+            // HM awal & HM akhir: alat berat wajib keduanya; baris lain boleh tanpa HM, tetapi bila salah satu diisi pasangannya wajib.
+            if ($tanggal?->toDateString() >= LembarBbm::WAJIB_HM_SEJAK && ($b['hm_awal'] === null) !== ($b['hm_akhir'] === null)) {
+                $g[] = 'HM awal & HM akhir harus diisi keduanya.';
+            } elseif ($jenis === 'pakai' && ($b['hm_awal'] === null || $b['hm_akhir'] === null) && $tanggal?->toDateString() >= LembarBbm::WAJIB_HM_SEJAK
+                && ($beratDb ??= AsetTruk::where('kategori', 'alat_berat')->pluck('no_lambung')->flip())->has($b['unit'])) {
+                $g[] = 'Alat berat wajib diisi HM awal & HM akhir.';
+            }
             if ($jenis === 'pakai') {
                 if ($b['masuk']) {
                     $g[] = 'Solar masuk tidak dicatat di baris alat — buat baris sendiri dengan unit sumber solar (mis. "Isi Solar dari Luar").';
@@ -338,11 +345,6 @@ class BbmController extends Controller
                     $g[] = 'Isi liter Keluar — atau HM awal & akhir bila alat bekerja tanpa isi solar. Baris tanpa transaksi tidak bisa disimpan.';
                 } elseif (! $b['proyek']) {
                     $g[] = 'Pemakaian solar / jam kerja alat wajib diisi Proyek.';
-                }
-                // Alat berat yang diisi solar wajib disertai HM awal & akhir (supaya rasio L/jam bisa dihitung) — sejak WAJIB_HM_SEJAK.
-                if ($b['keluar'] > 0 && ($b['hm_awal'] === null || $b['hm_akhir'] === null) && $tanggal?->toDateString() >= LembarBbm::WAJIB_HM_SEJAK
-                    && ($beratDb ??= AsetTruk::where('kategori', 'alat_berat')->pluck('no_lambung')->flip())->has($b['unit'])) {
-                    $g[] = 'Alat berat yang diisi solar wajib diisi HM awal & HM akhir hari itu (dasar rasio liter/jam).';
                 }
             } elseif ($jenis === 'masuk') {
                 if (! $b['masuk']) {

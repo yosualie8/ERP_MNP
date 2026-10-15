@@ -48,9 +48,9 @@
                 <span class="redup">keluar <b id="jml-keluar">0</b> L · masuk <b id="jml-masuk">0</b> L · <b id="jml-baris">0</b> baris</span>
             </div>
             <p class="redup" style="margin: 0 0 12px; font-size: 13px;">Pilih <b style="color: var(--teks);">Jenis</b> dulu di tiap baris. <b style="color: var(--teks);">Setiap baris harus berisi transaksi</b> (liter Keluar/Masuk, atau HM untuk alat yang bekerja tanpa isi solar).
-                <b>Pemakaian alat</b>: Unit = nama di Data Aset, isi HM & Keluar (liter) + Proyek — <b>alat berat yang diisi solar wajib HM awal & akhir</b>. <b>Solar masuk</b>: Unit bebas diketik (sumber solarnya, mis. "Isi Solar dari Luar", "Isi Solar dari DT 035"); tulis No DO di Keterangan bila ada.
+                <b>Pemakaian alat</b>: Unit = nama di Data Aset, isi HM & Keluar (liter) + Proyek — <b>alat berat wajib HM awal & HM akhir</b>; HM awal & akhir selalu diisi berpasangan. <b>Solar masuk</b>: Unit bebas diketik (sumber solarnya, mis. "Isi Solar dari Luar", "Isi Solar dari DT 035"); tulis No DO di Keterangan bila ada.
                 Unit (selain solar masuk), Proyek & Status harus persis sama dengan data master — beda huruf besar/kecil atau spasi pun ditolak. Total jam kerja dihitung otomatis dari jam Mulai–Selesai.
-                HM awal & proyek terisi otomatis dari catatan terakhir unit itu (ungu = otomatis, boleh diganti). Stok dihitung otomatis di sheet.</p>
+                HM awal (alat berat) & proyek terisi otomatis dari catatan terakhir unit itu (ungu = otomatis, boleh diganti). Stok dihitung otomatis di sheet.</p>
 
             <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px;">
                 <label style="font-size: 13px; color: var(--redup);">Tanggal</label>
@@ -141,7 +141,7 @@
                     <td>${isian('unit', i, isi.unit, 'placeholder="Unit…"')}</td>
                     <td>${isian('hm_awal', i, isi.hm_awal, 'class="angka-input" inputmode="decimal"')}</td>
                     <td>${isian('hm_akhir', i, isi.hm_akhir, 'class="angka-input" inputmode="decimal"')}</td>
-                    <td class="total">${isian('total_hm', i, isi.total_hm, 'class="angka-input" inputmode="decimal" title="Diisi bila HM awal/akhir tidak ada"')}</td>
+                    <td class="total">${isian('total_hm', i, isi.total_hm, 'class="angka-input" inputmode="decimal" title="Hanya untuk unit tanpa HM awal/akhir (bukan alat berat)"')}</td>
                     <td>${isian('masuk', i, isi.masuk, 'class="angka-input" inputmode="decimal"')}</td>
                     <td>${isian('keluar', i, isi.keluar, 'class="angka-input" inputmode="decimal"')}</td>
                     <td>${isian('jam_mulai', i, isi.jam_mulai, 'placeholder="8:00"')}</td>
@@ -175,7 +175,7 @@
                 ['hm_awal', 'hm_akhir', 'total_hm', 'jam_mulai', 'jam_selesai'].forEach(k => matikan(k, !!jenis && !alat && jenis !== 'operasional'));
                 if (isiOtomatis && alat && u) {
                     const hm = sel(tr, 'hm_awal');
-                    if (!hm.value && u.hm != null) { hm.value = String(u.hm).replace('.', ','); hm.classList.add('otomatis'); }
+                    if (!hm.value && u.hm != null && u.berat) { hm.value = String(u.hm).replace('.', ','); hm.classList.add('otomatis'); }
                     const p = sel(tr, 'proyek');
                     if (!p.value && u.proyek) { p.value = u.proyek; p.classList.add('otomatis'); }
                 }
@@ -225,19 +225,21 @@
                     if (n.hm_akhir < n.hm_awal) { galat.push('HM akhir lebih kecil dari HM awal.'); salahDi.add('hm_akhir'); }
                     else if (n.hm_akhir - n.hm_awal > 24) { galat.push('Total HM lebih dari 24 jam — periksa HM awal/akhir.'); salahDi.add('hm_akhir'); }
                 }
+                // HM awal & HM akhir: alat berat wajib keduanya; baris lain boleh tanpa HM, tetapi bila salah satu diisi
+                // pasangannya wajib (sejak WAJIB_HM_SEJAK; baris lama yang diedit tidak terkena).
+                const tgl = window.TanggalId ? TanggalId.urai(document.querySelector('[name=tanggal]').value) : null;
+                const iso = tgl ? `${tgl.getFullYear()}-${String(tgl.getMonth() + 1).padStart(2, '0')}-${String(tgl.getDate()).padStart(2, '0')}` : '9999';
+                const hmBerat = jenis === 'pakai' && u?.berat;
+                if (iso >= WAJIB_HM_SEJAK && (hmBerat || n.hm_awal !== null || n.hm_akhir !== null) && (n.hm_awal === null || n.hm_akhir === null)) {
+                    galat.push(hmBerat ? 'Alat berat wajib diisi HM awal & HM akhir.' : 'HM awal & HM akhir harus diisi keduanya.');
+                    if (n.hm_awal === null) salahDi.add('hm_awal'); if (n.hm_akhir === null) salahDi.add('hm_akhir');
+                }
                 if (jenis === 'pakai') {
                     if (n.masuk) { galat.push('Solar masuk tidak dicatat di baris alat — kosongkan Masuk, buat baris sendiri dengan unit sumber solar (mis. "Isi Solar dari Luar").'); salahDi.add('masuk'); }
                     // Baris alat harus berisi transaksi: liter Keluar atau jam HM (> 0).
                     const hm = n.hm_awal !== null && n.hm_akhir !== null ? n.hm_akhir - n.hm_awal : n.total_hm;
                     if (!n.keluar && !(hm > 0)) { galat.push('Isi liter Keluar — atau HM awal & akhir bila alat bekerja tanpa isi solar. Baris tanpa transaksi tidak bisa disimpan.'); salahDi.add('keluar'); }
                     else if (!v('proyek').trim()) { galat.push('Pemakaian solar / jam kerja alat wajib diisi Proyek.'); salahDi.add('proyek'); }
-                    // Alat berat yang diisi solar wajib disertai HM awal & akhir (sejak WAJIB_HM_SEJAK; baris lama yang diedit tidak terkena).
-                    const tgl = window.TanggalId ? TanggalId.urai(document.querySelector('[name=tanggal]').value) : null;
-                    const iso = tgl ? `${tgl.getFullYear()}-${String(tgl.getMonth() + 1).padStart(2, '0')}-${String(tgl.getDate()).padStart(2, '0')}` : '9999';
-                    if (u?.berat && n.keluar > 0 && (n.hm_awal === null || n.hm_akhir === null) && iso >= WAJIB_HM_SEJAK) {
-                        galat.push('Alat berat yang diisi solar wajib diisi HM awal & HM akhir hari itu (dasar rasio liter/jam).');
-                        if (n.hm_awal === null) salahDi.add('hm_awal'); if (n.hm_akhir === null) salahDi.add('hm_akhir');
-                    }
                 } else if (jenis === 'masuk') {
                     if (!n.masuk) { galat.push('Isi jumlah liter di kolom Masuk.'); salahDi.add('masuk'); }
                     if (n.keluar) { galat.push('Baris solar masuk tidak boleh berisi Keluar — kosongkan Keluar.'); salahDi.add('keluar'); }
