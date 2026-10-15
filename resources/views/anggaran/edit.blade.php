@@ -7,11 +7,13 @@
         $h = \App\Support\Anggaran::hitung($baris, $tahap);
         $langsung = array_sum(array_column($rincian, 1));
         $realisasi = $langsung + $overhead;
+        $volTanah = \App\Support\Anggaran::volumeTanah($baris);
+        $serapan = $h['hpp'] > 0 ? $realisasi / $h['hpp'] * 100 : null;
         $ang = fn ($v, $d = 0) => $v === null || $v === '' ? '' : rtrim(rtrim(number_format((float) $v, $d, ',', '.'), '0'), ',');
         $persen = fn ($v) => $v === null ? '–' : number_format($v, 1, ',', '.').'%';
         $b = $tahap->anggaran_baseline;
         // tunda = komponen yang belum masuk HPP rencana sebelum direalisasikan (mis. komisi lapangan sebelum tanggal bayarnya diisi).
-        $dataKomponen = $komponen->mapWithKeys(fn ($k) => [$k->id => ['nama' => $k->nama, 'jenis' => $k->jenis, 'cara' => $k->cara, 'satuan' => $k->satuan, 'aktif' => $k->aktif, 'bawaan' => $k->nilai_bawaan,
+        $dataKomponen = $komponen->mapWithKeys(fn ($k) => [$k->id => ['nama' => $k->nama, 'jenis' => $k->jenis, 'cara' => $k->cara, 'satuan' => $k->satuan, 'aktif' => $k->aktif, 'bawaan' => $k->nilai_bawaan, 'kode' => $k->kode, 'sumber' => $k->sumber,
             'tunda' => \App\Support\Anggaran::ditunda($k, $tahap)]]);
         $dataAwal = $baris->map(fn ($x) => ['komponen_id' => $x->komponen_id, 'uraian' => $x->uraian, 'volume' => $ang($x->volume, 3), 'harga' => $ang($x->harga, 2), 'persen' => $ang($x->persen, 3)])->values();
     @endphp
@@ -28,6 +30,7 @@
         table.ang td.nilai { text-align: right; white-space: nowrap; font-weight: 600; }
         table.ang tfoot td { font-weight: 700; text-align: right; }
         table.ang .tanpa { opacity: .3; }
+        table.ang input.rekom { color: #c4b5fd; border-color: rgba(167, 139, 250, .6); }
         .judul-bagian { display: flex; gap: 10px; align-items: center; margin: 14px 0 6px; }
         .judul-bagian h4 { margin: 0; color: var(--aksen-terang); }
     </style>
@@ -46,7 +49,10 @@
         <div class="kartu"><small>HPP rencana</small><b>{{ rp((int) round($h['hpp'])) }}</b>@if ($h['tunda'])<small>belum termasuk {{ count($h['tunda']) }} komponen yang menunggu realisasi</small>@endif</div>
         <div class="kartu"><small>Margin rencana</small><b @if ($h['margin'] < 0) style="color: var(--merah);" @endif>{{ rp((int) round($h['margin'])) }}</b><small>{{ $persen($h['persen_margin']) }} dari omset</small></div>
         <div class="kartu"><small>Realisasi HPP s/d hari ini</small><b>{{ rp((int) round($realisasi)) }}</b><small>langsung {{ rp($langsung) }} + biaya umum {{ rp((int) round($overhead)) }}</small></div>
-        <div class="kartu"><small>Progres (realisasi ÷ HPP rencana)</small><b @if ($h['hpp'] > 0 && $realisasi > $h['hpp']) style="color: var(--merah);" @endif>{{ $h['hpp'] > 0 ? $persen($realisasi / $h['hpp'] * 100) : '–' }}</b><small>{{ $h['hpp'] > 0 ? ($realisasi > $h['hpp'] ? 'realisasi melebihi HPP rencana' : 'sisa '.rp((int) round($h['hpp'] - $realisasi))) : 'HPP rencana belum diisi' }}</small></div>
+        @if ($volTanah > 0)
+            <div class="kartu"><small>Progres fisik (kubikasi bongkaran ÷ m³ HPP tanah)</small><b>{{ $persen($m3 / $volTanah * 100) }}</b><small>{{ $ang($m3, 2) }} dari {{ $ang($volTanah, 2) }} m³</small></div>
+        @endif
+        <div class="kartu"><small>{{ $volTanah > 0 ? 'Serapan biaya' : 'Progres' }} (realisasi ÷ HPP rencana)</small><b @if ($serapan > 100 || ($volTanah > 0 && $serapan > $m3 / $volTanah * 100 + 10)) style="color: var(--merah);" @endif>{{ $persen($serapan) }}</b><small>{{ $h['hpp'] > 0 ? ($realisasi > $h['hpp'] ? 'realisasi melebihi HPP rencana' : 'sisa '.rp((int) round($h['hpp'] - $realisasi))) : 'HPP rencana belum diisi' }}</small></div>
     </div>
 
     @if ($errors->any())
@@ -54,6 +60,26 @@
     @endif
     @if ($pakaiTemplate)
         <div class="pesan" style="background: rgba(240, 192, 90, .12); border: 1px solid rgba(240, 192, 90, .4);">Baris di bawah diisi dari <b>template tipe {{ \App\Models\ProyekTahap::TIPE[$tahap->tipe] }}</b> dan data tahap — <b>belum disimpan</b>. Lengkapi volume/harga lalu tekan Simpan anggaran.</div>
+    @endif
+
+    @if ($rekomendasi)
+        @php($rs = $rekomendasi['rasio'])
+        <div class="kartu" style="border-color: rgba(167, 139, 250, .45);">
+            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                <h4 style="margin: 0; color: #c4b5fd;">Rekomendasi dari {{ $rekomendasi['n'] }} tahap {{ $tahap->proyek->nama }} sejenis</h4>
+                <span class="redup" style="font-size: 12px;" title="{{ implode(', ', $rekomendasi['sampel']) }}">median per m³ kubikasi bongkaran, tahap selesai 12 bulan terakhir (arahkan kursor untuk daftar tahap)</span>
+                <button type="button" class="tombol" id="isi-rekomendasi" style="margin-left: auto; padding: 6px 12px; background: #7c3aed; border-color: #7c3aed;">Isi komponen lain dari rekomendasi</button>
+            </div>
+            <div style="display: flex; gap: 18px; flex-wrap: wrap; margin-top: 8px; font-size: 13px;">
+                <span>Solar <b>{{ number_format($rs['liter'], 3, ',', '.') }}</b> liter/m³</span>
+                <span>Rental <b>{{ number_format($rs['hm'], 3, ',', '.') }}</b> jam/m³</span>
+                <span>Ngepok <b>{{ number_format($rs['ngepok'], 3, ',', '.') }}</b> rit/m³</span>
+                <span>Gaji & UM <b>{{ rp((int) round($rs['gaji'])) }}</b>/m³</span>
+                <span>Operasional <b>{{ rp((int) round($rs['ops'])) }}</b>/m³</span>
+                <span>Biaya umum <b>{{ $rekomendasi['overhead_m3'] ? rp((int) $rekomendasi['overhead_m3']) : '–' }}</b>/m³ <span class="redup">(tanpa akun HPP/BBM/komisi)</span></span>
+            </div>
+            <p class="redup" style="margin: 6px 0 0; font-size: 12px;">Isi dulu volume <b>HPP tanah urug (m³)</b> & harganya, lalu tekan tombol ungu: solar, rental, ngepok, gaji, operasional & persen biaya umum dihitung dari volume itu (isian ungu = hasil rekomendasi, boleh diubah). Komisi tetap dari persen tahap.</p>
+        </div>
     @endif
 
     <form method="POST" action="{{ route('anggaran.simpan', $tahap) }}" class="kartu" id="form-anggaran">
@@ -160,6 +186,36 @@
             ['omset', 'hpp'].forEach(j => { if (!form.querySelector(`tbody[data-jenis=${j}] tr`)) tambah(j); });
             form.querySelectorAll('[data-tambah]').forEach(b => b.addEventListener('click', () => { tambah(b.dataset.tambah).querySelector('select').focus(); hitung(); }));
             form.addEventListener('input', hitung); hitung();
+            // Rekomendasi dari tahap sejenis: rasio per m³ × volume HPP tanah (m³).
+            const REKOM = @json($rekomendasi);
+            const TARIF = {solar: {{ (float) ($tahap->tarif_bbm ?? \App\Models\ProyekTahap::BAWAAN['tarif_bbm']) }}, rental: {{ (float) ($tahap->tarif_rental ?? \App\Models\ProyekTahap::BAWAAN['tarif_rental']) }}};
+            const tulis = (x, v) => { x.value = v; x.classList.add('rekom'); };
+            const fmt = (v, d = 0) => (Math.round(v * 10 ** d) / 10 ** d).toLocaleString('id-ID', {maximumFractionDigits: d});
+            const barisKode = kode => {
+                const id = Object.keys(KOMPONEN).find(i => KOMPONEN[i].kode === kode);
+                if (!id) return null;
+                return [...form.querySelectorAll('tbody tr')].find(t => t.querySelector('select').value === id) || tambah(KOMPONEN[id].jenis, {komponen_id: id});
+            };
+            document.getElementById('isi-rekomendasi')?.addEventListener('click', () => {
+                const tanah = [...form.querySelectorAll('tbody[data-jenis=hpp] tr')].filter(tr => KOMPONEN[tr.querySelector('select').value]?.sumber === 'ritasi_m3');
+                const m3 = tanah.reduce((s, tr) => s + angka(tr.querySelector('[data-k=volume]').value), 0);
+                if (!m3) { alert('Isi dulu volume HPP tanah urug & angkutan (m³).'); return; }
+                const r = REKOM.rasio;
+                const isi = (kode, f) => { const tr = barisKode(kode); if (tr) f(k => tr.querySelector('[data-k=' + k + ']')); };
+                isi('solar', q => { tulis(q('volume'), fmt(r.liter * m3)); if (!q('harga').value) tulis(q('harga'), fmt(TARIF.solar)); });
+                isi('rental', q => { tulis(q('volume'), fmt(r.hm * m3, 1)); if (!q('harga').value) tulis(q('harga'), fmt(TARIF.rental)); });
+                if (r.ngepok > 0 && REKOM.harga_ngepok) isi('ngepok', q => { tulis(q('volume'), fmt(Math.max(1, r.ngepok * m3))); tulis(q('harga'), fmt(REKOM.harga_ngepok)); });
+                isi('gaji', q => { tulis(q('volume'), '1'); tulis(q('harga'), fmt(Math.round(r.gaji * m3 / 1000) * 1000)); });
+                isi('operasional', q => { tulis(q('volume'), '1'); tulis(q('harga'), fmt(Math.round(r.ops * m3 / 1000) * 1000)); });
+                hitung();
+                // Biaya umum: Rp/m³ × volume ÷ total omset → persen.
+                const omset = angka(form.querySelector('[data-total=omset]').textContent);
+                if (REKOM.overhead_m3) {
+                    if (omset > 0) isi('overhead', q => tulis(q('persen'), fmt(REKOM.overhead_m3 * m3 / omset * 100, 2)));
+                    else alert('Isi omset dulu supaya persen biaya umum bisa dihitung.');
+                }
+                hitung();
+            });
             // Template menimpa isian yang belum disimpan → konfirmasi bila sudah ada anggaran.
             document.getElementById('isi-template').addEventListener('click', e => {
                 if ({{ $tahap->anggaran->isNotEmpty() ? 'true' : 'false' }} && !confirm('Isi ulang dari template? Baris yang tampil sekarang diganti (anggaran tersimpan baru berubah setelah Simpan).')) e.preventDefault();

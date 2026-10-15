@@ -35,9 +35,15 @@ class AnggaranController extends Controller
                 $langsung = array_sum(array_column(DaftarProyek::rincian($t, $ritasi, $kas, $bbm), 1));
                 $oh = $overhead[$t->id] ?? 0;
 
-                // Progres = realisasi HPP (biaya langsung + biaya umum teralokasi) ÷ HPP rencana.
+                // Progres fisik (cut & fill) = kubikasi bongkaran ÷ m³ HPP tanah; tanpa baris tanah m³: serapan biaya.
+                // Serapan biaya = realisasi HPP (langsung + biaya umum teralokasi) ÷ HPP rencana.
+                $volTanah = Anggaran::volumeTanah($t->anggaran);
+                $m3 = $ritasi['per_tahap'][$t->id]['m3'] ?? 0;
+                $serapan = $h['hpp'] > 0 ? ($langsung + $oh) / $h['hpp'] * 100 : null;
+
                 return (object) ['t' => $t, 'h' => $h, 'ada' => $t->anggaran->isNotEmpty(), 'langsung' => $langsung, 'overhead' => $oh,
-                    'realisasi' => $langsung + $oh, 'progres' => $h['hpp'] > 0 ? ($langsung + $oh) / $h['hpp'] * 100 : null];
+                    'realisasi' => $langsung + $oh, 'serapan' => $serapan, 'fisik' => $volTanah > 0 ? $m3 / $volTanah * 100 : null, 'm3' => $m3,
+                    'progres' => $volTanah > 0 ? $m3 / $volTanah * 100 : $serapan];
             })
             ->sortBy(fn ($x) => [$x->ada ? 0 : 1, $x->t->proyek->urutan, (int) preg_replace('/\D/', '', $x->t->nama) ?: 99999, $x->t->nama])->values();
 
@@ -56,6 +62,7 @@ class AnggaranController extends Controller
             'komponen' => KomponenAnggaran::where('aktif', true)->orWhereIn('id', $baris->pluck('komponen_id'))->orderBy('urutan')->get(),
             'rincian' => DaftarProyek::rincian($tahap, $ritasi, $kas, $bbm),
             'overhead' => Overhead::teralokasi()[$tahap->id] ?? 0,
+            'rekomendasi' => Anggaran::rekomendasi($tahap),
             'm3' => $ritasi['per_tahap'][$tahap->id]['m3'] ?? 0,
         ]);
     }

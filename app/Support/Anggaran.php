@@ -75,6 +75,97 @@ class Anggaran
             ->where('kubikasi', '>', 0)->avg('kubikasi') ?: 20);
     }
 
+    /** Volume rencana tanah (m³) = jumlah volume baris HPP bersumber Ritasi m³ — dasar progres fisik proyek cut & fill. */
+    public static function volumeTanah(iterable $baris): float
+    {
+        return (float) collect($baris)->filter(fn ($b) => $b->komponen->jenis === 'hpp' && $b->komponen->sumber === 'ritasi_m3')->sum('volume');
+    }
+
+    /**
+     * Rekomendasi komponen dari tahap sejenis (proyek induk & tipe sama, selesai dalam 12 bulan terakhir, ≥ 300 m³):
+     * MEDIAN rasio per m³ kubikasi bongkaran — solar (liter), HM (jam), ngepok (rit), gaji & operasional Kas (Rp) —
+     * plus biaya umum per m³ dari pos biaya umum yang mencakup tahap ini (12 bulan ÷ kubikasi yang ditanggungnya).
+     *
+     * @return array{n: int, sampel: array<int, string>, rasio: array<string, float>, harga_ngepok: ?float, overhead_m3: ?float}|null
+     */
+    public static function rekomendasi(ProyekTahap $t): ?array
+    {
+        $ritasi = DaftarProyek::ritasi();
+        $bbm = DaftarProyek::bbm();
+        $batas = now()->subMonths(12)->toDateString();
+        $sampel = ProyekTahap::where('proyek_id', $t->proyek_id)->where('tipe', $t->tipe)->where('status', 'selesai')->whereKeyNot($t->id)->whereNull('pos_overhead')->get()
+            ->filter(fn ($s) => ($ritasi['per_tahap'][$s->id]['m3'] ?? 0) >= 300 && ($ritasi['per_tahap'][$s->id]['selesai'] ?? '') >= $batas)->values();
+        if ($sampel->count() < 3) {
+            return null;
+        }
+        $kas = self::kasKelompok($sampel->pluck('id')->all());
+        $per = $sampel->map(function ($s) use ($ritasi, $bbm, $kas) {
+            $r = $ritasi['per_tahap'][$s->id];
+            $b = $bbm['per_tahap'][$s->id] ?? [];
+
+            return ['liter' => ($b['liter'] ?? 0) / $r['m3'], 'hm' => ($b['hm'] ?? 0) / $r['m3'], 'ngepok' => ($r['ngepok'] ?? 0) / $r['m3'],
+                'gaji' => ($kas[$s->id]['gaji'] ?? 0) / $r['m3'], 'ops' => ($kas[$s->id]['ops'] ?? 0) / $r['m3']];
+        });
+        $median = function (Collection $v) {
+            $v = $v->sort()->values();
+            $n = $v->count();
+
+            return $n ? ($n % 2 ? $v[intdiv($n, 2)] : ($v[$n / 2 - 1] + $v[$n / 2]) / 2) : 0.0;
+        };
+        $ngepok = collect($ritasi['per_tahap'])->filter(fn ($r) => ($r['ngepok'] ?? 0) > 0);
+
+        return [
+            'n' => $sampel->count(), 'sampel' => $sampel->pluck('nama')->all(),
+            'rasio' => collect(['liter', 'hm', 'ngepok', 'gaji', 'ops'])->mapWithKeys(fn ($k) => [$k => round($median($per->pluck($k)), 4)])->all(),
+            'harga_ngepok' => $ngepok->sum('ngepok') ? round($ngepok->sum('rp_ngepok') / $ngepok->sum('ngepok'), -2) : null,
+            'overhead_m3' => self::overheadPerM3($t),
+        ];
+    }
+
+    /** Kas per tahap per kelompok: gaji (Gaji & Tunjangan selain komisi) & ops (selain HPP, BBM, komisi — sudah dihitung di komponen lain). */
+    public static function kasKelompok(array $ids): array
+    {
+        $hasil = [];
+        foreach (DaftarProyek::queryKas()->selectRaw('c.kode cc, k.ref, a.nama akun, a.kelompok kel, b.tanggal, al.proyek_tahap_id alokasi, sum(b.nominal) s')
+            ->groupBy('c.kode', 'k.ref', 'a.nama', 'a.kelompok', 'b.tanggal', 'al.proyek_tahap_id')->get() as $r) {
+            $id = $r->alokasi ?: DaftarProyek::tahapKas($r->cc, $r->ref, $r->akun, substr((string) $r->tanggal, 0, 10));
+            if (! in_array($id, $ids, true) || Overhead::bukanOverhead($r->kel, $r->akun)) {
+                continue;
+            }
+            $g = $r->kel === 'Gaji & Tunjangan' ? 'gaji' : 'ops';
+            $hasil[$id][$g] = ($hasil[$id][$g] ?? 0) + (float) $r->s;
+        }
+
+        return $hasil;
+    }
+
+    /** Biaya umum per m³ untuk tahap ini: Σ biaya 12 bulan tiap pos yang mencakupnya ÷ kubikasi bongkaran yang ditanggung pos itu. */
+    public static function overheadPerM3(ProyekTahap $t): ?float
+    {
+        $dari = now()->subMonths(12)->format('Y-m');
+        $kas = Overhead::data()['kas'];
+        $m3 = [];
+        foreach (Ritasi::where('tanggal', '>=', $dari.'-01')->whereRaw("LOWER(COALESCE(jenis_buangan, '')) <> 'ngepok'")->selectRaw('tahap, sum(kubikasi) k')->groupBy('tahap')->get() as $r) {
+            if ($id = DaftarProyek::tahapId('ritasi', $r->tahap)) {
+                $m3[$id] = ($m3[$id] ?? 0) + (float) $r->k;
+            }
+        }
+        $proyekOf = ProyekTahap::whereIn('id', array_keys($m3))->pluck('proyek_id', 'id');
+        $total = 0.0;
+        foreach (ProyekTahap::whereNotNull('pos_overhead')->get() as $pos) {
+            if ($pos->pos_overhead === 'induk' && $pos->proyek_id !== $t->proyek_id) {
+                continue;
+            }
+            $biaya = array_sum(array_filter($kas[$pos->id] ?? [], fn ($v, $ym) => $ym >= $dari, ARRAY_FILTER_USE_BOTH));
+            $dasar = collect($m3)->filter(fn ($v, $id) => $pos->pos_overhead === 'semua' || ($proyekOf[$id] ?? null) === $pos->proyek_id)->sum();
+            if ($biaya && $dasar) {
+                $total += $biaya / $dasar;
+            }
+        }
+
+        return $total ? round($total, -1) : null;
+    }
+
     /** Perkiraan harga tanah & angkutan per m³ = Σ Harga Jual ÷ Σ kubikasi ritasi urug 6 bulan terakhir (dibulatkan ke ratusan). */
     public static function hargaTanahM3(): ?float
     {

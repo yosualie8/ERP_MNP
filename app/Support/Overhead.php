@@ -12,6 +12,7 @@ use Illuminate\Support\Collection;
  * Pembagian biaya umum (pos overhead: tahap "tanpa tahap", kantor, dll.) ke tahap yang berjalan, per bulan.
  * Rekomendasi tujuan = tahap (bukan pos) yang ada aktivitasnya (Ritasi / BBM / Kas) di bulan itu, dibatasi proyek induk
  * yang sama bila cakupan pos = "induk". Owner memilih manual dari rekomendasi; hanya alokasi yang disimpan yang dihitung.
+ * Biaya pos tidak memuat akun HPP (pembayaran ritasi), BBM & komisi — itu sudah dihitung di komponennya sendiri.
  * Metode: proporsional omset (omset rencana anggaran → omset tahap → volume × harga/m³) atau rata per tahap.
  */
 class Overhead
@@ -28,14 +29,18 @@ class Overhead
         }
         $kas = [];
         $aktif = [];
-        $baris = DaftarProyek::queryKas()->selectRaw('c.kode cc, k.ref, a.nama akun, b.tanggal, al.proyek_tahap_id alokasi, sum(b.nominal) s')
-            ->groupBy('c.kode', 'k.ref', 'a.nama', 'b.tanggal', 'al.proyek_tahap_id')->get();
+        $baris = DaftarProyek::queryKas()->selectRaw('c.kode cc, k.ref, a.nama akun, a.kelompok kel, b.tanggal, al.proyek_tahap_id alokasi, sum(b.nominal) s')
+            ->groupBy('c.kode', 'k.ref', 'a.nama', 'a.kelompok', 'b.tanggal', 'al.proyek_tahap_id')->get();
         foreach ($baris as $r) {
             $t = substr((string) $r->tanggal, 0, 10);
             if ($id = $r->alokasi ?: DaftarProyek::tahapKas($r->cc, $r->ref, $r->akun, $t)) {
                 $ym = substr($t, 0, 7);
-                $kas[$id][$ym] = ($kas[$id][$ym] ?? 0) + (float) $r->s;
                 $aktif[$id][$ym] = true;
+                // Biaya umum = Kas pos SELAIN yang sudah dihitung di komponen lain: akun HPP (pembayaran ritasi/tanah →
+                // komponen tanah dari Ritasi), BBM/solar (→ Data BBM) & komisi (→ komponen komisi). Mencegah hitung ganda.
+                if (! self::bukanOverhead($r->kel, $r->akun)) {
+                    $kas[$id][$ym] = ($kas[$id][$ym] ?? 0) + (float) $r->s;
+                }
             }
         }
         foreach (Ritasi::selectRaw("tahap, DATE_FORMAT(tanggal, '%Y-%m') ym")->distinct()->get() as $r) {
@@ -52,6 +57,12 @@ class Overhead
         }
 
         return self::$cache = ['kas' => $kas, 'aktif' => $aktif];
+    }
+
+    /** Akun Kas yang bukan biaya umum karena sudah dihitung di komponen lain (HPP ritasi/tanah, BBM, komisi). */
+    public static function bukanOverhead(?string $kelompok, ?string $akun): bool
+    {
+        return $kelompok === 'HPP' || (bool) preg_match('/bbm|solar|bensin|omis/i', (string) $akun);
     }
 
     /** Basis omset per tahap: omset rencana anggaran → kolom omset tahap → volume × harga/m³ → 0. */
