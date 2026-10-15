@@ -7,7 +7,7 @@
     <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 12px;">
         <a href="{{ route('anggaran.index') }}" @class(['chip', 'aktif' => ! $semua])>Berjalan & yang sudah beranggaran</a>
         <a href="{{ route('anggaran.index', ['semua' => 1]) }}" @class(['chip', 'aktif' => $semua])>Semua tahap</a>
-        <span class="redup" style="font-size: 13px;">Realisasi HPP = biaya langsung (ritasi, ngepok, solar, rental, Kas Harian) + biaya umum yang sudah dialokasikan. Serapan biaya = realisasi ÷ HPP rencana. Progres (cut & fill) = kubikasi bongkaran Ritasi ÷ m³ HPP tanah; tahap tanpa baris tanah m³ memakai serapan biaya (ditandai $).</span>
+        <span class="redup" style="font-size: 13px;">Realisasi HPP = biaya langsung (Harga Jual ritasi bongkaran & ngepok, solar & rental dari Data BBM & HM, Kas Harian tanpa akun HPP/BBM/sparepart/DT) + biaya umum yang sudah dialokasikan. Serapan biaya = realisasi ÷ HPP rencana. Progres (cut & fill) = kubikasi bongkaran Ritasi ÷ m³ HPP tanah; tahap tanpa baris tanah m³ memakai serapan biaya (ditandai $).</span>
         <span style="margin-left: auto; display: flex; gap: 6px;">
             @if (auth()->user()->bolehMenu('alokasi-overhead'))<a href="{{ route('alokasi-overhead.index') }}" class="tombol polos" style="padding: 6px 12px;">Alokasi Biaya Umum</a>@endif
             @if (auth()->user()->bolehMenu('komponen-anggaran'))<a href="{{ route('komponen-anggaran.index') }}" class="tombol polos" style="padding: 6px 12px;">Master Komponen</a>@endif

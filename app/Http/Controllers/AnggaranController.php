@@ -32,7 +32,7 @@ class AnggaranController extends Controller
             ->get()
             ->map(function ($t) use ($ritasi, $kas, $bbm, $overhead) {
                 $h = Anggaran::hitung($t->anggaran, $t);
-                $langsung = array_sum(array_column(DaftarProyek::rincian($t, $ritasi, $kas, $bbm), 1));
+                $langsung = array_sum(array_column(Anggaran::rincianRealisasi($t, $ritasi, $kas, $bbm), 1));
                 $oh = $overhead[$t->id] ?? 0;
 
                 // Progres fisik (cut & fill) = kubikasi bongkaran ÷ m³ HPP tanah; tanpa baris tanah m³: serapan biaya.
@@ -60,7 +60,7 @@ class AnggaranController extends Controller
         return view('anggaran.edit', [
             'tahap' => $tahap, 'baris' => $baris, 'pakaiTemplate' => $pakaiTemplate,
             'komponen' => KomponenAnggaran::where('aktif', true)->orWhereIn('id', $baris->pluck('komponen_id'))->orderBy('urutan')->get(),
-            'rincian' => DaftarProyek::rincian($tahap, $ritasi, $kas, $bbm),
+            'rincian' => Anggaran::rincianRealisasi($tahap, $ritasi, $kas, $bbm),
             'overhead' => Overhead::teralokasi()[$tahap->id] ?? 0,
             'rekomendasi' => Anggaran::rekomendasi($tahap),
             'm3' => $ritasi['per_tahap'][$tahap->id]['m3'] ?? 0,

@@ -12,7 +12,7 @@ use Illuminate\Support\Collection;
  * Pembagian biaya umum (pos overhead: tahap "tanpa tahap", kantor, dll.) ke tahap yang berjalan, per bulan.
  * Rekomendasi tujuan = tahap (bukan pos) yang ada aktivitasnya (Ritasi / BBM / Kas) di bulan itu, dibatasi proyek induk
  * yang sama bila cakupan pos = "induk". Owner memilih manual dari rekomendasi; hanya alokasi yang disimpan yang dihitung.
- * Biaya pos tidak memuat akun HPP (pembayaran ritasi), BBM & komisi — itu sudah dihitung di komponennya sendiri.
+ * Biaya pos tidak memuat akun yang diabaikan (HPP ritasi, BBM, sparepart & keperluan DT) — lihat diabaikan(); komisi tetap ikut.
  * Metode: proporsional omset (omset rencana anggaran → omset tahap → volume × harga/m³) atau rata per tahap.
  */
 class Overhead
@@ -36,9 +36,8 @@ class Overhead
             if ($id = $r->alokasi ?: DaftarProyek::tahapKas($r->cc, $r->ref, $r->akun, $t)) {
                 $ym = substr($t, 0, 7);
                 $aktif[$id][$ym] = true;
-                // Biaya umum = Kas pos SELAIN yang sudah dihitung di komponen lain: akun HPP (pembayaran ritasi/tanah →
-                // komponen tanah dari Ritasi), BBM/solar (→ Data BBM) & komisi (→ komponen komisi). Mencegah hitung ganda.
-                if (! self::bukanOverhead($r->kel, $r->akun)) {
+                // Biaya umum = Kas pos SELAIN akun yang diabaikan (lihat diabaikan()). Komisi tetap termasuk.
+                if (! self::diabaikan($r->kel, $r->akun)) {
                     $kas[$id][$ym] = ($kas[$id][$ym] ?? 0) + (float) $r->s;
                 }
             }
@@ -59,10 +58,15 @@ class Overhead
         return self::$cache = ['kas' => $kas, 'aktif' => $aktif];
     }
 
-    /** Akun Kas yang bukan biaya umum karena sudah dihitung di komponen lain (HPP ritasi/tanah, BBM, komisi). */
-    public static function bukanOverhead(?string $kelompok, ?string $akun): bool
+    /**
+     * Akun Kas yang TIDAK dihitung sebagai biaya proyek / biaya umum (owner 15 Okt 2026) karena sudah tertutup sumber lain:
+     * - akun HPP (pembayaran ritasi/tanah) → biaya ritasi hanya dari Harga Jual ritasi bongkaran (Rp/rit menutup biaya truk);
+     * - BBM/solar/bensin → solar hanya dari Data BBM & HM;
+     * - sparepart (DT & alat berat) & keperluan DT → tertutup Harga Jual per rit dan tarif rental per jam HM.
+     */
+    public static function diabaikan(?string $kelompok, ?string $akun): bool
     {
-        return $kelompok === 'HPP' || (bool) preg_match('/bbm|solar|bensin|omis/i', (string) $akun);
+        return $kelompok === 'HPP' || (bool) preg_match('/bbm|solar|bensin|spare\s*part|\bDT\b/i', (string) $akun);
     }
 
     /** Basis omset per tahap: omset rencana anggaran → kolom omset tahap → volume × harga/m³ → 0. */

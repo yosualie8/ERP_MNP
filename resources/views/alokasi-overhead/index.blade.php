@@ -20,7 +20,8 @@
     <div class="kartu">
         <p class="redup" style="margin: 0 0 8px; font-size: 13px;">Biaya Kas Harian yang masuk pos biaya umum (mis. ASG tanpa tahap, kantor JKT) dibagi tiap bulan ke tahap yang <b>berjalan</b> di bulan itu
             (ada ritasi, BBM, atau Kas). Centang awal = <b>rekomendasi</b> (proyek induk yang sama, atau semua proyek untuk pos umum). Ubah bila perlu lalu <b>Simpan</b> — hanya alokasi tersimpan yang masuk realisasi HPP di Anggaran Proyek.
-            Proporsional omset memakai omset rencana anggaran (atau omset tahap bila anggaran belum ada).</p>
+            Proporsional omset memakai omset rencana anggaran (atau omset tahap bila anggaran belum ada).
+            Biaya pos <b>tidak memuat</b> akun HPP (pembayaran ritasi), BBM, sparepart & keperluan DT — sudah tertutup Harga Jual ritasi, Data BBM & tarif rental; komisi tetap ikut.</p>
         <div style="display: flex; gap: 6px; flex-wrap: wrap;">
             @foreach ($bulanAda as $ym)
                 @php($st = $statusBulan[$ym])

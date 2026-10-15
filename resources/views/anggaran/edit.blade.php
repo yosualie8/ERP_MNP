@@ -76,7 +76,7 @@
                 <span>Ngepok <b>{{ number_format($rs['ngepok'], 3, ',', '.') }}</b> rit/m³</span>
                 <span>Gaji & UM <b>{{ rp((int) round($rs['gaji'])) }}</b>/m³</span>
                 <span>Operasional <b>{{ rp((int) round($rs['ops'])) }}</b>/m³</span>
-                <span>Biaya umum <b>{{ $rekomendasi['overhead_m3'] ? rp((int) $rekomendasi['overhead_m3']) : '–' }}</b>/m³ <span class="redup">(tanpa akun HPP/BBM/komisi)</span></span>
+                <span>Biaya umum <b>{{ $rekomendasi['overhead_m3'] ? rp((int) $rekomendasi['overhead_m3']) : '–' }}</b>/m³ <span class="redup">(tanpa akun HPP/BBM/sparepart/DT)</span></span>
             </div>
             <p class="redup" style="margin: 6px 0 0; font-size: 12px;">Isi dulu volume <b>HPP tanah urug (m³)</b> & harganya, lalu tekan tombol ungu: solar, rental, ngepok, gaji, operasional & persen biaya umum dihitung dari volume itu (isian ungu = hasil rekomendasi, boleh diubah). Komisi tetap dari persen tahap.</p>
         </div>

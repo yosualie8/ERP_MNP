@@ -75,6 +75,40 @@ class Anggaran
             ->where('kubikasi', '>', 0)->avg('kubikasi') ?: 20);
     }
 
+    private static ?array $kasDihitung = null;
+
+    /** Kas per tahap yang DIHITUNG sebagai realisasi biaya langsung (tanpa akun yang diabaikan — lihat Overhead::diabaikan). */
+    public static function kasDihitung(): array
+    {
+        if (self::$kasDihitung !== null) {
+            return self::$kasDihitung;
+        }
+        $hasil = [];
+        foreach (DaftarProyek::queryKas()->selectRaw('c.kode cc, k.ref, a.nama akun, a.kelompok kel, b.tanggal, al.proyek_tahap_id alokasi, sum(b.nominal) s')
+            ->groupBy('c.kode', 'k.ref', 'a.nama', 'a.kelompok', 'b.tanggal', 'al.proyek_tahap_id')->get() as $r) {
+            if (Overhead::diabaikan($r->kel, $r->akun)) {
+                continue;
+            }
+            if ($id = $r->alokasi ?: DaftarProyek::tahapKas($r->cc, $r->ref, $r->akun, substr((string) $r->tanggal, 0, 10))) {
+                $hasil[$id] = ($hasil[$id] ?? 0) + (float) $r->s;
+            }
+        }
+
+        return self::$kasDihitung = $hasil;
+    }
+
+    /**
+     * Rincian realisasi biaya langsung untuk anggaran: sama dengan grid Daftar Proyek, tetapi Kas Harian tanpa akun yang
+     * diabaikan (HPP ritasi, BBM, sparepart & keperluan DT — sudah tertutup Harga Jual ritasi, Data BBM & tarif rental).
+     */
+    public static function rincianRealisasi(ProyekTahap $t, array $ritasi, array $kas, array $bbm): array
+    {
+        $c = DaftarProyek::rincian($t, $ritasi, $kas, $bbm);
+        $c['kas'][1] = (int) round(self::kasDihitung()[$t->id] ?? 0);
+
+        return $c;
+    }
+
     /** Volume rencana tanah (m³) = jumlah volume baris HPP bersumber Ritasi m³ — dasar progres fisik proyek cut & fill. */
     public static function volumeTanah(iterable $baris): float
     {
@@ -122,14 +156,15 @@ class Anggaran
         ];
     }
 
-    /** Kas per tahap per kelompok: gaji (Gaji & Tunjangan selain komisi) & ops (selain HPP, BBM, komisi — sudah dihitung di komponen lain). */
+    /** Kas per tahap per kelompok untuk rasio rekomendasi: gaji (Gaji & Tunjangan) & ops — tanpa akun yang diabaikan & tanpa komisi. */
     public static function kasKelompok(array $ids): array
     {
         $hasil = [];
         foreach (DaftarProyek::queryKas()->selectRaw('c.kode cc, k.ref, a.nama akun, a.kelompok kel, b.tanggal, al.proyek_tahap_id alokasi, sum(b.nominal) s')
             ->groupBy('c.kode', 'k.ref', 'a.nama', 'a.kelompok', 'b.tanggal', 'al.proyek_tahap_id')->get() as $r) {
             $id = $r->alokasi ?: DaftarProyek::tahapKas($r->cc, $r->ref, $r->akun, substr((string) $r->tanggal, 0, 10));
-            if (! in_array($id, $ids, true) || Overhead::bukanOverhead($r->kel, $r->akun)) {
+            // Komisi tidak masuk rasio gaji/ops karena punya komponen % sendiri di anggaran.
+            if (! in_array($id, $ids, true) || Overhead::diabaikan($r->kel, $r->akun) || preg_match('/omis/i', (string) $r->akun)) {
                 continue;
             }
             $g = $r->kel === 'Gaji & Tunjangan' ? 'gaji' : 'ops';
