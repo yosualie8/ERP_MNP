@@ -68,7 +68,7 @@ class User extends Authenticatable
         return $this->hitungAkses()[0];
     }
 
-    /** Menu dari jabatan karyawan aktif yang terhubung (halaman Hak Akses Jabatan); tidak terhubung / tanpa jabatan = tanpa menu. */
+    /** Menu dari jabatan karyawan aktif yang terhubung (halaman Hak Akses Jabatan); tidak terhubung = tanpa menu, tanpa jabatan = Absen. */
     public function menuJabatan(): array
     {
         return $this->hitungAkses()[1];
@@ -78,7 +78,7 @@ class User extends Authenticatable
     {
         if ($this->aksesJabatan === null) {
             $k = Karyawan::where('email', strtolower((string) $this->email))->where('status', 'aktif')->first();
-            $this->aksesJabatan = [$k, JabatanMenu::untuk($k?->jabatan)];
+            $this->aksesJabatan = [$k, $k ? JabatanMenu::untuk($k->jabatan) : []];
         }
 
         return $this->aksesJabatan;

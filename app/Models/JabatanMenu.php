@@ -18,7 +18,7 @@ class JabatanMenu extends Model
     public static function untuk(?string $jabatan): array
     {
         if (! $jabatan) {
-            return [];
+            return self::BAWAAN; // karyawan aktif yang jabatannya belum diisi: tetap bisa Absen
         }
 
         $baris = static::where('jabatan', $jabatan)->first();

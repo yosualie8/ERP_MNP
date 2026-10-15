@@ -24,7 +24,7 @@ class PenggunaController extends Controller
         $data = $request->validate([
             'email' => ['required', 'email', Rule::unique('users', 'email')],
             'name' => ['nullable', 'string', 'max:100'],
-            'role' => ['required', Rule::in(array_keys(User::ROLE))],
+            'role' => ['required', Rule::in(['super_admin'])], // karyawan login lewat email di Data Karyawan
         ], ['email.unique' => 'Email ini sudah terdaftar.']);
         $email = strtolower(trim($data['email']));
 

@@ -12,8 +12,8 @@
         .menu-akun.berubah .simpan { border-color: var(--aksen); color: var(--aksen-terang); }
     </style>
     <div class="kartu">
-        <h3 style="margin-top: 0;">Tambah pengguna</h3>
-        <p class="redup" style="margin-top: 0;">Pengguna login dengan akun Google sesuai email di bawah. Super Admin melihat semua menu. Menu akun lain mengikuti <b>jabatan</b> karyawan aktif yang email-nya sama (atur di <a href="{{ route('jabatan-menu.index') }}">Hak Akses Jabatan</a>). Karyawan aktif yang emailnya terisi di Data Karyawan bisa login tanpa ditambahkan di sini.</p>
+        <h3 style="margin-top: 0;">Tambah Super Admin</h3>
+        <p class="redup" style="margin-top: 0;"><b>Karyawan tidak perlu ditambahkan di sini</b> — cukup isi email akun Google-nya di Data Karyawan (status aktif), lalu ia bisa login. Halaman ini hanya untuk menambah Super Admin. Super Admin melihat semua menu. Menu akun lain mengikuti <b>jabatan</b> karyawan aktif yang email-nya sama (atur di <a href="{{ route('jabatan-menu.index') }}">Hak Akses Jabatan</a>). Karyawan aktif yang emailnya terisi di Data Karyawan bisa login tanpa ditambahkan di sini.</p>
         @if ($errors->any())
             <div class="pesan galat">{{ $errors->first() }}</div>
         @endif
@@ -21,12 +21,8 @@
             @csrf
             <input type="search" name="email" value="{{ old('email') }}" placeholder="email@gmail.com" required style="min-width: 240px;">
             <input type="search" name="name" value="{{ old('name') }}" placeholder="Nama (boleh kosong)" style="min-width: 200px;">
-            @foreach (\App\Models\User::ROLE as $kunci => $nama)
-                <label style="display: inline-flex; align-items: center; gap: 4px; font-size: 14px;">
-                    <input type="radio" name="role" value="{{ $kunci }}" @checked(old('role', 'admin') === $kunci)> {{ $nama }}
-                </label>
-            @endforeach
-            <button class="tombol" type="submit" style="padding: 8px 14px;">Tambah</button>
+            <input type="hidden" name="role" value="super_admin">
+            <button class="tombol" type="submit" style="padding: 8px 14px;">Tambah Super Admin</button>
         </form>
     </div>
 

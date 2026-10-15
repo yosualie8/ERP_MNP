@@ -71,20 +71,16 @@ class GoogleController extends Controller
         if (in_array($email, User::emailSuperAdminEnv(), true)) {
             $user = User::updateOrCreate(['email' => $email], [...$profil, 'role' => 'super_admin']);
         } else {
-            // Pengguna lain harus sudah didaftarkan super admin di menu Pengguna.
             $user = User::where('email', $email)->first();
-            // Karyawan aktif yang email Google-nya terdaftar di Data Karyawan → akun dibuat otomatis; menunya mengikuti jabatan.
-            $karyawan = \App\Models\Karyawan::where('email', $email)->where('status', 'aktif')->first();
-            if (! $user && $karyawan) {
-                $user = User::create(['email' => $email, ...$profil, 'role' => User::ROLE_KARYAWAN]);
-            }
-            if ($user?->isKaryawan() && ! $karyawan) {
-                return redirect()->route('login')->withErrors(['email' => "Akun {$email} tidak lagi terdaftar sebagai karyawan aktif. Hubungi admin."]);
-            }
-            if (! $user) {
-                Http::asForm()->timeout(15)->post('https://oauth2.googleapis.com/revoke', ['token' => $googleUser->token]);
+            if (! $user?->isSuperAdmin()) {
+                // Selain Super Admin: hanya karyawan AKTIF yang email Google-nya terdaftar di Data Karyawan (menu ikut jabatan).
+                $karyawan = \App\Models\Karyawan::where('email', $email)->where('status', 'aktif')->first();
+                if (! $karyawan) {
+                    Http::asForm()->timeout(15)->post('https://oauth2.googleapis.com/revoke', ['token' => $googleUser->token]);
 
-                return redirect()->route('login')->withErrors(['email' => "Akun {$email} belum terdaftar. Minta super admin menambahkan email Anda di menu Pengguna."]);
+                    return redirect()->route('login')->withErrors(['email' => "Akun {$email} tidak terdaftar sebagai karyawan aktif. Minta admin mengisi email ini di Data Karyawan."]);
+                }
+                $user ??= User::create(['email' => $email, ...$profil, 'role' => User::ROLE_KARYAWAN]);
             }
             $user->update($profil);
         }
