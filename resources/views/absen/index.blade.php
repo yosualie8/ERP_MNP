@@ -123,6 +123,8 @@
                     };
                     ambil.addEventListener('click', () => {
                         if (adaFoto) { adaFoto = false; ambil.textContent = '📸 Ambil selfie'; siap(); nyalakan(); return; }
+                        // Kamera baru menyala & belum mengirim gambar → tunggu sebentar.
+                        if (!video.videoWidth || video.readyState < 2) { ambil.textContent = '⏳ Kamera belum siap — coba lagi'; setTimeout(() => { if (!adaFoto) ambil.textContent = '📸 Ambil selfie'; }, 1500); return; }
                         const w = 720, h = Math.round(w * video.videoHeight / video.videoWidth) || 960;
                         const c = Object.assign(document.createElement('canvas'), {width: w, height: h});
                         const g = c.getContext('2d'); g.translate(w, 0); g.scale(-1, 1); g.drawImage(video, 0, 0, w, h);
