@@ -32,7 +32,7 @@ class JabatanMenuController extends Controller
         return view('jabatan-menu.index', ['jabatan' => $jabatan]);
     }
 
-    public function update(Request $request): RedirectResponse
+    public function update(Request $request): RedirectResponse|\Illuminate\Http\JsonResponse
     {
         $d = $request->validate([
             'jabatan' => ['required', 'string', 'max:100'],
@@ -42,7 +42,9 @@ class JabatanMenuController extends Controller
         $menu = array_values(array_intersect(array_keys(MenuAkses::DAFTAR), array_diff($d['menu'] ?? [], MenuAkses::KHUSUS_SUPER)));
         JabatanMenu::updateOrCreate(['jabatan' => $d['jabatan']], ['menu' => $menu, 'user_id' => $request->user()->id]);
         $nama = collect($menu)->map(fn ($k) => MenuAkses::DAFTAR[$k][0]);
+        $pesan = "Menu jabatan {$d['jabatan']}: ".($nama->isEmpty() ? 'tidak ada (tidak bisa membuka menu apa pun)' : $nama->implode(', ')).'.';
 
-        return back()->with('success', "Menu jabatan {$d['jabatan']}: ".($nama->isEmpty() ? 'tidak ada (tidak bisa login ke menu apa pun)' : $nama->implode(', ')).'.');
+        // Disimpan dari halaman tanpa muat ulang (posisi gulir tetap).
+        return $request->expectsJson() ? response()->json(['pesan' => $pesan, 'jumlah' => count($menu)]) : back()->with('success', $pesan);
     }
 }
