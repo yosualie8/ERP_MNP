@@ -14,6 +14,7 @@ class MenuAkses
     /** kunci => [label di navigasi, rute tujuan, pola nama rute yang termasuk menu ini, keterangan] */
     public const DAFTAR = [
         'dashboard-uj' => ['Dashboard UJ', 'dashboard.uj', ['dashboard.uj'], 'Jumlah UJ belum reimburse, transaksi UJ terakhir & 5 reimburse UJ terakhir (kapan data terakhir diperbarui)'],
+        'dashboard-proyek' => ['Dashboard Progres Proyek', 'dashboard.proyek', ['dashboard.proyek'], 'Tahap berstatus progress: persen progres, biaya yang sudah keluar & rinciannya per komponen, tombol ke Anggaran'],
         'dashboard-aktivitas' => ['Dashboard Aktivitas Admin', 'dashboard.aktivitas', ['dashboard.aktivitas'], 'Log kegiatan semua pengguna (khusus Super Admin)'],
         'tanya-ai' => ['Tanya AI', 'tanya-ai', ['tanya-ai', 'tanya-ai.*'], 'Chat tanya data ERP (hanya baca, sesuai menu akun) + 🎤 speech to text; pertanyaan & jawaban dicatat'],
         'dashboard-kas' => ['Dashboard Kas Harian', 'dashboard.kas', ['dashboard.kas'], 'Jumlah belum reimburse, transaksi Kas Harian terakhir & 5 history reimburse terakhir (kapan data terakhir diperbarui)'],
@@ -55,7 +56,7 @@ class MenuAkses
     /** Kelompok menu di sidebar: kunci => [judul, ikon, menu di dalamnya]. */
     public const KATEGORI = [
         'asisten' => ['Asisten AI', '🤖', ['tanya-ai']],
-        'dashboard' => ['Dashboard', '📊', ['dashboard-kas', 'dashboard-uj', 'dashboard-bbm', 'dashboard-aktivitas']],
+        'dashboard' => ['Dashboard', '📊', ['dashboard-proyek', 'dashboard-kas', 'dashboard-uj', 'dashboard-bbm', 'dashboard-aktivitas']],
         'proyek' => ['Proyek', '🏗️', ['daftar-proyek', 'anggaran-proyek', 'alokasi-overhead', 'komponen-anggaran', 'pengaturan-proyek']],
         'kas' => ['Kas Harian', '🏦', ['input-kas', 'kas-harian', 'validasi-reimburse', 'riwayat-reimburse', 'kas-belum-reimburse', 'rekap', 'kode-gl']],
         'uj' => ['Uang Jalan', '🚚', ['pengajuan-uj', 'input-uj', 'kas-uj', 'reimburse-uj', 'rapikan-uj']],
