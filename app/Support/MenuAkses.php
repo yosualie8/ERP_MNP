@@ -44,6 +44,7 @@ class MenuAkses
         'absensi' => ['Data Absensi', 'absensi.index', ['absensi.*'], 'Rekap absensi per tanggal: jam masuk/pulang/lembur, selfie, lokasi; karyawan yang tidak absen'],
         'lokasi-absen' => ['Lokasi Absen', 'lokasi-absen.index', ['lokasi-absen.*'], 'Titik GPS + radius per proyek tempat karyawan boleh absen'],
         'karyawan' => ['Data Karyawan', 'karyawan.index', ['karyawan.*'], 'Data induk karyawan (NIK, site, jabatan, rekening) — dasar modul absensi'],
+        'jabatan' => ['Master Jabatan', 'jabatan.index', ['jabatan.*'], 'Daftar jabatan karyawan: tambah, ganti nama, hapus (jabatan Data Karyawan dipilih dari sini)'],
         'aset' => ['Data Aset', 'aset.index', ['aset.*'], 'Semua aset MNP (dump truck, alat berat, LV, engkel, …): lihat, tambah & ubah'],
         'kode-gl' => ['Kode GL', 'kas.kode-gl', ['kas.kode-gl'], 'Daftar Kode GL'],
     ];
@@ -57,7 +58,7 @@ class MenuAkses
         'uj' => ['Uang Jalan', '🚚', ['pengajuan-uj', 'input-uj', 'kas-uj', 'reimburse-uj', 'rapikan-uj']],
         'ritasi' => ['Ritasi', '⛰️', ['input-ritasi', 'ritasi', 'buangan-truk', 'monitor-ritasi', 'bayar-tanah', 'performa-ritasi', 'kubikasi-kendaraan']],
         'bbm' => ['BBM & HM', '⛽', ['input-bbm', 'bbm']],
-        'karyawan' => ['Karyawan', '👷', ['absen', 'absensi', 'karyawan', 'lokasi-absen']],
+        'karyawan' => ['Karyawan', '👷', ['absen', 'absensi', 'karyawan', 'jabatan', 'lokasi-absen']],
         'aset' => ['Aset', '🚛', ['aset']],
     ];
 

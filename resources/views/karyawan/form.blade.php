@@ -28,7 +28,7 @@
             <div><label for="npwp">NPWP</label><input id="npwp" name="npwp" value="{{ old('npwp', $karyawan->npwp) }}" autocomplete="off"></div>
             <div><label for="site">Site</label><input id="site" name="site" list="saran-site" value="{{ old('site', $karyawan->site) }}" autocomplete="off" placeholder="mis. ASG, Site 21">
                 <datalist id="saran-site">@foreach ($saranSite as $s)<option value="{{ $s }}">@endforeach</datalist></div>
-            <div><label for="jabatan">Jabatan</label><input id="jabatan" name="jabatan" list="saran-jabatan" value="{{ old('jabatan', $karyawan->jabatan) }}" autocomplete="off" placeholder="mis. Operator Excavator">
+            <div><label for="jabatan">Jabatan <span style="font-size: 11px;">(dari Master Jabatan)</span></label><input id="jabatan" name="jabatan" list="saran-jabatan" value="{{ old('jabatan', $karyawan->jabatan) }}" autocomplete="off" placeholder="mis. Operator Excavator">
                 <datalist id="saran-jabatan">@foreach ($saranJabatan as $s)<option value="{{ $s }}">@endforeach</datalist></div>
         </div>
         <div class="baris">

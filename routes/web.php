@@ -82,6 +82,10 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::post('/lokasi-absen', [\App\Http\Controllers\LokasiAbsenController::class, 'store'])->name('lokasi-absen.store');
     Route::get('/lokasi-absen/{lokasi}/edit', [\App\Http\Controllers\LokasiAbsenController::class, 'edit'])->whereNumber('lokasi')->name('lokasi-absen.edit');
     Route::put('/lokasi-absen/{lokasi}', [\App\Http\Controllers\LokasiAbsenController::class, 'update'])->whereNumber('lokasi')->name('lokasi-absen.update');
+    Route::get('/jabatan', [\App\Http\Controllers\JabatanController::class, 'index'])->name('jabatan.index');
+    Route::post('/jabatan', [\App\Http\Controllers\JabatanController::class, 'store'])->name('jabatan.store');
+    Route::patch('/jabatan/{jabatan}', [\App\Http\Controllers\JabatanController::class, 'update'])->whereNumber('jabatan')->name('jabatan.update');
+    Route::delete('/jabatan/{jabatan}', [\App\Http\Controllers\JabatanController::class, 'hapus'])->whereNumber('jabatan')->name('jabatan.hapus');
     Route::get('/karyawan', [\App\Http\Controllers\KaryawanController::class, 'index'])->name('karyawan.index');
     Route::get('/karyawan/tambah', [\App\Http\Controllers\KaryawanController::class, 'create'])->name('karyawan.create');
     Route::post('/karyawan', [\App\Http\Controllers\KaryawanController::class, 'store'])->name('karyawan.store');

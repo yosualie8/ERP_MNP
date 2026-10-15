@@ -69,7 +69,13 @@ class KaryawanController extends Controller
             'nik' => ['nullable', 'regex:/^\d{16}$/', ...($k && $request->input('nik') === $k->nik ? [] : [Rule::unique('karyawan', 'nik')->ignore($k?->id)])],
             'npwp' => ['nullable', 'string', 'max:30'],
             'status' => ['required', Rule::in(array_keys(Karyawan::STATUS))],
-            'site' => ['nullable', 'string', 'max:40'], 'jabatan' => ['nullable', 'string', 'max:80'],
+            'site' => ['nullable', 'string', 'max:40'],
+            // Jabatan wajib dari Master Jabatan, ditulis persis sama (menentukan hak akses menu).
+            'jabatan' => ['nullable', 'string', 'max:100', function ($a, $v, $gagal) {
+                if (! \App\Models\JabatanMenu::pluck('jabatan')->contains(fn ($j) => $j === $v)) {
+                    $gagal("Jabatan \"{$v}\" tidak ada di Master Jabatan — pilih dari daftar (tulis persis sama).");
+                }
+            }],
             'bank' => ['nullable', 'string', 'max:40'], 'no_rekening' => ['nullable', 'regex:/^\d{5,30}$/'],
             'nama_rekening' => ['nullable', 'string', 'max:120'],
         ], [
@@ -86,7 +92,7 @@ class KaryawanController extends Controller
         return [
             'saranSite' => collect(Karyawan::SITE)->merge(Karyawan::whereNotNull('site')->distinct()->pluck('site'))->unique()->sort()->values(),
             'saranBank' => Karyawan::whereNotNull('bank')->select('bank')->groupBy('bank')->orderByRaw('COUNT(*) DESC')->pluck('bank'),
-            'saranJabatan' => Karyawan::whereNotNull('jabatan')->distinct()->orderBy('jabatan')->pluck('jabatan'),
+            'saranJabatan' => \App\Models\JabatanMenu::orderBy('jabatan')->pluck('jabatan'),
         ];
     }
 
