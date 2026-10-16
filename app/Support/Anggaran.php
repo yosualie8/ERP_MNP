@@ -122,9 +122,12 @@ class Anggaran
     {
         $kas = DaftarProyek::queryKas()
             ->select('b.no_id', 'b.tanggal', 'b.nominal', 'b.pic', 'b.keterangan', 'k.kode_asli', 'c.kode as cc', 'k.ref', 'a.nama as akun', 'a.kelompok as kel', 'al.proyek_tahap_id as alokasi')
-            ->orderByDesc('b.tanggal')->orderByDesc('b.no_id')->get()
+            ->orderByDesc('b.tanggal')->orderByDesc('b.no_id')
+            // dibaca satu per satu & disaring dulu (seluruh Kas sebagai objek terlalu boros memori PHP-FPM)
+            ->cursor()
             ->map(fn ($r) => tap($r, fn ($r) => $r->tahap = $r->alokasi ?: DaftarProyek::tahapKas($r->cc, $r->ref, $r->akun, substr((string) $r->tanggal, 0, 10))))
-            ->filter(fn ($r) => in_array($r->tahap, $ids, true) && ! Overhead::diabaikan($r->kel, $r->akun, self::tipe($r->tahap), $r->keterangan));
+            ->filter(fn ($r) => in_array($r->tahap, $ids, true) && ! Overhead::diabaikan($r->kel, $r->akun, self::tipe($r->tahap), $r->keterangan))
+            ->collect();
         // Mutasi Rekening PT (BCA) yang ditandai dihitung untuk tahap ini (bayar langsung dari BCA).
         $bca = TandaMutasiPt::dihitung()->filter(fn ($b) => in_array($b->tahap_id, $ids, true))->map(fn ($b) => (object) [
             'no_id' => 'BCA', 'tanggal' => $b->m->tanggal->toDateString(), 'nominal' => $b->rp, 'pic' => null, 'keterangan' => $b->m->keterangan.($b->catatan ? ' — '.$b->catatan : ''),
