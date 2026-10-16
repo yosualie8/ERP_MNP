@@ -34,6 +34,9 @@ class MutasiPtController extends Controller
             ->when($status, fn ($w) => $w->where('tanggal', '>=', TandaMutasiPt::MULAI))
             ->when($q === '' && ! $status && $bulan, fn ($w) => $w->whereRaw("DATE_FORMAT(tanggal, '%Y-%m') = ?", [$bulan]))
             ->orderBy('tanggal')->orderBy('baris')->limit(5000)->get()
+            // cari juga di keterangan tambahan admin (tersimpan terpisah)
+            ->when($q !== '', fn ($c) => $c->concat(TandaMutasiPt::baris()->filter(fn ($b) => $b->tanda?->catatan
+                && collect(preg_split('/\s+/', $q))->every(fn ($kata) => mb_stripos($b->tanda->catatan, $kata) !== false))->pluck('m'))->unique('id')->sortBy(fn ($m) => [$m->tanggal, $m->baris])->values())
             ->map(fn ($m) => (object) ['m' => $m, 't' => $tanda[TandaMutasiPt::kunci($m)] ?? null])
             ->when($status, fn ($c) => $c->filter(fn ($x) => $x->t?->status === $status))->values();
         $hitung = TandaMutasiPt::baris()->groupBy('status')->map->count();
@@ -82,6 +85,25 @@ class MutasiPtController extends Controller
             'isi' => ['kunci' => $t->kunci, 'lama' => $lama, 'baru' => $t->only(['status', 'cost_center', 'proyek_tahap_id'])], 'user_id' => $request->user()->id]);
 
         return response()->json(['ok' => true, 'status' => $t->status, 'label' => TandaMutasiPt::STATUS[$t->status]]);
+    }
+
+    /** Simpan keterangan tambahan admin (tidak mengubah status: tanda baru tanpa status = tetap ikut otomatis). */
+    public function catatan(Request $request): JsonResponse
+    {
+        $d = $request->validate(['kunci' => ['required', 'string', 'size:40'], 'catatan' => ['nullable', 'string', 'max:500']]);
+        $b = TandaMutasiPt::baris()->firstWhere('kunci', $d['kunci']);
+        if (! $b) {
+            return response()->json(['galat' => 'Transaksi tidak ditemukan (mungkin file Drive berubah) — muat ulang halaman.'], 422);
+        }
+        $teks = trim(preg_replace('/\s+/', ' ', (string) ($d['catatan'] ?? ''))) ?: null;
+        $lama = $b->tanda?->catatan;
+        $t = MutasiPtTanda::firstOrNew(['kunci' => $d['kunci']]);
+        $t->fill(['catatan' => $teks, 'user_id' => $request->user()->id])->save();
+        KasRiwayat::create(['aksi' => 'mutasi-pt-catatan', 'lembar' => 'Mutasi PT', 'baris_awal' => $b->m->baris, 'baris_akhir' => $b->m->baris,
+            'ringkasan' => mb_strimwidth("BCA PT {$b->m->tanggal->format('d-m-Y')} Rp ".number_format($b->m->jumlah, 0, ',', '.').': keterangan tambahan "'.($teks ?? '(dihapus)').'"', 0, 490, '…'),
+            'isi' => ['kunci' => $t->kunci, 'lama' => $lama, 'baru' => $teks], 'user_id' => $request->user()->id]);
+
+        return response()->json(['ok' => true, 'catatan' => $teks]);
     }
 
     public function perbarui(): RedirectResponse

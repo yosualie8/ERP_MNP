@@ -91,7 +91,8 @@ class TandaMutasiPt
         return self::$semua = MutasiPt::where('tanggal', '>=', self::MULAI)->orderBy('tanggal')->orderBy('baris')->get()->map(function ($m) use ($tanda) {
             $k = self::kunci($m);
             $t = $tanda[$k] ?? null;
-            [$status, $alasan] = $t ? [$t->status, 'ditandai manual'] : self::otomatis($m);
+            // tanda tanpa status (hanya keterangan tambahan) = status tetap ikut otomatis
+            [$status, $alasan] = $t?->status ? [$t->status, 'ditandai manual'] : self::otomatis($m);
 
             return (object) ['m' => $m, 'kunci' => $k, 'status' => $status, 'alasan' => $alasan, 'tanda' => $t];
         });
@@ -111,7 +112,7 @@ class TandaMutasiPt
         return self::baris()->filter(fn ($b) => $b->status === 'dihitung' && $b->m->dbcr === 'DB' && $b->tanda?->proyek_tahap_id)->map(fn ($b) => (object) [
             'tahap_id' => isset($pos[$b->tanda->proyek_tahap_id]) ? null : $b->tanda->proyek_tahap_id,
             'pos_id' => isset($pos[$b->tanda->proyek_tahap_id]) ? $b->tanda->proyek_tahap_id : null,
-            'cost_center' => $b->tanda->cost_center, 'ym' => $b->m->tanggal->format('Y-m'), 'rp' => (float) $b->m->jumlah, 'm' => $b->m,
+            'cost_center' => $b->tanda->cost_center, 'catatan' => $b->tanda->catatan, 'ym' => $b->m->tanggal->format('Y-m'), 'rp' => (float) $b->m->jumlah, 'm' => $b->m,
         ])->values();
     }
 }

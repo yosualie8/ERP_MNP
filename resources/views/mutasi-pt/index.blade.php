@@ -23,6 +23,11 @@
         table.kas .alasan { display: block; font-size: 10.5px; color: var(--redup); }
         table.kas tr.ok-simpan td { transition: background .6s; background: rgba(76, 195, 138, .12); }
         table.kas tr.galat-simpan td { background: rgba(255, 92, 97, .12); }
+        table.kas input.catatan-admin { display: block; width: 100%; box-sizing: border-box; margin-top: 4px; padding: 3px 6px; font-size: 12.5px;
+            background: transparent; border: 1px dashed var(--garis); color: #93c5fd; }
+        table.kas input.catatan-admin:focus { border-style: solid; background: var(--kartu-2, #262b33); }
+        table.kas input.catatan-admin:not(:placeholder-shown) { border-color: transparent; font-weight: 600; }
+        .catatan-admin-teks { margin-top: 3px; font-size: 12.5px; font-weight: 600; color: #93c5fd; }
     </style>
 
     <div class="kartu" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
@@ -32,7 +37,7 @@
                 @foreach ($bulanAda as $ym => $n)<option value="{{ $ym }}" @selected($q === '' && ! $status && $ym === $bulan)>{{ $nb($ym) }} · {{ $n }}</option>@endforeach
             </select>
             @if ($i !== false && $i > 0)<a class="tombol polos" style="padding: 6px 12px;" href="{{ route('mutasi-pt.index', ['bulan' => $daftar[$i - 1]]) }}">›</a>@endif
-            <input type="search" name="q" value="{{ $q }}" placeholder="Cari keterangan di semua bulan (mis. HPP Pm Infra)" style="min-width: 300px;" autocomplete="off">
+            <input type="search" name="q" value="{{ $q }}" placeholder="Cari keterangan BCA / keterangan tambahan di semua bulan" style="min-width: 300px;" autocomplete="off">
             <button type="submit" class="tombol polos" style="padding: 6px 12px;">Cari</button>
             @if ($q !== '' || $status)<a href="{{ route('mutasi-pt.index', ['bulan' => $bulan]) }}" style="font-size: 13px;">kembali per bulan</a>@endif
         </form>
@@ -68,7 +73,13 @@
                     @php($t = $x->t)
                     <tr class="t" @if ($t) data-kunci="{{ $t->kunci }}" @endif>
                         <td data-n="{{ $m->tanggal?->toDateString() }}" data-v="{{ $m->tanggal?->toDateString() }} {{ $tgl($m->tanggal) }}" style="white-space: nowrap;">{{ $tgl($m->tanggal) }}</td>
-                        <td>{{ $m->keterangan }}</td>
+                        <td data-v="{{ $m->keterangan }} {{ $t?->tanda?->catatan }}">{{ $m->keterangan }}
+                            @if ($t && $bolehTandai)
+                                <input data-f="catatan" value="{{ $t->tanda?->catatan }}" maxlength="500" placeholder="+ keterangan tambahan" autocomplete="off" class="catatan-admin">
+                            @elseif ($t?->tanda?->catatan)
+                                <div class="catatan-admin-teks">{{ $t->tanda->catatan }}</div>
+                            @endif
+                        </td>
                         <td>@if ($m->dbcr === 'DB')<span class="label merah">DB</span>@elseif ($m->dbcr === 'CR')<span class="label hijau">CR</span>@else{{ $m->dbcr }}@endif</td>
                         <td class="angka" data-n="{{ $m->dbcr === 'DB' ? $m->jumlah : '' }}">{{ $m->dbcr === 'DB' ? rp((int) round($m->jumlah)) : '' }}</td>
                         <td class="angka" data-n="{{ $m->dbcr === 'CR' ? $m->jumlah : '' }}">{{ $m->dbcr === 'CR' ? rp((int) round($m->jumlah)) : '' }}</td>
@@ -102,7 +113,7 @@
             (() => {
                 // Cost Center = tahap detail (nama persis dari Daftar Proyek); wajib bila Dihitung.
                 const TAHAP = @json($dataTahap);
-                const URL_TANDA = @json(route('mutasi-pt.tandai')), TOKEN = @json(csrf_token());
+                const URL_TANDA = @json(route('mutasi-pt.tandai')), URL_CATATAN = @json(route('mutasi-pt.catatan')), TOKEN = @json(csrf_token());
                 const atur = tr => {
                     const st = tr.querySelector('[data-f=status]').value, th = tr.querySelector('[data-f=tahap]');
                     const v = th.value.trim(), ada = v !== '' && Object.hasOwn(TAHAP, v);
@@ -115,6 +126,25 @@
                     if (!th) return;
                     atur(tr);
                     th.addEventListener('input', () => atur(tr));
+                    // Keterangan tambahan: disimpan sendiri saat kotaknya ditinggalkan (tidak mengubah status).
+                    const cat = tr.querySelector('[data-f=catatan]');
+                    if (cat) {
+                        let awal = cat.value;
+                        cat.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); cat.blur(); } });
+                        cat.addEventListener('change', e => e.stopPropagation());
+                        cat.addEventListener('blur', async () => {
+                            if (cat.value.trim() === awal.trim()) return;
+                            const data = new FormData();
+                            data.append('_token', TOKEN); data.append('kunci', tr.dataset.kunci); data.append('catatan', cat.value);
+                            tr.classList.remove('ok-simpan', 'galat-simpan');
+                            try {
+                                const res = await fetch(URL_CATATAN, {method: 'POST', body: data, headers: {Accept: 'application/json'}});
+                                const h = await res.json().catch(() => ({}));
+                                if (!res.ok) throw new Error(h.galat || h.message || 'Gagal menyimpan keterangan');
+                                cat.value = awal = h.catatan || ''; tr.classList.add('ok-simpan');
+                            } catch (err) { tr.classList.add('galat-simpan'); alert(err.message); }
+                        });
+                    }
                     tr.addEventListener('change', async () => {
                         const {st, v, ada} = atur(tr);
                         if (v !== '' && !ada) return;                      // nama tahap belum persis

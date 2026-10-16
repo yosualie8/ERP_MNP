@@ -88,7 +88,7 @@ class Anggaran
             ->filter(fn ($r) => in_array($r->tahap, $ids, true) && ! Overhead::diabaikan($r->kel, $r->akun));
         // Mutasi Rekening PT (BCA) yang ditandai dihitung untuk tahap ini (bayar langsung dari BCA).
         $bca = TandaMutasiPt::dihitung()->filter(fn ($b) => in_array($b->tahap_id, $ids, true))->map(fn ($b) => (object) [
-            'no_id' => 'BCA', 'tanggal' => $b->m->tanggal->toDateString(), 'nominal' => $b->rp, 'pic' => null, 'keterangan' => $b->m->keterangan,
+            'no_id' => 'BCA', 'tanggal' => $b->m->tanggal->toDateString(), 'nominal' => $b->rp, 'pic' => null, 'keterangan' => $b->m->keterangan.($b->catatan ? ' — '.$b->catatan : ''),
             'kode_asli' => 'Rekening PT BCA', 'akun' => 'Bayar langsung dari BCA', 'tahap' => $b->tahap_id]);
 
         return $kas->concat($bca)->sortByDesc(fn ($r) => substr((string) $r->tanggal, 0, 10))->values()->groupBy('tahap');
