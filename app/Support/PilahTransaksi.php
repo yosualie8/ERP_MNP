@@ -144,10 +144,18 @@ class PilahTransaksi
 
         $kas = DaftarProyek::queryKas(true)
             ->selectRaw('b.no_id, b.tanggal, b.nominal, b.pic, b.keterangan, k.kode_asli, c.kode cc, k.ref, a.nama akun, a.kelompok kel, al.proyek_tahap_id alokasi, al.abaikan, al.sumber al_sumber, '.DaftarProyek::SQL_KUNCI.' kunci')
-            ->where('b.tanggal', '>=', $dari)->orderBy('b.tanggal')->orderBy('b.no_id')->get()
+            ->where('b.tanggal', '>=', $dari)->orderBy('b.tanggal')->orderBy('b.no_id')
+            // dibaca satu per satu & disaring DULU (hanya tahap lingkup ini / yang pernah dipilah) — seluruh Kas sejak awal
+            // sebagai objek melewati batas memori PHP-FPM 128 MB (Dashboard Progres Proyek 500, 16 Okt 2026)
+            ->cursor()
+            ->filter(function ($r) use ($ids) {
+                $r->tahap_gl = DaftarProyek::tahapKas($r->cc, $r->ref, $r->akun, substr((string) $r->tanggal, 0, 10));
+
+                return $r->al_sumber === 'pilah' || isset($ids[($r->abaikan ? null : $r->alokasi) ?? $r->tahap_gl]) || isset($ids[$r->tahap_gl]);
+            })
             ->map(function ($r) use ($semuaTahap, $tag, $boq) {
                 $tgl = substr((string) $r->tanggal, 0, 10);
-                $gl = DaftarProyek::tahapKas($r->cc, $r->ref, $r->akun, $tgl);
+                $gl = $r->tahap_gl;
                 $tahap = $r->abaikan ? null : ($r->alokasi ?: $gl);
                 $t = $tahap ? $semuaTahap[$tahap] ?? null : null;
                 $hitung = $r->abaikan ? [false, 'bukan biaya (dipilah)']
@@ -160,7 +168,7 @@ class PilahTransaksi
                     'abaikan' => (bool) $r->abaikan, 'manual' => $r->al_sumber === 'pilah', 'dihitung' => $hitung[0], 'status' => $hitung[1],
                     'tag' => $tag['kas'][(string) $r->no_id] ?? null, 'boq' => $boq['kas|'.$r->kunci]->item ?? null];
             })
-            ->filter(fn ($x) => $x->manual || isset($ids[$x->tahap_id ?? $x->tahap_gl]));
+            ->filter(fn ($x) => $x->manual || isset($ids[$x->tahap_id ?? $x->tahap_gl]))->collect();
 
         $bca = TandaMutasiPt::baris()->filter(fn ($b) => $b->m->dbcr === 'DB' && $b->m->tanggal->toDateString() >= $dari
             && (($b->tanda?->proyek_tahap_id && isset($ids[$b->tanda->proyek_tahap_id])) || $b->status === 'belum'))
