@@ -81,12 +81,17 @@ class Anggaran
      */
     public static function transaksiKas(array $ids): Collection
     {
-        return DaftarProyek::queryKas()
+        $kas = DaftarProyek::queryKas()
             ->select('b.no_id', 'b.tanggal', 'b.nominal', 'b.pic', 'b.keterangan', 'k.kode_asli', 'c.kode as cc', 'k.ref', 'a.nama as akun', 'a.kelompok as kel', 'al.proyek_tahap_id as alokasi')
             ->orderByDesc('b.tanggal')->orderByDesc('b.no_id')->get()
             ->map(fn ($r) => tap($r, fn ($r) => $r->tahap = $r->alokasi ?: DaftarProyek::tahapKas($r->cc, $r->ref, $r->akun, substr((string) $r->tanggal, 0, 10))))
-            ->filter(fn ($r) => in_array($r->tahap, $ids, true) && ! Overhead::diabaikan($r->kel, $r->akun))
-            ->groupBy('tahap');
+            ->filter(fn ($r) => in_array($r->tahap, $ids, true) && ! Overhead::diabaikan($r->kel, $r->akun));
+        // Mutasi Rekening PT (BCA) yang ditandai dihitung untuk tahap ini (bayar langsung dari BCA).
+        $bca = TandaMutasiPt::dihitung()->filter(fn ($b) => in_array($b->tahap_id, $ids, true))->map(fn ($b) => (object) [
+            'no_id' => 'BCA', 'tanggal' => $b->m->tanggal->toDateString(), 'nominal' => $b->rp, 'pic' => null, 'keterangan' => $b->m->keterangan,
+            'kode_asli' => 'Rekening PT BCA', 'akun' => 'Bayar langsung dari BCA', 'tahap' => $b->tahap_id]);
+
+        return $kas->concat($bca)->sortByDesc(fn ($r) => substr((string) $r->tanggal, 0, 10))->values()->groupBy('tahap');
     }
 
     /** @var array{total: array<int, float>, grup: array<int, array<string, float>>}|null */
@@ -119,6 +124,14 @@ class Anggaran
                 $g = preg_match('/omis/i', (string) $r->akun) ? 'komisi' : ($r->kel === 'Gaji & Tunjangan' ? 'gaji' : 'ops');
                 $total[$id] = ($total[$id] ?? 0) + (float) $r->s;
                 $grup[$id][$g] = ($grup[$id][$g] ?? 0) + (float) $r->s;
+            }
+        }
+
+        // Mutasi BCA PT yang dihitung & ditujukan ke tahap → realisasi operasional tahap itu.
+        foreach (TandaMutasiPt::dihitung() as $b) {
+            if ($b->tahap_id) {
+                $total[$b->tahap_id] = ($total[$b->tahap_id] ?? 0) + $b->rp;
+                $grup[$b->tahap_id]['ops'] = ($grup[$b->tahap_id]['ops'] ?? 0) + $b->rp;
             }
         }
 

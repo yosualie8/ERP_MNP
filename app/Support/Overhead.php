@@ -55,6 +55,13 @@ class Overhead
             }
         }
 
+        // Mutasi BCA PT yang dihitung tanpa tahap → biaya pos biaya umum cost center-nya (ikut dibagi di Alokasi Biaya Umum).
+        foreach (TandaMutasiPt::dihitung() as $b) {
+            if ($b->pos_id) {
+                $kas[$b->pos_id][$b->ym] = ($kas[$b->pos_id][$b->ym] ?? 0) + $b->rp;
+            }
+        }
+
         return self::$cache = ['kas' => $kas, 'aktif' => $aktif];
     }
 
