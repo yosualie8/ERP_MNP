@@ -118,6 +118,8 @@
                 x.placeholder = th.classList.contains('angka') ? 'mis. >100000' : 'Saring…';
                 x.dataset.kolom = i;
                 x.title = 'Saring kolom ' + th.textContent.trim();
+                // Kolom sempit (kode, satuan): hanya tombol pilih nilai ▾, tanpa kotak ketik, supaya kolom bisa selebar isinya.
+                if (th.hasAttribute('data-saring-sempit')) x.hidden = true;
                 const b = document.createElement('button');
                 b.type = 'button';
                 b.className = 'saring-nilai';

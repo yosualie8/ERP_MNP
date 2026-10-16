@@ -17,9 +17,11 @@
         table.kas input.angka { text-align: right; }
         table.kas td.p { white-space: nowrap; font-size: 12.5px; }
         .bar { height: 5px; background: var(--garis); border-radius: 3px; margin-top: 3px; overflow: hidden; }
-        .bar > i { display: block; height: 100%; background: var(--sukses); }
-        .bar.modal > i { background: #f0c05a; }
-        .bar.tagih > i { background: #60a5fa; }
+        .bar > span.isi { display: block; height: 100%; background: var(--sukses); }
+        .bar.modal > span.isi { background: #f0c05a; }
+        .bar.tagih > span.isi { background: #60a5fa; }
+        table.kas th.sempit, table.kas td.sempit { width: 1%; white-space: nowrap; }
+        table.kas td.kosong { color: var(--redup); font-size: 11.5px; }
         table.kas tr.ok-simpan td { transition: background .6s; background: rgba(76, 195, 138, .12); }
         tr.sub td { background: rgba(255, 255, 255, .03); font-weight: 600; }
     </style>
@@ -56,15 +58,15 @@
             <div class="kartu"><small>Nilai kontrak (BOQ)</small><b>{{ rp((int) round($p['nilai'])) }}</b><small>{{ $p['baris']->count() }} item</small></div>
             <div class="kartu"><small>Modal (material + jasa)</small><b>{{ rp((int) round($p['modal'])) }}</b><small>rencana GP {{ $p['nilai'] > 0 ? $pr(($p['nilai'] - $p['modal']) / $p['nilai'] * 100) : '–' }}</small></div>
             <div class="kartu"><small>Biaya keluar (dihitung)</small><b>{{ rp((int) round($p['biaya'])) }}</b><small>tanpa kode BOQ: {{ rp((int) round($p['biaya_tanpa'])) }} ({{ $p['n_tanpa'] }} transaksi)</small></div>
-            <div class="kartu"><small>Progres modal (biaya ÷ modal)</small><b style="{{ $warna($p['p_modal']) }}">{{ $pr($p['p_modal']) }}</b><div class="bar modal"><i style="width: {{ min(100, $p['p_modal'] ?? 0) }}%"></i></div></div>
-            <div class="kartu"><small>Progres terpasang (volume, bobot nilai)</small><b>{{ $pr($p['p_pasang']) }}</b><div class="bar"><i style="width: {{ min(100, $p['p_pasang'] ?? 0) }}%"></i></div></div>
-            <div class="kartu"><small>Progres tertagih</small><b>{{ $pr($p['p_tagih']) }}</b><div class="bar tagih"><i style="width: {{ min(100, $p['p_tagih'] ?? 0) }}%"></i></div><small>{{ rp((int) round($p['rp_tagih'])) }}</small></div>
+            <div class="kartu"><small>Progres modal (biaya ÷ modal)</small><b style="{{ $warna($p['p_modal']) }}">{{ $pr($p['p_modal']) }}</b><div class="bar modal"><span class="isi" style="width: {{ min(100, $p['p_modal'] ?? 0) }}%"></span></div></div>
+            <div class="kartu"><small>Progres terpasang (volume, bobot nilai)</small><b>{{ $pr($p['p_pasang']) }}</b><div class="bar"><span class="isi" style="width: {{ min(100, $p['p_pasang'] ?? 0) }}%"></span></div></div>
+            <div class="kartu"><small>Progres tertagih</small><b>{{ $pr($p['p_tagih']) }}</b><div class="bar tagih"><span class="isi" style="width: {{ min(100, $p['p_tagih'] ?? 0) }}%"></span></div><small>{{ rp((int) round($p['rp_tagih'])) }}</small></div>
         </div>
 
         @if ($ubah)
             <form method="POST" action="{{ route('boq.simpan', $tahap) }}" class="kartu gulir" style="padding: 0;">@csrf
                 <table class="kas" id="tabel-ubah" data-tanpa-saring-kolom>
-                    <thead><tr><th style="width: 70px;">Kode</th><th>Uraian</th><th style="width: 70px;">Sat</th><th style="width: 110px;">Volume</th><th style="width: 130px;">Harga jual / sat</th>
+                    <thead><tr><th style="width: 70px;">Kode</th><th>Uraian</th><th style="width: 110px;">Volume</th><th style="width: 70px;">Satuan</th><th style="width: 130px;">Harga Satuan</th>
                         <th style="width: 140px;">Modal material (total)</th><th style="width: 140px;">Modal jasa (total)</th><th style="width: 90px;">Transaksi</th><th style="width: 40px;"></th></tr></thead>
                     <tbody>
                         @foreach ($p['baris'] as $i => $b)
@@ -72,8 +74,9 @@
                             <tr>
                                 <td><input type="hidden" name="item[{{ $i }}][id]" value="{{ $it->id }}"><input name="item[{{ $i }}][kode]" value="{{ $it->kode }}" required></td>
                                 <td><input name="item[{{ $i }}][uraian]" value="{{ $it->uraian }}" required></td>
+                                <td><input class="angka" name="item[{{ $i }}][volume]" value="{{ $it->volume }}" inputmode="decimal"></td>
                                 <td><input name="item[{{ $i }}][satuan]" value="{{ $it->satuan }}"></td>
-                                @foreach (['volume', 'harga', 'modal_material', 'modal_jasa'] as $k)<td><input class="angka" name="item[{{ $i }}][{{ $k }}]" value="{{ $it->$k }}" inputmode="decimal"></td>@endforeach
+                                @foreach (['harga', 'modal_material', 'modal_jasa'] as $k)<td><input class="angka" name="item[{{ $i }}][{{ $k }}]" value="{{ $it->$k }}" inputmode="decimal"></td>@endforeach
                                 <td class="redup" style="font-size: 12px;">{{ $nTag[$it->id] ?? 0 }} bertag</td>
                                 <td><button type="button" class="tombol polos hapus" style="padding: 2px 8px;" title="Hapus item (kode BOQ transaksinya ikut lepas)">✕</button></td>
                             </tr>
@@ -93,8 +96,8 @@
                     tb.addEventListener('click', e => { if (e.target.classList.contains('hapus') && confirm('Hapus item ini?')) e.target.closest('tr').remove(); });
                     document.getElementById('tambah').addEventListener('click', () => {
                         const i = n++, tr = document.createElement('tr');
-                        tr.innerHTML = `<td><input name="item[${i}][kode]" required></td><td><input name="item[${i}][uraian]" required></td><td><input name="item[${i}][satuan]"></td>`
-                            + ['volume', 'harga', 'modal_material', 'modal_jasa'].map(k => `<td><input class="angka" name="item[${i}][${k}]" inputmode="decimal"></td>`).join('')
+                        tr.innerHTML = `<td><input name="item[${i}][kode]" required></td><td><input name="item[${i}][uraian]" required></td><td><input class="angka" name="item[${i}][volume]" inputmode="decimal"></td><td><input name="item[${i}][satuan]"></td>`
+                            + ['harga', 'modal_material', 'modal_jasa'].map(k => `<td><input class="angka" name="item[${i}][${k}]" inputmode="decimal"></td>`).join('')
                             + '<td></td><td><button type="button" class="tombol polos hapus" style="padding: 2px 8px;">✕</button></td>';
                         tb.appendChild(tr); tr.querySelector('input').focus();
                     });
@@ -103,27 +106,27 @@
         @else
             <div class="kartu gulir" style="padding: 0;">
                 <table class="kas" data-saring-kolom>
-                    <thead><tr><th>Kode</th><th>Uraian</th><th>Sat</th><th class="angka">Volume</th><th class="angka">Harga</th><th class="angka">Nilai jual</th><th class="angka">Bobot</th>
+                    <thead><tr><th class="sempit" data-saring-sempit>Kode</th><th>Uraian</th><th class="angka">Volume</th><th class="sempit" data-saring-sempit>Satuan</th><th class="angka">Harga Satuan</th><th class="angka" title="Volume × Harga Satuan">Total Harga</th><th class="angka">Bobot</th>
                         <th class="angka">Modal</th><th class="angka">Biaya keluar</th><th style="width: 110px;">% modal</th>
                         <th style="width: 120px;">Terpasang (kumulatif)</th><th style="width: 110px;">% terpasang</th><th class="angka">Tertagih</th><th style="width: 110px;">% tertagih</th></tr></thead>
                     <tbody>
                         @foreach ($p['baris'] as $b)
                             @php($it = $b->item)
                             <tr data-item="{{ $it->id }}">
-                                <td><b>{{ $it->kode }}</b></td>
+                                <td class="sempit"><b>{{ $it->kode }}</b></td>
                                 <td>{{ $it->uraian }}</td>
-                                <td>{{ $it->satuan }}</td>
                                 <td class="angka" data-n="{{ $it->volume }}">{{ $f($it->volume, 2) }}</td>
+                                <td class="sempit">{{ $it->satuan }}</td>
                                 <td class="angka" data-n="{{ $it->harga }}">{{ $it->harga ? rp((int) round($it->harga)) : '' }}</td>
                                 <td class="angka" data-n="{{ $b->nilai }}">{{ $b->nilai ? rp((int) round($b->nilai)) : '' }}</td>
                                 <td class="angka" data-n="{{ $b->bobot }}">{{ $b->bobot ? $pr($b->bobot) : '' }}</td>
                                 <td class="angka" data-n="{{ $b->modal }}">{{ $b->modal ? rp((int) round($b->modal)) : '' }}</td>
-                                <td class="angka" data-n="{{ $b->biaya }}">{{ $b->biaya ? rp((int) round($b->biaya)) : '' }}</td>
-                                <td class="p" data-n="{{ $b->p_modal }}"><span style="{{ $warna($b->p_modal) }}">{{ $b->p_modal !== null ? $pr($b->p_modal) : ($b->biaya ? 'tanpa modal' : '') }}</span>@if ($b->p_modal !== null)<div class="bar modal"><i style="width: {{ min(100, $b->p_modal) }}%"></i></div>@endif</td>
+                                <td @class(['angka', 'kosong' => ! $b->biaya]) data-n="{{ $b->biaya }}" @if (! $b->biaya) title="Belum ada transaksi Kas/BCA yang diberi kode {{ $it->kode }} di Pilah Transaksi" @endif>{{ $b->biaya ? rp((int) round($b->biaya)) : '–' }}</td>
+                                <td class="p" data-n="{{ $b->p_modal }}"><span style="{{ $warna($b->p_modal) }}">{{ $b->p_modal !== null ? $pr($b->p_modal) : ($b->biaya ? 'tanpa modal' : '') }}</span>@if ($b->p_modal !== null)<div class="bar modal"><span class="isi" style="width: {{ min(100, $b->p_modal) }}%"></span></div>@endif</td>
                                 <td data-n="{{ $b->terpasang }}"><input class="angka" data-f="pasang" value="{{ $b->terpasang !== null ? $f($b->terpasang, 3) : '' }}" placeholder="0" inputmode="decimal" title="Volume terpasang s/d hari ini ({{ $it->satuan }}) — tersimpan sebagai opname hari ini">@if ($b->tgl_opname)<span class="redup" style="font-size: 10.5px;" data-tgl>opname {{ $b->tgl_opname->translatedFormat('d-M-y') }}</span>@else<span class="redup" style="font-size: 10.5px;" data-tgl></span>@endif</td>
-                                <td class="p" data-n="{{ $b->p_pasang }}"><span data-persen>{{ $pr($b->p_pasang) }}</span><div class="bar"><i style="width: {{ min(100, $b->p_pasang ?? 0) }}%"></i></div></td>
+                                <td class="p" data-n="{{ $b->p_pasang }}"><span data-persen @if ($b->p_pasang === null) class="redup" title="Isi kolom Terpasang (kumulatif) untuk mencatat opname" @endif>{{ $b->p_pasang === null ? 'belum opname' : $pr($b->p_pasang) }}</span><div class="bar"><span class="isi" style="width: {{ min(100, $b->p_pasang ?? 0) }}%"></span></div></td>
                                 <td class="angka" data-n="{{ $b->tertagih }}">{{ $b->tertagih ? $f($b->tertagih, 3) : '' }}@if ($b->rp_tagih)<br><span class="redup" style="font-size: 11px;">{{ rp((int) round($b->rp_tagih)) }}</span>@endif</td>
-                                <td class="p" data-n="{{ $b->p_tagih }}">{{ $pr($b->p_tagih) }}<div class="bar tagih"><i style="width: {{ min(100, $b->p_tagih ?? 0) }}%"></i></div></td>
+                                <td class="p" data-n="{{ $b->p_tagih }}">{{ $pr($b->p_tagih) }}<div class="bar tagih"><span class="isi" style="width: {{ min(100, $b->p_tagih ?? 0) }}%"></span></div></td>
                             </tr>
                         @endforeach
                     </tbody>
@@ -166,7 +169,7 @@
                             <input name="catatan" value="{{ old('catatan') }}" placeholder="Catatan (opsional)" style="min-width: 300px;">
                         </div>
                         <table class="kas" data-tanpa-saring-kolom>
-                            <thead><tr><th>Kode</th><th>Uraian</th><th class="angka">Volume BOQ</th><th class="angka">Terpasang</th><th class="angka">Sudah ditagih</th><th style="width: 130px;">Ditagih sekarang</th><th class="angka">Harga</th></tr></thead>
+                            <thead><tr><th>Kode</th><th>Uraian</th><th class="angka">Volume BOQ</th><th class="angka">Terpasang</th><th class="angka">Sudah ditagih</th><th style="width: 130px;">Ditagih sekarang</th><th class="angka">Harga Satuan</th></tr></thead>
                             <tbody>
                                 @foreach ($p['baris'] as $b)
                                     @php($sisa = max(0, ($b->terpasang ?? 0) - $b->tertagih))
@@ -197,8 +200,8 @@
                                 const h = await res.json().catch(() => ({}));
                                 if (!res.ok) throw new Error(h.message || 'Gagal menyimpan');
                                 awal = inp.value; tr.classList.add('ok-simpan');
-                                tr.querySelector('[data-persen]').textContent = h.persen === null ? '–' : h.persen.toLocaleString('id-ID') + '%';
-                                tr.querySelector('.bar:not(.modal):not(.tagih) > i').style.width = Math.min(100, h.persen || 0) + '%';
+                                tr.querySelector('[data-persen]').classList.remove('redup'); tr.querySelector('[data-persen]').textContent = h.persen === null ? '–' : h.persen.toLocaleString('id-ID') + '%';
+                                tr.querySelector('.bar:not(.modal):not(.tagih) > span.isi').style.width = Math.min(100, h.persen || 0) + '%';
                                 tr.querySelector('[data-tgl]').textContent = 'opname ' + h.tanggal;
                             } catch (err) { alert(err.message); }
                         });
