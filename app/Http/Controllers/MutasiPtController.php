@@ -27,12 +27,15 @@ class MutasiPtController extends Controller
         $q = trim((string) $request->query('q'));
         $status = array_key_exists((string) $request->query('status'), TandaMutasiPt::STATUS) ? $request->query('status') : null;
         $bulan = preg_match('/^\d{4}-\d{2}$/', (string) $request->query('bulan')) ? $request->query('bulan') : $bulanAda->keys()->first();
+        $rentang = in_array((int) $request->query('rentang'), [1, 3, 6], true) ? (int) $request->query('rentang') : 1;
+        $dari = $bulan ? \Illuminate\Support\Carbon::createFromFormat('Y-m-d', $bulan.'-01')->subMonths($rentang - 1)->toDateString() : null;
         $tanda = TandaMutasiPt::baris()->keyBy('kunci');
         // status dipilih → semua bulan sejak 2026 dengan status itu; selain itu per bulan / hasil cari.
         $baris = MutasiPt::query()
             ->when($q !== '', fn ($w) => $w->where(fn ($x) => collect(preg_split('/\s+/', $q))->each(fn ($kata) => $x->where('keterangan', 'like', '%'.$kata.'%'))))
             ->when($status, fn ($w) => $w->where('tanggal', '>=', TandaMutasiPt::MULAI))
-            ->when($q === '' && ! $status && $bulan, fn ($w) => $w->whereRaw("DATE_FORMAT(tanggal, '%Y-%m') = ?", [$bulan]))
+            // rentang 1 / 3 / 6 bulan berakhir di bulan terpilih (bawaan 1 bulan)
+            ->when($q === '' && ! $status && $bulan, fn ($w) => $w->whereBetween('tanggal', [$dari, \Illuminate\Support\Carbon::createFromFormat('Y-m-d', $bulan.'-01')->endOfMonth()->toDateString()]))
             ->orderBy('tanggal')->orderBy('baris')->limit(5000)->get()
             // cari juga di keterangan tambahan admin (tersimpan terpisah)
             ->when($q !== '', fn ($c) => $c->concat(TandaMutasiPt::baris()->filter(fn ($b) => $b->tanda?->catatan
@@ -42,7 +45,7 @@ class MutasiPtController extends Controller
         $hitung = TandaMutasiPt::baris()->groupBy('status')->map->count();
 
         return view('mutasi-pt.index', [
-            'baris' => $baris, 'bulan' => $bulan, 'bulanAda' => $bulanAda, 'q' => $q, 'status' => $status, 'hitung' => $hitung,
+            'baris' => $baris, 'bulan' => $bulan, 'rentang' => $rentang, 'dari' => $dari, 'bulanAda' => $bulanAda, 'q' => $q, 'status' => $status, 'hitung' => $hitung,
             'rpDihitung' => TandaMutasiPt::dihitung()->sum('rp'),
             'impor' => Cache::get(ImporMutasiPt::KUNCI),
             'saldoAkhir' => MutasiPt::orderByDesc('tanggal')->orderByDesc('baris')->first(),

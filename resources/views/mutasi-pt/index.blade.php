@@ -32,14 +32,18 @@
 
     <div class="kartu" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
         <form method="GET" style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
-            @if ($i !== false && $i < $daftar->count() - 1)<a class="tombol polos" style="padding: 6px 12px;" href="{{ route('mutasi-pt.index', ['bulan' => $daftar[$i + 1]]) }}">‹</a>@endif
-            <select name="bulan" onchange="this.form.q.value = ''; this.form.submit()" style="min-width: 170px;">
+            @if ($i !== false && $i < $daftar->count() - 1)<a class="tombol polos" style="padding: 6px 12px;" href="{{ route('mutasi-pt.index', ['bulan' => $daftar[$i + 1], 'rentang' => $rentang]) }}">‹</a>@endif
+            <input type="hidden" name="rentang" value="{{ $rentang }}">
+            <select name="bulan" onchange="this.form.q.value = ''; this.form.submit()" style="min-width: 170px;" title="Bulan terakhir dari rentang">
                 @foreach ($bulanAda as $ym => $n)<option value="{{ $ym }}" @selected($q === '' && ! $status && $ym === $bulan)>{{ $nb($ym) }} · {{ $n }}</option>@endforeach
             </select>
-            @if ($i !== false && $i > 0)<a class="tombol polos" style="padding: 6px 12px;" href="{{ route('mutasi-pt.index', ['bulan' => $daftar[$i - 1]]) }}">›</a>@endif
+            @if ($i !== false && $i > 0)<a class="tombol polos" style="padding: 6px 12px;" href="{{ route('mutasi-pt.index', ['bulan' => $daftar[$i - 1], 'rentang' => $rentang]) }}">›</a>@endif
+            @foreach ([1, 3, 6] as $rg)
+                <a href="{{ route('mutasi-pt.index', ['bulan' => $bulan, 'rentang' => $rg]) }}" @class(['chip', 'aktif' => $q === '' && ! $status && $rentang === $rg])>{{ $rg }} bulan</a>
+            @endforeach
             <input type="search" name="q" value="{{ $q }}" placeholder="Cari keterangan BCA / keterangan tambahan di semua bulan" style="min-width: 300px;" autocomplete="off">
             <button type="submit" class="tombol polos" style="padding: 6px 12px;">Cari</button>
-            @if ($q !== '' || $status)<a href="{{ route('mutasi-pt.index', ['bulan' => $bulan]) }}" style="font-size: 13px;">kembali per bulan</a>@endif
+            @if ($q !== '' || $status)<a href="{{ route('mutasi-pt.index', ['bulan' => $bulan, 'rentang' => $rentang]) }}" style="font-size: 13px;">kembali per bulan</a>@endif
         </form>
         <form method="POST" action="{{ route('mutasi-pt.perbarui') }}" style="margin-left: auto;">@csrf<button type="submit" class="tombol polos" style="padding: 6px 12px;">↻ Perbarui dari Drive</button></form>
     </div>
@@ -53,7 +57,7 @@
     </div>
 
     <div class="ringkas">
-        <div class="kartu"><small>{{ $status ? \App\Support\TandaMutasiPt::STATUS[$status].' (semua bulan 2026)' : ($q !== '' ? 'Hasil cari "'.$q.'"' : $nb($bulan ?? now()->format('Y-m'))) }}</small><b>{{ number_format($baris->count(), 0, ',', '.') }} transaksi</b></div>
+        <div class="kartu"><small>{{ $status ? \App\Support\TandaMutasiPt::STATUS[$status].' (semua bulan 2026)' : ($q !== '' ? 'Hasil cari "'.$q.'"' : ($rentang > 1 && $dari ? $nb(substr($dari, 0, 7)).' – '.$nb($bulan) : $nb($bulan ?? now()->format('Y-m')))) }}</small><b>{{ number_format($baris->count(), 0, ',', '.') }} transaksi</b></div>
         <div class="kartu"><small>Keluar (DB)</small><b style="color: var(--merah);">{{ rp((int) round($keluar)) }}</b></div>
         <div class="kartu"><small>Masuk (CR)</small><b style="color: var(--sukses);">{{ rp((int) round($masuk)) }}</b></div>
         <div class="kartu"><small>Saldo terakhir</small><b>{{ $saldoAkhir?->saldo !== null ? rp((int) round($saldoAkhir->saldo)) : '–' }}</b><small>{{ $saldoAkhir ? $tgl($saldoAkhir->tanggal) : '' }}</small></div>
