@@ -100,7 +100,7 @@ class Anggaran
         }
         $p = ProgresBoq::hitung($t);
         if ($p['ada_opname']) {
-            return ['persen' => $p['p_pasang'], 'jenis' => 'terpasang', 'boq' => $p, 'ket' => 'terpasang (opname BOQ, bobot nilai)'];
+            return ['persen' => $p['p_pasang'], 'jenis' => 'terpasang', 'boq' => $p, 'ket' => 'terpasang (opname BOQ / minimal yang sudah ditagih, bobot nilai)'];
         }
 
         return $p['rp_tagih'] > 0 ? ['persen' => $p['p_tagih'], 'jenis' => 'tertagih', 'boq' => $p, 'ket' => 'tertagih (belum ada opname terpasang)'] : null;

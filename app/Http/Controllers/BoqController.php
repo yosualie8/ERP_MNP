@@ -112,8 +112,10 @@ class BoqController extends Controller
             'ringkasan' => "Opname {$item->tahap->nama} {$item->kode}: terpasang ".rtrim(rtrim(number_format($d['volume'], 3, ',', '.'), '0'), ',')." {$item->satuan} per {$tgl}",
             'isi' => ['boq_item_id' => $item->id, 'opname_id' => $o->id, 'volume' => $d['volume'], 'tanggal' => $tgl], 'user_id' => $request->user()->id]);
         $vol = (float) $item->volume;
+        // terpasang efektif minimal = volume yang sudah ditagih
+        $efektif = max((float) $d['volume'], (float) TagihanItem::where('boq_item_id', $item->id)->sum('volume'));
 
-        return response()->json(['ok' => true, 'persen' => $vol > 0 ? round($d['volume'] / $vol * 100, 1) : null, 'tanggal' => \Illuminate\Support\Carbon::parse($tgl)->translatedFormat('d-M-y')]);
+        return response()->json(['ok' => true, 'persen' => $vol > 0 ? round($efektif / $vol * 100, 1) : null, 'tanggal' => \Illuminate\Support\Carbon::parse($tgl)->translatedFormat('d-M-y')]);
     }
 
     /** Tagihan progres baru: volume ditagih per item (nilai = volume × harga jual). */
