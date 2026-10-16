@@ -60,7 +60,9 @@
         <div class="pesan galat"><b>Periksa lagi:</b><ul style="margin: 6px 0 0; padding-left: 18px;">@foreach ($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul></div>
     @endif
     @if ($boq)
-        @php($pb = $pf['boq'] ?? \App\Support\ProgresBoq::hitung($tahap))
+        @php
+            $pb = $pf['boq'] ?? \App\Support\ProgresBoq::hitung($tahap);
+        @endphp
         <div class="pesan" style="background: rgba(96, 165, 250, .1); border: 1px solid rgba(96, 165, 250, .4);">
             📐 <b>Dari BOQ ({{ $boq['n'] }} item):</b> omset rencana sudah termasuk <b>nilai kontrak {{ rp((int) round($boq['nilai'])) }}</b> dan HPP rencana sudah termasuk <b>modal {{ rp((int) round($boq['modal'])) }}</b> (material + jasa per item).
             Baris komponen di bawah hanya untuk biaya di luar item BOQ (mis. jasa harian, komisi, biaya umum).
