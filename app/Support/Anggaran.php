@@ -51,7 +51,10 @@ class Anggaran
                 $omset += $nilai[$i];
             }
         }
-        $hpp = 0.0;
+        // Tahap ber-BOQ (Infra): omset rencana + nilai kontrak BOQ, HPP rencana + modal BOQ (material + jasa per item).
+        $boq = $t ? self::boq($t) : null;
+        $omset += $boq['nilai'] ?? 0;
+        $hpp = (float) ($boq['modal'] ?? 0);
         foreach ($baris as $i => $b) {
             if ($b->komponen->jenis === 'hpp') {
                 $nilai[$i] = round($b->komponen->cara === 'persen' ? ($b->persen ?? 0) / 100 * $omset : ($b->volume ?? 0) * ($b->harga ?? 0), 2);
@@ -64,7 +67,43 @@ class Anggaran
         }
         ksort($nilai);
 
-        return ['omset' => $omset, 'hpp' => $hpp, 'margin' => $omset - $hpp, 'persen_margin' => $omset > 0 ? ($omset - $hpp) / $omset * 100 : null, 'nilai' => $nilai, 'tunda' => $tunda];
+        return ['omset' => $omset, 'hpp' => $hpp, 'margin' => $omset - $hpp, 'persen_margin' => $omset > 0 ? ($omset - $hpp) / $omset * 100 : null, 'nilai' => $nilai, 'tunda' => $tunda, 'boq' => $boq];
+    }
+
+    private static ?array $boqTahap = null;
+
+    /** Ringkasan BOQ tahap: nilai kontrak (Σ volume × harga), modal (Σ material + jasa), jumlah item — null bila tanpa BOQ. */
+    public static function boq(ProyekTahap $t): ?array
+    {
+        self::$boqTahap ??= \App\Models\BoqItem::get()->groupBy('proyek_tahap_id')
+            ->map(fn ($g) => ['nilai' => $g->sum(fn ($i) => $i->nilai()), 'modal' => $g->sum(fn ($i) => $i->modal()), 'n' => $g->count()])->all();
+
+        return self::$boqTahap[$t->id] ?? null;
+    }
+
+    /**
+     * Progres fisik tahap: cut & fill = kubikasi bongkaran ÷ m³ HPP tanah; tahap ber-BOQ = progres TERPASANG (opname, bobot
+     * nilai jual) atau — bila belum ada opname — progres TERTAGIH. null = belum ada dasar (pakai serapan biaya).
+     *
+     * @return array{persen: float, ket: string, jenis: string, boq: ?array}|null
+     */
+    public static function progresFisik(ProyekTahap $t, iterable $baris, array $ritasi): ?array
+    {
+        if (($vol = self::volumeTanah($baris)) > 0) {
+            $m3 = $ritasi['per_tahap'][$t->id]['m3'] ?? 0;
+
+            return ['persen' => $m3 / $vol * 100, 'jenis' => 'kubikasi', 'boq' => null,
+                'ket' => number_format($m3, 0, ',', '.').' dari '.number_format($vol, 0, ',', '.').' m³ bongkaran'];
+        }
+        if (! self::boq($t)) {
+            return null;
+        }
+        $p = ProgresBoq::hitung($t);
+        if ($p['ada_opname']) {
+            return ['persen' => $p['p_pasang'], 'jenis' => 'terpasang', 'boq' => $p, 'ket' => 'terpasang (opname BOQ, bobot nilai)'];
+        }
+
+        return $p['rp_tagih'] > 0 ? ['persen' => $p['p_tagih'], 'jenis' => 'tertagih', 'boq' => $p, 'ket' => 'tertagih (belum ada opname terpasang)'] : null;
     }
 
 
@@ -163,7 +202,10 @@ class Anggaran
     {
         $r = $ritasi['per_tahap'][$t->id] ?? [];
         $b = $bbm['per_tahap'][$t->id] ?? [];
-        $kas = self::kasGrup($t->id);
+        // Tahap ber-BOQ: biaya berkode BOQ jadi baris "Item BOQ"; baris Kas hanya sisa yang belum berkode (tidak dobel).
+        $boq = self::boq($t);
+        $rb = $boq ? PilahTransaksi::realisasiBoq()[$t->id] ?? null : null;
+        $kas = $rb ? $rb['grup'] : self::kasGrup($t->id);
         $tarifBbm = $t->tarif_bbm ?? ProyekTahap::BAWAAN['tarif_bbm'];
         $tarifRental = $t->tarif_rental ?? ProyekTahap::BAWAAN['tarif_rental'];
         // sumber => [volume realisasi, rupiah realisasi, nama bila tidak dianggarkan, satuan]
@@ -183,6 +225,10 @@ class Anggaran
         $h = self::hitung($baris, $t);
         $hasil = [];
         $terpakai = [];
+        if ($boq) {
+            $hasil[] = ['nama' => 'Item BOQ — modal material & jasa ('.$boq['n'].' item)', 'satuan' => null, 'v_rencana' => null, 'rp_rencana' => (float) $boq['modal'], 'tunda' => false,
+                'v_real' => null, 'rp_real' => (float) ($rb['boq'] ?? 0), 'catatan' => 'biaya berkode BOQ — rincian di BOQ & Progres', 'boq' => true];
+        }
         foreach (collect($baris)->values() as $i => $x) {
             if ($x->komponen->jenis !== 'hpp') {
                 continue;

@@ -23,20 +23,8 @@ class ProgresBoq
         $opname = BoqOpname::whereIn('boq_item_id', $items->pluck('id'))->orderBy('tanggal')->orderBy('id')->get()->groupBy('boq_item_id')->map->last();
         $tagih = TagihanItem::whereIn('boq_item_id', $items->pluck('id'))->selectRaw('boq_item_id, sum(volume) v, sum(nilai) rp')->groupBy('boq_item_id')->get()->keyBy('boq_item_id');
 
-        $biaya = [];
-        $biayaTotal = 0.0;
-        $nTanpa = 0;
-        foreach (PilahTransaksi::baris([$t->id], '2000-01-01') as $x) {
-            if (! $x->dihitung || $x->tahap_id !== $t->id) {
-                continue;
-            }
-            $biayaTotal += $x->nominal;
-            if ($x->boq && $x->boq->proyek_tahap_id === $t->id) {
-                $biaya[$x->boq->id] = ($biaya[$x->boq->id] ?? 0) + $x->nominal;
-            } else {
-                $nTanpa++;
-            }
-        }
+        $rb = PilahTransaksi::realisasiBoq()[$t->id] ?? ['total' => 0.0, 'item' => [], 'n_tanpa' => 0];
+        [$biaya, $biayaTotal, $nTanpa] = [$rb['item'], $rb['total'], $rb['n_tanpa']];
 
         $nilaiTotal = $items->sum(fn ($i) => $i->nilai());
         $baris = $items->map(function (BoqItem $i) use ($opname, $tagih, $biaya, $nilaiTotal) {
@@ -61,6 +49,7 @@ class ProgresBoq
             'p_pasang' => $nilaiTotal > 0 ? $baris->sum(fn ($b) => $b->nilai * min(1, ($b->p_pasang ?? 0) / 100)) / $nilaiTotal * 100 : null,
             'p_tagih' => $nilaiTotal > 0 ? $baris->sum('rp_tagih') / $nilaiTotal * 100 : null,
             'rp_tagih' => $baris->sum('rp_tagih'),
+            'ada_opname' => $opname->isNotEmpty(),
         ];
     }
 

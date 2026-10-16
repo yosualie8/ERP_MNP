@@ -50,22 +50,31 @@
         <div class="kartu"><small>HPP rencana</small><b>{{ rp((int) round($h['hpp'])) }}</b>@if ($h['tunda'])<small>belum termasuk {{ count($h['tunda']) }} komponen yang menunggu realisasi</small>@endif</div>
         <div class="kartu"><small>Margin rencana</small><b @if ($h['margin'] < 0) style="color: var(--merah);" @endif>{{ rp((int) round($h['margin'])) }}</b><small>{{ $persen($h['persen_margin']) }} dari omset</small></div>
         <div class="kartu"><small>Realisasi HPP s/d hari ini</small><b>{{ rp((int) round($realisasi)) }}</b><small>langsung {{ rp($langsung) }} + biaya umum {{ rp((int) round($overhead)) }}</small></div>
-        @if ($volTanah > 0)
-            <div class="kartu"><small>Progres fisik (kubikasi bongkaran ÷ m³ HPP tanah)</small><b>{{ $persen($m3 / $volTanah * 100) }}</b><small>{{ $ang($m3, 2) }} dari {{ $ang($volTanah, 2) }} m³</small></div>
+        @if ($pf)
+            <div class="kartu"><small>Progres fisik — {{ $pf['jenis'] === 'kubikasi' ? 'kubikasi bongkaran ÷ m³ HPP tanah' : $pf['ket'] }}</small><b>{{ $persen($pf['persen']) }}</b><small>{{ $pf['jenis'] === 'kubikasi' ? $pf['ket'] : '' }}</small></div>
         @endif
-        <div class="kartu"><small>{{ $volTanah > 0 ? 'Serapan biaya' : 'Progres' }} (realisasi ÷ HPP rencana)</small><b @if ($serapan > 100 || ($volTanah > 0 && $serapan > $m3 / $volTanah * 100 + 10)) style="color: var(--merah);" @endif>{{ $persen($serapan) }}</b><small>{{ $h['hpp'] > 0 ? ($realisasi > $h['hpp'] ? 'realisasi melebihi HPP rencana' : 'sisa '.rp((int) round($h['hpp'] - $realisasi))) : 'HPP rencana belum diisi' }}</small></div>
+        <div class="kartu"><small>{{ $pf ? 'Serapan biaya' : 'Progres' }} (realisasi ÷ HPP rencana)</small><b @if ($serapan > 100 || ($pf && $serapan > $pf['persen'] + 10)) style="color: var(--merah);" @endif>{{ $persen($serapan) }}</b><small>{{ $h['hpp'] > 0 ? ($realisasi > $h['hpp'] ? 'realisasi melebihi HPP rencana' : 'sisa '.rp((int) round($h['hpp'] - $realisasi))) : 'HPP rencana belum diisi' }}</small></div>
     </div>
 
     @if ($errors->any())
         <div class="pesan galat"><b>Periksa lagi:</b><ul style="margin: 6px 0 0; padding-left: 18px;">@foreach ($errors->all() as $e)<li>{{ $e }}</li>@endforeach</ul></div>
     @endif
-    @if ($pakaiTemplate)
+    @if ($boq)
+        @php($pb = $pf['boq'] ?? \App\Support\ProgresBoq::hitung($tahap))
+        <div class="pesan" style="background: rgba(96, 165, 250, .1); border: 1px solid rgba(96, 165, 250, .4);">
+            📐 <b>Dari BOQ ({{ $boq['n'] }} item):</b> omset rencana sudah termasuk <b>nilai kontrak {{ rp((int) round($boq['nilai'])) }}</b> dan HPP rencana sudah termasuk <b>modal {{ rp((int) round($boq['modal'])) }}</b> (material + jasa per item).
+            Baris komponen di bawah hanya untuk biaya di luar item BOQ (mis. jasa harian, komisi, biaya umum).
+            Progres BOQ: modal {{ $persen($pb['p_modal']) }} · terpasang {{ $pb['ada_opname'] ? $persen($pb['p_pasang']) : 'belum ada opname' }} · tertagih {{ $persen($pb['p_tagih']) }}
+            @if (auth()->user()->bolehMenu('boq-proyek'))· <a href="{{ route('boq.index', ['tahap' => $tahap->id]) }}">BOQ & Progres →</a>@endif
+        </div>
+    @endif
+    @if ($pakaiTemplate && ! $boq)
         <div class="pesan" style="background: rgba(240, 192, 90, .12); border: 1px solid rgba(240, 192, 90, .4);">Anggaran tahap ini belum ada — baris awal disiapkan otomatis dari <b>template tipe {{ \App\Models\ProyekTahap::TIPE[$tahap->tipe] }}</b> & data tahap, <b>belum disimpan</b>. Lengkapi volume/harga lalu tekan Simpan anggaran.</div>
     @endif
 
     @if ($perKomponen)
         @php
-            $fisik = $volTanah > 0 ? $m3 / $volTanah * 100 : null;
+            $fisik = $pf['persen'] ?? null;
             $sumR = collect($perKomponen)->reject(fn ($k) => $k['tunda'])->sum('rp_rencana');
             $sumA = collect($perKomponen)->sum('rp_real');
         @endphp

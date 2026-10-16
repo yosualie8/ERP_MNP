@@ -156,7 +156,7 @@ class PilahTransaksi
                         : [true, $t?->pos_overhead ? 'biaya umum (dibagi Alokasi Biaya Umum)' : 'dihitung']));
 
                 return (object) ['sumber' => 'kas', 'kunci' => $r->kunci, 'tanggal' => $tgl, 'nominal' => (float) $r->nominal, 'keterangan' => (string) $r->keterangan,
-                    'catatan' => null, 'pic' => $r->pic, 'akun' => $r->akun, 'kode' => $r->kode_asli, 'no_id' => $r->no_id, 'tahap_gl' => $gl, 'tahap_id' => $tahap,
+                    'catatan' => null, 'pic' => $r->pic, 'akun' => $r->akun, 'kel' => $r->kel, 'kode' => $r->kode_asli, 'no_id' => $r->no_id, 'tahap_gl' => $gl, 'tahap_id' => $tahap,
                     'abaikan' => (bool) $r->abaikan, 'manual' => $r->al_sumber === 'pilah', 'dihitung' => $hitung[0], 'status' => $hitung[1],
                     'tag' => $tag['kas'][(string) $r->no_id] ?? null, 'boq' => $boq['kas|'.$r->kunci]->item ?? null];
             })
@@ -166,7 +166,7 @@ class PilahTransaksi
             && (($b->tanda?->proyek_tahap_id && isset($ids[$b->tanda->proyek_tahap_id])) || $b->status === 'belum'))
             ->map(fn ($b) => (object) ['sumber' => 'bca', 'kunci' => $b->kunci, 'tanggal' => $b->m->tanggal->toDateString(), 'nominal' => (float) $b->m->jumlah,
                 'keterangan' => trim(preg_replace('/\s+/', ' ', preg_replace('/^TRSF E-BANKING (DB )?\d{4}\/FT\w+\/WS\d+\s*/', '', (string) $b->m->keterangan))),
-                'catatan' => $b->tanda?->catatan, 'pic' => null, 'akun' => 'Rekening PT BCA', 'kode' => null, 'no_id' => null, 'tahap_gl' => null,
+                'catatan' => $b->tanda?->catatan, 'pic' => null, 'akun' => 'Rekening PT BCA', 'kel' => null, 'kode' => null, 'no_id' => null, 'tahap_gl' => null,
                 'tahap_id' => $b->status === 'dihitung' ? $b->tanda?->proyek_tahap_id : null, 'abaikan' => $b->status === 'tidak', 'manual' => (bool) $b->tanda?->status,
                 'dihitung' => $b->status === 'dihitung' && $b->tanda?->proyek_tahap_id, 'status' => TandaMutasiPt::STATUS[$b->status].($b->alasan && $b->alasan !== 'ditandai manual' ? ' · '.$b->alasan : ''),
                 'tag' => $tag['bca'][$b->m->tanggal->toDateString().'|'.(int) round($b->m->jumlah)] ?? null, 'boq' => $boq['bca|'.$b->kunci]->item ?? null]);
@@ -268,21 +268,41 @@ class PilahTransaksi
         }
     }
 
+    private static ?array $realisasi = null;
+
     /**
-     * Biaya dihitung per item BOQ (Kas & BCA yang diberi kode BOQ, dihitung, dan tahapnya = tahap item).
+     * Realisasi biaya dihitung tiap tahap yang punya BOQ (sekali hitung per request): total, per item BOQ, jumlah ber-BOQ,
+     * dan sisa yang BELUM berkode BOQ per kelompok (gaji, komisi, material = akun HPP, bbm, ops) — dasar Anggaran Infra
+     * supaya biaya berkode BOQ tidak terhitung dua kali di baris Kas.
      *
-     * @return array<int, float>
+     * @return array<int, array{total: float, boq: float, item: array<int, float>, grup: array<string, float>, n_tanpa: int}>
      */
-    public static function biayaPerItem(ProyekTahap $t): array
+    public static function realisasiBoq(): array
     {
-        $hasil = [];
-        foreach (self::baris([$t->id], '2000-01-01') as $x) {
-            if ($x->boq && $x->dihitung && $x->tahap_id === $t->id && $x->boq->proyek_tahap_id === $t->id) {
-                $hasil[$x->boq->id] = ($hasil[$x->boq->id] ?? 0) + $x->nominal;
+        if (self::$realisasi !== null) {
+            return self::$realisasi;
+        }
+        $ids = BoqItem::distinct()->pluck('proyek_tahap_id')->all();
+        $hasil = array_fill_keys($ids, ['total' => 0.0, 'boq' => 0.0, 'item' => [], 'grup' => [], 'n_tanpa' => 0]);
+        foreach ($ids ? self::baris($ids, '2000-01-01') : [] as $x) {
+            if (! $x->dihitung || ! isset($hasil[$x->tahap_id])) {
+                continue;
             }
+            $h = &$hasil[$x->tahap_id];
+            $h['total'] += $x->nominal;
+            if ($x->boq && $x->boq->proyek_tahap_id === $x->tahap_id) {
+                $h['boq'] += $x->nominal;
+                $h['item'][$x->boq->id] = ($h['item'][$x->boq->id] ?? 0) + $x->nominal;
+            } else {
+                $g = preg_match('/omis/i', (string) $x->akun) ? 'komisi' : ($x->kel === 'Gaji & Tunjangan' ? 'gaji'
+                    : ($x->kel === 'HPP' ? 'material' : (Overhead::akunBbm($x->akun) ? 'bbm' : 'ops')));
+                $h['grup'][$g] = ($h['grup'][$g] ?? 0) + $x->nominal;
+                $h['n_tanpa']++;
+            }
+            unset($h);
         }
 
-        return $hasil;
+        return self::$realisasi = $hasil;
     }
 
     /** Simpan tahap transaksi Kas: tahap / abaikan (bukan biaya) / kosong (kembali ke Kode GL). */

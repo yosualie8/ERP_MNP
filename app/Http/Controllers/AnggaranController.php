@@ -35,15 +35,14 @@ class AnggaranController extends Controller
                 $langsung = array_sum(array_column(Anggaran::rincianRealisasi($t, $ritasi, $kas, $bbm), 1));
                 $oh = $overhead[$t->id] ?? 0;
 
-                // Progres fisik (cut & fill) = kubikasi bongkaran ÷ m³ HPP tanah; tanpa baris tanah m³: serapan biaya.
-                // Serapan biaya = realisasi HPP (langsung + biaya umum teralokasi) ÷ HPP rencana.
-                $volTanah = Anggaran::volumeTanah($t->anggaran);
-                $m3 = $ritasi['per_tahap'][$t->id]['m3'] ?? 0;
+                // Progres fisik: cut & fill = kubikasi bongkaran ÷ m³ HPP tanah; tahap ber-BOQ = terpasang (opname) / tertagih;
+                // tanpa keduanya: serapan biaya = realisasi HPP (langsung + biaya umum teralokasi) ÷ HPP rencana.
+                $pf = Anggaran::progresFisik($t, $t->anggaran, $ritasi);
                 $serapan = $h['hpp'] > 0 ? ($langsung + $oh) / $h['hpp'] * 100 : null;
 
-                return (object) ['t' => $t, 'h' => $h, 'ada' => $t->anggaran->isNotEmpty(), 'langsung' => $langsung, 'overhead' => $oh,
-                    'realisasi' => $langsung + $oh, 'serapan' => $serapan, 'fisik' => $volTanah > 0 ? $m3 / $volTanah * 100 : null, 'm3' => $m3,
-                    'progres' => $volTanah > 0 ? $m3 / $volTanah * 100 : $serapan];
+                return (object) ['t' => $t, 'h' => $h, 'ada' => $t->anggaran->isNotEmpty() || $h['boq'], 'langsung' => $langsung, 'overhead' => $oh,
+                    'realisasi' => $langsung + $oh, 'serapan' => $serapan, 'fisik' => $pf['persen'] ?? null, 'fisikKet' => $pf['ket'] ?? null,
+                    'progres' => $pf['persen'] ?? $serapan];
             })
             ->sortBy(fn ($x) => [$x->ada ? 0 : 1, $x->t->proyek->urutan, (int) preg_replace('/\D/', '', $x->t->nama) ?: 99999, $x->t->nama])->values();
 
@@ -63,7 +62,10 @@ class AnggaranController extends Controller
             'tahap' => $tahap, 'baris' => $baris, 'pakaiTemplate' => $pakaiTemplate,
             'komponen' => KomponenAnggaran::where('aktif', true)->orWhereIn('id', $baris->pluck('komponen_id'))->orderBy('urutan')->get(),
             'rincian' => Anggaran::rincianRealisasi($tahap, $ritasi, $kas, $bbm),
-            'perKomponen' => $pakaiTemplate ? [] : Anggaran::realisasiKomponen($tahap, $baris, $ritasi, $bbm, $overhead),
+            // tahap ber-BOQ: rencana sudah ada dari BOQ walau baris komponen belum disimpan
+            'perKomponen' => $pakaiTemplate && ! Anggaran::boq($tahap) ? [] : Anggaran::realisasiKomponen($tahap, $pakaiTemplate ? collect() : $baris, $ritasi, $bbm, $overhead),
+            'pf' => Anggaran::progresFisik($tahap, $baris, $ritasi),
+            'boq' => Anggaran::boq($tahap),
             'overhead' => $overhead,
             'kasTahap' => Anggaran::transaksiKas([$tahap->id])[$tahap->id] ?? collect(),
             'overheadBulan' => Overhead::rincianTeralokasi()[$tahap->id] ?? [],

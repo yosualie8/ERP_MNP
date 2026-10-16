@@ -27,13 +27,12 @@ class DashboardProyekController extends Controller
                 $oh = $overhead[$t->id] ?? 0;
                 $h = Anggaran::hitung($t->anggaran, $t);
                 $realisasi = array_sum(array_column(Anggaran::rincianRealisasi($t, $ritasi, $kas, $bbm), 1)) + $oh;
-                $volTanah = Anggaran::volumeTanah($t->anggaran);
-                $m3 = $ritasi['per_tahap'][$t->id]['m3'] ?? 0;
+                $pf = Anggaran::progresFisik($t, $t->anggaran, $ritasi);
                 $r = $ritasi['per_tahap'][$t->id] ?? [];
 
                 return (object) [
-                    't' => $t, 'ada' => $t->anggaran->isNotEmpty(), 'hpp' => $h['hpp'], 'omset' => $h['omset'], 'realisasi' => $realisasi,
-                    'fisik' => $volTanah > 0 ? $m3 / $volTanah * 100 : null, 'm3' => $m3, 'volTanah' => $volTanah,
+                    't' => $t, 'ada' => $t->anggaran->isNotEmpty() || $h['boq'], 'hpp' => $h['hpp'], 'omset' => $h['omset'], 'realisasi' => $realisasi,
+                    'fisik' => $pf['persen'] ?? null, 'fisikKet' => $pf['ket'] ?? null, 'boq' => $pf['boq'] ?? ($h['boq'] ? \App\Support\ProgresBoq::hitung($t) : null),
                     'serapan' => $h['hpp'] > 0 ? $realisasi / $h['hpp'] * 100 : null,
                     // Aktivitas awal/terakhir = ritasi, BBM, atau Kas Harian pertama/terakhir untuk tahap ini.
                     'awal' => collect([$r['mulai'] ?? null, $bbm['per_tahap'][$t->id]['mulai'] ?? null, $kas['per_tahap'][$t->id]['mulai'] ?? null])->filter()->min(),

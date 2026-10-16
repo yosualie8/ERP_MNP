@@ -42,7 +42,7 @@
     </div>
 
     <div style="display: flex; gap: 6px; justify-content: flex-end; margin-bottom: 6px;">
-        <span class="redup" style="font-size: 12px; margin-right: auto; align-self: center;">Progres = kubikasi bongkaran ÷ m³ HPP tanah (cut & fill); tanpa baris tanah m³ = serapan biaya (realisasi ÷ HPP rencana), ditandai $. Klik baris untuk rincian biaya.</span>
+        <span class="redup" style="font-size: 12px; margin-right: auto; align-self: center;">Progres = kubikasi bongkaran ÷ m³ HPP tanah (cut & fill); tahap Infra ber-BOQ = volume terpasang (opname) atau tertagih bila belum ada opname; selain itu serapan biaya (realisasi ÷ HPP rencana), ditandai $. Klik baris untuk rincian biaya.</span>
         <button type="button" class="tombol polos" id="buka-semua" style="padding: 5px 12px; font-size: 13px;">⊞ Buka semua</button>
         <button type="button" class="tombol polos" id="tutup-semua" style="padding: 5px 12px; font-size: 13px;">⊟ Tutup semua</button>
     </div>
@@ -59,17 +59,21 @@
                     <tr class="m">
                         <td data-v="{{ $x->t->nama }} {{ $x->t->proyek->nama }} {{ $x->t->lokasi }} {{ $x->t->surveyor }}"><span class="panah">▸</span> <b>{{ $x->t->nama }}</b> <span class="redup" style="font-size: 11px;">· {{ $x->t->proyek->nama }}</span>
                             <div style="padding-left: 16px;">@include('proyek._sub', ['t' => $x->t])</div></td>
-                        <td data-n="{{ $p }}" data-v="{{ $persen($p) }}" title="{{ $x->fisik !== null ? $ang($x->m3).' dari '.$ang($x->volTanah).' m³ bongkaran' : ($p !== null ? 'serapan biaya — belum ada baris HPP tanah m³' : 'belum ada anggaran') }}">
+                        <td data-n="{{ $p }}" data-v="{{ $persen($p) }}" title="{{ $x->fisik !== null ? $x->fisikKet : ($p !== null ? 'serapan biaya — belum ada dasar progres fisik' : 'belum ada anggaran') }}">
                             @if ($p !== null)
                                 <div class="bar"><span style="width: {{ min(100, $p) }}%; background: {{ $warna }};"></span><b>{{ $persen($p) }}@if ($x->fisik === null) $@endif</b></div>
                             @else<span class="redup">belum ada anggaran</span>@endif
+                            @if ($x->boq)
+                                <div class="redup" style="font-size: 11px; margin-top: 3px; white-space: nowrap;" title="BOQ: biaya ÷ modal · volume terpasang · tertagih">modal {{ $persen($x->boq['p_modal']) }} · pasang {{ $x->boq['ada_opname'] ? $persen($x->boq['p_pasang']) : '–' }} · tagih {{ $persen($x->boq['p_tagih']) }}</div>
+                            @endif
                         </td>
                         <td class="angka" data-n="{{ $x->realisasi }}"><b>{{ rp((int) round($x->realisasi)) }}</b></td>
                         <td class="angka" data-n="{{ $x->hpp }}">{{ $x->hpp ? rp((int) round($x->hpp)) : '' }}</td>
                         <td class="angka" data-n="{{ $x->serapan }}" @if ($x->serapan > 100 || $boros) style="color: {{ $x->serapan > 100 ? 'var(--merah)' : '#f0c05a' }}; font-weight: 700;" title="{{ $x->serapan > 100 ? 'Realisasi melebihi HPP rencana' : 'Biaya terserap lebih cepat dari progres fisik' }}" @endif>{{ $x->serapan !== null ? $persen($x->serapan) : '' }}</td>
                         <td data-n="{{ $x->awal }}" data-v="{{ $x->awal }} {{ $tgl($x->awal) }}" style="white-space: nowrap;">{{ $tgl($x->awal) }}</td>
                         <td data-n="{{ $x->terakhir }}" data-v="{{ $x->terakhir }} {{ $tgl($x->terakhir) }}" style="white-space: nowrap;">{{ $tgl($x->terakhir) }}</td>
-                        <td style="text-align: center;">@if ($bolehAnggaran)<a href="{{ route('anggaran.edit', $x->t) }}" class="tombol-edit">Anggaran</a>@endif</td>
+                        <td style="text-align: center;">@if ($bolehAnggaran)<a href="{{ route('anggaran.edit', $x->t) }}" class="tombol-edit">Anggaran</a>@endif
+                            @if ($x->boq && auth()->user()->bolehMenu('boq-proyek'))<a href="{{ route('boq.index', ['tahap' => $x->t->id]) }}" class="tombol-edit" style="margin-top: 4px; display: inline-block;">BOQ</a>@endif</td>
                     </tr>
                     <tr class="d">
                         <td colspan="8">
