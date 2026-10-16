@@ -35,6 +35,8 @@ class DashboardProyekController extends Controller
                     't' => $t, 'ada' => $t->anggaran->isNotEmpty(), 'hpp' => $h['hpp'], 'omset' => $h['omset'], 'realisasi' => $realisasi,
                     'fisik' => $volTanah > 0 ? $m3 / $volTanah * 100 : null, 'm3' => $m3, 'volTanah' => $volTanah,
                     'serapan' => $h['hpp'] > 0 ? $realisasi / $h['hpp'] * 100 : null,
+                    // Aktivitas awal/terakhir = ritasi, BBM, atau Kas Harian pertama/terakhir untuk tahap ini.
+                    'awal' => collect([$r['mulai'] ?? null, $bbm['per_tahap'][$t->id]['mulai'] ?? null, $kas['per_tahap'][$t->id]['mulai'] ?? null])->filter()->min(),
                     'terakhir' => max($r['selesai'] ?? '', $bbm['per_tahap'][$t->id]['selesai'] ?? '', $kas['per_tahap'][$t->id]['selesai'] ?? '') ?: null,
                     'rincian' => Anggaran::realisasiKomponen($t, $t->anggaran, $ritasi, $bbm, $oh),
                     'kas' => $trx[$t->id] ?? collect(),

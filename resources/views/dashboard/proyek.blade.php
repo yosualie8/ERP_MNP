@@ -48,7 +48,7 @@
     </div>
     <div class="kartu gulir" style="padding: 0;">
         <table class="grid" id="grid" data-saring-kolom>
-            <thead><tr><th>Tahap</th><th style="width: 190px;">Progres</th><th class="angka">Biaya keluar</th><th class="angka">HPP rencana</th><th class="angka">Serapan biaya</th><th>Aktivitas terakhir</th><th data-tanpa-saring style="width: 90px;"></th></tr></thead>
+            <thead><tr><th>Tahap</th><th style="width: 190px;">Progres</th><th class="angka">Biaya keluar</th><th class="angka">HPP rencana</th><th class="angka">Serapan biaya</th><th>Aktivitas awal</th><th>Aktivitas terakhir</th><th data-tanpa-saring style="width: 90px;"></th></tr></thead>
             <tbody>
                 @foreach ($baris as $x)
                     @php
@@ -67,11 +67,12 @@
                         <td class="angka" data-n="{{ $x->realisasi }}"><b>{{ rp((int) round($x->realisasi)) }}</b></td>
                         <td class="angka" data-n="{{ $x->hpp }}">{{ $x->hpp ? rp((int) round($x->hpp)) : '' }}</td>
                         <td class="angka" data-n="{{ $x->serapan }}" @if ($x->serapan > 100 || $boros) style="color: {{ $x->serapan > 100 ? 'var(--merah)' : '#f0c05a' }}; font-weight: 700;" title="{{ $x->serapan > 100 ? 'Realisasi melebihi HPP rencana' : 'Biaya terserap lebih cepat dari progres fisik' }}" @endif>{{ $x->serapan !== null ? $persen($x->serapan) : '' }}</td>
+                        <td data-n="{{ $x->awal }}" data-v="{{ $x->awal }} {{ $tgl($x->awal) }}" style="white-space: nowrap;">{{ $tgl($x->awal) }}</td>
                         <td data-n="{{ $x->terakhir }}" data-v="{{ $x->terakhir }} {{ $tgl($x->terakhir) }}" style="white-space: nowrap;">{{ $tgl($x->terakhir) }}</td>
                         <td style="text-align: center;">@if ($bolehAnggaran)<a href="{{ route('anggaran.edit', $x->t) }}" class="tombol-edit">Anggaran</a>@endif</td>
                     </tr>
                     <tr class="d">
-                        <td colspan="7">
+                        <td colspan="8">
                             <table class="rinci">
                                 <tr><th>Komponen</th><th class="angka">Rencana</th><th class="angka">Realisasi</th><th class="angka">Rencana (Rp)</th><th class="angka">Biaya keluar (Rp)</th><th class="angka">% terpakai</th></tr>
                                 @forelse ($x->rincian as $k)
