@@ -133,7 +133,7 @@ class PilahTransaksiController extends Controller
                 $hasil[] = ['kunci' => $b['kunci'], 'status' => $status];
                 $catat[] = $ringkas.' → '.($abaikan ? 'bukan biaya' : ($tid ? $tahapAda[$tid]->nama : 'otomatis')).($item ? ' · BOQ '.$item->kode : '');
             }
-            KasRiwayat::create(['aksi' => 'pilah-transaksi', 'lembar' => 'Pilah Transaksi', 'baris_awal' => 0, 'baris_akhir' => 0,
+            KasRiwayat::create(['aksi' => 'pilah-transaksi', 'lembar' => 'Pilah', 'baris_awal' => 0, 'baris_akhir' => 0,
                 'ringkasan' => mb_strimwidth(count($catat) === 1 ? 'Pilah: '.$catat[0] : 'Pilah '.count($catat).' transaksi: '.implode(' | ', array_slice($catat, 0, 3)).(count($catat) > 3 ? ' …' : ''), 0, 490, '…'),
                 'isi' => ['baris' => $d['baris'], 'ringkas' => $catat], 'user_id' => $request->user()->id]);
             DB::commit();
