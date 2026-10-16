@@ -55,7 +55,7 @@
     </div>
     <p class="redup" style="font-size: 12px; margin: -4px 0 10px;">
         <b>Dihitung</b> = dibayar langsung dari BCA (transaksi besar / berpajak) → biaya cost center; pilih tahap bila jelas, tanpa tahap masuk pos biaya umum cost center itu (dibagi di Alokasi Biaya Umum).
-        <b>Tidak dihitung</b> = uang masuk, reimburse Kas Harian/UJ, transfer ke rekening internal (Barnabas, Yosua, Multi Transportasi) — ditandai otomatis, boleh diubah.
+        <b>Tidak dihitung</b> = uang masuk, reimburse Kas Harian/UJ, rekening internal (Barnabas, Yosua, Multi Transportasi), ke Hans Anderson, pelunasan pinjaman, ke rekening MNP sendiri, leasing, DP/beli unit, sparepart/overhaul/ban, HPP ritasi — ditandai otomatis (alasan tertulis di bawah status), boleh diubah. Tidak ada yang otomatis Dihitung.
         Sumber: file Drive "{{ $impor['nama'] ?? 'Mutasi Rek PT Gabungan MNP.xlsx' }}"@if ($impor), diimpor {{ \Illuminate\Support\Carbon::parse($impor['waktu'])->translatedFormat('d-M H:i') }}, diperiksa tiap 30 menit @endif.</p>
 
     <div class="kartu gulir" style="padding: 0;">

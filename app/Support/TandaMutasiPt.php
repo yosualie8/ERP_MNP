@@ -25,6 +25,20 @@ class TandaMutasiPt
     /** Penerima reimburse / rekening internal — transfer ke sini otomatis tidak dihitung. */
     public const PENERIMA_INTERNAL = '/BARNABAS MANAEN|YOSUA DWI ?PERMANA|MULTI TRANSPORTASI/i';
 
+    /**
+     * Aturan otomatis TIDAK dihitung (owner 16 Okt 2026): pendanaan / perpindahan uang & biaya yang sudah tertutup Harga Jual
+     * ritasi, tarif rental atau merupakan aset. TIDAK ada aturan otomatis "dihitung" — itu selalu manual. Tarikan tetap dicek.
+     */
+    public const ATURAN_TIDAK = [
+        '/HANS ANDERSON/i' => 'ke Hans Anderson (pendanaan)',
+        '/PINJAMAN|TIME ?LOAN/i' => 'pelunasan pinjaman',
+        '/MULTI NIAGA PUTRA/i' => 'ke rekening MNP sendiri',
+        '/\bBFI\b|LEASI|FINANCE/i' => 'leasing unit (tertutup tarif)',
+        '/UNITED TRACTOR|\bDP\b.*\b(UNIT|D\d{2}|PC ?\d{3})\b/i' => 'DP / beli unit (aset)',
+        '/SPARE ?PART|OVERHAUL|\bBAN\b/i' => 'sparepart / overhaul / ban (tertutup tarif)',
+        '/\bHPP\b.*\bRIT/i' => 'HPP ritasi (dari Harga Jual ritasi)',
+    ];
+
     public static function kunci(MutasiPt $m): string
     {
         return sha1(implode('|', [$m->tanggal?->toDateString(), $m->dbcr, number_format((float) $m->jumlah, 2, '.', ''), number_format((float) $m->saldo, 2, '.', ''), $m->keterangan]));
@@ -43,6 +57,11 @@ class TandaMutasiPt
         }
         if (preg_match(self::PENERIMA_INTERNAL, (string) $m->keterangan)) {
             return ['tidak', 'reimburse / rekening internal'];
+        }
+        foreach (self::ATURAN_TIDAK as $pola => $alasan) {
+            if (preg_match($pola, (string) $m->keterangan)) {
+                return ['tidak', $alasan];
+            }
         }
         self::$reimburse ??= KasReimburse::get(['tanggal', 'total'])->concat(UjReimburse::get(['tanggal', 'total']))
             ->map(fn ($r) => [$r->tanggal?->toDateString(), (float) $r->total])->all();
