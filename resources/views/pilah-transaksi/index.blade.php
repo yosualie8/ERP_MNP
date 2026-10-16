@@ -7,7 +7,7 @@
         $tgl = fn ($d) => \Illuminate\Support\Carbon::parse($d)->translatedFormat('d-M-y');
         $dataTahap = $tahap->mapWithKeys(fn ($t) => [$t->nama => $t->id]);
         $dataBoq = $boq;
-        $qs = ['proyek' => $pilih->all(), 'dari' => $dari];
+        $qs = ['proyek' => $pilih->all(), 'dari' => $dari] + ($semuaBca ? ['bca' => 'semua'] : []);
         $rpTotal = $baris->sum('nominal');
     @endphp
     <style>
@@ -34,6 +34,7 @@
         @endforeach
         <label class="redup" style="font-size: 13px;">sejak <input type="date" name="dari" value="{{ $dari }}" onchange="this.form.submit()"></label>
         <input type="hidden" name="saring" value="{{ $saring }}">
+        <label class="redup" style="font-size: 13px;" title="Bawaan: BCA belum dicek hanya yang terkait proyek ini (tag sheet, menyebut proyek, atau penerima yang sama dengan transfer proyek ini)"><input type="checkbox" name="bca" value="semua" @checked($semuaBca) onchange="this.form.submit()"> BCA: semua yang belum dicek</label>
         <span style="margin-left: auto; display: flex; gap: 6px;">
             <a class="tombol polos" style="padding: 6px 12px;" href="{{ route('pilah.index', $qs + ['saring' => $saring, 'segarkan' => 1]) }}" title="Baca ulang tag Proyek/BOQ dari sheet monitoring Infra">↻ Tag sheet</a>
             <a class="tombol polos" style="padding: 6px 12px;" href="{{ route('pilah.unduh', $qs) }}">⬇ Excel</a>

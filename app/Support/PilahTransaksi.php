@@ -134,7 +134,7 @@ class PilahTransaksi
      *
      * @return Collection<int, object>
      */
-    public static function baris(array $ids, string $dari): Collection
+    public static function baris(array $ids, string $dari, bool $semuaBca = false): Collection
     {
         $semuaTahap = ProyekTahap::get(['id', 'nama', 'tipe', 'pos_overhead'])->keyBy('id');
         $perNama = $semuaTahap->mapWithKeys(fn ($t) => [$t->nama => $t->id])->all();
@@ -173,8 +173,27 @@ class PilahTransaksi
 
         $baris = $kas->concat($bca)->sortBy(fn ($x) => $x->tanggal.($x->sumber === 'bca' ? '1' : '0'))->values();
         self::rekomendasi($baris, $perNama);
+        if ($semuaBca) {
+            return $baris;
+        }
 
-        return $baris;
+        // BCA belum dicek hanya yang terkait lingkup ini: bertag sheet / ada rekomendasi / menyebut proyek / penerimanya sama
+        // dengan transfer BCA yang sudah masuk tahap lingkup ini (mis. pemasok material) — sisanya lewat pilihan "BCA: semua".
+        $kenal = $baris->filter(fn ($x) => $x->sumber === 'bca' && ($x->tahap_id || $x->tag))->flatMap(fn ($x) => self::penerima($x->keterangan))->unique()->flip();
+        $frek = TandaMutasiPt::baris()->flatMap(fn ($b) => array_unique(self::penerima((string) $b->m->keterangan)))->countBy();
+
+        return $baris->filter(fn ($x) => $x->sumber !== 'bca' || $x->tahap_id || $x->manual || $x->tag || $x->rek_tahap
+            || preg_match('/infra|\bpm\b|\bpik\b|marina|regatta/i', $x->keterangan.' '.$x->catatan)
+            || collect(self::penerima($x->keterangan))->contains(fn ($k) => isset($kenal[$k]) && ($frek[$k] ?? 0) <= 60))->values();
+    }
+
+    /** Kata nama penerima di keterangan BCA (huruf besar ≥ 4, bukan kata transaksi bank). */
+    public static function penerima(string $ket): array
+    {
+        $umum = ['TRSF', 'BANKING', 'TRANSFER', 'BIAYA', 'FAST', 'INFRA', 'TARIKAN', 'SETORAN', 'KLIRING', 'GAJI', 'KARYAWAN', 'PROYEK', 'MARINA', 'REGATTA', 'SEWA', 'TUNAI'];
+        preg_match_all('/\b[A-Z]{4,}\b/', $ket, $m);
+
+        return array_values(array_diff($m[0], $umum));
     }
 
     /** Isi rek_tahap [id, dasar] dan rek_boq [BoqItem, dasar] tiap baris. */
@@ -216,7 +235,8 @@ class PilahTransaksi
 
             // --- BOQ (item dari tahap terpilih, atau tahap rekomendasi) ---
             $x->rek_boq = null;
-            $tid = $x->tahap_id ?: (is_int($x->rek_tahap[0] ?? null) ? $x->rek_tahap[0] : null);
+            // BOQ dari tahap terpilih; tahap terpilih belum punya BOQ (mis. "PM2 - Infra" umum) → BOQ tahap rekomendasi
+            $tid = $x->tahap_id && isset($items[$x->tahap_id]) ? $x->tahap_id : (is_int($x->rek_tahap[0] ?? null) ? $x->rek_tahap[0] : $x->tahap_id);
             $daftar = $items[$tid] ?? collect();
             if ($daftar->isEmpty()) {
                 continue;

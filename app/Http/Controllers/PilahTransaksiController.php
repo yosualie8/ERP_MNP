@@ -46,7 +46,8 @@ class PilahTransaksiController extends Controller
             PilahTransaksi::tagSheet(true);
         }
         $saring = array_key_exists((string) $request->query('saring'), self::SARING) ? $request->query('saring') : 'semua';
-        $baris = PilahTransaksi::baris($ids, $dari);
+        $semuaBca = $request->query('bca') === 'semua';
+        $baris = PilahTransaksi::baris($ids, $dari, $semuaBca);
         $hitungSaring = collect(self::SARING)->map(fn ($l, $k) => $this->saring($baris, $k)->count());
         $tampil = $this->saring($baris, $saring);
         $tahap = ProyekTahap::with('proyek')->get()->sortBy(fn ($t) => [in_array($t->id, $ids, true) ? 0 : 1, $t->status === 'progress' ? 0 : 1, $t->nama])->values();
@@ -56,7 +57,7 @@ class PilahTransaksiController extends Controller
 
         return view('pilah-transaksi.index', [
             'baris' => $tampil, 'semuaBaris' => $baris->count(), 'saring' => $saring, 'hitungSaring' => $hitungSaring, 'pilih' => $pilih, 'semuaProyek' => $semua,
-            'dari' => $dari, 'tahap' => $tahap, 'per' => $per, 'tahapNama' => $tahap->pluck('nama', 'id'),
+            'dari' => $dari, 'semuaBca' => $semuaBca, 'tahap' => $tahap, 'per' => $per, 'tahapNama' => $tahap->pluck('nama', 'id'),
             'boq' => BoqItem::orderBy('urutan')->get()->groupBy('proyek_tahap_id')->map(fn ($g) => $g->map(fn ($i) => [$i->id, $i->label()])->values()),
             'galatSheet' => PilahTransaksi::tagSheet()['galat'] ?? null,
         ]);
@@ -148,7 +149,7 @@ class PilahTransaksiController extends Controller
     public function unduh(Request $request): StreamedResponse
     {
         [, $ids, $dari] = $this->lingkup($request);
-        $baris = PilahTransaksi::baris($ids, $dari);
+        $baris = PilahTransaksi::baris($ids, $dari, $request->query('bca') === 'semua');
         $nama = ProyekTahap::pluck('nama', 'id');
 
         return response()->streamDownload(function () use ($baris, $nama) {
