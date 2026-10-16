@@ -75,6 +75,20 @@ class Anggaran
             ->where('kubikasi', '>', 0)->avg('kubikasi') ?: 20);
     }
 
+    /**
+     * Transaksi Kas Harian yang jelas untuk tahap-tahap ini (alokasi / Kode GL tahap), tanpa akun yang diabaikan
+     * (HPP ritasi, BBM, sparepart, DT) — terbaru dulu, dikelompokkan per tahap_id.
+     */
+    public static function transaksiKas(array $ids): Collection
+    {
+        return DaftarProyek::queryKas()
+            ->select('b.no_id', 'b.tanggal', 'b.nominal', 'b.pic', 'b.keterangan', 'k.kode_asli', 'c.kode as cc', 'k.ref', 'a.nama as akun', 'a.kelompok as kel', 'al.proyek_tahap_id as alokasi')
+            ->orderByDesc('b.tanggal')->orderByDesc('b.no_id')->get()
+            ->map(fn ($r) => tap($r, fn ($r) => $r->tahap = $r->alokasi ?: DaftarProyek::tahapKas($r->cc, $r->ref, $r->akun, substr((string) $r->tanggal, 0, 10))))
+            ->filter(fn ($r) => in_array($r->tahap, $ids, true) && ! Overhead::diabaikan($r->kel, $r->akun))
+            ->groupBy('tahap');
+    }
+
     /** @var array{total: array<int, float>, grup: array<int, array<string, float>>}|null */
     private static ?array $kasDihitung = null;
 

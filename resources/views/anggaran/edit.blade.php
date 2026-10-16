@@ -100,6 +100,10 @@
         </div>
     @endif
 
+    <div class="kartu">
+        @include('anggaran._rincian-biaya', ['kas' => $kasTahap, 'overheadBulan' => $overheadBulan])
+    </div>
+
     @if ($rekomendasi)
         @php($rs = $rekomendasi['rasio'])
         <div class="kartu" style="border-color: rgba(167, 139, 250, .45);">

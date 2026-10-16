@@ -65,6 +65,8 @@ class AnggaranController extends Controller
             'rincian' => Anggaran::rincianRealisasi($tahap, $ritasi, $kas, $bbm),
             'perKomponen' => $pakaiTemplate ? [] : Anggaran::realisasiKomponen($tahap, $baris, $ritasi, $bbm, $overhead),
             'overhead' => $overhead,
+            'kasTahap' => Anggaran::transaksiKas([$tahap->id])[$tahap->id] ?? collect(),
+            'overheadBulan' => Overhead::rincianTeralokasi()[$tahap->id] ?? [],
             'rekomendasi' => Anggaran::rekomendasi($tahap),
             'm3' => $ritasi['per_tahap'][$tahap->id]['m3'] ?? 0,
         ]);

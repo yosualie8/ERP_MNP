@@ -21,13 +21,7 @@ class DashboardProyekController extends Controller
         $rincianOh = Overhead::rincianTeralokasi();
         $tahap = ProyekTahap::with(['proyek', 'anggaran.komponen'])->where('status', 'progress')->whereNull('pos_overhead')->where('tipe', '!=', 'biaya')->get();
         // Transaksi Kas Harian yang jelas untuk tahap ini (alokasi / Kode GL tahap), tanpa akun yang diabaikan (HPP ritasi, BBM, sparepart, DT).
-        $ids = $tahap->pluck('id')->all();
-        $trx = DaftarProyek::queryKas()
-            ->select('b.no_id', 'b.tanggal', 'b.nominal', 'b.pic', 'b.keterangan', 'k.kode_asli', 'c.kode as cc', 'k.ref', 'a.nama as akun', 'a.kelompok as kel', 'al.proyek_tahap_id as alokasi')
-            ->orderByDesc('b.tanggal')->orderByDesc('b.no_id')->get()
-            ->map(fn ($r) => tap($r, fn ($r) => $r->tahap = $r->alokasi ?: DaftarProyek::tahapKas($r->cc, $r->ref, $r->akun, substr((string) $r->tanggal, 0, 10))))
-            ->filter(fn ($r) => in_array($r->tahap, $ids, true) && ! Overhead::diabaikan($r->kel, $r->akun))
-            ->groupBy('tahap');
+        $trx = Anggaran::transaksiKas($tahap->pluck('id')->all());
         $baris = $tahap
             ->map(function ($t) use ($ritasi, $kas, $bbm, $overhead, $rincianOh, $trx) {
                 $oh = $overhead[$t->id] ?? 0;
