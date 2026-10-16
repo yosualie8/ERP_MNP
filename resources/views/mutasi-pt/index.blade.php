@@ -11,7 +11,7 @@
         $daftar = $bulanAda->keys()->values();
         $i = $bulan ? $daftar->search($bulan) : false;
         $warna = ['dihitung' => 'hijau', 'tidak' => '', 'belum' => 'kuning'];
-        $dataTahap = $tahap->map(fn ($t) => ['id' => $t->id, 'nama' => $t->nama, 'cc' => $t->cost_center, 'progress' => $t->status === 'progress'])->values();
+        $dataTahap = $tahap->mapWithKeys(fn ($t) => [$t->nama => $t->id]);
     @endphp
     <style>
         .ringkas { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 12px; }
@@ -54,14 +54,14 @@
         <div class="kartu"><small>Saldo terakhir</small><b>{{ $saldoAkhir?->saldo !== null ? rp((int) round($saldoAkhir->saldo)) : '–' }}</b><small>{{ $saldoAkhir ? $tgl($saldoAkhir->tanggal) : '' }}</small></div>
     </div>
     <p class="redup" style="font-size: 12px; margin: -4px 0 10px;">
-        <b>Dihitung</b> = dibayar langsung dari BCA (transaksi besar / berpajak) → biaya cost center; pilih tahap bila jelas, tanpa tahap masuk pos biaya umum cost center itu (dibagi di Alokasi Biaya Umum).
+        <b>Dihitung</b> = dibayar langsung dari BCA (transaksi besar / berpajak) → wajib isi <b>Cost Center = tahap detail</b> (nama persis dari Daftar Proyek); bila tahapnya pos biaya umum (mis. "ASG (biaya tanpa tahap)", "JKT (biaya lokasi)") biaya ikut dibagi di Alokasi Biaya Umum.
         <b>Tidak dihitung</b> = uang masuk, reimburse Kas Harian/UJ, rekening internal (Barnabas, Yosua, Multi Transportasi), ke Hans Anderson, pelunasan pinjaman, ke rekening MNP sendiri, leasing, DP/beli unit, sparepart/overhaul/ban, HPP ritasi — ditandai otomatis (alasan tertulis di bawah status), boleh diubah. Tidak ada yang otomatis Dihitung.
         Sumber: file Drive "{{ $impor['nama'] ?? 'Mutasi Rek PT Gabungan MNP.xlsx' }}"@if ($impor), diimpor {{ \Illuminate\Support\Carbon::parse($impor['waktu'])->translatedFormat('d-M H:i') }}, diperiksa tiap 30 menit @endif.</p>
 
     <div class="kartu gulir" style="padding: 0;">
         <table class="kas" data-saring-kolom>
             <thead><tr><th>Tanggal</th><th>Keterangan</th><th>DB/CR</th><th class="angka">Keluar</th><th class="angka">Masuk</th><th class="angka">Saldo</th>
-                <th style="width: 150px;">Dihitung</th><th style="width: 120px;">Cost Center</th><th style="width: 210px;">Tahap (opsional)</th></tr></thead>
+                <th style="width: 150px;">Dihitung</th><th style="width: 260px;">Cost Center (tahap detail)</th></tr></thead>
             <tbody>
                 @forelse ($baris as $x)
                     @php($m = $x->m)
@@ -74,7 +74,7 @@
                         <td class="angka" data-n="{{ $m->dbcr === 'CR' ? $m->jumlah : '' }}">{{ $m->dbcr === 'CR' ? rp((int) round($m->jumlah)) : '' }}</td>
                         <td class="angka" data-n="{{ $m->saldo }}">{{ $m->saldo !== null ? rp((int) round($m->saldo)) : '' }}</td>
                         @if (! $t)
-                            <td class="redup" colspan="3" style="font-size: 12px;">sebelum 2026 — tidak ditandai</td>
+                            <td class="redup" colspan="2" style="font-size: 12px;">sebelum 2026 — tidak ditandai</td>
                         @else
                             <td class="tanda" data-v="{{ \App\Support\TandaMutasiPt::STATUS[$t->status] }}">
                                 @if ($bolehTandai)
@@ -82,52 +82,46 @@
                                 @else<span class="label {{ $warna[$t->status] }}">{{ \App\Support\TandaMutasiPt::STATUS[$t->status] }}</span>@endif
                                 @if ($t->alasan)<span class="alasan">{{ $t->alasan }}</span>@endif
                             </td>
-                            <td data-v="{{ $t->tanda?->cost_center }}">
-                                @if ($bolehTandai)
-                                    <select data-f="cost_center"><option value="">—</option>@foreach ($costCenter as $c)<option @selected($t->tanda?->cost_center === $c)>{{ $c }}</option>@endforeach</select>
-                                @else{{ $t->tanda?->cost_center }}@endif
-                            </td>
                             <td data-v="{{ $t->tanda?->tahap?->nama }}">
                                 @if ($bolehTandai)
-                                    <select data-f="tahap_id" data-awal="{{ $t->tanda?->proyek_tahap_id }}"><option value="">— pos biaya umum —</option></select>
-                                @else{{ $t->tanda?->tahap?->nama ?? ($t->status === 'dihitung' ? 'pos biaya umum' : '') }}@endif
+                                    <input data-f="tahap" list="daftar-tahap" value="{{ $t->tanda?->tahap?->nama }}" placeholder="{{ $m->dbcr === 'DB' ? 'ketik / pilih tahap' : '' }}" autocomplete="off" style="width: 100%; padding: 3px 6px; font-size: 12.5px;" @disabled($m->dbcr !== 'DB')>
+                                @else{{ $t->tanda?->tahap?->nama }}@endif
                             </td>
                         @endif
                     </tr>
                 @empty
-                    <tr><td colspan="9" class="redup" style="padding: 16px;">{{ $bulanAda->isEmpty() ? 'Belum ada data — tekan "Perbarui dari Drive".' : 'Tidak ada transaksi.' }}</td></tr>
+                    <tr><td colspan="8" class="redup" style="padding: 16px;">{{ $bulanAda->isEmpty() ? 'Belum ada data — tekan "Perbarui dari Drive".' : 'Tidak ada transaksi.' }}</td></tr>
                 @endforelse
             </tbody>
         </table>
     </div>
 
     @if ($bolehTandai)
+        <datalist id="daftar-tahap">@foreach ($tahap as $tp)<option value="{{ $tp->nama }}">{{ $tp->pos_overhead ? 'pos biaya umum · ' : '' }}{{ $tp->proyek->nama }}{{ $tp->status !== 'progress' ? ' · '.\App\Models\ProyekTahap::STATUS[$tp->status] : '' }}</option>@endforeach</datalist>
         <script>
             (() => {
+                // Cost Center = tahap detail (nama persis dari Daftar Proyek); wajib bila Dihitung.
                 const TAHAP = @json($dataTahap);
                 const URL_TANDA = @json(route('mutasi-pt.tandai')), TOKEN = @json(csrf_token());
-                // Pilihan tahap mengikuti cost center (tahap progress di atas).
-                const isiTahap = (sel, cc, pilih) => {
-                    sel.innerHTML = '<option value="">— pos biaya umum —</option>';
-                    TAHAP.filter(t => t.cc === cc).forEach(t => sel.append(new Option(t.nama + (t.progress ? '' : ' (selesai)'), t.id, false, String(t.id) === String(pilih))));
-                };
                 const atur = tr => {
-                    const st = tr.querySelector('[data-f=status]').value, cc = tr.querySelector('[data-f=cost_center]'), th = tr.querySelector('[data-f=tahap_id]');
-                    th.disabled = st !== 'dihitung' || !cc.value;
-                    cc.style.borderColor = st === 'dihitung' && !cc.value ? 'var(--merah)' : '';
+                    const st = tr.querySelector('[data-f=status]').value, th = tr.querySelector('[data-f=tahap]');
+                    const v = th.value.trim(), ada = v !== '' && Object.hasOwn(TAHAP, v);
+                    th.style.borderColor = (st === 'dihitung' && !ada) || (v !== '' && !ada) ? 'var(--merah)' : '';
+                    th.title = v !== '' && !ada ? 'Tahap tidak terdaftar — pilih dari daftar (nama persis)' : '';
+                    return {st, v, ada};
                 };
                 document.querySelectorAll('tr[data-kunci]').forEach(tr => {
-                    const cc = tr.querySelector('[data-f=cost_center]'), th = tr.querySelector('[data-f=tahap_id]');
-                    if (!cc) return;
-                    isiTahap(th, cc.value, th.dataset.awal); atur(tr);
-                    tr.addEventListener('change', async e => {
-                        if (e.target === cc) isiTahap(th, cc.value, '');
-                        atur(tr);
-                        const st = tr.querySelector('[data-f=status]').value;
-                        if (st === 'dihitung' && !cc.value) { cc.focus(); return; } // tunggu cost center dipilih
+                    const th = tr.querySelector('[data-f=tahap]');
+                    if (!th) return;
+                    atur(tr);
+                    th.addEventListener('input', () => atur(tr));
+                    tr.addEventListener('change', async () => {
+                        const {st, v, ada} = atur(tr);
+                        if (v !== '' && !ada) return;                      // nama tahap belum persis
+                        if (st === 'dihitung' && !ada) { th.focus(); return; } // tunggu cost center (tahap) diisi
                         const data = new FormData();
                         data.append('_token', TOKEN); data.append('kunci', tr.dataset.kunci); data.append('status', st);
-                        data.append('cost_center', cc.value); data.append('tahap_id', th.disabled ? '' : th.value);
+                        data.append('tahap_id', st === 'dihitung' ? TAHAP[v] : '');
                         tr.classList.remove('ok-simpan', 'galat-simpan');
                         try {
                             const res = await fetch(URL_TANDA, {method: 'POST', body: data, headers: {Accept: 'application/json'}});
@@ -135,8 +129,8 @@
                             if (!res.ok) throw new Error(h.galat || h.message || 'Gagal menyimpan');
                             tr.classList.add('ok-simpan');
                             const al = tr.querySelector('.alasan'); if (al) al.textContent = 'ditandai manual';
-                            tr.querySelector('td.tanda').dataset.v = h.label; cc.closest('td').dataset.v = cc.value;
-                            th.closest('td').dataset.v = th.selectedOptions[0]?.text || '';
+                            tr.querySelector('td.tanda').dataset.v = h.label; th.closest('td').dataset.v = st === 'dihitung' ? v : '';
+                            if (st !== 'dihitung') th.value = '';
                         } catch (err) { tr.classList.add('galat-simpan'); alert(err.message); }
                     });
                 });

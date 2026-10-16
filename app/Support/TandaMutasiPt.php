@@ -12,7 +12,7 @@ use Illuminate\Support\Collection;
 /**
  * Status biaya mutasi Rekening PT (BCA) — owner 16 Okt 2026. Alur: pengeluaran lewat Kas Harian Jago lalu di-reimburse
  * dari BCA (reimburse TIDAK dihitung); uang customer masuk ke BCA (tidak dihitung); transaksi besar / berpajak dibayar
- * langsung dari BCA → DIHITUNG ke cost center (tahap opsional; tanpa tahap → pos biaya umum cost center itu).
+ * langsung dari BCA → DIHITUNG ke cost center = TAHAP DETAIL (wajib); tahap pos biaya umum → dibagi lewat Alokasi Biaya Umum.
  * Penandaan mulai 1 Jan 2026; otomatis: CR, transfer ke rekening internal/reimburse, cocok Riwayat Reimburse → tidak;
  * sisanya "belum dicek". Penandaan manual mengalahkan otomatis.
  */
@@ -105,12 +105,13 @@ class TandaMutasiPt
      */
     public static function dihitung(): Collection
     {
-        $pos = ProyekTahap::whereNotNull('pos_overhead')->whereNotNull('cost_center')->get()
-            ->sortBy(fn ($p) => $p->pos_overhead === 'induk' ? 0 : 1)->groupBy('cost_center')->map->first();
+        // Cost center = TAHAP DETAIL (wajib, owner 16 Okt 2026). Tahap pos biaya umum → dibagi lewat Alokasi Biaya Umum.
+        $pos = ProyekTahap::whereNotNull('pos_overhead')->pluck('id')->flip();
 
-        return self::baris()->filter(fn ($b) => $b->status === 'dihitung' && $b->m->dbcr === 'DB')->map(fn ($b) => (object) [
-            'tahap_id' => $b->tanda?->proyek_tahap_id, 'pos_id' => $b->tanda?->proyek_tahap_id ? null : ($pos[$b->tanda?->cost_center]->id ?? null),
-            'cost_center' => $b->tanda?->cost_center, 'ym' => $b->m->tanggal->format('Y-m'), 'rp' => (float) $b->m->jumlah, 'm' => $b->m,
+        return self::baris()->filter(fn ($b) => $b->status === 'dihitung' && $b->m->dbcr === 'DB' && $b->tanda?->proyek_tahap_id)->map(fn ($b) => (object) [
+            'tahap_id' => isset($pos[$b->tanda->proyek_tahap_id]) ? null : $b->tanda->proyek_tahap_id,
+            'pos_id' => isset($pos[$b->tanda->proyek_tahap_id]) ? $b->tanda->proyek_tahap_id : null,
+            'cost_center' => $b->tanda->cost_center, 'ym' => $b->m->tanggal->format('Y-m'), 'rp' => (float) $b->m->jumlah, 'm' => $b->m,
         ])->values();
     }
 }

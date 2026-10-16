@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\CostCenter;
 use App\Models\KasRiwayat;
 use App\Models\MutasiPt;
 use App\Models\MutasiPtTanda;
@@ -44,9 +43,8 @@ class MutasiPtController extends Controller
             'rpDihitung' => TandaMutasiPt::dihitung()->sum('rp'),
             'impor' => Cache::get(ImporMutasiPt::KUNCI),
             'saldoAkhir' => MutasiPt::orderByDesc('tanggal')->orderByDesc('baris')->first(),
-            'costCenter' => CostCenter::orderBy('kode')->pluck('kode'),
-            'tahap' => ProyekTahap::whereNull('pos_overhead')->where('tipe', '!=', 'biaya')->whereNotNull('cost_center')
-                ->orderByRaw("status = 'progress' desc")->orderBy('nama')->get(['id', 'nama', 'cost_center', 'status']),
+            // Pilihan Cost Center = semua tahap detail: yang berjalan dulu, lalu pos biaya umum, lalu lainnya.
+            'tahap' => ProyekTahap::with('proyek')->get()->sortBy(fn ($t) => [$t->status === 'progress' && ! $t->pos_overhead ? 0 : ($t->pos_overhead ? 1 : 2), $t->nama])->values(),
             'bolehTandai' => $request->user()->bolehMenu('mutasi-pt'),
         ]);
     }
@@ -57,7 +55,6 @@ class MutasiPtController extends Controller
         $d = $request->validate([
             'kunci' => ['required', 'string', 'size:40'],
             'status' => ['required', Rule::in(array_keys(TandaMutasiPt::STATUS))],
-            'cost_center' => ['nullable', Rule::exists('cost_center', 'kode')],
             'tahap_id' => ['nullable', 'integer', 'exists:proyek_tahap,id'],
         ]);
         $b = TandaMutasiPt::baris()->firstWhere('kunci', $d['kunci']);
@@ -68,22 +65,20 @@ class MutasiPtController extends Controller
             if ($b->m->dbcr !== 'DB') {
                 return response()->json(['galat' => 'Hanya uang keluar (DB) yang bisa dihitung sebagai biaya.'], 422);
             }
-            if (empty($d['cost_center'])) {
-                return response()->json(['galat' => 'Pilih Cost Center dulu untuk transaksi yang dihitung.'], 422);
+            if (empty($d['tahap_id'])) {
+                return response()->json(['galat' => 'Isi Cost Center (tahap detail) dulu — wajib untuk transaksi yang dihitung.'], 422);
             }
         }
         $tahap = ! empty($d['tahap_id']) ? ProyekTahap::find($d['tahap_id']) : null;
-        if ($tahap && $d['status'] === 'dihitung' && $tahap->cost_center !== $d['cost_center']) {
-            return response()->json(['galat' => "Tahap {$tahap->nama} ber-cost center {$tahap->cost_center}, bukan {$d['cost_center']}."], 422);
-        }
         $lama = $b->tanda?->only(['status', 'cost_center', 'proyek_tahap_id']);
+        // Cost center = tahap detail; kolom cost_center menyimpan kode cost center tahap itu sebagai keterangan.
         $t = MutasiPtTanda::updateOrCreate(['kunci' => $d['kunci']], [
-            'status' => $d['status'], 'cost_center' => $d['status'] === 'dihitung' ? $d['cost_center'] : ($d['cost_center'] ?? null),
-            'proyek_tahap_id' => $d['status'] === 'dihitung' ? $tahap?->id : null, 'user_id' => $request->user()->id,
+            'status' => $d['status'], 'proyek_tahap_id' => $d['status'] === 'dihitung' ? $tahap?->id : null,
+            'cost_center' => $d['status'] === 'dihitung' ? $tahap?->costCenter() : null, 'user_id' => $request->user()->id,
         ]);
         KasRiwayat::create(['aksi' => 'mutasi-pt-tanda', 'lembar' => 'Mutasi PT', 'baris_awal' => $b->m->baris, 'baris_akhir' => $b->m->baris,
             'ringkasan' => mb_strimwidth("BCA PT {$b->m->tanggal->format('d-m-Y')} Rp ".number_format($b->m->jumlah, 0, ',', '.').': '.TandaMutasiPt::STATUS[$t->status]
-                .($t->cost_center ? " · {$t->cost_center}" : '').($tahap ? " · {$tahap->nama}" : '').' — '.$b->m->keterangan, 0, 490, '…'),
+                .($tahap && $t->status === 'dihitung' ? " · {$tahap->nama}" : '').' — '.$b->m->keterangan, 0, 490, '…'),
             'isi' => ['kunci' => $t->kunci, 'lama' => $lama, 'baru' => $t->only(['status', 'cost_center', 'proyek_tahap_id'])], 'user_id' => $request->user()->id]);
 
         return response()->json(['ok' => true, 'status' => $t->status, 'label' => TandaMutasiPt::STATUS[$t->status]]);
