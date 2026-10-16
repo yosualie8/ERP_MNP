@@ -70,10 +70,25 @@ class Overhead
      * - akun HPP (pembayaran ritasi/tanah) → biaya ritasi hanya dari Harga Jual ritasi bongkaran (Rp/rit menutup biaya truk);
      * - BBM/solar/bensin → solar hanya dari Data BBM & HM;
      * - sparepart (DT & alat berat) & keperluan DT → tertutup Harga Jual per rit dan tarif rental per jam HM.
+     * Tahap tipe INFRA (owner 16 Okt 2026): akun HPP = material → DIHITUNG; BBM di luar alat berat (carry, pickup, genset)
+     * → DIHITUNG; BBM alat berat (lihat ALAT_BERAT di keterangan) tetap dari Data BBM & HM; sparepart/DT tetap diabaikan.
      */
-    public static function diabaikan(?string $kelompok, ?string $akun): bool
+    public static function diabaikan(?string $kelompok, ?string $akun, ?string $tipe = null, ?string $keterangan = null): bool
     {
-        return $kelompok === 'HPP' || (bool) preg_match('/bbm|solar|bensin|spare\s*part|\bDT\b/i', (string) $akun);
+        if ($tipe === 'infra') {
+            return (bool) preg_match('/spare\s*part|\bDT\b/i', (string) $akun)
+                || (self::akunBbm($akun) && preg_match(self::ALAT_BERAT, (string) $keterangan));
+        }
+
+        return $kelompok === 'HPP' || self::akunBbm($akun) || (bool) preg_match('/spare\s*part|\bDT\b/i', (string) $akun);
+    }
+
+    /** Keterangan Kas yang menunjukkan BBM untuk alat berat (solarnya tercatat di Data BBM & HM). */
+    public const ALAT_BERAT = '/exca|excavator|beko|vibro|dozer|loader|grader|alat berat|\bPC ?\d{2,3}\b|\bDT\b|dump/i';
+
+    public static function akunBbm(?string $akun): bool
+    {
+        return (bool) preg_match('/bbm|solar|bensin/i', (string) $akun);
     }
 
     /** Basis omset per tahap: omset rencana anggaran → kolom omset tahap → volume × harga/m³ → 0. */

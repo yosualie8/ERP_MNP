@@ -17,7 +17,8 @@ class ProyekTahap extends Model
     protected $casts = ['volume' => 'float', 'luas' => 'float', 'komisi_lapangan' => 'float', 'komisi_yosua' => 'float', 'komisi_verlix' => 'float',
         'bayar_lapangan' => 'date', 'bayar_yosua' => 'date', 'bayar_verlix' => 'date', 'anggaran_baseline' => 'array', 'anggaran_dikunci_at' => 'datetime'];
 
-    public const TIPE = ['luas' => 'Luas & volume', 'ritasi' => 'Ritasi', 'biaya' => 'Biaya umum']; // biaya = biaya tanpa tahap / biaya lokasi
+    // biaya = biaya tanpa tahap / biaya lokasi; infra = pekerjaan sipil (BOQ): Kas HPP (material) & BBM non alat berat dihitung
+    public const TIPE = ['luas' => 'Luas & volume', 'ritasi' => 'Ritasi', 'biaya' => 'Biaya umum', 'infra' => 'Infra'];
 
     public const STATUS = ['belum' => 'Belum mulai', 'progress' => 'Progress', 'selesai' => 'Selesai', 'batal' => 'Batal'];
 

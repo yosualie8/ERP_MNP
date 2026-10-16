@@ -84,7 +84,9 @@ class AlokasiBiayaOperasional extends Command
         if ($this->option('simpan')) {
             DB::transaction(function () use ($alokasi) {
                 DB::table('kas_alokasi')->where('sumber', 'biaya_operasional')->delete();
-                foreach (array_chunk(array_values($alokasi), 500) as $potong) {
+                // pilihan manual di halaman Pilah Transaksi (sumber "pilah") mengalahkan lembar Biaya Operasional
+                $manual = DB::table('kas_alokasi')->pluck('kunci')->flip();
+                foreach (array_chunk(array_values(array_diff_key($alokasi, $manual->all())), 500) as $potong) {
                     DB::table('kas_alokasi')->insert($potong);
                 }
             });

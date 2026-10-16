@@ -73,6 +73,15 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::put('/proyek/tahap/{tahap}', [DaftarProyekController::class, 'update'])->whereNumber('tahap')->name('proyek.update');
     Route::post('/proyek/alias', [DaftarProyekController::class, 'petakan'])->name('proyek.petakan');
     // Anggaran (rencana omset & HPP) per tahap + master komponennya.
+    Route::get('/pilah-transaksi', [\App\Http\Controllers\PilahTransaksiController::class, 'index'])->name('pilah.index');
+    Route::get('/pilah-transaksi/unduh', [\App\Http\Controllers\PilahTransaksiController::class, 'unduh'])->name('pilah.unduh');
+    Route::post('/pilah-transaksi', [\App\Http\Controllers\PilahTransaksiController::class, 'simpan'])->name('pilah.simpan');
+    Route::get('/boq', [\App\Http\Controllers\BoqController::class, 'index'])->name('boq.index');
+    Route::post('/boq/tahap/{tahap}', [\App\Http\Controllers\BoqController::class, 'simpan'])->whereNumber('tahap')->name('boq.simpan');
+    Route::post('/boq/tahap/{tahap}/impor', [\App\Http\Controllers\BoqController::class, 'impor'])->whereNumber('tahap')->name('boq.impor');
+    Route::post('/boq/tahap/{tahap}/tagihan', [\App\Http\Controllers\BoqController::class, 'tagihan'])->whereNumber('tahap')->name('boq.tagihan');
+    Route::delete('/boq/tagihan/{tagihan}', [\App\Http\Controllers\BoqController::class, 'hapusTagihan'])->whereNumber('tagihan')->name('boq.tagihan.hapus');
+    Route::post('/boq/item/{item}/opname', [\App\Http\Controllers\BoqController::class, 'opname'])->whereNumber('item')->name('boq.opname');
     Route::get('/anggaran', [\App\Http\Controllers\AnggaranController::class, 'index'])->name('anggaran.index');
     Route::get('/anggaran/tahap/{tahap}', [\App\Http\Controllers\AnggaranController::class, 'edit'])->whereNumber('tahap')->name('anggaran.edit');
     Route::post('/anggaran/tahap/{tahap}', [\App\Http\Controllers\AnggaranController::class, 'simpan'])->whereNumber('tahap')->name('anggaran.simpan');

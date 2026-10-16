@@ -28,7 +28,8 @@ class DaftarProyek
         return [
             'periode' => array_key_exists($simpan['periode'] ?? '', self::PERIODE) ? $simpan['periode'] : 'tahun_ini',
             'status' => $simpan['status'] ?? array_keys(\App\Models\ProyekTahap::STATUS),
-            'tipe' => $simpan['tipe'] ?? array_keys(\App\Models\ProyekTahap::TIPE),
+            // tipe Infra (16 Okt 2026) dipecah dari Luas & volume: pengaturan lama yang memuat luas ikut menampilkan infra
+            'tipe' => isset($simpan['tipe']) ? (in_array('luas', $simpan['tipe'], true) && ! in_array('infra', $simpan['tipe'], true) && ! isset($simpan['tipe_infra']) ? [...$simpan['tipe'], 'infra'] : $simpan['tipe']) : array_keys(\App\Models\ProyekTahap::TIPE),
             'cost_center' => $simpan['cost_center'] ?? [],
         ];
     }
@@ -150,14 +151,15 @@ class DaftarProyek
      * di lembar lama), akun Non-biaya (talangan, salah transfer) dan Piutang (cashbon karyawan) tidak ikut, begitu pula
      * yang ditandai "abaikan" di kas_alokasi. Kolom alokasi = tahap dari kas_alokasi (mengalahkan Kode GL).
      */
-    public static function queryKas(): \Illuminate\Database\Query\Builder
+    public static function queryKas(bool $termasukAbaikan = false): \Illuminate\Database\Query\Builder
     {
         return DB::table('kas_bon as b')->join('kode_gl as k', 'k.id', '=', 'b.kode_gl_id')->leftJoin('cost_center as c', 'c.id', '=', 'k.cost_center_id')
             ->leftJoin('akun_gl as a', 'a.id', '=', 'k.akun_gl_id')
             ->join('kas_transfer as t', 't.id', '=', 'b.kas_transfer_id')->join('kas_bulan as m', 'm.id', '=', 't.kas_bulan_id')
             ->leftJoin('kas_alokasi as al', 'al.kunci', '=', DB::raw(self::SQL_KUNCI))
             ->where(fn ($q) => $q->whereNull('a.kelompok')->orWhereNotIn('a.kelompok', ['Non-biaya', 'Piutang']))
-            ->where(fn ($q) => $q->whereNull('al.abaikan')->orWhere('al.abaikan', false));
+            // $termasukAbaikan: halaman Pilah Transaksi tetap menampilkan yang ditandai "bukan biaya" supaya bisa dibatalkan
+            ->when(! $termasukAbaikan, fn ($q) => $q->where(fn ($q) => $q->whereNull('al.abaikan')->orWhere('al.abaikan', false)));
     }
 
     /** Kunci tetap transaksi detail untuk kas_alokasi: ID transaksi, atau "lembar:baris" bila ID kosong/#N/A/rusak (lembar lama). */

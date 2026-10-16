@@ -1,0 +1,90 @@
+<?php
+
+namespace App\Support;
+
+use App\Models\BoqItem;
+use App\Models\BoqOpname;
+use App\Models\ProyekTahap;
+use App\Models\TagihanItem;
+
+/**
+ * Progres per item BOQ satu tahap (owner 16 Okt 2026) — tiga sudut:
+ *  - MODAL: biaya dihitung yang diberi kode BOQ item ÷ modal item (material + jasa);
+ *  - TERPASANG: volume opname terakhir ÷ volume BOQ;
+ *  - TERTAGIH: volume ditagih (semua tagihan progres) ÷ volume BOQ.
+ * Total terpasang/tertagih = rata-rata tertimbang nilai jual; total modal = semua biaya dihitung tahap (termasuk yang
+ * belum diberi kode BOQ) ÷ total modal.
+ */
+class ProgresBoq
+{
+    public static function hitung(ProyekTahap $t): array
+    {
+        $items = BoqItem::where('proyek_tahap_id', $t->id)->orderBy('urutan')->orderBy('id')->get();
+        $opname = BoqOpname::whereIn('boq_item_id', $items->pluck('id'))->orderBy('tanggal')->orderBy('id')->get()->groupBy('boq_item_id')->map->last();
+        $tagih = TagihanItem::whereIn('boq_item_id', $items->pluck('id'))->selectRaw('boq_item_id, sum(volume) v, sum(nilai) rp')->groupBy('boq_item_id')->get()->keyBy('boq_item_id');
+
+        $biaya = [];
+        $biayaTotal = 0.0;
+        $nTanpa = 0;
+        foreach (PilahTransaksi::baris([$t->id], '2000-01-01') as $x) {
+            if (! $x->dihitung || $x->tahap_id !== $t->id) {
+                continue;
+            }
+            $biayaTotal += $x->nominal;
+            if ($x->boq && $x->boq->proyek_tahap_id === $t->id) {
+                $biaya[$x->boq->id] = ($biaya[$x->boq->id] ?? 0) + $x->nominal;
+            } else {
+                $nTanpa++;
+            }
+        }
+
+        $nilaiTotal = $items->sum(fn ($i) => $i->nilai());
+        $baris = $items->map(function (BoqItem $i) use ($opname, $tagih, $biaya, $nilaiTotal) {
+            $vol = (float) $i->volume;
+            $pasang = $opname[$i->id]->volume ?? null;
+            $tg = $tagih[$i->id] ?? null;
+
+            return (object) [
+                'item' => $i, 'nilai' => $i->nilai(), 'bobot' => $nilaiTotal > 0 ? $i->nilai() / $nilaiTotal * 100 : null, 'modal' => $i->modal(),
+                'biaya' => $biaya[$i->id] ?? 0.0, 'p_modal' => $i->modal() > 0 ? ($biaya[$i->id] ?? 0) / $i->modal() * 100 : null,
+                'terpasang' => $pasang, 'tgl_opname' => $opname[$i->id]->tanggal ?? null, 'p_pasang' => $vol > 0 && $pasang !== null ? $pasang / $vol * 100 : null,
+                'tertagih' => $tg ? (float) $tg->v : 0.0, 'rp_tagih' => $tg ? (float) $tg->rp : 0.0, 'p_tagih' => $vol > 0 && $tg ? $tg->v / $vol * 100 : null,
+            ];
+        });
+        $modalTotal = $baris->sum('modal');
+        $biayaBoq = array_sum($biaya);
+
+        return [
+            'baris' => $baris, 'nilai' => $nilaiTotal, 'modal' => $modalTotal, 'biaya' => $biayaTotal, 'biaya_boq' => $biayaBoq,
+            'biaya_tanpa' => $biayaTotal - $biayaBoq, 'n_tanpa' => $nTanpa,
+            'p_modal' => $modalTotal > 0 ? $biayaTotal / $modalTotal * 100 : null,
+            'p_pasang' => $nilaiTotal > 0 ? $baris->sum(fn ($b) => $b->nilai * min(1, ($b->p_pasang ?? 0) / 100)) / $nilaiTotal * 100 : null,
+            'p_tagih' => $nilaiTotal > 0 ? $baris->sum('rp_tagih') / $nilaiTotal * 100 : null,
+            'rp_tagih' => $baris->sum('rp_tagih'),
+        ];
+    }
+
+    /**
+     * Baca item BOQ dari lembar penawaran berformat "Monitoring" (sheet Infra): kolom A kode (A1, B12, …), B uraian,
+     * C satuan, D volume, E harga satuan, K total modal material, N total jasa borongan. Baris tanpa kode dilewati.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public static function bacaSheet(string $id, string $lembar): array
+    {
+        $r = "'".str_replace("'", "''", $lembar)."'!A1:N300";
+        $v = GoogleSheets::wajib()->nilaiMentah($id, [$r])[$r] ?? [];
+        $angka = fn ($x) => is_numeric($x) ? (float) $x : (is_string($x) && preg_match('/^-?[\d.]+(,\d+)?$/', trim($x)) ? (float) str_replace(['.', ','], ['', '.'], trim($x)) : null);
+        $hasil = [];
+        foreach ($v as $x) {
+            $kode = strtoupper(trim((string) ($x[0] ?? '')));
+            if (! preg_match('/^[A-Z]\d{1,2}$/', $kode) || trim((string) ($x[1] ?? '')) === '') {
+                continue;
+            }
+            $hasil[] = ['kode' => $kode, 'uraian' => mb_substr(trim(preg_replace('/\s+/', ' ', (string) $x[1])), 0, 255), 'satuan' => mb_substr(trim((string) ($x[2] ?? '')), 0, 20) ?: null,
+                'volume' => $angka($x[3] ?? null), 'harga' => $angka($x[4] ?? null), 'modal_material' => $angka($x[10] ?? null), 'modal_jasa' => $angka($x[13] ?? null)];
+        }
+
+        return $hasil;
+    }
+}

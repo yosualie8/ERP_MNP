@@ -25,4 +25,7 @@ return [
     'mutasi_pt_file' => env('MNP_MUTASI_PT_FILE', '1XrkJL-yONri_YLKXKd76eGqLr_-Wmy6Y'),
 
     'sheet_cost_project' => env('MNP_SHEET_COST_PROJECT', '1q2k6v3IRgGUktYCmptkgZCS22ZA4oVI5k7m0fRl_FqU'),
+
+    // Spreadsheet PM2 Infra "Progress Project Infra" (Monitoring BOQ Regatta, Transaksi Kas & Mutasi PT BCA bertag Proyek/BOQ) — dasar rekomendasi Pilah Transaksi.
+    'sheet_infra' => env('MNP_SHEET_INFRA', '1C6Ti0Tdwv7HvRyVOGATUPeYqQrJb87mngSF8os1s_Qo'),
 ];

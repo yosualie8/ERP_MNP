@@ -95,7 +95,7 @@ class DaftarProyekController extends Controller
         $semuaCc = \App\Models\CostCenter::pluck('kode')->push('-')->all();
         $d['cost_center'] = array_diff($semuaCc, $pilihCc) ? $pilihCc : [];
         $lama = DaftarProyek::pengaturan();
-        \App\Models\PengaturanApp::simpan(DaftarProyek::KUNCI_PENGATURAN, json_encode($d), $request->user()->id);
+        \App\Models\PengaturanApp::simpan(DaftarProyek::KUNCI_PENGATURAN, json_encode($d + ['tipe_infra' => true]) /* tanda: disimpan setelah ada tipe Infra */, $request->user()->id);
         $this->catat($request, 'proyek-ubah', 'Pengaturan filter bawaan Daftar Proyek diubah', ['sebelum' => $lama, 'sesudah' => $d]);
 
         return redirect()->route('pengaturan-proyek')->with('success', 'Pengaturan Daftar Proyek disimpan.');

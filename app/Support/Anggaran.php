@@ -18,7 +18,7 @@ class Anggaran
         'omset' => ['kubikasi' => 'Kubikasi Ritasi (m³)', 'rit' => 'Jumlah rit Ritasi', 'manual' => 'Manual'],
         'hpp' => [
             'ritasi_m3' => 'Ritasi (kubikasi m³ & Harga Jual)', 'rit' => 'Ritasi (Harga Jual per rit)', 'ngepok' => 'Ngepok (Ritasi)', 'solar' => 'Solar (Data BBM)', 'rental' => 'Jam HM (Data BBM)',
-            'kas_gaji' => 'Kas Harian — Gaji & Tunjangan', 'kas_operasional' => 'Kas Harian — biaya operasional', 'kas_hpp' => 'Kas Harian — akun HPP',
+            'kas_gaji' => 'Kas Harian — Gaji & Tunjangan', 'kas_operasional' => 'Kas Harian — biaya operasional', 'kas_hpp' => 'Kas Harian — akun HPP (material Infra)', 'kas_bbm' => 'Kas Harian — BBM non alat berat (Infra)',
             'komisi' => 'Komisi (% omset)', 'overhead' => 'Overhead (bagian biaya umum)', 'manual' => 'Manual',
         ],
     ];
@@ -85,13 +85,23 @@ class Anggaran
             ->select('b.no_id', 'b.tanggal', 'b.nominal', 'b.pic', 'b.keterangan', 'k.kode_asli', 'c.kode as cc', 'k.ref', 'a.nama as akun', 'a.kelompok as kel', 'al.proyek_tahap_id as alokasi')
             ->orderByDesc('b.tanggal')->orderByDesc('b.no_id')->get()
             ->map(fn ($r) => tap($r, fn ($r) => $r->tahap = $r->alokasi ?: DaftarProyek::tahapKas($r->cc, $r->ref, $r->akun, substr((string) $r->tanggal, 0, 10))))
-            ->filter(fn ($r) => in_array($r->tahap, $ids, true) && ! Overhead::diabaikan($r->kel, $r->akun));
+            ->filter(fn ($r) => in_array($r->tahap, $ids, true) && ! Overhead::diabaikan($r->kel, $r->akun, self::tipe($r->tahap), $r->keterangan));
         // Mutasi Rekening PT (BCA) yang ditandai dihitung untuk tahap ini (bayar langsung dari BCA).
         $bca = TandaMutasiPt::dihitung()->filter(fn ($b) => in_array($b->tahap_id, $ids, true))->map(fn ($b) => (object) [
             'no_id' => 'BCA', 'tanggal' => $b->m->tanggal->toDateString(), 'nominal' => $b->rp, 'pic' => null, 'keterangan' => $b->m->keterangan.($b->catatan ? ' — '.$b->catatan : ''),
             'kode_asli' => 'Rekening PT BCA', 'akun' => 'Bayar langsung dari BCA', 'tahap' => $b->tahap_id]);
 
         return $kas->concat($bca)->sortByDesc(fn ($r) => substr((string) $r->tanggal, 0, 10))->values()->groupBy('tahap');
+    }
+
+    private static ?array $tipe = null;
+
+    /** Tipe tahap (luas / ritasi / biaya / infra) — menentukan akun Kas yang dihitung (lihat Overhead::diabaikan). */
+    public static function tipe(?int $id): ?string
+    {
+        self::$tipe ??= ProyekTahap::pluck('tipe', 'id')->all();
+
+        return $id ? (self::$tipe[$id] ?? null) : null;
     }
 
     /** @var array{total: array<int, float>, grup: array<int, array<string, float>>}|null */
@@ -103,7 +113,7 @@ class Anggaran
         return self::kasHitung()['total'];
     }
 
-    /** Kas dihitung per tahap per grup: gaji (Gaji & Tunjangan), komisi, ops (lainnya) — realisasi komponen kas_gaji/komisi/kas_operasional. */
+    /** Kas dihitung per tahap per grup: gaji (Gaji & Tunjangan), komisi, ops (lainnya), dan untuk tahap Infra material (akun HPP) & bbm (non alat berat). */
     public static function kasGrup(int $id): array
     {
         return self::kasHitung()['grup'][$id] ?? [];
@@ -115,13 +125,18 @@ class Anggaran
             return self::$kasDihitung;
         }
         $total = $grup = [];
-        foreach (DaftarProyek::queryKas()->selectRaw('c.kode cc, k.ref, a.nama akun, a.kelompok kel, b.tanggal, al.proyek_tahap_id alokasi, sum(b.nominal) s')
-            ->groupBy('c.kode', 'k.ref', 'a.nama', 'a.kelompok', 'b.tanggal', 'al.proyek_tahap_id')->get() as $r) {
-            if (Overhead::diabaikan($r->kel, $r->akun)) {
+        // ab = keterangan menyebut alat berat (BBM alat berat tahap Infra tetap dari Data BBM & HM)
+        $ab = trim(Overhead::ALAT_BERAT, '/i');
+        foreach (DaftarProyek::queryKas()->selectRaw('c.kode cc, k.ref, a.nama akun, a.kelompok kel, b.tanggal, al.proyek_tahap_id alokasi, (b.keterangan REGEXP ?) ab, sum(b.nominal) s', [$ab])
+            ->groupBy('c.kode', 'k.ref', 'a.nama', 'a.kelompok', 'b.tanggal', 'al.proyek_tahap_id', 'ab')->get() as $r) {
+            $id = $r->alokasi ?: DaftarProyek::tahapKas($r->cc, $r->ref, $r->akun, substr((string) $r->tanggal, 0, 10));
+            $tipe = self::tipe($id);
+            if (Overhead::diabaikan($r->kel, $r->akun, $tipe, $r->ab ? 'alat berat' : null)) {
                 continue;
             }
-            if ($id = $r->alokasi ?: DaftarProyek::tahapKas($r->cc, $r->ref, $r->akun, substr((string) $r->tanggal, 0, 10))) {
-                $g = preg_match('/omis/i', (string) $r->akun) ? 'komisi' : ($r->kel === 'Gaji & Tunjangan' ? 'gaji' : 'ops');
+            if ($id) {
+                $g = preg_match('/omis/i', (string) $r->akun) ? 'komisi' : ($tipe === 'infra' && $r->kel === 'HPP' ? 'material'
+                    : ($tipe === 'infra' && Overhead::akunBbm($r->akun) ? 'bbm' : ($r->kel === 'Gaji & Tunjangan' ? 'gaji' : 'ops')));
                 $total[$id] = ($total[$id] ?? 0) + (float) $r->s;
                 $grup[$id][$g] = ($grup[$id][$g] ?? 0) + (float) $r->s;
             }
@@ -161,6 +176,8 @@ class Anggaran
             'kas_gaji' => [null, $kas['gaji'] ?? 0, 'Gaji & tunjangan (Kas)', null],
             'kas_operasional' => [null, $kas['ops'] ?? 0, 'Operasional (Kas)', null],
             'komisi' => [null, $kas['komisi'] ?? 0, 'Komisi (Kas)', null],
+            'kas_hpp' => [null, $kas['material'] ?? 0, 'Material (Kas akun HPP)', null],
+            'kas_bbm' => [null, $kas['bbm'] ?? 0, 'BBM kendaraan & genset (Kas)', null],
             'overhead' => [null, $overhead, 'Biaya umum teralokasi', null],
         ];
         $h = self::hitung($baris, $t);
