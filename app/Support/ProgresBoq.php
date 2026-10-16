@@ -23,11 +23,11 @@ class ProgresBoq
         $opname = BoqOpname::whereIn('boq_item_id', $items->pluck('id'))->orderBy('tanggal')->orderBy('id')->get()->groupBy('boq_item_id')->map->last();
         $tagih = TagihanItem::whereIn('boq_item_id', $items->pluck('id'))->selectRaw('boq_item_id, sum(volume) v, sum(nilai) rp')->groupBy('boq_item_id')->get()->keyBy('boq_item_id');
 
-        $rb = PilahTransaksi::realisasiBoq()[$t->id] ?? ['total' => 0.0, 'item' => [], 'n_tanpa' => 0];
+        $rb = PilahTransaksi::realisasiBoq()[$t->id] ?? ['total' => 0.0, 'item' => [], 'n_tanpa' => 0, 'trx' => [], 'tanpa' => []];
         [$biaya, $biayaTotal, $nTanpa] = [$rb['item'], $rb['total'], $rb['n_tanpa']];
 
         $nilaiTotal = $items->sum(fn ($i) => $i->nilai());
-        $baris = $items->map(function (BoqItem $i) use ($opname, $tagih, $biaya, $nilaiTotal) {
+        $baris = $items->map(function (BoqItem $i) use ($opname, $tagih, $biaya, $nilaiTotal, $rb) {
             $vol = (float) $i->volume;
             $op = $opname[$i->id]->volume ?? null;
             $tg = $tagih[$i->id] ?? null;
@@ -36,7 +36,7 @@ class ProgresBoq
             $pasang = $op === null && $tgV <= 0 ? null : max((float) $op, $tgV);
 
             return (object) [
-                'item' => $i, 'nilai' => $i->nilai(), 'bobot' => $nilaiTotal > 0 ? $i->nilai() / $nilaiTotal * 100 : null, 'modal' => $i->modal(),
+                'item' => $i, 'trx' => $rb['trx'][$i->id] ?? [], 'nilai' => $i->nilai(), 'bobot' => $nilaiTotal > 0 ? $i->nilai() / $nilaiTotal * 100 : null, 'modal' => $i->modal(),
                 'biaya' => $biaya[$i->id] ?? 0.0, 'p_modal' => $i->modal() > 0 ? ($biaya[$i->id] ?? 0) / $i->modal() * 100 : null,
                 'terpasang' => $pasang, 'opname' => $op, 'pasang_dari' => $pasang === null ? null : ($op !== null && $op >= $tgV ? 'opname' : 'tagihan'), 'tgl_opname' => $opname[$i->id]->tanggal ?? null, 'p_pasang' => $vol > 0 && $pasang !== null ? $pasang / $vol * 100 : null,
                 'tertagih' => $tg ? (float) $tg->v : 0.0, 'rp_tagih' => $tg ? (float) $tg->rp : 0.0, 'p_tagih' => $vol > 0 && $tg ? $tg->v / $vol * 100 : null,
@@ -47,7 +47,7 @@ class ProgresBoq
 
         return [
             'baris' => $baris, 'nilai' => $nilaiTotal, 'modal' => $modalTotal, 'biaya' => $biayaTotal, 'biaya_boq' => $biayaBoq,
-            'biaya_tanpa' => $biayaTotal - $biayaBoq, 'n_tanpa' => $nTanpa,
+            'biaya_tanpa' => $biayaTotal - $biayaBoq, 'n_tanpa' => $nTanpa, 'trx_tanpa' => $rb['tanpa'],
             'p_modal' => $modalTotal > 0 ? $biayaTotal / $modalTotal * 100 : null,
             'p_pasang' => $nilaiTotal > 0 ? $baris->sum(fn ($b) => $b->nilai * min(1, ($b->p_pasang ?? 0) / 100)) / $nilaiTotal * 100 : null,
             'p_tagih' => $nilaiTotal > 0 ? $baris->sum('rp_tagih') / $nilaiTotal * 100 : null,

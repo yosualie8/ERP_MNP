@@ -7,6 +7,7 @@
         $f = fn ($v, $d = 0) => $v === null ? '' : (rtrim(rtrim(number_format($v, $d, ',', '.'), '0'), ',') ?: '0');
         $pr = fn ($v) => $v === null ? '–' : number_format($v, 1, ',', '.').'%';
         $warna = fn ($v) => $v === null ? '' : ($v > 100 ? 'color: var(--merah);' : '');
+        $bolehPilah = auth()->user()->bolehMenu('pilah-transaksi');
     @endphp
     <style>
         .ringkas { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin-bottom: 12px; }
@@ -24,6 +25,18 @@
         table.kas td.kosong { color: var(--redup); font-size: 11.5px; }
         table.kas tr.ok-simpan td { transition: background .6s; background: rgba(76, 195, 138, .12); }
         tr.sub td { background: rgba(255, 255, 255, .03); font-weight: 600; }
+        /* klik baris item → rincian pengeluaran di bawahnya */
+        table.kas tr.ada-trx { cursor: pointer; }
+        table.kas tr.ada-trx .panah { display: inline-block; width: 12px; color: var(--redup); transition: transform .15s; }
+        table.kas tr.ada-trx.buka .panah { transform: rotate(90deg); }
+        table.kas .jml-trx { font-size: 10.5px; color: var(--redup); font-weight: 400; }
+        table.kas tr.d { display: none; }
+        table.kas tr.d.buka { display: table-row; }
+        table.kas tr.d > td { background: rgba(0, 0, 0, .18); padding: 8px 14px 10px 34px; }
+        table.rinci-trx { border-collapse: collapse; font-size: 12.5px; width: 100%; max-width: 1200px; }
+        table.rinci-trx th, table.rinci-trx td { padding: 3px 10px 3px 0; border-bottom: 1px solid var(--garis); text-align: left; vertical-align: top; }
+        table.rinci-trx .angka { text-align: right; white-space: nowrap; }
+        table.rinci-trx tfoot td { font-weight: 700; border-bottom: 0; }
     </style>
 
     <form method="GET" class="kartu" style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
@@ -112,8 +125,8 @@
                     <tbody>
                         @foreach ($p['baris'] as $b)
                             @php($it = $b->item)
-                            <tr data-item="{{ $it->id }}">
-                                <td class="sempit"><b>{{ $it->kode }}</b></td>
+                            <tr data-item="{{ $it->id }}" @if ($b->trx) class="ada-trx" title="Klik untuk melihat {{ count($b->trx) }} transaksi pengeluaran {{ $it->kode }}" @endif>
+                                <td class="sempit" data-v="{{ $it->kode }}">@if ($b->trx)<span class="panah">▸</span>@endif<b>{{ $it->kode }}</b>@if ($b->trx)<div class="jml-trx">{{ count($b->trx) }} trx</div>@endif</td>
                                 <td>{{ $it->uraian }}</td>
                                 <td class="angka" data-n="{{ $it->volume }}">{{ $f($it->volume, 2) }}</td>
                                 <td class="sempit">{{ $it->satuan }}</td>
@@ -128,20 +141,24 @@
                                 <td class="angka" data-n="{{ $b->tertagih }}">{{ $b->tertagih ? $f($b->tertagih, 3) : '' }}@if ($b->rp_tagih)<br><span class="redup" style="font-size: 11px;">{{ rp((int) round($b->rp_tagih)) }}</span>@endif</td>
                                 <td class="p" data-n="{{ $b->p_tagih }}">{{ $pr($b->p_tagih) }}<div class="bar tagih"><span class="isi" style="width: {{ min(100, $b->p_tagih ?? 0) }}%"></span></div></td>
                             </tr>
+                            @if ($b->trx)
+                                <tr class="d"><td colspan="14">@include('boq._trx', ['trx' => $b->trx, 'bolehPilah' => $bolehPilah])</td></tr>
+                            @endif
                         @endforeach
                     </tbody>
                     <tfoot>
                         <tr class="sub"><td colspan="5">Total</td><td class="angka">{{ rp((int) round($p['nilai'])) }}</td><td class="angka">100%</td><td class="angka">{{ rp((int) round($p['modal'])) }}</td>
                             <td class="angka">{{ rp((int) round($p['biaya_boq'])) }}</td><td class="p">{{ $p['modal'] > 0 ? $pr($p['biaya_boq'] / $p['modal'] * 100) : '–' }}</td><td></td><td class="p">{{ $pr($p['p_pasang']) }}</td><td class="angka">{{ rp((int) round($p['rp_tagih'])) }}</td><td class="p">{{ $pr($p['p_tagih']) }}</td></tr>
                         @if ($p['biaya_tanpa'] > 0)
-                            <tr><td colspan="8" class="redup">Biaya dihitung yang <b>belum diberi kode BOQ</b> ({{ $p['n_tanpa'] }} transaksi — gaji, sewa, umum, atau belum dipilah) · <a href="{{ route('pilah.index', ['saring' => 'tanpa-boq']) }}">pilah →</a></td>
+                            <tr class="ada-trx" title="Klik untuk melihat transaksinya"><td colspan="8" class="redup"><span class="panah">▸</span> Biaya dihitung yang <b>belum diberi kode BOQ</b> ({{ $p['n_tanpa'] }} transaksi — gaji, sewa, umum, atau belum dipilah) · <a href="{{ route('pilah.index', ['saring' => 'tanpa-boq']) }}">pilah →</a></td>
                                 <td class="angka">{{ rp((int) round($p['biaya_tanpa'])) }}</td><td colspan="5"></td></tr>
+                            <tr class="d"><td colspan="14">@include('boq._trx', ['trx' => $p['trx_tanpa'], 'bolehPilah' => $bolehPilah])</td></tr>
                         @endif
                     </tfoot>
                 </table>
             </div>
             <p class="redup" style="font-size: 12px;">% modal &gt; 100% (merah) = biaya item sudah melewati modalnya. Terpasang diisi kumulatif (total terpasang sampai hari ini) dan tersimpan sebagai opname bertanggal hari ini; selama opname lebih kecil / belum ada, terpasang = volume yang sudah ditagih (abu-abu di kotak = volume tertagih).
-                Biaya keluar = transaksi Kas & BCA yang dihitung untuk tahap ini dan diberi kode BOQ di <a href="{{ route('pilah.index') }}">Pilah Transaksi</a>.</p>
+                Klik baris item (▸) untuk melihat transaksi pengeluarannya. Biaya keluar = transaksi Kas & BCA yang dihitung untuk tahap ini dan diberi kode BOQ di <a href="{{ route('pilah.index') }}">Pilah Transaksi</a>.</p>
 
             <h3 style="margin: 18px 0 8px;">Tagihan progres</h3>
             <div class="kartu gulir" style="padding: 0;">
@@ -186,6 +203,13 @@
 
             <script>
                 (() => {
+                    // klik baris item (bukan kotak isian / tautan) → buka/tutup rincian pengeluaran di bawahnya
+                    document.querySelectorAll('table.kas tr.ada-trx').forEach(tr => tr.addEventListener('click', e => {
+                        if (e.target.closest('input, a, button')) return;
+                        const d = tr.nextElementSibling;
+                        if (!d?.classList.contains('d')) return;
+                        tr.classList.toggle('buka'); d.classList.toggle('buka', tr.classList.contains('buka'));
+                    }));
                     const TOKEN = @json(csrf_token()), URL = @json(route('boq.opname', ['item' => '__ID__']));
                     document.querySelectorAll('tr[data-item] [data-f=pasang]').forEach(inp => {
                         let awal = inp.value;

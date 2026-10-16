@@ -283,7 +283,9 @@ class PilahTransaksi
      * dan sisa yang BELUM berkode BOQ per kelompok (gaji, komisi, material = akun HPP, bbm, ops) — dasar Anggaran Infra
      * supaya biaya berkode BOQ tidak terhitung dua kali di baris Kas.
      *
-     * @return array<int, array{total: float, boq: float, item: array<int, float>, grup: array<string, float>, n_tanpa: int}>
+     * Juga daftar transaksinya: trx[item_id] (berkode BOQ) & tanpa (belum berkode) untuk rincian di halaman BOQ.
+     *
+     * @return array<int, array{total: float, boq: float, item: array<int, float>, grup: array<string, float>, n_tanpa: int, trx: array, tanpa: array}>
      */
     public static function realisasiBoq(): array
     {
@@ -291,17 +293,21 @@ class PilahTransaksi
             return self::$realisasi;
         }
         $ids = BoqItem::distinct()->pluck('proyek_tahap_id')->all();
-        $hasil = array_fill_keys($ids, ['total' => 0.0, 'boq' => 0.0, 'item' => [], 'grup' => [], 'n_tanpa' => 0]);
+        $hasil = array_fill_keys($ids, ['total' => 0.0, 'boq' => 0.0, 'item' => [], 'grup' => [], 'n_tanpa' => 0, 'trx' => [], 'tanpa' => []]);
         foreach ($ids ? self::baris($ids, '2000-01-01') : [] as $x) {
             if (! $x->dihitung || ! isset($hasil[$x->tahap_id])) {
                 continue;
             }
             $h = &$hasil[$x->tahap_id];
             $h['total'] += $x->nominal;
+            $ringkas = (object) ['sumber' => $x->sumber, 'tanggal' => $x->tanggal, 'keterangan' => $x->keterangan, 'catatan' => $x->catatan, 'pic' => $x->pic,
+                'akun' => $x->akun, 'kode' => $x->kode, 'no_id' => $x->no_id, 'nominal' => $x->nominal];
             if ($x->boq && $x->boq->proyek_tahap_id === $x->tahap_id) {
                 $h['boq'] += $x->nominal;
                 $h['item'][$x->boq->id] = ($h['item'][$x->boq->id] ?? 0) + $x->nominal;
+                $h['trx'][$x->boq->id][] = $ringkas;
             } else {
+                $h['tanpa'][] = $ringkas;
                 $g = preg_match('/omis/i', (string) $x->akun) ? 'komisi' : ($x->kel === 'Gaji & Tunjangan' ? 'gaji'
                     : ($x->kel === 'HPP' ? 'material' : (Overhead::akunBbm($x->akun) ? 'bbm' : 'ops')));
                 $h['grup'][$g] = ($h['grup'][$g] ?? 0) + $x->nominal;
