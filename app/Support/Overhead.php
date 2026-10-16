@@ -119,19 +119,36 @@ class Overhead
      */
     public static function teralokasi(): array
     {
-        $alokasi = AlokasiOverhead::all();
+        return collect(self::rincianTeralokasi())->map(fn ($baris) => array_sum(array_column($baris, 'rp')))->all();
+    }
+
+    private static ?array $rincian = null;
+
+    /**
+     * Rincian biaya umum teralokasi per tahap: satu baris per bulan per pos (bukan per transaksi) — [tahap_id => [{bulan, pos, metode, porsi, rp}]].
+     *
+     * @return array<int, array<int, array{bulan: string, pos: string, metode: string, porsi: float, rp: float}>>
+     */
+    public static function rincianTeralokasi(): array
+    {
+        if (self::$rincian !== null) {
+            return self::$rincian;
+        }
+        $alokasi = AlokasiOverhead::orderBy('bulan')->get();
         if ($alokasi->isEmpty()) {
-            return [];
+            return self::$rincian = [];
         }
         $kas = self::data()['kas'];
         $basis = self::basisOmset(ProyekTahap::whereIn('id', $alokasi->pluck('tahap_ids')->flatten()->unique())->get());
+        $namaPos = ProyekTahap::whereIn('id', $alokasi->pluck('pos_tahap_id')->unique())->pluck('nama', 'id');
         $hasil = [];
         foreach ($alokasi as $a) {
-            foreach (self::bagi($kas[$a->pos_tahap_id][$a->bulan] ?? 0, $a->tahap_ids, $a->metode, $basis) as $id => $rp) {
-                $hasil[$id] = ($hasil[$id] ?? 0) + $rp;
+            $biaya = $kas[$a->pos_tahap_id][$a->bulan] ?? 0;
+            foreach (self::bagi($biaya, $a->tahap_ids, $a->metode, $basis) as $id => $rp) {
+                $hasil[$id][] = ['bulan' => $a->bulan, 'pos' => $namaPos[$a->pos_tahap_id] ?? '-', 'metode' => $a->metode, 'porsi' => $biaya ? $rp / $biaya * 100 : 0, 'rp' => $rp];
             }
         }
 
-        return $hasil;
+        return self::$rincian = $hasil;
     }
 }
