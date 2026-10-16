@@ -99,6 +99,8 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::post('/jabatan', [\App\Http\Controllers\JabatanController::class, 'store'])->name('jabatan.store');
     Route::patch('/jabatan/{jabatan}', [\App\Http\Controllers\JabatanController::class, 'update'])->whereNumber('jabatan')->name('jabatan.update');
     Route::delete('/jabatan/{jabatan}', [\App\Http\Controllers\JabatanController::class, 'hapus'])->whereNumber('jabatan')->name('jabatan.hapus');
+    Route::get('/mutasi-pt', [\App\Http\Controllers\MutasiPtController::class, 'index'])->name('mutasi-pt.index');
+    Route::post('/mutasi-pt/perbarui', [\App\Http\Controllers\MutasiPtController::class, 'perbarui'])->name('mutasi-pt.perbarui');
     Route::get('/karyawan', [\App\Http\Controllers\KaryawanController::class, 'index'])->name('karyawan.index');
     Route::get('/karyawan/tambah', [\App\Http\Controllers\KaryawanController::class, 'create'])->name('karyawan.create');
     Route::post('/karyawan', [\App\Http\Controllers\KaryawanController::class, 'store'])->name('karyawan.store');

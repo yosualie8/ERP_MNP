@@ -27,6 +27,8 @@ class Kernel extends ConsoleKernel
         $schedule->command('mnp:impor-ritasi')->everyFiveMinutes()->withoutOverlapping();
         // Lembar Penggunaan BBM ikut ke aplikasi.
         $schedule->command('mnp:impor-bbm')->everyFiveMinutes()->withoutOverlapping();
+        // Mutasi Rekening PT (BCA): file Drive diperiksa tiap 30 menit, diimpor hanya bila berubah.
+        $schedule->command('mnp:impor-mutasi-pt')->everyThirtyMinutes()->withoutOverlapping();
     }
 
     /**
