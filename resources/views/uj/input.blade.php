@@ -131,6 +131,7 @@
             @method('PUT')
             @if ($ajukan)
                 <input type="hidden" name="pengajuan_id" value="{{ $edit['pengajuan_id'] }}">
+                <input type="hidden" name="menunggu" value="{{ $edit['menunggu'] ?? '' }}">
             @else
                 <input type="hidden" name="versi" value="{{ $edit['versi'] }}">
                 <input type="hidden" name="no_uj" value="{{ $edit['no_uj'] }}">
@@ -247,6 +248,22 @@
                 <span class="redup">{{ $ajukan ? 'Total pengajuan' : 'Jumlah detail' }} <span class="total-bon" id="total-bon">0</span>@unless ($ajukan) dari nominal master <b id="nilai-transfer">0</b>@else<b id="nilai-transfer" hidden>0</b>@endunless</span>
             </div>
             <div id="status-cocok" class="pesan" style="margin: 8px 0 10px; padding: 8px 12px;{{ $ajukan ? ' display: none;' : '' }}"></div>
+            @if ($ajukan && $edit && count($edit['terkunci'] ?? []))
+                @php($labelKunci = ['terealisasi' => 'Terealisasi', 'dialihkan' => 'Dialihkan', 'batal' => 'Dibatalkan'])
+                <div class="gulir" style="margin: 8px 0 14px;">
+                    <p style="margin: 0 0 6px;">🔒 <b>{{ count($edit['terkunci']) }} detail sudah direalisasi / dibatalkan</b> <span class="redup">— tidak bisa diubah (Rp {{ number_format(collect($edit['terkunci'])->sum('nominal'), 0, ',', '.') }}, tidak termasuk total di bawah)</span></p>
+                    <table class="bon" style="min-width: 1100px; opacity: .75;">
+                        <thead><tr><th class="angka" style="width: 130px;">Nominal</th><th style="width: 150px;">Nama driver</th><th>Keterangan</th><th style="width: 160px;">Kategori</th><th style="width: 100px;">No Mobil</th><th style="width: 100px;">Jenis</th><th style="width: 100px;">No DO</th><th style="width: 150px;">Status</th></tr></thead>
+                        <tbody>
+                            @foreach ($edit['terkunci'] as $d)
+                                <tr><td class="angka">{{ number_format($d->nominal, 0, ',', '.') }}</td><td>{{ $d->nama }}</td><td>{{ $d->keterangan }}</td><td>{{ $d->kategori }}</td><td>{{ $d->no_mobil }}</td><td>{{ $d->jenis_kendaraan }}</td><td>{{ $d->no_do }}</td>
+                                    <td><span class="label {{ $d->status === 'batal' ? '' : 'hijau' }}">{{ $labelKunci[$d->status] ?? $d->status }}</span>@if ($d->id_uj) <span class="redup" style="font-size: 12px;">UJ-{{ $d->id_uj }}</span>@endif</td></tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                    <p style="margin: 10px 0 0;">✏️ <b>Detail yang masih menunggu realisasi</b> <span class="redup">— bisa diubah, ditambah, atau dihapus</span></p>
+                </div>
+            @endif
             <p class="redup" style="margin: 0 0 10px;">{{ $ajukan ? 'Satu baris = satu uang jalan yang diajukan, nanti direalisasikan per baris. Nama driver wajib diisi di setiap baris.' : 'Satu baris = satu ID UJ di sheet (nomornya dilanjutkan otomatis). Nama detail pertama mengikuti nama penerima.' }} Jenis kendaraan terisi otomatis dari No Mobil (ungu = otomatis, boleh diganti).</p>
             <div class="gulir">
             <table class="bon" style="min-width: 1100px;">

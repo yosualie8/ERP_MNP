@@ -151,7 +151,7 @@
                         </td>
                         <td class="redup" style="font-size: 12px;">{{ $p->user?->name ?? $p->user?->email }} · {{ $p->created_at->translatedFormat('j M H:i') }}</td>
                         <td style="white-space: nowrap;">
-                            @if ($p->status === 'diajukan')<a href="{{ route('pengajuan-uj.ubah', $p) }}" class="tombol-edit">Edit</a>@endif
+                            @if ($p->detail->contains('status', 'menunggu'))<a href="{{ route('pengajuan-uj.ubah', $p) }}" class="tombol-edit" title="Ubah detail yang belum direalisasi">Edit</a>@endif
                             @if (in_array($p->status, ['diajukan', 'sebagian'], true))
                                 <form method="POST" action="{{ route('pengajuan-uj.batal', $p) }}" style="display: inline;" onsubmit="return confirm('Batalkan detail {{ $p->kode() }} yang masih menunggu? Detail yang sudah terealisasi tidak berubah.')">
                                     @csrf<button class="tombol-hapus" type="submit">Batalkan</button></form>

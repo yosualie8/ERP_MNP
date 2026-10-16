@@ -110,10 +110,14 @@ class PengajuanUjController extends UjController
         if ($tolak = $this->tolakUbah($pengajuan)) {
             return redirect()->route('pengajuan-uj.daftar')->with('error', $tolak);
         }
+        // Hanya detail yang MENUNGGU yang bisa diubah; yang sudah terealisasi / dialihkan / dibatalkan tampil terkunci.
+        [$tunggu, $kunci] = $pengajuan->detail->sortBy('urut')->partition(fn ($d) => $d->status === 'menunggu');
         $edit = [
             'pengajuan_id' => $pengajuan->id, 'kode' => $pengajuan->kode(), 'tanggal' => $pengajuan->tanggal->toDateString(),
-            'nominal' => $pengajuan->nominal, 'biaya_transfer' => '0',
-            'detail' => $pengajuan->detail->map(fn ($d) => $d->only(['nama', 'keterangan', 'nominal', 'kategori', 'jenis_kendaraan', 'no_mobil', 'no_do', 'konfirmasi']))->all(),
+            'nominal' => (int) $tunggu->sum('nominal'), 'biaya_transfer' => '0',
+            'detail' => $tunggu->map(fn ($d) => $d->only(['nama', 'keterangan', 'nominal', 'kategori', 'jenis_kendaraan', 'no_mobil', 'no_do', 'konfirmasi']))->values()->all(),
+            'menunggu' => $tunggu->pluck('id')->sort()->implode(','),
+            'terkunci' => $kunci->values(),
         ];
 
         return $this->create()->with(['mode' => 'pengajuan', 'edit' => $edit]);
@@ -128,14 +132,21 @@ class PengajuanUjController extends UjController
         if ($input instanceof RedirectResponse) {
             return $input;
         }
-        $temuan = $this->wajibKonfirmasi($input, null, $pengajuan->detail->pluck('id')->all());
+        $tunggu = $pengajuan->detail()->where('status', 'menunggu')->pluck('id');
+        // Detail yang sedang diedit harus sama dengan saat form dibuka (mungkin baru saja direalisasikan di Input UJ).
+        if ($tunggu->sort()->implode(',') !== (string) $request->input('menunggu')) {
+            return redirect()->route('pengajuan-uj.ubah', $pengajuan)->with('error', "Ada detail {$pengajuan->kode()} yang baru saja direalisasikan / dibatalkan — form dimuat ulang, periksa lagi perubahan Anda.");
+        }
+        $temuan = $this->wajibKonfirmasi($input, null, $tunggu->all());
         if ($temuan instanceof RedirectResponse) {
             return $temuan;
         }
-        DB::transaction(function () use ($pengajuan, $input, $temuan) {
-            $pengajuan->update(['tanggal' => $input['tanggal']->toDateString(), 'nominal' => $input['nominal']]);
-            $pengajuan->detail()->delete();
-            $this->simpanDetail($pengajuan, $input, $temuan);
+        DB::transaction(function () use ($pengajuan, $input, $temuan, $tunggu) {
+            // Detail terkunci (terealisasi / dialihkan / dibatalkan) tidak disentuh; hanya yang menunggu diganti isi form.
+            $tetap = $pengajuan->detail()->whereNotIn('id', $tunggu)->get();
+            $pengajuan->update(['tanggal' => $input['tanggal']->toDateString(), 'nominal' => $input['nominal'] + (int) $tetap->sum('nominal')]);
+            $pengajuan->detail()->whereIn('id', $tunggu)->delete();
+            $this->simpanDetail($pengajuan, $input, $temuan, (int) $tetap->max('urut'));
         });
         KasRiwayat::create(['aksi' => 'uj-ajukan-ubah', 'lembar' => 'Pengajuan', 'baris_awal' => 0, 'baris_akhir' => 0,
             'ringkasan' => mb_strimwidth($pengajuan->kode().' diubah: '.$this->ringkas($pengajuan->fresh()), 0, 490, '…'), 'isi' => ['pengajuan_id' => $pengajuan->id], 'user_id' => $request->user()->id]);
@@ -233,11 +244,11 @@ class PengajuanUjController extends UjController
         return back()->with('success', "Tautan transfer {$idKas} dari {$kode} dilepas.");
     }
 
-    private function simpanDetail(UjPengajuan $p, array $input, array $temuan): void
+    private function simpanDetail(UjPengajuan $p, array $input, array $temuan, int $urutAwal = 0): void
     {
         foreach ($input['detail'] as $i => $d) {
             $detail = UjPengajuanDetail::create([
-                'uj_pengajuan_id' => $p->id, 'urut' => $i + 1, 'nama' => $d['nama'], 'keterangan' => $d['keterangan'], 'nominal' => $d['nominal'],
+                'uj_pengajuan_id' => $p->id, 'urut' => $urutAwal + $i + 1, 'nama' => $d['nama'], 'keterangan' => $d['keterangan'], 'nominal' => $d['nominal'],
                 'kategori' => $d['kategori'], 'jenis_kendaraan' => $d['jenis_kendaraan'], 'no_mobil' => $d['no_mobil'], 'no_do' => $d['no_do'],
                 'konfirmasi' => $d['konfirmasi'], 'temuan' => $temuan[$i] ?? null, 'status' => 'menunggu',
             ]);
@@ -259,9 +270,10 @@ class PengajuanUjController extends UjController
 
     private function tolakUbah(UjPengajuan $p): ?string
     {
-        return $p->detail()->where('status', '!=', 'menunggu')->exists()
-            ? "Pengajuan {$p->kode()} sudah (sebagian) direalisasikan atau dibatalkan — tidak bisa diubah. Batalkan sisanya lalu ajukan ulang bila perlu."
-            : null;
+        // Boleh diubah selama masih ada detail yang menunggu realisasi (detail lain tampil terkunci).
+        return $p->detail()->where('status', 'menunggu')->exists()
+            ? null
+            : "Pengajuan {$p->kode()} sudah tidak punya detail yang menunggu (semua terealisasi / dibatalkan) — tidak bisa diubah.";
     }
 
     private function ringkas(UjPengajuan $p): string
