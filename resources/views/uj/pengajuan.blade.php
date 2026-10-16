@@ -32,7 +32,11 @@
         dialog#dialog-transfer::backdrop { background: rgba(0, 0, 0, .6); }
         #dialog-transfer .kepala-dt { padding: 12px 16px; border-bottom: 1px solid var(--garis); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
         #dialog-transfer .kepala-dt input { flex: 1; min-width: 220px; padding: 6px 9px; border-radius: 6px; border: 2px solid #4a5160; font-size: 13px; }
-        #dialog-transfer .isi-dt { max-height: 58vh; overflow: auto; }
+        /* Dialog = kolom flex: kepala (cari) & kaki (tombol Tautkan) selalu terlihat, hanya daftar yang digulir — sebelumnya di layar pendek kaki terpotong. */
+        dialog#dialog-transfer[open] { display: flex; flex-direction: column; overflow: hidden; }
+        #dialog-transfer form { display: flex; flex-direction: column; flex: 1; min-height: 0; max-height: 86vh; }
+        #dialog-transfer .kepala-dt, #dialog-transfer .kaki-dt { flex: none; }
+        #dialog-transfer .isi-dt { flex: 1; min-height: 120px; overflow: auto; }
         #dialog-transfer table { width: 100%; border-collapse: collapse; font-size: 13px; }
         #dialog-transfer th { position: sticky; top: 0; background: var(--kartu-2); text-align: left; padding: 6px 8px; font-size: 12px; color: var(--redup); }
         #dialog-transfer td { padding: 5px 8px; border-top: 1px solid var(--garis); cursor: pointer; }
@@ -225,7 +229,7 @@
                 <input type="search" id="cari-dt" placeholder="Cari keterangan, tujuan, NO ID atau nominal (kosong = sekitar tanggal pengajuan)" autocomplete="off">
                 <button type="button" class="tombol polos" id="tutup-dt">Tutup</button>
             </div>
-            <div class="isi-dt"><table>
+            <div class="isi-dt"><table data-tanpa-saring-kolom data-tanpa-beku data-tanpa-navigasi>
                 <thead><tr><th style="width: 30px;"></th><th>Tanggal</th><th>ID Kas Harian</th><th>Tujuan</th><th>Keterangan</th><th class="angka">Nominal</th><th>Sudah ditautkan ke</th></tr></thead>
                 <tbody id="daftar-dt"></tbody>
             </table></div>
