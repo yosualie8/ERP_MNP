@@ -39,7 +39,8 @@ class PengalihanUjController extends Controller
             $akhir = $akhir ? \Illuminate\Support\Carbon::parse($akhir)->toDateString() : null;
             $sudahTanah = isset($tanah[$do($u->no_do)]);
             $tgl = $u->tanggal->timezone('Asia/Jakarta')->toDateString();
-            $alasan = $sudahTanah ? 'uang tanah sudah dibayar — mungkin sudah jalan' : ($akhir && $tgl < $akhir ? "lebih lama dari rit terakhir truk ini ({$akhir}) — mungkin sudah jalan" : null);
+            $alasan = $u->kategori === 'Uang MOB' ? 'Uang MOB sudah terpakai untuk mobilisasi ke proyek ini — tetap biaya proyek asal'
+                : ($sudahTanah ? 'uang tanah sudah dibayar — mungkin sudah jalan' : ($akhir && $tgl < $akhir ? "lebih lama dari rit terakhir truk ini ({$akhir}) — mungkin sudah jalan" : null));
 
             return (object) ['u' => $u, 'tgl' => $tgl, 'rit_akhir' => $akhir, 'usul' => ! $alasan && ($pilihMobil->isEmpty() || $pilihMobil->contains($u->no_mobil)), 'alasan' => $alasan];
         })->sortBy(fn ($c) => [$c->u->no_mobil, $c->tgl])->values();
