@@ -30,6 +30,8 @@ class BoqController extends Controller
         return view('boq.index', [
             'daftar' => $daftar, 'tahap' => $tahap, 'ubah' => $request->boolean('ubah'),
             'p' => $tahap ? ProgresBoq::hitung($tahap) : null,
+            // biaya belum ber-BOQ dibagi ke item per bobot Total Harga (bawaan tampil; ?bagi=0 untuk hanya biaya ber-BOQ)
+            'bagi' => $request->query('bagi', '1') !== '0', 'lain' => $tahap ? ProgresBoq::biayaLain($tahap) : null,
             'tagihan' => $tahap ? TagihanProyek::with('item')->where('proyek_tahap_id', $tahap->id)->orderBy('tanggal')->orderBy('id')->get() : collect(),
             'nTag' => $tahap ? TransaksiBoq::whereIn('boq_item_id', BoqItem::where('proyek_tahap_id', $tahap->id)->pluck('id'))->selectRaw('boq_item_id, count(*) n')->groupBy('boq_item_id')->pluck('n', 'boq_item_id') : collect(),
         ]);

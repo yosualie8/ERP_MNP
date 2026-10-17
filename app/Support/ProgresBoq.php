@@ -17,6 +17,37 @@ use App\Models\TagihanItem;
  */
 class ProgresBoq
 {
+    /**
+     * Biaya tahap yang BELUM masuk item BOQ, untuk dibagi ke item menurut bobot Total Harga (owner 17 Okt 2026 — sementara
+     * sebelum dirapikan): (1) realisasi tahap ini di luar "Item BOQ" (ritasi, solar, rental, Kas belum berkode, biaya umum);
+     * (2) bagian dari tahap UMUM proyek induk yang sama (tipe Infra tanpa BOQ, mis. "Pantai Mutiara 2 - Infra") — dibagi ke
+     * tahap ber-BOQ di induk itu menurut nilai kontrak.
+     *
+     * @return array{sendiri: array<int, array{0: string, 1: float}>, umum: array<int, array{tahap: string, total: float, porsi: float, rp: float}>, total: float}
+     */
+    public static function biayaLain(ProyekTahap $t): array
+    {
+        [$ritasi, $bbm] = [DaftarProyek::ritasi(), DaftarProyek::bbm()];
+        $oh = Overhead::teralokasi();
+        $t->loadMissing('anggaran.komponen');
+        $sendiri = collect(Anggaran::realisasiKomponen($t, $t->anggaran, $ritasi, $bbm, $oh[$t->id] ?? 0))
+            ->filter(fn ($k) => empty($k['boq']) && abs($k['rp_real']) >= 1)->map(fn ($k) => [$k['nama'], (float) $k['rp_real']])->values()->all();
+
+        $saudara = ProyekTahap::with('anggaran.komponen')->where('proyek_id', $t->proyek_id)->where('tipe', 'infra')->whereNull('pos_overhead')->get();
+        $berBoq = $saudara->filter(fn ($s) => Anggaran::boq($s));
+        $nilaiInduk = $berBoq->sum(fn ($s) => Anggaran::boq($s)['nilai']);
+        $umum = [];
+        foreach ($saudara->reject(fn ($s) => Anggaran::boq($s)) as $u) {
+            $tot = (float) array_sum(array_column(Anggaran::realisasiKomponen($u, $u->anggaran, $ritasi, $bbm, $oh[$u->id] ?? 0), 'rp_real'));
+            $porsi = $nilaiInduk > 0 ? (Anggaran::boq($t)['nilai'] ?? 0) / $nilaiInduk : 0;
+            if (abs($tot) >= 1 && $porsi > 0) {
+                $umum[] = ['tahap' => $u->nama, 'total' => $tot, 'porsi' => $porsi, 'rp' => $tot * $porsi];
+            }
+        }
+
+        return ['sendiri' => $sendiri, 'umum' => $umum, 'total' => array_sum(array_column($sendiri, 1)) + array_sum(array_column($umum, 'rp'))];
+    }
+
     public static function hitung(ProyekTahap $t): array
     {
         $items = BoqItem::where('proyek_tahap_id', $t->id)->orderBy('urutan')->orderBy('id')->get();

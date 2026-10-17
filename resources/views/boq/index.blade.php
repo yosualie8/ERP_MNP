@@ -8,6 +8,9 @@
         $pr = fn ($v) => $v === null ? '–' : number_format($v, 1, ',', '.').'%';
         $warna = fn ($v) => $v === null ? '' : ($v > 100 ? 'color: var(--merah);' : '');
         $bolehPilah = auth()->user()->bolehMenu('pilah-transaksi');
+        // biaya belum ber-BOQ (tahap sendiri + bagian tahap umum) dibagi ke item per bobot Total Harga — sementara, sebelum dirapikan
+        $lainTot = ($bagi ?? false) && $lain ? $lain['total'] : 0;
+        $kol = $lainTot ? 15 : 14;
     @endphp
     <style>
         .ringkas { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin-bottom: 12px; }
@@ -71,10 +74,31 @@
             <div class="kartu"><small>Nilai kontrak (BOQ)</small><b>{{ rp((int) round($p['nilai'])) }}</b><small>{{ $p['baris']->count() }} item</small></div>
             <div class="kartu"><small>Modal (material + jasa)</small><b>{{ rp((int) round($p['modal'])) }}</b><small>rencana GP {{ $p['nilai'] > 0 ? $pr(($p['nilai'] - $p['modal']) / $p['nilai'] * 100) : '–' }}</small></div>
             <div class="kartu"><small>Biaya keluar (dihitung)</small><b>{{ rp((int) round($p['biaya'])) }}</b><small>tanpa kode BOQ: {{ rp((int) round($p['biaya_tanpa'])) }} ({{ $p['n_tanpa'] }} transaksi)</small></div>
-            <div class="kartu"><small>Progres modal (biaya ÷ modal)</small><b style="{{ $warna($p['p_modal']) }}">{{ $pr($p['p_modal']) }}</b><div class="bar modal"><span class="isi" style="width: {{ min(100, $p['p_modal'] ?? 0) }}%"></span></div></div>
+            @php($pmTot = $lainTot && $p['modal'] > 0 ? ($p['biaya_boq'] + $lainTot) / $p['modal'] * 100 : $p['p_modal'])
+            <div class="kartu"><small>Progres modal ({{ $lainTot ? 'semua biaya termasuk bagian biaya lain' : 'biaya' }} ÷ modal)</small><b style="{{ $warna($pmTot) }}">{{ $pr($pmTot) }}</b><div class="bar modal"><span class="isi" style="width: {{ min(100, $pmTot ?? 0) }}%"></span></div>@if ($lainTot)<small>{{ rp((int) round($p['biaya_boq'] + $lainTot)) }}</small>@endif</div>
             <div class="kartu"><small>Progres terpasang (volume, bobot nilai)</small><b>{{ $pr($p['p_pasang']) }}</b><div class="bar"><span class="isi" style="width: {{ min(100, $p['p_pasang'] ?? 0) }}%"></span></div></div>
             <div class="kartu"><small>Progres tertagih</small><b>{{ $pr($p['p_tagih']) }}</b><div class="bar tagih"><span class="isi" style="width: {{ min(100, $p['p_tagih'] ?? 0) }}%"></span></div><small>{{ rp((int) round($p['rp_tagih'])) }}</small></div>
         </div>
+
+        @if ($lain && $lain['total'] > 0 && ! $ubah)
+            <details class="kartu" @if ($lainTot) open @endif>
+                <summary style="cursor: pointer;"><b>Biaya belum masuk item BOQ: {{ rp((int) round($lain['total'])) }}</b>
+                    <span class="redup" style="font-size: 12px;">{{ $lainTot ? '— sementara DIBAGI ke item menurut bobot Total Harga (kolom "Bagian biaya lain")' : '— tidak dibagi' }}</span>
+                    <a href="{{ route('boq.index', ['tahap' => $tahap->id, 'bagi' => $lainTot ? 0 : 1]) }}" class="tombol polos" style="padding: 3px 10px; font-size: 12px; margin-left: 8px;">{{ $lainTot ? 'Tampilkan hanya biaya ber-BOQ' : 'Bagi ke item per bobot' }}</a></summary>
+                <table class="kas" style="margin-top: 8px; max-width: 900px;" data-tanpa-saring-kolom>
+                    <tbody>
+                        @foreach ($lain['sendiri'] as [$nm, $v])
+                            <tr><td>{{ $tahap->nama }} — {{ $nm }}</td><td class="angka">{{ rp((int) round($v)) }}</td></tr>
+                        @endforeach
+                        @foreach ($lain['umum'] as $u)
+                            <tr><td>Bagian dari tahap umum <b>{{ $u['tahap'] }}</b>: {{ rp((int) round($u['total'])) }} × {{ number_format($u['porsi'] * 100, 2, ',', '.') }}% <span class="redup">(porsi nilai kontrak di proyek induk)</span></td><td class="angka">{{ rp((int) round($u['rp'])) }}</td></tr>
+                        @endforeach
+                        <tr class="sub"><td>Total</td><td class="angka">{{ rp((int) round($lain['total'])) }}</td></tr>
+                    </tbody>
+                </table>
+                <p class="redup" style="font-size: 12px; margin: 6px 0 0;">Sementara sebelum biaya dirapikan per kode BOQ di Pilah Transaksi. Begitu transaksinya diberi kode BOQ, biayanya pindah ke kolom "Biaya keluar" item itu.</p>
+            </details>
+        @endif
 
         @if ($ubah)
             <form method="POST" action="{{ route('boq.simpan', $tahap) }}" class="kartu gulir" style="padding: 0;">@csrf
@@ -120,11 +144,13 @@
             <div class="kartu gulir" style="padding: 0;">
                 <table class="kas" data-saring-kolom>
                     <thead><tr><th class="sempit" data-saring-sempit>Kode</th><th>Uraian</th><th class="angka">Volume</th><th class="sempit" data-saring-sempit>Satuan</th><th class="angka">Harga Satuan</th><th class="angka" title="Volume × Harga Satuan">Total Harga</th><th class="angka">Bobot</th>
-                        <th class="angka">Modal</th><th class="angka">Biaya keluar</th><th style="width: 110px;">% modal</th>
+                        <th class="angka">Modal</th><th class="angka">Biaya keluar</th>@if ($lainTot)<th class="angka" title="Biaya belum masuk item BOQ × bobot Total Harga">Bagian biaya lain</th>@endif<th style="width: 110px;">% modal</th>
                         <th style="width: 120px;">Terpasang (kumulatif)</th><th style="width: 110px;">% terpasang</th><th class="angka">Tertagih</th><th style="width: 110px;">% tertagih</th></tr></thead>
                     <tbody>
                         @foreach ($p['baris'] as $b)
                             @php($it = $b->item)
+                            @php($bag = $lainTot * ($b->bobot ?? 0) / 100)
+                            @php($pm = $b->modal > 0 ? ($b->biaya + $bag) / $b->modal * 100 : null)
                             <tr data-item="{{ $it->id }}" @if ($b->trx) class="ada-trx" title="Klik untuk melihat {{ count($b->trx) }} transaksi pengeluaran {{ $it->kode }}" @endif>
                                 <td class="sempit" data-v="{{ $it->kode }}">@if ($b->trx)<span class="panah">▸</span>@endif<b>{{ $it->kode }}</b>@if ($b->trx)<div class="jml-trx">{{ count($b->trx) }} trx</div>@endif</td>
                                 <td>{{ $it->uraian }}</td>
@@ -135,24 +161,25 @@
                                 <td class="angka" data-n="{{ $b->bobot }}">{{ $b->bobot ? $pr($b->bobot) : '' }}</td>
                                 <td class="angka" data-n="{{ $b->modal }}">{{ $b->modal ? rp((int) round($b->modal)) : '' }}</td>
                                 <td @class(['angka', 'kosong' => ! $b->biaya]) data-n="{{ $b->biaya }}" @if (! $b->biaya) title="Belum ada transaksi Kas/BCA yang diberi kode {{ $it->kode }} di Pilah Transaksi" @endif>{{ $b->biaya ? rp((int) round($b->biaya)) : '–' }}</td>
-                                <td class="p" data-n="{{ $b->p_modal }}"><span style="{{ $warna($b->p_modal) }}">{{ $b->p_modal !== null ? $pr($b->p_modal) : ($b->biaya ? 'tanpa modal' : '') }}</span>@if ($b->p_modal !== null)<div class="bar modal"><span class="isi" style="width: {{ min(100, $b->p_modal) }}%"></span></div>@endif</td>
+                                @if ($lainTot)<td class="angka" data-n="{{ $bag }}">{{ $bag >= 1 ? rp((int) round($bag)) : '' }}</td>@endif
+                                <td class="p" data-n="{{ $pm }}"><span style="{{ $warna($pm) }}">{{ $pm !== null ? $pr($pm) : ($b->biaya + $bag >= 1 ? 'tanpa modal' : '') }}</span>@if ($pm !== null)<div class="bar modal"><span class="isi" style="width: {{ min(100, $pm) }}%"></span></div>@endif</td>
                                 <td data-n="{{ $b->terpasang }}"><input class="angka" data-f="pasang" value="{{ $b->opname !== null ? $f($b->opname, 3) : '' }}" placeholder="{{ $b->tertagih ? $f($b->tertagih, 3) : '0' }}" inputmode="decimal" title="Volume terpasang s/d hari ini ({{ $it->satuan }}) — tersimpan sebagai opname hari ini">@if ($b->tgl_opname)<span class="redup" style="font-size: 10.5px;" data-tgl>opname {{ $b->tgl_opname->translatedFormat('d-M-y') }}</span>@else<span class="redup" style="font-size: 10.5px;" data-tgl></span>@endif</td>
                                 <td class="p" data-n="{{ $b->p_pasang }}"><span data-persen @if ($b->p_pasang === null) class="redup" title="Isi kolom Terpasang (kumulatif) untuk mencatat opname" @elseif ($b->pasang_dari === 'tagihan') title="Belum ada opname — terpasang minimal = volume yang sudah ditagih" @endif>{{ $b->p_pasang === null ? 'belum opname' : $pr($b->p_pasang) }}</span>@if ($b->pasang_dari === 'tagihan')<span class="redup" style="font-size: 10.5px;"> dari tagihan</span>@endif<div class="bar"><span class="isi" style="width: {{ min(100, $b->p_pasang ?? 0) }}%"></span></div></td>
                                 <td class="angka" data-n="{{ $b->tertagih }}">{{ $b->tertagih ? $f($b->tertagih, 3) : '' }}@if ($b->rp_tagih)<br><span class="redup" style="font-size: 11px;">{{ rp((int) round($b->rp_tagih)) }}</span>@endif</td>
                                 <td class="p" data-n="{{ $b->p_tagih }}">{{ $pr($b->p_tagih) }}<div class="bar tagih"><span class="isi" style="width: {{ min(100, $b->p_tagih ?? 0) }}%"></span></div></td>
                             </tr>
                             @if ($b->trx)
-                                <tr class="d"><td colspan="14">@include('boq._trx', ['trx' => $b->trx, 'bolehPilah' => $bolehPilah])</td></tr>
+                                <tr class="d"><td colspan="{{ $kol }}">@include('boq._trx', ['trx' => $b->trx, 'bolehPilah' => $bolehPilah])</td></tr>
                             @endif
                         @endforeach
                     </tbody>
                     <tfoot>
                         <tr class="sub"><td colspan="5">Total</td><td class="angka">{{ rp((int) round($p['nilai'])) }}</td><td class="angka">100%</td><td class="angka">{{ rp((int) round($p['modal'])) }}</td>
-                            <td class="angka">{{ rp((int) round($p['biaya_boq'])) }}</td><td class="p">{{ $p['modal'] > 0 ? $pr($p['biaya_boq'] / $p['modal'] * 100) : '–' }}</td><td></td><td class="p">{{ $pr($p['p_pasang']) }}</td><td class="angka">{{ rp((int) round($p['rp_tagih'])) }}</td><td class="p">{{ $pr($p['p_tagih']) }}</td></tr>
+                            <td class="angka">{{ rp((int) round($p['biaya_boq'])) }}</td>@if ($lainTot)<td class="angka">{{ rp((int) round($lainTot)) }}</td>@endif<td class="p">{{ $p['modal'] > 0 ? $pr(($p['biaya_boq'] + $lainTot) / $p['modal'] * 100) : '–' }}</td><td></td><td class="p">{{ $pr($p['p_pasang']) }}</td><td class="angka">{{ rp((int) round($p['rp_tagih'])) }}</td><td class="p">{{ $pr($p['p_tagih']) }}</td></tr>
                         @if ($p['biaya_tanpa'] > 0)
                             <tr class="ada-trx" title="Klik untuk melihat transaksinya"><td colspan="8" class="redup"><span class="panah">▸</span> Biaya dihitung yang <b>belum diberi kode BOQ</b> ({{ $p['n_tanpa'] }} transaksi — gaji, sewa, umum, atau belum dipilah) · <a href="{{ route('pilah.index', ['saring' => 'tanpa-boq']) }}">pilah →</a></td>
-                                <td class="angka">{{ rp((int) round($p['biaya_tanpa'])) }}</td><td colspan="5"></td></tr>
-                            <tr class="d"><td colspan="14">@include('boq._trx', ['trx' => $p['trx_tanpa'], 'bolehPilah' => $bolehPilah])</td></tr>
+                                <td class="angka">{{ rp((int) round($p['biaya_tanpa'])) }}</td><td colspan="{{ $lainTot ? 6 : 5 }}"></td></tr>
+                            <tr class="d"><td colspan="{{ $kol }}">@include('boq._trx', ['trx' => $p['trx_tanpa'], 'bolehPilah' => $bolehPilah])</td></tr>
                         @endif
                     </tfoot>
                 </table>
