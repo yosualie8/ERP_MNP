@@ -31,6 +31,15 @@ class AnggaranController extends Controller
             ->when(! $semua, fn ($q) => $q->where(fn ($w) => $w->whereIn('status', ['belum', 'progress'])->orHas('anggaran')))
             ->get()
             ->map(function ($t) use ($ritasi, $kas, $bbm, $overhead) {
+                if ($t->tipe === 'ritasi') {
+                    // tipe ritasi: tanpa anggaran — omset & biaya realisasi mengikuti data (RitasiProyek)
+                    $rp = \App\Support\RitasiProyek::hitung($t, $bbm, $overhead[$t->id] ?? 0);
+                    $oh = (float) $rp['biaya']['overhead'][2];
+
+                    return (object) ['t' => $t, 'h' => ['omset' => $rp['omset'], 'hpp' => 0, 'margin' => $rp['margin'], 'persen_margin' => $rp['persen_margin']], 'ada' => true,
+                        'langsung' => (int) round($rp['total'] - $oh), 'overhead' => $oh, 'realisasi' => $rp['total'], 'serapan' => null, 'fisik' => null, 'fisikKet' => null,
+                        'progres' => null, 'ritasi' => $rp];
+                }
                 $h = Anggaran::hitung($t->anggaran, $t);
                 $langsung = array_sum(array_column(Anggaran::rincianRealisasi($t, $ritasi, $kas, $bbm), 1));
                 $oh = $overhead[$t->id] ?? 0;
@@ -52,6 +61,14 @@ class AnggaranController extends Controller
     public function edit(Request $request, ProyekTahap $tahap): View
     {
         $tahap->load('proyek', 'anggaran.komponen');
+        if ($tahap->tipe === 'ritasi') {
+            // tipe ritasi: tanpa anggaran HPP/omset — setelan harga per rit / m³, realisasi otomatis
+            return view('anggaran.ritasi', [
+                'tahap' => $tahap, 'r' => \App\Support\RitasiProyek::hitung($tahap),
+                'kasTahap' => Anggaran::transaksiKas([$tahap->id])[$tahap->id] ?? collect(),
+                'overheadBulan' => Overhead::rincianTeralokasi()[$tahap->id] ?? [],
+            ]);
+        }
         // Anggaran belum pernah disimpan → baris awal otomatis dari template tipe tahap (tombol template dihapus, owner 15 Okt 2026).
         $pakaiTemplate = $tahap->anggaran->isEmpty();
         $baris = $pakaiTemplate ? Anggaran::template($tahap) : $tahap->anggaran;
@@ -125,6 +142,26 @@ class AnggaranController extends Controller
 
         return redirect()->route('anggaran.edit', $tahap)->with('success', "Anggaran {$tahap->nama} disimpan: omset {$rp($baru['omset'])}, HPP {$rp($baru['hpp'])}, margin ".
             ($baru['persen_margin'] !== null ? number_format($baru['persen_margin'], 1, ',', '.').'%' : '–').'.');
+    }
+
+    /** Setelan tahap tipe ritasi: dasar bayar (per m³ / per rit), harga, kata kunci UJ. */
+    public function simpanRitasi(Request $request, ProyekTahap $tahap): RedirectResponse
+    {
+        abort_unless($tahap->tipe === 'ritasi', 404);
+        $d = $request->validate(['dasar_bayar' => ['required', 'in:m3,rit'], 'harga' => ['required', 'string', 'max:20'], 'kata_uj' => ['nullable', 'string', 'max:200']]);
+        $harga = self::angka($d['harga']);
+        if ($harga === false || $harga === null || $harga < 0) {
+            throw ValidationException::withMessages(['harga' => 'Harga harus angka.']);
+        }
+        $lama = $tahap->only(['dasar_bayar', 'harga_m3', 'harga_rit', 'kata_uj']);
+        $tahap->update(['dasar_bayar' => $d['dasar_bayar'], $d['dasar_bayar'] === 'rit' ? 'harga_rit' : 'harga_m3' => $harga,
+            'kata_uj' => trim(preg_replace('/\s*,\s*/', ', ', (string) ($d['kata_uj'] ?? ''))) ?: null]);
+        $rp = fn ($v) => number_format((float) $v, 0, ',', '.');
+        KasRiwayat::create(['aksi' => 'proyek-ubah', 'lembar' => 'Proyek', 'baris_awal' => 0, 'baris_akhir' => 0,
+            'ringkasan' => "Setelan ritasi {$tahap->nama}: dibayar per ".($d['dasar_bayar'] === 'rit' ? 'rit' : 'm³')." Rp {$rp($harga)}".($tahap->kata_uj ? ", kata kunci UJ: {$tahap->kata_uj}" : ''),
+            'isi' => ['tahap_id' => $tahap->id, 'lama' => $lama, 'baru' => $tahap->only(['dasar_bayar', 'harga_m3', 'harga_rit', 'kata_uj'])], 'user_id' => $request->user()->id]);
+
+        return redirect()->route('anggaran.edit', $tahap)->with('success', "Setelan ritasi disimpan: per ".($d['dasar_bayar'] === 'rit' ? 'rit' : 'm³')." Rp {$rp($harga)}.");
     }
 
     /** Kunci anggaran saat ini sebagai baseline (rencana awal); bisa diperbarui bila ada addendum. */

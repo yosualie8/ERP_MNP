@@ -25,6 +25,17 @@ class DashboardProyekController extends Controller
         $baris = $tahap
             ->map(function ($t) use ($ritasi, $kas, $bbm, $overhead, $rincianOh, $trx) {
                 $oh = $overhead[$t->id] ?? 0;
+                if ($t->tipe === 'ritasi') {
+                    // tipe ritasi: omset & biaya realisasi otomatis, tanpa progres anggaran
+                    $rp = \App\Support\RitasiProyek::hitung($t, $bbm, $oh);
+                    $r = $ritasi['per_tahap'][$t->id] ?? [];
+
+                    return (object) ['t' => $t, 'ada' => true, 'hpp' => 0, 'omset' => $rp['omset'], 'realisasi' => $rp['total'], 'fisik' => null, 'fisikKet' => null, 'boq' => null,
+                        'serapan' => null, 'ritasi' => $rp, 'awal' => $rp['mulai'], 'terakhir' => $rp['selesai'],
+                        'rincian' => collect($rp['biaya'])->map(fn ($b) => ['nama' => $b[0], 'satuan' => $b[3], 'v_rencana' => null, 'rp_rencana' => 0.0, 'tunda' => false,
+                            'v_real' => $b[1], 'rp_real' => $b[2], 'catatan' => null])->values()->all(),
+                        'kas' => $trx[$t->id] ?? collect(), 'overheadBulan' => $rincianOh[$t->id] ?? []];
+                }
                 $h = Anggaran::hitung($t->anggaran, $t);
                 $realisasi = array_sum(array_column(Anggaran::rincianRealisasi($t, $ritasi, $kas, $bbm), 1)) + $oh;
                 $pf = Anggaran::progresFisik($t, $t->anggaran, $ritasi);

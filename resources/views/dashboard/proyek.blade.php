@@ -60,7 +60,12 @@
                         <td data-v="{{ $x->t->nama }} {{ $x->t->proyek->nama }} {{ $x->t->lokasi }} {{ $x->t->surveyor }}"><span class="panah">▸</span> <b>{{ $x->t->nama }}</b> <span class="redup" style="font-size: 11px;">· {{ $x->t->proyek->nama }}</span>
                             <div style="padding-left: 16px;">@include('proyek._sub', ['t' => $x->t])</div></td>
                         <td data-n="{{ $p }}" data-v="{{ $persen($p) }}" title="{{ $x->fisik !== null ? $x->fisikKet : ($p !== null ? 'serapan biaya — belum ada dasar progres fisik' : 'belum ada anggaran') }}">
-                            @if ($p !== null)
+                            @if (isset($x->ritasi))
+                                @php($rr = $x->ritasi)
+                                <div style="font-size: 12.5px; white-space: nowrap;"><b>{{ $rr['rit'] }} rit</b> · {{ $ang($rr['m3'], 0) }} m³</div>
+                                <div class="redup" style="font-size: 11px; white-space: nowrap;">omset {{ rp((int) round($rr['omset'])) }} · margin <span @if ($rr['margin'] < 0) style="color: var(--merah);" @endif>{{ $persen($rr['persen_margin']) }}</span></div>
+                                <div class="redup" style="font-size: 11px; white-space: nowrap;">UJ {{ $rr['uj_diberi'] }} rit · bongkar {{ $rr['uj_bongkar'] }} · belum {{ $rr['uj_belum'] }}</div>
+                            @elseif ($p !== null)
                                 <div class="bar"><span style="width: {{ min(100, $p) }}%; background: {{ $warna }};"></span><b>{{ $persen($p) }}@if ($x->fisik === null) $@endif</b></div>
                             @else<span class="redup">belum ada anggaran</span>@endif
                             @if ($x->boq)

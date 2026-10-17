@@ -96,7 +96,8 @@ class Overhead
     {
         $tahap->loadMissing('anggaran.komponen');
 
-        return $tahap->mapWithKeys(fn (ProyekTahap $t) => [$t->id => ($a = Anggaran::hitung($t->anggaran, $t)['omset']) > 0 ? $a
+        // tipe ritasi: omset realisasi (bongkaran × harga) sebagai dasar pembagian
+        return $tahap->mapWithKeys(fn (ProyekTahap $t) => [$t->id => ($a = $t->tipe === 'ritasi' ? RitasiProyek::omset($t) : Anggaran::hitung($t->anggaran, $t)['omset']) > 0 ? $a
             : (float) ($t->omset ?: ($t->volume && $t->harga_m3 ? $t->volume * $t->harga_m3 : 0))])->all();
     }
 

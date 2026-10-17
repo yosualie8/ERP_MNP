@@ -85,6 +85,7 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/anggaran', [\App\Http\Controllers\AnggaranController::class, 'index'])->name('anggaran.index');
     Route::get('/anggaran/tahap/{tahap}', [\App\Http\Controllers\AnggaranController::class, 'edit'])->whereNumber('tahap')->name('anggaran.edit');
     Route::post('/anggaran/tahap/{tahap}', [\App\Http\Controllers\AnggaranController::class, 'simpan'])->whereNumber('tahap')->name('anggaran.simpan');
+    Route::post('/anggaran/tahap/{tahap}/ritasi', [\App\Http\Controllers\AnggaranController::class, 'simpanRitasi'])->whereNumber('tahap')->name('anggaran.ritasi');
     Route::post('/anggaran/tahap/{tahap}/kunci', [\App\Http\Controllers\AnggaranController::class, 'kunci'])->whereNumber('tahap')->name('anggaran.kunci');
     Route::get('/alokasi-biaya-umum', [\App\Http\Controllers\AlokasiOverheadController::class, 'index'])->name('alokasi-overhead.index');
     Route::post('/alokasi-biaya-umum', [\App\Http\Controllers\AlokasiOverheadController::class, 'simpan'])->name('alokasi-overhead.simpan');
