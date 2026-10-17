@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\ProyekTahap;
 use App\Models\Ritasi;
 use App\Models\UjDetail;
+use App\Models\UjPengalihan;
 use Illuminate\Support\Carbon;
 
 /**
@@ -44,8 +45,12 @@ class RitasiProyek
         // dihitung (keterangannya jelas), tetapi uang tanah / Kas UJ lain ber-DO itu TIDAK ditarik supaya biaya proyek lain tidak ikut.
         $doLain = Ritasi::whereNotIn('tahap', $nama)->whereNotNull('no_do')->pluck('no_do')->map($do)->filter()->flip();
         $kata = collect(preg_split('/\s*,\s*/', (string) $t->kata_uj))->filter()->map(fn ($k) => preg_quote($k, '/'))->implode('|');
-        $mulai = $rit->min('tanggal') ? Carbon::parse($rit->min('tanggal'))->subDays(10)->toDateString() : null;
-        $uj = $mulai ? UjDetail::where('tanggal', '>=', $mulai)->get(['id_uj', 'tanggal', 'nama', 'keterangan', 'nominal', 'kategori', 'no_mobil', 'no_do']) : collect();
+        // belum ada ritasi (proyek baru) → UJ berkata kunci dicari sejak tahap dibuat
+        $mulai = Carbon::parse($rit->min('tanggal') ?? $t->created_at ?? now())->subDays(10)->toDateString();
+        // UJ yang dialihkan / dikembalikan dari tahap ini (Pengalihan UJ) tidak lagi milik tahap ini
+        $keluar = UjPengalihan::whereIn('jenis', ['alih', 'kembali'])->where('dari_tahap_id', $t->id)->get()->keyBy('id_uj');
+        $uj = UjDetail::where('tanggal', '>=', $mulai)->get(['id_uj', 'tanggal', 'nama', 'keterangan', 'nominal', 'kategori', 'no_mobil', 'no_do'])
+            ->reject(fn ($u) => isset($keluar[$u->id_uj]));
         $jalan = $uj->filter(fn ($u) => in_array($u->kategori, ['Uang Jalan', 'Uang MOB'], true)
             // Uang MOB tanpa DO di Ritasi hanya dihitung bila MENUJU proyek ini ("PIK ke Kendal" / "PIK Kendal"); "Kendal PIK" = pindah
             // keluar dari proyek, tidak akan pernah bongkar (owner 17 Okt 2026).
@@ -68,11 +73,15 @@ class RitasiProyek
         $rental = ($b['hm'] ?? 0) * ($t->tarif_rental ?? ProyekTahap::BAWAAN['tarif_rental']);
         $overhead ??= Overhead::teralokasi()[$t->id] ?? 0;
         $kas = Anggaran::kasDihitung()[$t->id] ?? 0;
+        // UJ dialihkan dari proyek lain (truk pindah sebelum bongkar) = biaya tahap ini; pemakaiannya (MOB / potong UJ) hanya mengurangi saldo sopir
+        $masuk = UjPengalihan::where('ke_tahap_id', $t->id)->orderBy('tanggal')->get();
+        $alih = $masuk->where('jenis', 'alih');
 
         $biaya = [
             'uj' => ['Uang Jalan + Uang MOB (Kas UJ)', $jalan->count(), (float) $jalan->sum('nominal'), 'rit diberi UJ'],
             'tanah' => ['Uang Tanah (Kas UJ)', $tanah->count(), (float) $tanah->sum('nominal'), 'DO'],
             'uj_lain' => ['Kas UJ lain (sparepart, makan, dll.)', $lain->count(), (float) $lain->sum('nominal'), 'transaksi'],
+            'uj_alih' => ['UJ dialihkan dari proyek lain (Pengalihan UJ)', $alih->count(), (float) $alih->sum('nominal'), 'UJ'],
             'solar' => ['Solar (Data BBM)', round($b['liter'] ?? 0, 1), $solar, 'liter'],
             'rental' => ['Rental alat (jam HM)', round($b['hm'] ?? 0, 1), $rental, 'jam'],
             'kas' => ['Kas Harian & BCA (dihitung)', null, (float) $kas, null],
@@ -108,6 +117,9 @@ class RitasiProyek
             'uj_diberi' => $jalan->count(), 'uj_bongkar' => $bongkar->count(), 'uj_belum' => $jalan->count() - $bongkar->count(),
             'rit_tanpa_uj' => $rit->filter(fn ($r) => ! isset($jalanDo[$do($r->no_do)]))->count(),
             'belum' => $jalan->reject(fn ($u) => isset($ritDo[$do($u->no_do)]))->sortBy('tanggal')->values(),
+            'alih_keluar' => ['n' => $keluar->count(), 'rp' => (float) $keluar->sum('nominal'), 'kembali' => (float) $keluar->where('jenis', 'kembali')->sum('nominal')],
+            'alih_masuk' => ['n' => $alih->count(), 'rp' => (float) $alih->sum('nominal'), 'pakai' => (float) $masuk->where('jenis', 'pakai')->sum('nominal'),
+                'saldo' => (float) $alih->sum('nominal') - (float) $masuk->where('jenis', 'pakai')->sum('nominal'), 'mobil' => $alih->pluck('no_mobil')->unique()->count()],
             'hari' => $hari, 'mulai' => $rit->min('tanggal')?->toDateString(), 'selesai' => $rit->max('tanggal')?->toDateString(),
         ];
     }
