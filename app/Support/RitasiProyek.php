@@ -40,15 +40,16 @@ class RitasiProyek
         $urug = $rit->reject(fn ($r) => strcasecmp((string) $r->jenis_buangan, 'Ngepok') === 0);
         $ritDo = $rit->map(fn ($r) => $do($r->no_do))->filter()->flip();
 
-        // DO ritasi tahap lain → UJ ber-kata kunci dengan DO itu bukan milik tahap ini
+        // DO yang juga tercatat di Ritasi tahap lain (nomor DO bertabrakan antar proyek, mis. 15519 KIK & ASG T116): UJ ber-kata kunci tetap
+        // dihitung (keterangannya jelas), tetapi uang tanah / Kas UJ lain ber-DO itu TIDAK ditarik supaya biaya proyek lain tidak ikut.
         $doLain = Ritasi::whereNotIn('tahap', $nama)->whereNotNull('no_do')->pluck('no_do')->map($do)->filter()->flip();
         $kata = collect(preg_split('/\s*,\s*/', (string) $t->kata_uj))->filter()->map(fn ($k) => preg_quote($k, '/'))->implode('|');
         $mulai = $rit->min('tanggal') ? Carbon::parse($rit->min('tanggal'))->subDays(10)->toDateString() : null;
         $uj = $mulai ? UjDetail::where('tanggal', '>=', $mulai)->get(['id_uj', 'tanggal', 'nama', 'keterangan', 'nominal', 'kategori', 'no_mobil', 'no_do']) : collect();
         $jalan = $uj->filter(fn ($u) => in_array($u->kategori, ['Uang Jalan', 'Uang MOB'], true)
-            && (isset($ritDo[$do($u->no_do)]) || ($kata && preg_match("/\\b({$kata})\\b/i", (string) $u->keterangan) && ! isset($doLain[$do($u->no_do)]))));
+            && (isset($ritDo[$do($u->no_do)]) || ($kata && preg_match("/\\b({$kata})\\b/i", (string) $u->keterangan))));
         $jalanDo = $jalan->map(fn ($u) => $do($u->no_do))->filter()->flip();
-        $milik = fn ($u) => ($d = $do($u->no_do)) !== '' && (isset($ritDo[$d]) || isset($jalanDo[$d]));
+        $milik = fn ($u) => ($d = $do($u->no_do)) !== '' && (isset($ritDo[$d]) || (isset($jalanDo[$d]) && ! isset($doLain[$d])));
         $tanah = $uj->filter(fn ($u) => $u->kategori === 'Uang Tanah' && $milik($u));
         $lain = $uj->filter(fn ($u) => ! in_array($u->kategori, ['Uang Jalan', 'Uang MOB', 'Uang Tanah'], true) && $milik($u));
         $bongkar = $jalan->filter(fn ($u) => isset($ritDo[$do($u->no_do)]));
