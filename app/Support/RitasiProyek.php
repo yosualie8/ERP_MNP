@@ -47,7 +47,10 @@ class RitasiProyek
         $mulai = $rit->min('tanggal') ? Carbon::parse($rit->min('tanggal'))->subDays(10)->toDateString() : null;
         $uj = $mulai ? UjDetail::where('tanggal', '>=', $mulai)->get(['id_uj', 'tanggal', 'nama', 'keterangan', 'nominal', 'kategori', 'no_mobil', 'no_do']) : collect();
         $jalan = $uj->filter(fn ($u) => in_array($u->kategori, ['Uang Jalan', 'Uang MOB'], true)
-            && (isset($ritDo[$do($u->no_do)]) || ($kata && preg_match("/\\b({$kata})\\b/i", (string) $u->keterangan))));
+            // Uang MOB tanpa DO di Ritasi hanya dihitung bila MENUJU proyek ini ("PIK ke Kendal" / "PIK Kendal"); "Kendal PIK" = pindah
+            // keluar dari proyek, tidak akan pernah bongkar (owner 17 Okt 2026).
+            && (isset($ritDo[$do($u->no_do)]) || ($kata && preg_match("/\\b({$kata})\\b/i", (string) $u->keterangan)
+                && ($u->kategori !== 'Uang MOB' || preg_match("/\\b(ke|menuju)\\s+({$kata})\\b|\\b({$kata})\\W*$/i", trim((string) $u->keterangan))))));
         $jalanDo = $jalan->map(fn ($u) => $do($u->no_do))->filter()->flip();
         $milik = fn ($u) => ($d = $do($u->no_do)) !== '' && (isset($ritDo[$d]) || (isset($jalanDo[$d]) && ! isset($doLain[$d])));
         $tanah = $uj->filter(fn ($u) => $u->kategori === 'Uang Tanah' && $milik($u));
