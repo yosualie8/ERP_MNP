@@ -151,8 +151,9 @@
                             @php($it = $b->item)
                             @php($bag = $lainTot * ($b->bobot ?? 0) / 100)
                             @php($pm = $b->modal > 0 ? ($b->biaya + $bag) / $b->modal * 100 : null)
-                            <tr data-item="{{ $it->id }}" @if ($b->trx) class="ada-trx" title="Klik untuk melihat {{ count($b->trx) }} transaksi pengeluaran {{ $it->kode }}" @endif>
-                                <td class="sempit" data-v="{{ $it->kode }}">@if ($b->trx)<span class="panah">▸</span>@endif<b>{{ $it->kode }}</b>@if ($b->trx)<div class="jml-trx">{{ count($b->trx) }} trx</div>@endif</td>
+                            @php($buka = $b->trx || $bag >= 1)
+                            <tr data-item="{{ $it->id }}" @if ($buka) class="ada-trx" title="Klik untuk melihat {{ $b->trx ? count($b->trx).' transaksi pengeluaran '.$it->kode : 'asal bagian biaya lain '.$it->kode }}" @endif>
+                                <td class="sempit" data-v="{{ $it->kode }}">@if ($buka)<span class="panah">▸</span>@endif<b>{{ $it->kode }}</b>@if ($b->trx)<div class="jml-trx">{{ count($b->trx) }} trx</div>@elseif ($bag >= 1)<div class="jml-trx">bagian</div>@endif</td>
                                 <td>{{ $it->uraian }}</td>
                                 <td class="angka" data-n="{{ $it->volume }}">{{ $f($it->volume, 2) }}</td>
                                 <td class="sempit">{{ $it->satuan }}</td>
@@ -168,8 +169,17 @@
                                 <td class="angka" data-n="{{ $b->tertagih }}">{{ $b->tertagih ? $f($b->tertagih, 3) : '' }}@if ($b->rp_tagih)<br><span class="redup" style="font-size: 11px;">{{ rp((int) round($b->rp_tagih)) }}</span>@endif</td>
                                 <td class="p" data-n="{{ $b->p_tagih }}">{{ $pr($b->p_tagih) }}<div class="bar tagih"><span class="isi" style="width: {{ min(100, $b->p_tagih ?? 0) }}%"></span></div></td>
                             </tr>
-                            @if ($b->trx)
-                                <tr class="d"><td colspan="{{ $kol }}">@include('boq._trx', ['trx' => $b->trx, 'bolehPilah' => $bolehPilah])</td></tr>
+                            @if ($buka)
+                                <tr class="d"><td colspan="{{ $kol }}">
+                                    @if ($b->trx)
+                                        @include('boq._trx', ['trx' => $b->trx, 'bolehPilah' => $bolehPilah])
+                                    @else
+                                        <div class="redup" style="font-size: 12.5px; margin-bottom: 4px;">Belum ada transaksi yang diberi kode <b>{{ $it->kode }}</b>.</div>
+                                    @endif
+                                    @if ($bag >= 1)
+                                        @include('boq._bagian', ['lain' => $lain, 'bobot' => $b->bobot, 'bag' => $bag, 'kode' => $it->kode, 'nama' => $tahap->nama])
+                                    @endif
+                                </td></tr>
                             @endif
                         @endforeach
                     </tbody>
