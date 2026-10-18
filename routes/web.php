@@ -159,6 +159,7 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::post('/ritasi/monitor', [RitasiController::class, 'simpanBongkar'])->name('ritasi.monitor.bongkar');
     Route::post('/ritasi/monitor/unggah', [RitasiController::class, 'unggahBongkar'])->name('ritasi.monitor.unggah');
     Route::get('/ritasi/monitor/templat', [RitasiController::class, 'templatBongkar'])->name('ritasi.monitor.templat');
+    Route::post('/ritasi/monitor/tutup', [\App\Http\Controllers\PengalihanUjController::class, 'tutup'])->name('ritasi.monitor.tutup');
     Route::get('/ritasi/bayar-tanah', [RitasiController::class, 'bayarTanah'])->name('ritasi.bayar-tanah');
     Route::post('/ritasi/bayar-tanah/rekap', [\App\Http\Controllers\BayarTanahRekapController::class, 'simpan'])->name('ritasi.bayar-tanah.rekap');
     Route::post('/ritasi/bayar-tanah/rekap/{rekap}/batal', [\App\Http\Controllers\BayarTanahRekapController::class, 'batal'])->whereNumber('rekap')->name('ritasi.bayar-tanah.batal');

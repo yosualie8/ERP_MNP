@@ -166,11 +166,11 @@
                             data-mobil="{{ $d->no_mobil }}" data-do="{{ $d->no_do }}" data-nominal="{{ (int) $d->nominal }} {{ number_format((int) $d->nominal, 0, ',', '.') }}"
                             data-status="{{ $teksStatus }}"
                             title="{{ $teksStatus }}{{ $d->id_uj ? ' · '.$d->id_uj : '' }}{{ $d->realisasi_pada ? ' · '.$d->realisasi_pada->translatedFormat('j M') : '' }} · {{ $d->keterangan }}{{ $d->temuan ? ' · FLAG dikonfirmasi: '.$d->konfirmasi : '' }}">
-                            <td>@if ($bolehRealisasi && $d->status === 'menunggu')<input type="checkbox" class="pilih-real" value="{{ $d->id }}" data-pj="{{ $p->id }}" data-nominal="{{ (int) $d->nominal }}"
+                            <td>@if ($bolehRealisasi && $d->status === 'menunggu')<input type="checkbox" class="pilih-real" value="{{ $d->id }}" data-pj="{{ $p->id }}" data-nominal="{{ (int) $d->nominal - (int) $d->saldo }}"
                                 data-nama="{{ $d->nama }}" title="Pilih untuk direalisasikan bersama (satu transfer)">@endif</td>
                             <td>{{ $d->no_mobil ?: '–' }}</td>
                             <td>{{ $d->nama }}</td>
-                            <td class="angka">{{ rp($d->nominal) }}</td>
+                            <td class="angka">{{ rp($d->nominal) }}@if ($d->saldo)<div style="font-size: 11px; color: #93c5fd;" title="Dibayar dari saldo sopir (UJ yang dialihkan) — tidak ditransfer">💰 saldo {{ rp($d->saldo) }} · transfer {{ rp($d->nominal - $d->saldo) }}</div>@endif</td>
                             <td>{{ $d->kategori }}</td>
                             <td>{{ $d->no_do ?: '–' }}</td>
                             <td></td><td></td><td></td>

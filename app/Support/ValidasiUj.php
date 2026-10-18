@@ -49,6 +49,11 @@ class ValidasiUj
             ->orderBy('tanggal')->orderBy('baris')
             ->get(['id_uj', 'tanggal', 'nama', 'keterangan', 'nominal', 'kategori', 'jenis_kendaraan', 'no_mobil', 'no_do'])
             ->map(fn (UjDetail $d) => [...self::baris($d->id_uj ?: 'tanpa ID', $d->tanggal, $d->nama, $d->keterangan, (int) $d->nominal, $d->kategori, $d->jenis_kendaraan, $d->no_mobil, $d->no_do), 'id_uj' => $d->id_uj]);
+        // UJ yang sudah dialihkan / dikembalikan / dibatalkan (Pengalihan UJ) dikeluarkan dari validasi beserta transaksi DO itu s/d
+        // tanggal pengalihannya, supaya DO lama bisa dipakai lagi untuk tujuan baru tanpa dianggap dobel (owner 18 Okt 2026).
+        [$idTutup, $doTutup] = self::tertutup();
+        $histori = $histori->reject(fn ($x) => isset($idTutup[$x['id_uj']])
+            || ($x['do'] !== null && isset($doTutup[$x['do']]) && $x['tanggal'] && $x['tanggal']->lte($doTutup[$x['do']])))->values();
         // ID UJ yang sudah menjadi realisasi suatu pengajuan (tidak bisa ditautkan lagi sebagai "duluan").
         $tertaut = $tanyaDuluan ? \App\Models\UjPengajuanDetail::whereNotNull('id_uj')->pluck('id_uj')->flip()->all() : [];
         $dipakaiDuluan = [];
@@ -115,7 +120,7 @@ class ValidasiUj
                     }
                 }
             }
-            $temuan[$i] = [...$tautan, ...self::aturan($r, $pembanding, $jenisDt)];
+            $temuan[$i] = [...$tautan, ...self::aturan($r, $pembanding, $jenisDt), ...($tanyaDuluan ? self::ujTerbuka($r) : [])];
             $sebelumnya->push($r);
         }
 
@@ -329,6 +334,50 @@ class ValidasiUj
     private static function lokasiUangTanah(string $ket): ?string
     {
         return preg_match('/(?:uang|bayar)\s+tanah\s+([a-z][a-z ]{2,})/i', $ket, $m) ? strtolower(trim(preg_split('/\s+(\d|rit|tgl|tanggal)/i', $m[1])[0])) : null;
+    }
+
+    /** [id UJ yang ditutup Pengalihan UJ => true, kunci DO-nya => tanggal pengalihan terakhir]. */
+    private static function tertutup(): array
+    {
+        static $hasil;
+        if ($hasil !== null) {
+            return $hasil;
+        }
+        $p = \App\Models\UjPengalihan::whereIn('jenis', \App\Models\UjPengalihan::MENUTUP)->whereNotNull('id_uj')->get(['id_uj', 'tanggal'])->keyBy('id_uj');
+        $do = [];
+        foreach (UjDetail::whereIn('id_uj', $p->keys()->all() ?: ['-'])->get(['id_uj', 'no_do']) as $u) {
+            if ($k = self::kunciDo(str_replace(['`', "'"], '', (string) $u->no_do))) {
+                $do[$k] = max($do[$k] ?? $p[$u->id_uj]->tanggal, $p[$u->id_uj]->tanggal);
+                // kunci tanpa pembersihan (histori memakai DO apa adanya, mis. "`0015")
+                $do[self::kunciDo($u->no_do)] = $do[$k];
+            }
+        }
+
+        return $hasil = [$p->map(fn () => true)->all(), $do];
+    }
+
+    /**
+     * Pengajuan UJ (Kontrol UJ, owner 18 Okt 2026): mobil yang masih punya Uang Jalan / MOB belum bongkar melewati batas wajar
+     * proyeknya → peringatan (info, tidak wajib dikonfirmasi); lebih dari 7 hari → wajib diberi alasan. Tidak memblokir.
+     *
+     * @return array<int, array{kode: string, prioritas: string, pesan: string}>
+     */
+    private static function ujTerbuka(array $r): array
+    {
+        if (! $r['mobil'] || ($r['jenisKat'] !== 'uj' && ! in_array($r['kategori'], KontrolUj::KATEGORI, true))) {
+            return [];
+        }
+        $lewat = KontrolUj::lewatMobil($r['mobil'], $r['doAsli']);
+        if ($lewat->isEmpty()) {
+            return [];
+        }
+        $merah = $lewat->where('status', 'merah');
+        $sebut = fn ($c) => $c->take(4)->map(fn ($d) => 'DO '.$d['do'].' ('.$d['umur'].' hari'.($d['tahap'] ? ', '.$d['tahap'] : '').')')->implode(', ').($c->count() > 4 ? ' dan '.($c->count() - 4).' lainnya' : '');
+
+        return [$merah->isNotEmpty()
+            ? ['kode' => 'B', 'prioritas' => 'tinggi', 'pesan' => "{$r['mobil']} masih punya {$lewat->count()} UJ belum bongkar, {$merah->count()} di antaranya lebih dari ".KontrolUj::MERAH.' hari: '.$sebut($merah)
+                .'. Tulis alasannya (mis. "surat jalan belum diterima", "truk breakdown") — tindak lanjuti di Monitor Ritasi: input bongkar, alihkan, kembalikan, atau batalkan.']
+            : ['kode' => 'B', 'prioritas' => 'info', 'pesan' => "{$r['mobil']} masih punya {$lewat->count()} UJ belum bongkar melewati batas wajar: ".$sebut($lewat).'. Pastikan data bongkarnya segera diinput di Monitor Ritasi.']];
     }
 
     private static function kunciDo(?string $do): ?string

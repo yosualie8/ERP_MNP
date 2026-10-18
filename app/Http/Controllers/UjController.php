@@ -95,6 +95,8 @@ class UjController extends Controller
             'jenis' => $hitung('jenis_kendaraan', 10),
             'bank' => $bank,
             'modelKategori' => $this->modelKategori(),
+            // Pengajuan UJ: saldo sopir per mobil (UJ yang dialihkan, belum terpakai) untuk tombol "Pakai saldo"
+            'saldoSopir' => \App\Support\SaldoSopir::perMobil()->map(fn ($m) => (int) round($m['saldo']))->filter(fn ($v) => $v > 0)->all(),
             ...$this->dariPengajuan(),
             ...$this->dariBayarTanah(),
         ]);
@@ -172,7 +174,8 @@ class UjController extends Controller
         }
         $detail = UjPengajuanDetail::with('pengajuan')->whereIn('id', $ids)->where('status', 'menunggu')->orderBy('uj_pengajuan_id')->orderBy('urut')->get();
         $baris = $detail->map(fn ($d) => [
-            'pengajuan' => $d->id, 'kode' => $d->pengajuan->kode(), 'nama' => $d->nama, 'keterangan' => $d->keterangan, 'nominal' => (int) $d->nominal,
+            // yang direalisasikan (ditransfer) = nominal − bagian yang dibayar dari saldo sopir
+            'pengajuan' => $d->id, 'kode' => $d->pengajuan->kode(), 'nama' => $d->nama, 'keterangan' => $d->keterangan, 'nominal' => (int) $d->nominal - (int) $d->saldo,
             'kategori' => $d->kategori, 'jenis_kendaraan' => $d->jenis_kendaraan, 'no_mobil' => $d->no_mobil, 'no_do' => $d->no_do,
         ])->values()->all();
         $hilang = $ids->count() - $detail->count();
@@ -225,7 +228,7 @@ class UjController extends Controller
         $request->merge([
             'nominal' => $polos($request->input('nominal')),
             'nominal_biaya' => $polos($request->input('nominal_biaya')),
-            'detail' => array_map(fn ($d) => is_array($d) ? [...$d, 'nominal' => $polos($d['nominal'] ?? null)] : $d, (array) $request->input('detail', [])),
+            'detail' => array_map(fn ($d) => is_array($d) ? [...$d, 'nominal' => $polos($d['nominal'] ?? null), 'saldo' => $polos($d['saldo'] ?? null)] : $d, (array) $request->input('detail', [])),
         ]);
         if ($pengajuan) {
             $request->merge(['nama' => null, 'bank' => null, 'rekening' => null, 'biaya_transfer' => '0',
@@ -251,6 +254,7 @@ class UjController extends Controller
             'detail.*.pengajuan' => ['nullable', 'integer'],
             'detail.*.alasan_pengajuan' => ['nullable', 'string', 'max:1000'],
             'detail.*.duluan' => ['nullable', 'string', 'max:30'],
+            'detail.*.saldo' => ['nullable', 'integer', 'min:0'],
             'bayar_tanah_id' => ['nullable', 'integer'],
             'foto' => ['nullable', 'array', 'max:'.KasFotoController::MAKS_FOTO],
             'foto.*' => KasFotoController::ATURAN['foto.*'],
@@ -289,6 +293,8 @@ class UjController extends Controller
                 'alasan_pengajuan' => $rapi($d['alasan_pengajuan'] ?? null),
                 // Pengajuan UJ: ID UJ transaksi yang sudah terjadi duluan (jawaban "Ya" atas pertanyaan validasi D).
                 'duluan' => $pengajuan ? $rapi($d['duluan'] ?? null) : null,
+                // Pengajuan UJ: bagian nominal yang dibayar dari saldo sopir (UJ yang dialihkan) — tidak ditransfer.
+                'saldo' => $pengajuan ? (int) ($d['saldo'] ?? 0) : 0,
             ], $data['detail'])),
             'biaya_transfer' => $request->boolean('biaya_transfer'),
             'nominal_biaya' => (int) ($data['nominal_biaya'] ?? TulisUjSheet::BIAYA_TRANSFER),
@@ -408,7 +414,8 @@ class UjController extends Controller
 
                 continue;
             }
-            if (mb_strlen((string) $input['detail'][$i]['konfirmasi']) >= self::MIN_KONFIRMASI) {
+            // FLAG "info" (mis. UJ terbuka lewat batas wajar) hanya peringatan — tidak wajib dikonfirmasi.
+            if (mb_strlen((string) $input['detail'][$i]['konfirmasi']) >= self::MIN_KONFIRMASI || collect($daftar)->every(fn ($t) => ($t['prioritas'] ?? '') === 'info')) {
                 continue;
             }
             $d = $input['detail'][$i];

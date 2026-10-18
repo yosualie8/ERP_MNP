@@ -51,6 +51,12 @@
             <div class="kartu"><span class="redup">Sudah bongkar (ada di Ritasi)</span><b>{{ $semua->whereNotNull('bongkar')->count() }}</b></div>
         @endif
         <div class="kartu"><span class="redup">Data Ritasi terakhir</span><b>{{ $ritasiTerakhir ? \Illuminate\Support\Carbon::parse($ritasiTerakhir)->translatedFormat('j M Y') : '–' }}</b></div>
+        @unless ($tanah)
+            <a class="kartu" href="{{ route('ritasi.monitor', ['status' => 'lewat']) }}" style="text-decoration: none; color: inherit;" title="UJ (sejak 1 Mei 2026) yang belum bongkar melewati batas wajar proyeknya">
+                <span class="redup">UJ lewat batas wajar</span><b style="color: #f0c05a;">{{ $ringkasKontrol['lewat']['n'] }} DO · {{ rp($ringkasKontrol['lewat']['rp']) }}</b></a>
+            <a class="kartu" href="{{ route('ritasi.monitor', ['status' => 'merah']) }}" style="text-decoration: none; color: inherit;" title="Lebih dari {{ \App\Support\KontrolUj::MERAH }} hari — pengajuan UJ berikutnya untuk mobil itu wajib beralasan">
+                <span class="redup">UJ &gt; {{ \App\Support\KontrolUj::MERAH }} hari</span><b style="color: #ff8a8f;">{{ $ringkasKontrol['merah']['n'] }} DO · {{ rp($ringkasKontrol['merah']['rp']) }}</b></a>
+        @endunless
     </div>
 
     <p class="redup" style="margin: 0 0 12px; font-size: 13px;">@if ($tanah)Daftar No DO yang sudah ada Uang Jalan-nya di Kas UJ tetapi belum ada transaksi Uang Tanah-nya. Galian yang memang tidak bayar tanah (mis. ambil material) bisa disaring lewat baris Galian.@else DO yang sudah ada uang jalannya di Kas UJ tetapi belum bongkar (belum ada di data Ritasi). Begitu surat jalannya masuk, isi Tanggal Bongkar, Tujuan Bongkar,
@@ -60,9 +66,14 @@
     @php($tautan = fn (array $ubah) => route($rute, array_filter([...['umur' => $umur ?? 'semua', 'q' => $q, 'tujuan' => $tujuan, 'galian' => $galian], ...$ubah], fn ($v) => $v !== null && $v !== '')))
     <form method="GET" action="{{ route($rute) }}" class="cari-monitor">
         <span class="redup">Umur:</span>
-        <a href="{{ $tautan(['umur' => '7']) }}" @class(['chip', 'aktif' => $umur === '7'])>≤ 7 hari · {{ $jumlahUmur['7'] }}</a>
-        <a href="{{ $tautan(['umur' => '30']) }}" @class(['chip', 'aktif' => $umur === '30'])>≤ 30 hari · {{ $jumlahUmur['30'] }}</a>
-        <a href="{{ $tautan(['umur' => 'semua']) }}" @class(['chip', 'aktif' => ! $umur])>All time · {{ $semua->count() }}</a>
+        <a href="{{ $tautan(['umur' => '7']) }}" @class(['chip', 'aktif' => $umur === '7' && ! ($status ?? null)])>≤ 7 hari · {{ $jumlahUmur['7'] }}</a>
+        <a href="{{ $tautan(['umur' => '30']) }}" @class(['chip', 'aktif' => $umur === '30' && ! ($status ?? null)])>≤ 30 hari · {{ $jumlahUmur['30'] }}</a>
+        <a href="{{ $tautan(['umur' => 'semua']) }}" @class(['chip', 'aktif' => ! $umur && ! ($status ?? null)])>All time · {{ $semua->count() }}</a>
+        @unless ($tanah)
+            <span class="redup" style="margin-left: 8px;">Kontrol UJ:</span>
+            <a href="{{ route('ritasi.monitor', ['status' => 'lewat']) }}" @class(['chip', 'aktif' => ($status ?? null) === 'lewat']) title="Belum bongkar melewati batas wajar proyek (sejak 1 Mei 2026)">Lewat batas · {{ $ringkasKontrol['lewat']['n'] }}</a>
+            <a href="{{ route('ritasi.monitor', ['status' => 'merah']) }}" @class(['chip', 'aktif' => ($status ?? null) === 'merah'])>&gt; {{ \App\Support\KontrolUj::MERAH }} hari · {{ $ringkasKontrol['merah']['n'] }}</a>
+        @endunless
         <input type="hidden" name="umur" value="{{ $umur ?? 'semua' }}">
         @if ($tujuan !== '')<input type="hidden" name="tujuan" value="{{ $tujuan }}">@endif
         @if ($galian !== '')<input type="hidden" name="galian" value="{{ $galian }}">@endif
@@ -187,8 +198,12 @@
                                 <td>{{ implode(', ', $d['mobil']) ?: '–' }}</td>
                                 <td>{{ implode(', ', $d['jenis']) ?: '–' }}</td>
                                 <td>{{ implode(', ', $d['driver']) ?: '–' }}</td>
+                                @php($k = $d['kontrol'] ?? null)
                                 <td style="white-space: nowrap;">{{ $d['pertama']?->translatedFormat('j M Y') ?? '–' }}
-                                    @if ($d['umur'] !== null)<br><span @class(['umur', 'baru' => $d['umur'] <= 7, 'sedang' => $d['umur'] > 7 && $d['umur'] <= 30, 'lama' => $d['umur'] > 30])>{{ $d['umur'] }} hari</span>@endif</td>
+                                    @if ($k)<br><span @class(['umur', 'baru' => $k['status'] === 'wajar', 'sedang' => $k['status'] === 'lewat', 'lama' => $k['status'] === 'merah'])
+                                        title="Batas wajar bongkar {{ $k['batas'] }} hari{{ $k['tahap'] ? ' ('.$k['tahap'].')' : '' }}{{ $k['lama'] ? ' · data sebelum Mei 2026' : '' }}">{{ $d['umur'] }} hari</span>
+                                        <div class="redup" style="font-size: 10.5px;">batas {{ $k['batas'] }} hr{{ $k['tahap'] ? ' · '.\Illuminate\Support\Str::limit($k['tahap'], 18) : '' }}</div>
+                                    @elseif ($d['umur'] !== null)<br><span @class(['umur', 'baru' => $d['umur'] <= 7, 'sedang' => $d['umur'] > 7 && $d['umur'] <= 30, 'lama' => $d['umur'] > 30])>{{ $d['umur'] }} hari</span>@endif</td>
                                 <td><input type="text" name="{{ $n }}[galian]" value="{{ $lama['galian'] ?? $d['galian_saran'] }}" list="saran-galian" autocomplete="off" class="isi-bongkar" data-bawaan="{{ $d['galian_saran'] }}"></td>
                                 <td><input type="text" name="{{ $n }}[tanggal]" value="{{ $lama['tanggal'] ?? '' }}" data-tanggal-id data-maks="{{ now()->toDateString() }}" class="isi-bongkar wajib"></td>
                                 <td><input type="text" name="{{ $n }}[jam]" value="{{ $lama['jam'] ?? '' }}" data-jam-id class="isi-bongkar" style="min-width: 70px;"></td>
@@ -219,6 +234,16 @@
                                     <td class="angka">{{ rp((int) $x->nominal) }}</td>
                                 </tr>
                             @endforeach
+                            @php($idTutup = collect($d['detail'])->filter(fn ($x) => in_array($x->kategori, \App\Support\KontrolUj::KATEGORI, true) && $x->id_uj && ! str_starts_with($x->id_uj, 'SALDO-'))->pluck('id_uj'))
+                            @if ($idTutup->isNotEmpty())
+                                <tr class="b"><td colspan="13" style="padding: 6px 10px;">
+                                    <b style="font-size: 12px;">Tidak akan bongkar?</b>
+                                    @if ($k['tahap_id'] ?? null)<a href="{{ route('pengalihan-uj.index', ['asal' => $k['tahap_id'], 'mobil' => implode(',', $d['mobil'])]) }}" class="tombol polos" style="padding: 2px 10px; font-size: 12px;" title="Truk pindah proyek sebelum bongkar — UJ jadi saldo sopir">↪ Alihkan ke proyek lain</a>@endif
+                                    <button type="button" class="tombol polos" data-tutup="kembali" data-uj="{{ $idTutup->implode(',') }}" data-do="{{ $d['do'] }}" style="padding: 2px 10px; font-size: 12px;">↩ Uang dikembalikan sopir</button>
+                                    <button type="button" class="tombol polos" data-tutup="batal" data-uj="{{ $idTutup->implode(',') }}" data-do="{{ $d['do'] }}" style="padding: 2px 10px; font-size: 12px;" title="Tidak bongkar tetapi uangnya sudah terpakai (mis. breakdown) — tetap biaya proyek">✕ Batal (tidak bongkar)</button>
+                                    <span class="redup" style="font-size: 11.5px;">{{ $idTutup->implode(', ') }} · wajib alasan</span>
+                                </td></tr>
+                            @endif
                             </template>
                         </tbody>
                     @empty
@@ -234,6 +259,24 @@
                 <span class="redup" id="info-bongkar">Isi Tanggal Bongkar, Tujuan Bongkar, Jenis Tanah & No Surat Jalan dari surat jalan untuk DO yang sudah bongkar.</span>
             </div>
         </form>
+        {{-- Kontrol UJ: tutup UJ belum bongkar (dikembalikan / batal) — form terpisah (tidak boleh bersarang di form bongkar). --}}
+        <form method="POST" action="{{ route('ritasi.monitor.tutup') }}" id="form-tutup-uj" hidden>@csrf
+            <input type="hidden" name="jenis"><input type="hidden" name="keterangan"><span class="isi-uj"></span>
+        </form>
+        <script>
+            document.addEventListener('click', e => {
+                const b = e.target.closest('[data-tutup]');
+                if (!b) return;
+                const batal = b.dataset.tutup === 'batal';
+                const alasan = prompt(`${batal ? 'BATAL (tidak bongkar, uang sudah terpakai — tetap biaya proyek)' : 'UANG DIKEMBALIKAN SOPIR'} untuk DO ${b.dataset.do} (${b.dataset.uj}).\nTulis alasannya (min. 10 karakter):`);
+                if (alasan === null) return;
+                if (alasan.trim().length < 10) { alert('Alasan minimal 10 karakter.'); return; }
+                const f = document.getElementById('form-tutup-uj');
+                f.jenis.value = b.dataset.tutup; f.keterangan.value = alasan.trim();
+                f.querySelector('.isi-uj').innerHTML = b.dataset.uj.split(',').map(id => `<input type="hidden" name="uj[]" value="${id.replace(/"/g, '')}">`).join('');
+                f.submit();
+            });
+        </script>
     @else
     @php($bolehBayar = true)
     @if ($rekapTanah->isNotEmpty())

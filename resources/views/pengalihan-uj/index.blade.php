@@ -29,22 +29,25 @@
         <button class="tombol polos" type="submit">Tampilkan</button>
     </form>
     <p class="redup" style="font-size: 12px; margin: -6px 0 12px;">Untuk UJ yang sudah diberikan tetapi truknya dipindah ke proyek lain sebelum bongkar. Transaksi Kas UJ aslinya <b>tidak diubah</b>.
-        <b>Dialihkan</b> = biaya UJ pindah ke proyek tujuan dan menjadi saldo sopir (dipakai untuk Uang MOB / dipotong dari UJ berikutnya). <b>Dikembalikan</b> = uangnya dikembalikan sopir, keluar dari biaya proyek asal.</p>
+        <b>Dialihkan</b> = UJ keluar dari biaya proyek asal dan menjadi <b>saldo sopir</b> (belum biaya). Saldo terpakai otomatis begitu <b>DO lamanya bongkar</b> di proyek tujuan
+        (cukup ajukan kekurangannya dengan DO yang sama), atau lewat <b>Pakai saldo</b> di Pengajuan UJ (DO baru) / Uang MOB. Yang terpakai baru menjadi biaya proyek tujuan.
+        <b>Dikembalikan</b> = uangnya dikembalikan sopir, keluar dari biaya proyek asal.</p>
 
     @if ($tujuan && $saldo->isNotEmpty())
         <div class="ringkas">
             <div class="kartu"><small>UJ dialihkan ke {{ $tujuan->nama }}</small><b>{{ $saldo->sum('n') }} UJ · {{ rp((int) $saldo->sum('alih')) }}</b><small>{{ $saldo->count() }} mobil</small></div>
+            <div class="kartu"><small>Terpakai lewat DO lama (sudah bongkar)</small><b>{{ rp((int) $saldo->sum('terpakai_do')) }}</b><small>{{ $saldo->sum('n_terpakai_do') }} UJ</small></div>
             <div class="kartu"><small>Dipakai Uang MOB</small><b>{{ rp((int) $saldo->sum('mob')) }}</b></div>
-            <div class="kartu"><small>Dipotong / pemakaian lain</small><b>{{ rp((int) $saldo->sum('pakai_lain')) }}</b></div>
-            <div class="kartu"><small>Saldo sopir (potong UJ berikutnya)</small><b>{{ rp((int) $saldo->sum('saldo')) }}</b></div>
+            <div class="kartu"><small>Dipakai UJ DO baru / lain</small><b>{{ rp((int) $saldo->sum('pakai_lain')) }}</b></div>
+            <div class="kartu"><small>Saldo sopir (belum terpakai)</small><b>{{ rp((int) $saldo->sum('saldo')) }}</b></div>
         </div>
         <div class="kartu gulir" style="padding: 0;">
             <h4 style="margin: 0; padding: 12px 14px 6px; color: var(--aksen-terang);">Saldo per mobil di {{ $tujuan->nama }}</h4>
             <table class="kas" data-tanpa-saring-kolom>
-                <thead><tr><th>Mobil</th><th>Sopir</th><th class="angka">UJ dialihkan</th><th class="angka">Rp dialihkan</th><th class="angka">Uang MOB</th><th class="angka">Dipotong / lain</th><th class="angka">Saldo</th><th>Catat pemakaian saldo</th></tr></thead>
+                <thead><tr><th>Mobil</th><th>Sopir</th><th class="angka">UJ dialihkan</th><th class="angka">Rp dialihkan</th><th class="angka">Terpakai DO lama</th><th class="angka">Uang MOB</th><th class="angka">UJ DO baru / lain</th><th class="angka">Saldo</th><th>Catat pemakaian saldo</th></tr></thead>
                 <tbody>
                     @foreach ($saldo as $mobil => $s)
-                        <tr><td><b>{{ $mobil }}</b></td><td>{{ $s['nama'] }}</td><td class="angka">{{ $s['n'] }}</td><td class="angka">{{ rp((int) $s['alih']) }}</td><td class="angka">{{ $s['mob'] ? rp((int) $s['mob']) : '' }}</td>
+                        <tr><td><b>{{ $mobil }}</b></td><td>{{ $s['nama'] }}</td><td class="angka">{{ $s['n'] }}</td><td class="angka">{{ rp((int) $s['alih']) }}</td><td class="angka">{{ $s['terpakai_do'] ? rp((int) $s['terpakai_do']).' ('.$s['n_terpakai_do'].')' : '' }}</td><td class="angka">{{ $s['mob'] ? rp((int) $s['mob']) : '' }}</td>
                             <td class="angka">{{ $s['pakai_lain'] ? rp((int) $s['pakai_lain']) : '' }}</td><td class="angka"><b>{{ rp((int) $s['saldo']) }}</b></td>
                             <td>@if ($s['saldo'] > 0)
                                 <form method="POST" action="{{ route('pengalihan-uj.pakai') }}" style="display: flex; gap: 4px; flex-wrap: wrap;">@csrf

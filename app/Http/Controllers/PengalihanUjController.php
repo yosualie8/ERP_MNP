@@ -46,10 +46,13 @@ class PengalihanUjController extends Controller
         })->sortBy(fn ($c) => [$c->u->no_mobil, $c->tgl])->values();
 
         $buku = $tujuan ? UjPengalihan::with(['dari', 'ke'])->where('ke_tahap_id', $tujuan->id)->orderBy('no_mobil')->orderBy('tanggal')->orderBy('id')->get() : collect();
-        $saldo = $buku->groupBy('no_mobil')->map(fn ($g) => ['nama' => $g->firstWhere('jenis', 'alih')?->nama ?? $g->first()->nama,
+        // saldo sopir = dialihkan − terpakai lewat DO lama (sudah bongkar) − dipakai (MOB / UJ DO baru / lain) — lihat App\Support\SaldoSopir
+        $ss = \App\Support\SaldoSopir::perMobil();
+        $saldo = $buku->groupBy('no_mobil')->map(fn ($g, $m) => ['nama' => $g->firstWhere('jenis', 'alih')?->nama ?? $g->first()->nama,
             'alih' => $g->where('jenis', 'alih')->sum('nominal'), 'n' => $g->where('jenis', 'alih')->count(),
+            'terpakai_do' => $ss[$m]['terpakai_do'] ?? 0, 'n_terpakai_do' => isset($ss[$m]) ? $ss[$m]['uj']->filter(fn ($x) => $x->bongkar)->count() : 0,
             'mob' => $g->where('jenis', 'pakai')->where('peruntukan', 'mob')->sum('nominal'), 'pakai_lain' => $g->where('jenis', 'pakai')->where('peruntukan', '!=', 'mob')->sum('nominal')])
-            ->map(fn ($x) => $x + ['saldo' => $x['alih'] - $x['mob'] - $x['pakai_lain']]);
+            ->map(fn ($x) => $x + ['saldo' => $x['alih'] - $x['terpakai_do'] - $x['mob'] - $x['pakai_lain']]);
 
         return view('pengalihan-uj.index', [
             'ritasi' => $ritasi, 'asal' => $asal, 'tujuan' => $tujuan, 'calon' => $calon, 'pilihMobil' => $pilihMobil, 'buku' => $buku, 'saldo' => $saldo,
@@ -118,7 +121,7 @@ class PengalihanUjController extends Controller
             'peruntukan' => ['required', 'in:mob,uj,lain'], 'nominal' => ['required', 'string', 'max:20'], 'keterangan' => ['nullable', 'string', 'max:300']]);
         $nominal = (float) preg_replace('/\D/', '', $d['nominal']);
         $buku = UjPengalihan::where('ke_tahap_id', $d['tujuan'])->where('no_mobil', $d['no_mobil'])->get();
-        $sisa = $buku->where('jenis', 'alih')->sum('nominal') - $buku->where('jenis', 'pakai')->sum('nominal');
+        $sisa = \App\Support\SaldoSopir::sisa($d['no_mobil']);
         if ($nominal <= 0 || $nominal > $sisa) {
             return back()->withInput()->with('error', "Nominal harus 1 s/d saldo {$d['no_mobil']} (Rp ".number_format($sisa, 0, ',', '.').').');
         }
@@ -129,6 +132,37 @@ class PengalihanUjController extends Controller
             'isi' => $d + ['nominal_angka' => $nominal], 'user_id' => $request->user()->id]);
 
         return back()->with('success', "Pemakaian saldo {$d['no_mobil']} dicatat.");
+    }
+
+    /**
+     * Monitor Ritasi → tutup UJ belum bongkar satu DO (Kontrol UJ, owner 18 Okt 2026):
+     *  - kembali : uang dikembalikan sopir (keluar dari biaya proyeknya);
+     *  - batal   : tidak bongkar, uang sudah terpakai (mis. truk breakdown di jalan) — tetap biaya, alasan wajib.
+     */
+    public function tutup(Request $request): RedirectResponse
+    {
+        $d = $request->validate(['jenis' => ['required', 'in:kembali,batal'], 'uj' => ['required', 'array', 'min:1'], 'uj.*' => ['string', 'max:20'],
+            'keterangan' => ['required', 'string', 'min:10', 'max:300']], ['keterangan.*' => 'Tulis alasannya (min. 10 karakter).', 'uj.required' => 'Tidak ada UJ yang dipilih.']);
+        $uj = UjDetail::whereIn('id_uj', $d['uj'])->whereIn('kategori', \App\Support\KontrolUj::KATEGORI)->get();
+        $sudah = UjPengalihan::whereIn('id_uj', $uj->pluck('id_uj'))->pluck('id_uj')->flip();
+        $uj = $uj->reject(fn ($u) => isset($sudah[$u->id_uj]));
+        if ($uj->isEmpty()) {
+            return back()->with('error', 'UJ itu sudah dialihkan / dikembalikan / dibatalkan sebelumnya.');
+        }
+        $tahap = \App\Support\KontrolUj::terbuka()->keyBy('do');
+        DB::transaction(function () use ($uj, $d, $tahap, $request) {
+            foreach ($uj as $u) {
+                UjPengalihan::create(['jenis' => $d['jenis'], 'id_uj' => $u->id_uj, 'no_do' => $u->no_do ? ltrim(trim($u->no_do), "`'") : null, 'no_mobil' => $u->no_mobil ?: '-',
+                    'nama' => $u->nama, 'dari_tahap_id' => $tahap[\App\Support\SaldoSopir::kunciDo($u->no_do)]['tahap_id'] ?? null, 'tanggal' => now()->toDateString(),
+                    'nominal' => $u->nominal, 'keterangan' => $d['keterangan'], 'user_id' => $request->user()->id]);
+            }
+        });
+        $label = $d['jenis'] === 'kembali' ? 'dikembalikan sopir' : 'dibatalkan (tidak bongkar)';
+        KasRiwayat::create(['aksi' => 'uj-tutup', 'lembar' => 'Kas UJ', 'baris_awal' => 0, 'baris_akhir' => 0,
+            'ringkasan' => mb_strimwidth($uj->count().' UJ '.$label.' (Rp '.number_format($uj->sum('nominal'), 0, ',', '.').'): '.$uj->pluck('id_uj')->implode(', ').' — '.$d['keterangan'], 0, 490, '…'),
+            'isi' => ['uj' => $uj->pluck('id_uj'), 'jenis' => $d['jenis'], 'keterangan' => $d['keterangan']], 'user_id' => $request->user()->id]);
+
+        return back()->with('success', $uj->count().' UJ ('.$uj->pluck('id_uj')->implode(', ').") {$label}.");
     }
 
     public function hapus(Request $request, UjPengalihan $pengalihan): RedirectResponse

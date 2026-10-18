@@ -20,10 +20,32 @@ class MonitorRitasi
     /** @return array{do: Collection<int, array>, bukan_angka: Collection<int, string>} */
     public static function belumBongkar(): array
     {
-        // UJ yang sudah dialihkan / dikembalikan di Pengalihan UJ (truk pindah proyek sebelum bongkar) bukan lagi "belum bongkar"
-        $alih = UjPengalihan::whereIn('jenis', ['alih', 'kembali'])->whereNotNull('id_uj')->pluck('id_uj')->flip();
+        // UJ yang sudah dialihkan / dikembalikan / dibatalkan di Pengalihan UJ bukan lagi "belum bongkar"; transaksi lain DO itu sampai
+        // tanggal pengalihannya (uang makan, sparepart perjalanan lama) ikut tertutup. Transaksi DO lama SESUDAH pengalihan (mis.
+        // kekurangan UJ untuk tujuan baru) tetap dipantau. Pemakaian saldo sopir ber-DO baru (Pengajuan UJ) ikut dipantau bongkarnya.
+        $tutup = UjPengalihan::whereIn('jenis', UjPengalihan::MENUTUP)->whereNotNull('id_uj')->get(['id_uj', 'tanggal']);
+        $doTutup = [];
+        foreach (UjDetail::whereIn('id_uj', $tutup->pluck('id_uj'))->get(['id_uj', 'no_do']) as $u) {
+            if ($k = SaldoSopir::kunciDo($u->no_do)) {
+                $tgl = $tutup->firstWhere('id_uj', $u->id_uj)->tanggal;
+                $doTutup[$k] = isset($doTutup[$k]) ? max($doTutup[$k], $tgl) : $tgl;
+            }
+        }
+        $idTutup = $tutup->pluck('id_uj')->flip();
+        $saring = fn ($d, string $k) => ! isset($idTutup[$d->id_uj]) && ! (isset($doTutup[$k]) && $d->tanggal && $d->tanggal->lte($doTutup[$k]));
 
-        return self::kelompok(fn (string $do, Collection $baris, array $ritasi) => ! isset($ritasi[$do]) && ! $baris->contains(fn ($d) => isset($alih[$d->id_uj])));
+        return self::kelompok(fn (string $do, Collection $baris, array $ritasi) => ! isset($ritasi[$do]), $saring, self::dariSaldo());
+    }
+
+    /** Pemakaian saldo sopir ber-DO (Pengajuan UJ → Pakai saldo) dalam bentuk baris Kas UJ supaya ikut dipantau bongkarnya. */
+    public static function dariSaldo(): array
+    {
+        return UjPengalihan::where('jenis', 'pakai')->whereNotNull('no_do')->orderBy('tanggal')->get()
+            ->map(fn ($p) => (new UjDetail)->forceFill([
+                'id_uj' => 'SALDO-'.$p->id, 'baris' => null, 'tanggal' => $p->tanggal, 'nama' => $p->nama, 'nominal' => $p->nominal,
+                'keterangan' => 'Dibayar dari saldo sopir'.($p->keterangan ? ' — '.$p->keterangan : ''), 'kategori' => 'Uang Jalan',
+                'jenis_kendaraan' => null, 'no_mobil' => $p->no_mobil, 'no_do' => $p->no_do, 'status' => 'saldo sopir', 'tahap_saldo' => $p->ke_tahap_id,
+            ]))->all();
     }
 
     /** @return array{do: Collection<int, array>, bukan_angka: Collection<int, string>} */
@@ -38,8 +60,10 @@ class MonitorRitasi
      * Semua transaksi Kas UJ ber-No DO, dikelompokkan per DO; hanya DO yang lolos $termasuk yang diambil.
      *
      * @param  callable(string, Collection, array): bool  $termasuk  (kunci DO, transaksi DO itu, peta DO ritasi => tanggal rit pertama)
+     * @param  callable(UjDetail, string): bool|null  $saring  transaksi yang ikut dihitung (null = semua)
+     * @param  array<int, UjDetail>  $tambahan  baris tambahan (mis. pemakaian saldo sopir) yang diperlakukan seperti transaksi Kas UJ
      */
-    private static function kelompok(callable $termasuk): array
+    private static function kelompok(callable $termasuk, ?callable $saring = null, array $tambahan = []): array
     {
         $kunci = fn ($v) => LembarRitasi::kunciAngka(str_replace(['`', "'"], '', (string) $v));
         $ritasi = [];
@@ -58,17 +82,20 @@ class MonitorRitasi
 
         $bukanAngka = collect();
         $per = [];
-        foreach ($detail as $d) {
+        foreach ([...$detail, ...$tambahan] as $d) {
             $k = $kunci($d->no_do);
             if ($k === null || ! ctype_digit($k)) {
                 $bukanAngka->push(trim((string) $d->no_do));
 
                 continue;
             }
+            if ($saring && ! $saring($d, $k)) {
+                continue;
+            }
             $per[$k][] = $d;
         }
         $hariIni = Carbon::today();
-        $do = collect($per)->map(fn ($b) => collect($b))->filter(fn (Collection $c, $k) => $termasuk((string) $k, $c, $ritasi))
+        $do = collect($per)->map(fn ($b) => collect($b)->sortBy(fn ($d) => $d->tanggal?->format('Ymd'))->values())->filter(fn (Collection $c, $k) => $termasuk((string) $k, $c, $ritasi))
             ->map(function (Collection $c, $k) use ($hariIni, $ritasi, $suratJalan) {
                 $pertama = $c->first()->tanggal;
 

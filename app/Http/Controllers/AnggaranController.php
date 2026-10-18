@@ -148,18 +148,19 @@ class AnggaranController extends Controller
     public function simpanRitasi(Request $request, ProyekTahap $tahap): RedirectResponse
     {
         abort_unless($tahap->tipe === 'ritasi', 404);
-        $d = $request->validate(['dasar_bayar' => ['required', 'in:m3,rit'], 'harga' => ['required', 'string', 'max:20'], 'kata_uj' => ['nullable', 'string', 'max:200']]);
+        $d = $request->validate(['dasar_bayar' => ['required', 'in:m3,rit'], 'harga' => ['required', 'string', 'max:20'], 'kata_uj' => ['nullable', 'string', 'max:200'],
+            'batas_bongkar' => ['nullable', 'integer', 'min:1', 'max:30']], ['batas_bongkar.*' => 'Batas wajar bongkar 1–30 hari (kosong = '.\App\Support\KontrolUj::BATAS_BAWAAN.' hari).']);
         $harga = self::angka($d['harga']);
         if ($harga === false || $harga === null || $harga < 0) {
             throw ValidationException::withMessages(['harga' => 'Harga harus angka.']);
         }
-        $lama = $tahap->only(['dasar_bayar', 'harga_m3', 'harga_rit', 'kata_uj']);
+        $lama = $tahap->only(['dasar_bayar', 'harga_m3', 'harga_rit', 'kata_uj', 'batas_bongkar']);
         $tahap->update(['dasar_bayar' => $d['dasar_bayar'], $d['dasar_bayar'] === 'rit' ? 'harga_rit' : 'harga_m3' => $harga,
-            'kata_uj' => trim(preg_replace('/\s*,\s*/', ', ', (string) ($d['kata_uj'] ?? ''))) ?: null]);
+            'kata_uj' => trim(preg_replace('/\s*,\s*/', ', ', (string) ($d['kata_uj'] ?? ''))) ?: null, 'batas_bongkar' => $d['batas_bongkar'] ?? null]);
         $rp = fn ($v) => number_format((float) $v, 0, ',', '.');
         KasRiwayat::create(['aksi' => 'proyek-ubah', 'lembar' => 'Proyek', 'baris_awal' => 0, 'baris_akhir' => 0,
             'ringkasan' => "Setelan ritasi {$tahap->nama}: dibayar per ".($d['dasar_bayar'] === 'rit' ? 'rit' : 'm³')." Rp {$rp($harga)}".($tahap->kata_uj ? ", kata kunci UJ: {$tahap->kata_uj}" : ''),
-            'isi' => ['tahap_id' => $tahap->id, 'lama' => $lama, 'baru' => $tahap->only(['dasar_bayar', 'harga_m3', 'harga_rit', 'kata_uj'])], 'user_id' => $request->user()->id]);
+            'isi' => ['tahap_id' => $tahap->id, 'lama' => $lama, 'baru' => $tahap->only(['dasar_bayar', 'harga_m3', 'harga_rit', 'kata_uj', 'batas_bongkar'])], 'user_id' => $request->user()->id]);
 
         return redirect()->route('anggaran.edit', $tahap)->with('success', "Setelan ritasi disimpan: per ".($d['dasar_bayar'] === 'rit' ? 'rit' : 'm³')." Rp {$rp($harga)}.");
     }

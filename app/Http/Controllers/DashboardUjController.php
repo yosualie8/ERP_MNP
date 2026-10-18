@@ -60,6 +60,8 @@ class DashboardUjController extends Controller
         ]);
 
         return view('dashboard.uj', [
+            // Kontrol UJ: UJ yang belum bongkar melewati batas wajar / lebih dari 7 hari (sejak 1 Mei 2026)
+            'kontrol' => \App\Support\KontrolUj::ringkas(),
             'belum' => $belum,
             'terakhir' => $terakhir,
             'lewatAplikasi' => $lewatAplikasi,

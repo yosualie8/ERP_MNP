@@ -69,6 +69,11 @@
         .temuan .prioritas.tinggi { background: var(--aksen); color: #fff; }
         .temuan .prioritas.sedang { background: #b8860b; color: #fff; }
         .temuan .prioritas.rendah { background: #3b404b; color: #dfe2e7; }
+        .temuan .prioritas.info { background: #2f6f9f; color: #fff; }
+        .saldo-sopir { margin-top: 4px; font-size: 11.5px; color: #93c5fd; }
+        .saldo-sopir[hidden] { display: none; }
+        .saldo-sopir input { width: 100%; margin-top: 2px; padding: 3px 6px; font-size: 12px; border-color: #3b6ea5; }
+        .saldo-sopir button { padding: 1px 8px; font-size: 11px; margin-left: 4px; }
         .temuan .aturan { color: var(--redup); font-size: 11px; }
         .temuan label { display: block; color: var(--teks); font-size: 12px; margin: 0; }
         .aksi-massal-pj { border: 1px solid var(--aksen); background: var(--aksen-muda); border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; }
@@ -245,7 +250,7 @@
         <div class="kartu">
             <div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px;">
                 <h3 style="margin: 0 0 4px;">{{ $ajukan ? 'Daftar transaksi yang diajukan' : 'Transaksi detail' }}</h3>
-                <span class="redup">{{ $ajukan ? 'Total pengajuan' : 'Jumlah detail' }} <span class="total-bon" id="total-bon">0</span>@unless ($ajukan) dari nominal master <b id="nilai-transfer">0</b>@else<b id="nilai-transfer" hidden>0</b>@endunless</span>
+                <span class="redup">{{ $ajukan ? 'Total pengajuan' : 'Jumlah detail' }} <span class="total-bon" id="total-bon">0</span>@unless ($ajukan) dari nominal master <b id="nilai-transfer">0</b>@else<b id="nilai-transfer" hidden>0</b><span id="ringkas-saldo" hidden> · dari saldo sopir <b id="total-saldo">0</b> · <b>ditransfer <span id="total-ditransfer">0</span></b></span>@endunless</span>
             </div>
             <div id="status-cocok" class="pesan" style="margin: 8px 0 10px; padding: 8px 12px;{{ $ajukan ? ' display: none;' : '' }}"></div>
             @if ($ajukan && $edit && count($edit['terkunci'] ?? []))
@@ -321,7 +326,9 @@
 
     <template id="templat-bon">
         <tr class="baris-detail">
-            <td><input type="hidden" class="pengajuan-kunci"><input type="hidden" class="duluan-kunci"><input type="text" class="angka-input rupiah" data-nama="nominal" inputmode="numeric" autocomplete="off" required></td>
+            <td><input type="hidden" class="pengajuan-kunci"><input type="hidden" class="duluan-kunci"><input type="text" class="angka-input rupiah" data-nama="nominal" inputmode="numeric" autocomplete="off" required>
+                @if ($ajukan)<div class="saldo-sopir" hidden><span class="info-saldo"></span><button type="button" class="tombol polos pakai-saldo" title="Bayar dari saldo sopir (UJ yang dialihkan)">Pakai</button>
+                    <input type="text" class="angka-input rupiah" data-nama="saldo" inputmode="numeric" autocomplete="off" placeholder="dibayar dari saldo" title="Bagian nominal yang dibayar dari saldo sopir — tidak ditransfer"></div>@endif</td>
             <td><input type="text" data-nama="nama" list="daftar-nama" autocomplete="off"></td>
             <td><input type="text" data-nama="keterangan" autocomplete="off" required></td>
             <td><input type="text" data-nama="kategori" list="daftar-kategori" autocomplete="off" required><div class="saran-kode"></div></td>
@@ -433,8 +440,58 @@
                 daftar.appendChild(tr);
                 urutkanNama();
                 hitung();
+                setTimeout(aturSaldo);
                 return tr;
             };
+            // Pengajuan UJ: saldo sopir (UJ yang dialihkan dari proyek lain) bisa dipakai membayar detail — bagian itu tidak ditransfer.
+            const SALDO = @json($saldoSopir ?? []);
+            function aturSaldo() {
+                if (!AJUKAN) return;
+                const dipakai = {};
+                barisDetail().forEach(tr => {
+                    const m = kunciMobil(tr.querySelector('[data-nama=no_mobil]').value);
+                    if (m) dipakai[m] = (dipakai[m] || 0) + angka(tr.querySelector('[data-nama=saldo]')?.value);
+                });
+                let totalSaldo = 0, total = 0;
+                barisDetail().forEach(tr => {
+                    const box = tr.querySelector('.saldo-sopir');
+                    if (!box) return;
+                    const m = kunciMobil(tr.querySelector('[data-nama=no_mobil]').value);
+                    const inp = box.querySelector('[data-nama=saldo]');
+                    const nominal = angka(tr.querySelector('[data-nama=nominal]').value);
+                    const pakai = angka(inp.value);
+                    const ada = SALDO[m] || 0;
+                    const sisa = ada - (dipakai[m] || 0);
+                    box.hidden = !(ada > 0 || pakai > 0);
+                    box.querySelector('.info-saldo').textContent = ada > 0
+                        ? `💰 Saldo ${m}: ${fmt(ada)}${sisa !== ada ? ' · sisa ' + fmt(Math.max(0, sisa)) : ''}` + (sisa < 0 ? ' — MELEBIHI saldo' : '')
+                        : `⚠ ${m || 'Mobil ini'} tidak punya saldo sopir`;
+                    box.querySelector('.pakai-saldo').hidden = !(sisa > 0 && pakai < nominal);
+                    inp.style.borderColor = sisa < 0 || pakai > nominal ? 'var(--aksen)' : '';
+                    totalSaldo += pakai; total += nominal;
+                });
+                const rk = document.getElementById('ringkas-saldo');
+                if (rk) {
+                    rk.hidden = !totalSaldo;
+                    document.getElementById('total-saldo').textContent = fmt(totalSaldo);
+                    document.getElementById('total-ditransfer').textContent = fmt(total - totalSaldo);
+                }
+            }
+            if (AJUKAN) {
+                daftar.addEventListener('input', () => aturSaldo());
+                daftar.addEventListener('focusout', () => setTimeout(aturSaldo));
+                daftar.addEventListener('click', e => {
+                    const btn = e.target.closest('.pakai-saldo');
+                    if (!btn) return;
+                    const tr = btn.closest('tr');
+                    const m = kunciMobil(tr.querySelector('[data-nama=no_mobil]').value);
+                    const inp = tr.querySelector('[data-nama=saldo]');
+                    const lain = barisDetail().filter(x => x !== tr && kunciMobil(x.querySelector('[data-nama=no_mobil]').value) === m)
+                        .reduce((s, x) => s + angka(x.querySelector('[data-nama=saldo]').value), 0);
+                    inp.value = fmt(Math.max(0, Math.min(angka(tr.querySelector('[data-nama=nominal]').value), (SALDO[m] || 0) - lain)));
+                    aturSaldo(); evaluasi();
+                });
+            }
             // Tebak Kategori dari Keterangan, seketika di browser (model dari histori Kas Seabank, tepat ±99%).
             // Kategori otomatis (ungu) boleh ditimpa tebakan berikutnya; begitu admin mengetik/memilih sendiri, tidak disentuh lagi.
             const modelKategori = @json($modelKategori);
@@ -867,6 +924,15 @@
                     if (!tanya.length) jumlah++;
                     tr.aturan = [...new Set(daftarT.map(x => x.kode))];
                     if (tanya.length) return;
+                    // FLAG "info" saja (mis. UJ terbuka lewat batas wajar): peringatan, tanpa kotak konfirmasi.
+                    if (daftarT.every(x => x.prioritas === 'info')) {
+                        const t = document.createElement('tr');
+                        t.className = 'temuan-baris';
+                        t.innerHTML = `<td colspan="8"><div class="temuan">${daftarT.map(x => `<div><span class="prioritas info">info</span> <span class="aturan">Aturan ${esc2(x.kode)}</span> ${esc2(x.pesan)}</div>`).join('')}</div></td>`;
+                        (tr.duluanEl ?? tr.kurangEl ?? tr).after(t);
+                        tr.temuan = t;
+                        return;
+                    }
                     const t = document.createElement('tr');
                     t.className = 'temuan-baris';
                     t.innerHTML = `<td colspan="8"><div class="temuan">

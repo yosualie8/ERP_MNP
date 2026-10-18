@@ -29,7 +29,8 @@ class BandingPengajuan
         $teks = fn ($v) => mb_strtolower(trim(preg_replace('/\s+/', ' ', (string) $v)));
         $do = fn ($v) => ($v = preg_replace('/\s+/', '', (string) $v)) === '' ? '' : (ltrim($v, '0') ?: '0');
         $kolom = [
-            'nominal' => ['Nominal', (int) $p->nominal, (int) $d['nominal'], fn ($v) => rp((int) $v)],
+            // bagian yang dibayar dari saldo sopir tidak ditransfer → realisasinya = nominal − saldo
+            'nominal' => ['Nominal', (int) $p->nominal - (int) $p->saldo, (int) $d['nominal'], fn ($v) => rp((int) $v)],
             'nama' => ['Driver', $teks($p->nama), $teks($d['nama'] ?? ''), null],
             'keterangan' => ['Keterangan', $teks($p->keterangan), $teks($d['keterangan']), null],
             'kategori' => ['Kategori', $teks(KategoriUj::baku($p->kategori)), $teks(KategoriUj::baku($d['kategori'] ?? null)), null],

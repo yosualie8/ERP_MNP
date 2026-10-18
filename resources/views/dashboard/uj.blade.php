@@ -12,6 +12,18 @@
 
     <div class="dash-kartu">
         <div class="kartu">
+            <h4>UJ belum bongkar</h4>
+            <div class="angka-besar" style="color: {{ $kontrol['merah']['n'] ? '#ff8a8f' : 'inherit' }};">{{ $kontrol['merah']['n'] }} <span style="font-size: 15px; font-weight: 400;">DO &gt; {{ \App\Support\KontrolUj::MERAH }} hari</span></div>
+            <div style="font-size: 18px; margin: 4px 0 8px;"><b>{{ rp($kontrol['merah']['rp']) }}</b> <span class="redup" style="font-size: 13px;">uang jalan tanpa data bongkar</span></div>
+            <div class="dash-baris"><span>Lewat batas wajar proyek (termasuk &gt; {{ \App\Support\KontrolUj::MERAH }} hari)</span><span>{{ $kontrol['lewat']['n'] + $kontrol['merah']['n'] }} DO · <b>{{ rp($kontrol['lewat']['rp'] + $kontrol['merah']['rp']) }}</b></span></div>
+            <div class="dash-baris"><span>Masih wajar (dalam perjalanan)</span><span>{{ $kontrol['wajar']['n'] }} DO · {{ rp($kontrol['wajar']['rp']) }}</span></div>
+            <div class="dash-baris redup"><span>Data lama sebelum Mei 2026</span><span>{{ $kontrol['lama']['n'] }} DO · {{ rp($kontrol['lama']['rp']) }}</span></div>
+            @if (auth()->user()->bolehMenu('monitor-ritasi'))
+                <div style="margin-top: 10px;"><a href="{{ route('ritasi.monitor', ['status' => 'lewat']) }}" class="tombol polos" style="padding: 4px 12px; font-size: 13px;">Tindak lanjuti di Monitor Ritasi</a></div>
+            @endif
+        </div>
+
+        <div class="kartu">
             <h4>Belum reimburse</h4>
             <div class="angka-besar">{{ number_format($belum['detail'], 0, ',', '.') }} <span style="font-size: 15px; font-weight: 400;">transaksi</span></div>
             <div style="font-size: 18px; margin: 4px 0 8px;"><b>{{ rp($belum['total']) }}</b> <span class="redup" style="font-size: 13px;">dari {{ $belum['transfer'] }} transfer</span></div>

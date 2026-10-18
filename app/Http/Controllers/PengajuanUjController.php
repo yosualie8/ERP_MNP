@@ -91,10 +91,13 @@ class PengajuanUjController extends UjController
         if ($temuan instanceof RedirectResponse) {
             return $temuan;
         }
+        if ($tolak = $this->periksaSaldo($input, [])) {
+            return $tolak;
+        }
         $p = DB::transaction(function () use ($input, $temuan, $request) {
-            // Pengajuan = daftar transaksi (tanpa penerima/rekening); nominal = jumlah detail.
+            // Pengajuan = daftar transaksi (tanpa penerima/rekening); nominal = jumlah yang DITRANSFER (detail − bagian dari saldo sopir).
             $p = UjPengajuan::create(['tanggal' => $input['tanggal']->toDateString(), 'nama' => null, 'bank' => null, 'rekening' => null,
-                'nominal' => $input['nominal'], 'status' => 'diajukan', 'user_id' => $request->user()->id]);
+                'nominal' => $input['nominal'] - array_sum(array_column($input['detail'], 'saldo')), 'status' => 'diajukan', 'user_id' => $request->user()->id]);
             $this->simpanDetail($p, $input, $temuan);
 
             return $p;
@@ -115,12 +118,14 @@ class PengajuanUjController extends UjController
         $edit = [
             'pengajuan_id' => $pengajuan->id, 'kode' => $pengajuan->kode(), 'tanggal' => $pengajuan->tanggal->toDateString(),
             'nominal' => (int) $tunggu->sum('nominal'), 'biaya_transfer' => '0',
-            'detail' => $tunggu->map(fn ($d) => $d->only(['nama', 'keterangan', 'nominal', 'kategori', 'jenis_kendaraan', 'no_mobil', 'no_do', 'konfirmasi']))->values()->all(),
+            'detail' => $tunggu->map(fn ($d) => $d->only(['nama', 'keterangan', 'nominal', 'saldo', 'kategori', 'jenis_kendaraan', 'no_mobil', 'no_do', 'konfirmasi']))->values()->all(),
             'menunggu' => $tunggu->pluck('id')->sort()->implode(','),
             'terkunci' => $kunci->values(),
         ];
+        // saldo sopir yang dipakai detail yang sedang diubah dihitung tersedia lagi
+        $saldo = \App\Support\SaldoSopir::perMobil()->map(fn ($m) => (int) round(\App\Support\SaldoSopir::sisa($m['no_mobil'], $tunggu->pluck('id')->all())))->filter(fn ($v) => $v > 0)->all();
 
-        return $this->create()->with(['mode' => 'pengajuan', 'edit' => $edit]);
+        return $this->create()->with(['mode' => 'pengajuan', 'edit' => $edit, 'saldoSopir' => $saldo]);
     }
 
     public function simpanUbah(Request $request, UjPengajuan $pengajuan): RedirectResponse
@@ -141,10 +146,16 @@ class PengajuanUjController extends UjController
         if ($temuan instanceof RedirectResponse) {
             return $temuan;
         }
+        if ($tolak = $this->periksaSaldo($input, $tunggu->all())) {
+            return $tolak;
+        }
         DB::transaction(function () use ($pengajuan, $input, $temuan, $tunggu) {
             // Detail terkunci (terealisasi / dialihkan / dibatalkan) tidak disentuh; hanya yang menunggu diganti isi form.
+            // Pemakaian saldo sopir detail yang diganti ikut terhapus (cascade uj_pengalihan.uj_pengajuan_detail_id).
             $tetap = $pengajuan->detail()->whereNotIn('id', $tunggu)->get();
-            $pengajuan->update(['tanggal' => $input['tanggal']->toDateString(), 'nominal' => $input['nominal'] + (int) $tetap->sum('nominal')]);
+            $pengajuan->update(['tanggal' => $input['tanggal']->toDateString(),
+                'nominal' => $input['nominal'] - array_sum(array_column($input['detail'], 'saldo')) + (int) $tetap->sum(fn ($d) => $d->nominal - $d->saldo)]);
+            \App\Models\UjPengalihan::whereIn('uj_pengajuan_detail_id', $tunggu)->delete();
             $pengajuan->detail()->whereIn('id', $tunggu)->delete();
             $this->simpanDetail($pengajuan, $input, $temuan, (int) $tetap->max('urut'));
         });
@@ -157,6 +168,8 @@ class PengajuanUjController extends UjController
     /** Batalkan detail yang masih menunggu (detail yang sudah terealisasi tidak berubah). */
     public function batal(Request $request, UjPengajuan $pengajuan): RedirectResponse
     {
+        // pemakaian saldo sopir detail yang dibatalkan dikembalikan ke saldo
+        \App\Models\UjPengalihan::whereIn('uj_pengajuan_detail_id', $pengajuan->detail()->where('status', 'menunggu')->pluck('id'))->delete();
         $n = $pengajuan->detail()->where('status', 'menunggu')->update(['status' => 'batal']);
         $pengajuan->hitungStatus();
         KasRiwayat::create(['aksi' => 'uj-ajukan-batal', 'lembar' => 'Pengajuan', 'baris_awal' => 0, 'baris_akhir' => 0,
@@ -250,8 +263,21 @@ class PengajuanUjController extends UjController
             $detail = UjPengajuanDetail::create([
                 'uj_pengajuan_id' => $p->id, 'urut' => $urutAwal + $i + 1, 'nama' => $d['nama'], 'keterangan' => $d['keterangan'], 'nominal' => $d['nominal'],
                 'kategori' => $d['kategori'], 'jenis_kendaraan' => $d['jenis_kendaraan'], 'no_mobil' => $d['no_mobil'], 'no_do' => $d['no_do'],
-                'konfirmasi' => $d['konfirmasi'], 'temuan' => $temuan[$i] ?? null, 'status' => 'menunggu',
+                'saldo' => $d['saldo'], 'konfirmasi' => $d['konfirmasi'], 'temuan' => $temuan[$i] ?? null, 'status' => 'menunggu',
             ]);
+            // Dibayar dari saldo sopir: tercatat sebagai pemakaian saldo (biaya proyek tujuan; UJ ber-DO ikut dipantau bongkarnya).
+            // Dibayar penuh dari saldo = tidak ada yang ditransfer → langsung terealisasi.
+            if ($d['saldo'] > 0) {
+                $m = \App\Support\SaldoSopir::perMobil()[$d['no_mobil']] ?? null;
+                \App\Models\UjPengalihan::create(['jenis' => 'pakai', 'no_do' => $d['no_do'], 'no_mobil' => $d['no_mobil'], 'nama' => $d['nama'] ?: $m['nama'] ?? null,
+                    'ke_tahap_id' => $m['tahap_id'] ?? null, 'tanggal' => $p->tanggal, 'nominal' => $d['saldo'], 'uj_pengajuan_detail_id' => $detail->id,
+                    'peruntukan' => $d['kategori'] === 'Uang MOB' ? 'mob' : (\App\Support\ValidasiUj::jenisKategori($d['kategori']) === 'uj' ? 'uj' : 'lain'),
+                    'keterangan' => mb_strimwidth($p->kode().' — '.$d['keterangan'], 0, 300, '…'), 'user_id' => auth()->id()]);
+                if ($d['saldo'] >= $d['nominal']) {
+                    $detail->update(['status' => 'terealisasi', 'jenis_realisasi' => 'saldo', 'alasan' => 'Dibayar penuh dari saldo sopir (UJ yang dialihkan) — tidak ditransfer.',
+                        'realisasi_pada' => now(), 'realisasi_oleh' => auth()->id()]);
+                }
+            }
             // Transaksi Kas UJ yang terjadi duluan (dijawab "Ya"): langsung tercatat sebagai realisasi pengajuan ini.
             if ($d['duluan'] && ($uj = \App\Models\UjDetail::where('id_uj', $d['duluan'])->first())) {
                 $isiUj = $uj->only(['nama', 'keterangan', 'nominal', 'kategori', 'jenis_kendaraan', 'no_mobil', 'no_do']);
@@ -265,7 +291,50 @@ class PengajuanUjController extends UjController
                 ]);
             }
         }
+        \App\Support\SaldoSopir::lupakan();
         $p->hitungStatus();
+    }
+
+    /**
+     * Pakai saldo sopir: wajib No Mobil, tidak melebihi nominal detail maupun saldo mobil itu. DO lama milik UJ yang dialihkan
+     * tidak boleh dibayar dari saldo lagi — saldonya otomatis terpakai saat DO itu bongkar (cukup ajukan kekurangannya).
+     */
+    private function periksaSaldo(array $input, array $kecualiDetail): ?RedirectResponse
+    {
+        $pesan = [];
+        $per = [];
+        foreach ($input['detail'] as $i => $d) {
+            if (! $d['saldo']) {
+                continue;
+            }
+            $b = 'Baris '.($i + 1);
+            if (! $d['no_mobil']) {
+                $pesan["saldo.{$i}"] = "{$b}: isi No Mobil untuk membayar dari saldo sopir.";
+
+                continue;
+            }
+            if ($d['saldo'] > $d['nominal']) {
+                $pesan["saldo.{$i}"] = "{$b}: dibayar dari saldo (".rp($d['saldo']).') melebihi nominalnya ('.rp($d['nominal']).').';
+
+                continue;
+            }
+            $lama = (\App\Support\SaldoSopir::perMobil()[$d['no_mobil']]['uj'] ?? collect())
+                ->first(fn ($x) => ! $x->bongkar && $x->kunci && $x->kunci === \App\Support\SaldoSopir::kunciDo($d['no_do']));
+            if ($lama) {
+                $pesan["saldo.{$i}"] = "{$b}: DO {$d['no_do']} adalah DO lama {$lama->p->id_uj} (".rp($lama->p->nominal).') yang dialihkan — saldonya otomatis terpakai begitu DO itu bongkar. '
+                    .'Ajukan kekurangannya saja tanpa "Pakai saldo".';
+
+                continue;
+            }
+            $per[$d['no_mobil']] = ($per[$d['no_mobil']] ?? 0) + $d['saldo'];
+        }
+        foreach ($per as $m => $s) {
+            if ($s > ($sisa = \App\Support\SaldoSopir::sisa($m, $kecualiDetail)) + 0.5) {
+                $pesan['saldo.'.$m] = "Saldo sopir {$m} hanya ".rp((int) $sisa).', tetapi dipakai '.rp($s).'.';
+            }
+        }
+
+        return $pesan ? back()->withInput()->withErrors($pesan) : null;
     }
 
     private function tolakUbah(UjPengajuan $p): ?string

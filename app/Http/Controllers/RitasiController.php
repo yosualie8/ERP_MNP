@@ -221,6 +221,16 @@ class RitasiController extends Controller
         ])), $w));
         $hitung = fn ($f) => $semua->filter($f)->count();
 
+        // Kontrol UJ (owner 18 Okt 2026): status tiap DO terhadap batas wajar bongkar proyeknya (wajar / lewat / merah > 7 hari).
+        // Saringan ?status=lewat|merah menampilkan DO lewat batas sejak 1 Mei 2026 (mengabaikan saringan umur).
+        $kontrol = $mode === 'ritasi' ? \App\Support\KontrolUj::terbuka($semua)->keyBy('do') : collect();
+        $semua = $semua->map(fn ($d) => [...$d, 'kontrol' => $kontrol[$d['do']] ?? null]);
+        $status = $mode === 'ritasi' && in_array($request->query('status'), ['lewat', 'merah'], true) ? $request->query('status') : null;
+        $cocokStatus = fn ($d) => ($k = $d['kontrol']) && ! $k['lama'] && ($status === 'merah' ? $k['status'] === 'merah' : $k['status'] !== 'wajar');
+        $baru = $kontrol->reject(fn ($k) => $k['lama']);
+        $ringkasKontrol = ['lewat' => ['n' => $baru->where('status', '!=', 'wajar')->count(), 'rp' => (int) $baru->where('status', '!=', 'wajar')->sum('uj')],
+            'merah' => ['n' => $baru->where('status', 'merah')->count(), 'rp' => (int) $baru->where('status', 'merah')->sum('uj')]];
+
         // Monitor Ritasi = tempat mengisi data bongkar: saran galian dari keterangan UJ & daftar saran isian.
         $saran = [];
         if ($mode === 'ritasi') {
@@ -241,8 +251,9 @@ class RitasiController extends Controller
             'doDirekap' => $mode === 'tanah' ? \App\Models\BayarTanahRekap::doMenunggu() : [],
             'mode' => $mode, 'rute' => $mode === 'tanah' ? 'ritasi.bayar-tanah' : 'ritasi.monitor', 'saran' => $saran,
             'daftar' => $doUnggah !== null ? $semua->filter(fn ($d) => in_array($d['do'], $doUnggah, true))->values()
-                : $semua->filter($cocokUmur)->filter($cocokCari)->filter($cocokTujuan)->filter($cocokGalian)->values(),
+                : $semua->filter($status ? $cocokStatus : $cocokUmur)->filter($cocokCari)->filter($cocokTujuan)->filter($cocokGalian)->values(),
             'semua' => $semua, 'umur' => $umur, 'q' => $q, 'tujuan' => $tujuan, 'galian' => $galian, 'bukanAngka' => $bukanAngka,
+            'status' => $status, 'ringkasKontrol' => $ringkasKontrol,
             'jumlahTujuan' => $semua->filter($cocokUmur)->filter($cocokGalian)->flatMap(fn ($d) => $d['buangan'])->countBy()->sortDesc(),
             'jumlahTanpa' => $semua->filter($cocokUmur)->filter($cocokGalian)->filter(fn ($d) => ! $d['buangan'])->count(),
             'jumlahGalian' => $semua->filter($cocokUmur)->filter($cocokTujuan)->map($namaGalian)->countBy()->sortDesc(),

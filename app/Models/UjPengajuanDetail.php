@@ -10,7 +10,7 @@ class UjPengajuanDetail extends Model
     protected $table = 'uj_pengajuan_detail';
 
     protected $fillable = ['uj_pengajuan_id', 'urut', 'nama', 'keterangan', 'nominal', 'kategori', 'jenis_kendaraan', 'no_mobil', 'no_do',
-        'konfirmasi', 'temuan', 'status', 'id_uj', 'jenis_realisasi', 'alasan', 'realisasi', 'realisasi_pada', 'realisasi_oleh'];
+        'saldo', 'konfirmasi', 'temuan', 'status', 'id_uj', 'jenis_realisasi', 'alasan', 'realisasi', 'realisasi_pada', 'realisasi_oleh'];
 
     protected $casts = ['temuan' => 'array', 'realisasi' => 'array', 'realisasi_pada' => 'datetime'];
 
