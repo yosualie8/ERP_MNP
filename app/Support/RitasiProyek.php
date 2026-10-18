@@ -49,8 +49,23 @@ class RitasiProyek
         $mulai = Carbon::parse($rit->min('tanggal') ?? $t->created_at ?? now())->subDays(10)->toDateString();
         // UJ yang dialihkan / dikembalikan dari tahap ini (Pengalihan UJ) tidak lagi milik tahap ini
         $keluar = UjPengalihan::whereIn('jenis', ['alih', 'kembali'])->where('dari_tahap_id', $t->id)->get()->keyBy('id_uj');
+        // Dialihkan SEBAGIAN (mis. Uang MOB PIK→Kendal Rp2,1 jt yang sudah termasuk UJ rit pertama: hanya Rp270rb UJ-nya yang gantung):
+        // sisanya tetap biaya tahap ini, dan UJ itu tidak lagi dihitung belum bongkar.
+        $sebagian = [];
         $uj = UjDetail::where('tanggal', '>=', $mulai)->get(['id_uj', 'tanggal', 'nama', 'keterangan', 'nominal', 'kategori', 'no_mobil', 'no_do'])
-            ->reject(fn ($u) => isset($keluar[$u->id_uj]));
+            ->reject(function ($u) use ($keluar, &$sebagian) {
+                if (! isset($keluar[$u->id_uj])) {
+                    return false;
+                }
+                if ($keluar[$u->id_uj]->nominal + 0.5 < (float) $u->nominal) {
+                    $u->nominal = (float) $u->nominal - $keluar[$u->id_uj]->nominal;
+                    $sebagian[$u->id_uj] = true;
+
+                    return false;
+                }
+
+                return true;
+            });
         $jalan = $uj->filter(fn ($u) => in_array($u->kategori, ['Uang Jalan', 'Uang MOB'], true)
             // Uang MOB tanpa DO di Ritasi hanya dihitung bila MENUJU proyek ini ("PIK ke Kendal" / "PIK Kendal"); "Kendal PIK" = pindah
             // keluar dari proyek, tidak akan pernah bongkar (owner 17 Okt 2026).
@@ -61,6 +76,7 @@ class RitasiProyek
         $tanah = $uj->filter(fn ($u) => $u->kategori === 'Uang Tanah' && $milik($u));
         $lain = $uj->filter(fn ($u) => ! in_array($u->kategori, ['Uang Jalan', 'Uang MOB', 'Uang Tanah'], true) && $milik($u));
         $bongkar = $jalan->filter(fn ($u) => isset($ritDo[$do($u->no_do)]));
+        $belum = $jalan->reject(fn ($u) => isset($ritDo[$do($u->no_do)]) || isset($sebagian[$u->id_uj]))->sortBy('tanggal')->values();
 
         $m3 = (float) $urug->sum('kubikasi');
         $dasar = $t->dasar_bayar === 'rit' ? 'rit' : 'm3';
@@ -114,9 +130,9 @@ class RitasiProyek
             'dasar' => $dasar, 'harga' => $harga, 'rit' => $urug->count(), 'ngepok' => $rit->count() - $urug->count(), 'm3' => $m3,
             'ber_ls' => $rit->filter(fn ($r) => str_starts_with((string) $r->no_seri, 'LS-'))->count(),
             'omset' => $omset, 'biaya' => $biaya, 'total' => $total, 'margin' => $omset - $total, 'persen_margin' => $omset > 0 ? ($omset - $total) / $omset * 100 : null,
-            'uj_diberi' => $jalan->count(), 'uj_bongkar' => $bongkar->count(), 'uj_belum' => $jalan->count() - $bongkar->count(),
+            'uj_diberi' => $jalan->count(), 'uj_bongkar' => $bongkar->count(), 'uj_belum' => $belum->count(), 'uj_sebagian' => count($sebagian),
             'rit_tanpa_uj' => $rit->filter(fn ($r) => ! isset($jalanDo[$do($r->no_do)]))->count(),
-            'belum' => $jalan->reject(fn ($u) => isset($ritDo[$do($u->no_do)]))->sortBy('tanggal')->values(),
+            'belum' => $belum,
             'alih_keluar' => ['n' => $keluar->count(), 'rp' => (float) $keluar->sum('nominal'), 'kembali' => (float) $keluar->where('jenis', 'kembali')->sum('nominal')],
             'alih_masuk' => ['n' => $alih->count(), 'rp' => (float) $alih->sum('nominal'), 'pakai' => (float) $masuk->where('jenis', 'pakai')->sum('nominal'),
                 'saldo' => (float) $alih->sum('nominal') - (float) $masuk->where('jenis', 'pakai')->sum('nominal'), 'mobil' => $alih->pluck('no_mobil')->unique()->count()],

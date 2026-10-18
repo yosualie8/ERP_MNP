@@ -4,6 +4,7 @@ namespace App\Support;
 
 use App\Models\Ritasi;
 use App\Models\UjDetail;
+use App\Models\UjPengalihan;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -19,7 +20,10 @@ class MonitorRitasi
     /** @return array{do: Collection<int, array>, bukan_angka: Collection<int, string>} */
     public static function belumBongkar(): array
     {
-        return self::kelompok(fn (string $do, Collection $baris, array $ritasi) => ! isset($ritasi[$do]));
+        // UJ yang sudah dialihkan / dikembalikan di Pengalihan UJ (truk pindah proyek sebelum bongkar) bukan lagi "belum bongkar"
+        $alih = UjPengalihan::whereIn('jenis', ['alih', 'kembali'])->whereNotNull('id_uj')->pluck('id_uj')->flip();
+
+        return self::kelompok(fn (string $do, Collection $baris, array $ritasi) => ! isset($ritasi[$do]) && ! $baris->contains(fn ($d) => isset($alih[$d->id_uj])));
     }
 
     /** @return array{do: Collection<int, array>, bukan_angka: Collection<int, string>} */
