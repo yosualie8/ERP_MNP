@@ -280,7 +280,10 @@ class PengajuanUjController extends UjController
                 && $k->tanggal->between($t->waktu->copy()->subDay()->startOfDay(), $t->waktu->copy()->addDays(10)->endOfDay()))
                 ->map(fn ($k) => ['no_id' => (int) $k->no_id, 'tgl' => $k->tanggal->translatedFormat('j M Y'), 'id_kas' => $k->tanggal->format('ymd').'-Jago-'.$k->no_id,
                     'nama' => $k->nama_tujuan, 'keterangan' => $k->keterangan, 'nominal' => (int) $k->kredit,
-                    'dipakai' => ($dipakai[$k->no_id] ?? collect())->map(fn ($x) => $x->pengajuan->kode())->unique()->values()->all()])->values()->all();
+                    'dipakai' => ($dipakai[$k->no_id] ?? collect())->map(fn ($x) => $x->pengajuan->kode())->unique()->values()->all(),
+                    // urutan: hari yang sama dengan transfer, lalu sesudahnya (makin dekat makin atas), terakhir H-1
+                    'jarak' => ($h = (int) $t->waktu->copy()->startOfDay()->diffInDays($k->tanggal->copy()->startOfDay(), false)) < 0 ? 100 : $h, 'baris' => (int) $k->baris])
+                ->sortBy([['jarak', 'asc'], ['baris', 'asc']])->values()->all();
             $usul = collect($calon)->first(fn ($c) => ! $c['dipakai'] && ! isset($terpakaiUsul[$c['no_id']]))['no_id'] ?? null;
             if ($usul) {
                 $terpakaiUsul[$usul] = true;
@@ -305,7 +308,7 @@ class PengajuanUjController extends UjController
         $kas = KasTransfer::where('kredit', '>', 0)->whereIn('no_id', $pasangan->values())->get()->keyBy('no_id');
         $salah = $pasangan->filter(fn ($no, $id) => ! isset($tanda[$id]) || ! isset($kas[$no]) || (int) $kas[$no]->kredit !== (int) $tanda[$id]->nominal);
         if ($salah->isNotEmpty()) {
-            return back()->with('error', 'Pasangan tidak valid (penanda sudah selesai, transaksi tidak ditemukan, atau nominal berbeda): '.$salah->map(fn ($no, $id) => "TF-{$id} ↔ NO {$no}")->implode(', ').'.');
+            return back()->with('error', 'Pasangan tidak valid (penanda sudah selesai, transaksi tidak ditemukan, atau nominal berbeda): '.$salah->map(fn ($no, $id) => 'TF-'.str_pad((string) $id, 4, '0', STR_PAD_LEFT)." ↔ NO {$no}")->implode(', ').'.');
         }
         $ringkas = [];
         DB::transaction(function () use ($pasangan, $tanda, $kas, $request, &$ringkas) {
