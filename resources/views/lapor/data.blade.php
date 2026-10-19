@@ -1,4 +1,4 @@
-@extends('layouts.app', ['judul' => 'Data Lapor Lapangan'])
+@extends('layouts.app', ['judul' => 'Data Absensi & Lapor Lapangan'])
 
 @section('lebar', '1400px')
 
@@ -18,6 +18,9 @@
         .kirim form { display: grid; gap: 4px; font-size: 12.5px; }
         .kirim form select, .kirim form input { padding: 4px 6px; font-size: 12.5px; }
         @media (max-width: 900px) { .kirim { grid-template-columns: 60px 1fr; } .kirim form { grid-column: 1 / -1; } }
+        .sel-absen { white-space: nowrap; }
+        .sel-absen a { margin-left: 4px; font-size: 12px; }
+        .orang:target { outline: 2px solid var(--aksen); }
     </style>
     <form method="GET" style="display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap;">
         <a class="tombol polos" style="padding: 6px 12px;" href="{{ route('lapor-data.index', ['tanggal' => $tanggal->copy()->subDay()->toDateString(), 'tahap' => $tahapId]) }}">‹</a>
@@ -30,15 +33,42 @@
             <a href="{{ route('lapor-data.index', ['tanggal' => $tanggal->toDateString(), 'tahap' => $p['t']->id]) }}" @class(['chip', 'aktif' => $tahapId === $p['t']->id])>{{ $p['t']->nama }} · {{ $p['n'] }}</a>
         @endforeach
         @if ($tanpaProyek)<span class="redup" style="font-size: 12px;">· {{ $tanpaProyek }} kiriman di luar lokasi proyek</span>@endif
-        <a href="{{ route('absensi.index', ['tanggal' => $tanggal->toDateString()]) }}" class="tombol polos" style="margin-left: auto; padding: 6px 12px;">Data Absensi →</a>
     </form>
 
     <div class="ringkas">
-        <div class="kartu"><span class="redup">Kiriman</span><b>{{ $ringkas['kiriman'] }}</b><span class="redup" style="font-size: 12px;">{{ $ringkas['foto'] }} foto</span></div>
-        <div class="kartu"><span class="redup">Karyawan mengirim</span><b>{{ $ringkas['karyawan'] }}</b></div>
+        <div class="kartu"><span class="redup">Absen masuk</span><b>{{ $hadir }} / {{ $aktif }}</b><span class="redup" style="font-size: 12px;">karyawan aktif</span></div>
+        <div class="kartu"><span class="redup">Tidak absen</span><b style="{{ $aktif - $hadir > 0 ? 'color: var(--merah);' : '' }}">{{ max($aktif - $hadir, 0) }}</b><span class="redup" style="font-size: 12px;">dasar potongan UM</span></div>
+        <div class="kartu"><span class="redup">Kiriman</span><b>{{ $ringkas['kiriman'] }}</b><span class="redup" style="font-size: 12px;">{{ $ringkas['foto'] }} foto · {{ $ringkas['karyawan'] }} karyawan</span></div>
         <div class="kartu"><span class="redup">Laporan / progres</span><b>{{ $ringkas['laporan'] }}</b></div>
         <div class="kartu"><span class="redup">Di luar lokasi proyek</span><b @if ($ringkas['luar']) style="color: #f0c05a;" @endif>{{ $ringkas['luar'] }}</b></div>
         <div class="kartu"><span class="redup">Jam kerja standar</span><b>{{ $jam['masuk'] }}–{{ $jam['pulang'] }}</b><span class="redup" style="font-size: 12px;">lembur bila lewat {{ $jam['toleransi'] }} menit</span></div>
+        @if ($tanpaEmail)<div class="kartu"><span class="redup">Karyawan aktif tanpa email</span><b style="color: #f0c05a;">{{ $tanpaEmail }}</b><span class="redup" style="font-size: 12px;">belum bisa login untuk lapor</span></div>@endif
+    </div>
+
+    {{-- Rekap absensi (dulu menu Data Absensi): hasil pilah kiriman per karyawan. Klik nama → kirimannya di bawah. --}}
+    <div class="kartu gulir" style="padding: 0;">
+        <h4 style="margin: 0; padding: 12px 14px 6px;">Rekap absensi</h4>
+        <table class="kas">
+            <thead><tr><th>Karyawan</th><th>Site</th><th>Masuk</th><th>Pulang</th><th>Mulai lembur</th><th>Selesai lembur</th><th class="angka">Jam kerja</th><th>Proyek · lokasi</th><th class="angka">Kiriman</th><th>Keterangan</th></tr></thead>
+            <tbody>
+                @foreach ($rekap as $b)
+                    @php($a = $b['absen'])
+                    @php($kerja = isset($a['masuk'], $a['pulang']) ? $a['masuk']->waktu->diffInMinutes($a['pulang']->waktu) : null)
+                    @php($lembur = isset($a['lembur_mulai'], $a['lembur_selesai']) ? $a['lembur_mulai']->waktu->diffInMinutes($a['lembur_selesai']->waktu) : null)
+                    <tr class="t">
+                        <td>@if ($b['kiriman'])<a href="#k{{ $b['k']->id }}"><b>{{ $b['k']->nama }}</b></a>@else<b>{{ $b['k']->nama }}</b>@endif</td>
+                        <td>{{ $b['k']->site }}</td>
+                        @foreach (['masuk', 'pulang', 'lembur_mulai', 'lembur_selesai'] as $j)
+                            <td class="sel-absen">@if (isset($a[$j])){{ $a[$j]->waktu->format('H:i') }}<a href="{{ route('absen.foto', $a[$j]) }}" target="_blank" title="Foto">📷</a>@endif</td>
+                        @endforeach
+                        <td class="angka">{{ $kerja !== null ? intdiv($kerja, 60).' j '.($kerja % 60).' m' : '' }}@if ($lembur)<br><span class="redup">+ lembur {{ intdiv($lembur, 60) }} j {{ $lembur % 60 }} m</span>@endif</td>
+                        <td>{{ $a->first()?->lokasi?->tahap?->nama }}@if ($a->first()?->lokasi) <span class="redup">· {{ $a->first()->lokasi->lokasiProyek() }}</span>@elseif ($a->first()?->lapor)<span style="color: #f0c05a;">📍 {{ $a->first()->lapor->alamat ?? ($a->first()->lat ? 'bukan lokasi proyek' : 'tanpa GPS') }}</span>@endif</td>
+                        <td class="angka">{{ $b['kiriman'] ?: '' }}</td>
+                        <td>@if ($a->isEmpty())<span class="label merah">Tidak absen</span>@elseif (! isset($a['pulang']))<span class="label kuning">Belum / lupa pulang</span>@endif</td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
     </div>
 
     <details class="kartu" style="padding: 10px 14px;">
@@ -66,7 +96,7 @@
     @forelse ($perKaryawan as $kid => $g)
         @php($k = $g->first()->karyawan)
         @php($a = ($absen[$kid] ?? collect())->keyBy('jenis'))
-        <div class="kartu orang">
+        <div class="kartu orang" id="k{{ $kid }}">
             <div class="kepala">
                 <b>{{ $k?->nama }}</b><span class="redup">{{ $k?->site }}{{ $k?->jabatan ? ' · '.$k->jabatan : '' }}</span>
                 @foreach (['masuk' => 'Masuk', 'pulang' => 'Pulang', 'lembur_mulai' => 'Lembur', 'lembur_selesai' => 's/d'] as $j => $label)

@@ -127,7 +127,7 @@ class AbsenController extends Controller
     {
         $u = $request->user();
         $milikSendiri = $absensi->karyawan?->email && strtolower($absensi->karyawan->email) === strtolower((string) $u->email);
-        abort_unless($milikSendiri || $u->bolehMenu('absensi') || $u->bolehMenu('lapor-data'), 403);
+        abort_unless($milikSendiri || $u->bolehMenu('absensi'), 403);
         // Absen hasil pilah Lapor Lapangan: foto kamera kirimannya
         if ($absensi->lapor_id && ($f = \App\Models\LaporFoto::where('lapor_id', $absensi->lapor_id)->orderByRaw("sumber = 'kamera' DESC")->orderBy('urutan')->first())) {
             return redirect()->route('lapor.foto', $f);

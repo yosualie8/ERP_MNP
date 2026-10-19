@@ -48,8 +48,8 @@ class MenuAkses
         'dashboard-bbm' => ['Dashboard BBM & HM', 'bbm.dashboard', ['bbm.dashboard'], 'Tren konsumsi solar & jam HM proyek dan per alat, rasio liter/jam, kelengkapan data HM'],
         'bbm' => ['Data BBM & HM', 'bbm.index', ['bbm.index'], 'Penggunaan BBM per bulan: pemakaian per unit, solar masuk, stok solar, baris yang perlu dilengkapi'],
         'absen' => ['Lapor Lapangan', 'lapor.index', ['absen.index', 'lapor.index', 'lapor.simpan', 'lapor.cek'], 'Kirim foto absen, laporan kerja & kejadian lapangan (banyak foto, kamera depan/belakang atau galeri) — sistem yang memilah masuk, pulang, lembur & progres'],
-        'lapor-data' => ['Data Lapor Lapangan', 'lapor-data.index', ['lapor-data.*'], 'Semua kiriman Lapor Lapangan per tanggal & proyek: hasil pilah masuk/pulang/lembur/progres, koreksi, kaitkan ke item BOQ, jam kerja standar & per proyek'],
-        'absensi' => ['Data Absensi', 'absensi.index', ['absensi.*'], 'Rekap absensi per tanggal: jam masuk/pulang/lembur, selfie, lokasi; karyawan yang tidak absen'],
+        // Data Absensi & Data Lapor Lapangan disatukan (owner 19 Okt 2026) — kunci 'absensi' dipertahankan supaya hak akses jabatan tetap.
+        'absensi' => ['Data Absensi & Lapor', 'lapor-data.index', ['absensi.*', 'lapor-data.*'], 'Rekap absensi per tanggal (masuk/pulang/lembur, yang tidak absen) + semua kiriman Lapor Lapangan: koreksi hasil pilah, kaitkan ke item BOQ, jam kerja standar & per proyek'],
         'lokasi-absen' => ['Lokasi Absen', 'lokasi-absen.index', ['lokasi-absen.*'], 'Titik GPS + radius per proyek tempat karyawan boleh absen'],
         'karyawan' => ['Data Karyawan', 'karyawan.index', ['karyawan.*'], 'Data induk karyawan (NIK, site, jabatan, rekening) — dasar modul absensi'],
         'jabatan' => ['Master Jabatan', 'jabatan.index', ['jabatan.*'], 'Daftar jabatan karyawan: tambah, ganti nama, hapus (jabatan Data Karyawan dipilih dari sini)'],
@@ -67,13 +67,13 @@ class MenuAkses
         'uj' => ['Uang Jalan', '🚚', ['pengajuan-uj', 'input-uj', 'kas-uj', 'reimburse-uj', 'pengalihan-uj', 'rapikan-uj']],
         'ritasi' => ['Ritasi', '⛰️', ['input-ritasi', 'ritasi', 'buangan-truk', 'monitor-ritasi', 'bayar-tanah', 'performa-ritasi', 'kubikasi-kendaraan']],
         'bbm' => ['BBM & HM', '⛽', ['input-bbm', 'bbm']],
-        'karyawan' => ['Karyawan', '👷', ['absen', 'lapor-data', 'absensi', 'karyawan', 'jabatan', 'lokasi-absen']],
+        'karyawan' => ['Karyawan', '👷', ['absen', 'absensi', 'karyawan', 'jabatan', 'lokasi-absen']],
         'aset' => ['Aset', '🚛', ['aset']],
     ];
 
     /** Foto bon dipakai Input Kas dan Input UJ: boleh bila salah satunya boleh. */
     // oauth.* = izin ChatGPT (MCP) membaca data ERP → hanya akun dengan menu Tanya AI.
-    private const BERSAMA = ['oauth.izin' => ['tanya-ai'], 'oauth.putuskan' => ['tanya-ai'], 'absen.foto' => ['absen', 'absensi', 'lapor-data'], 'lapor.foto' => ['absen', 'absensi', 'lapor-data'], 'kas.foto' => ['input-kas', 'kas-harian', 'input-uj', 'kas-uj'], 'kas.foto.destroy' => ['input-kas', 'input-uj']];
+    private const BERSAMA = ['oauth.izin' => ['tanya-ai'], 'oauth.putuskan' => ['tanya-ai'], 'absen.foto' => ['absen', 'absensi'], 'lapor.foto' => ['absen', 'absensi'], 'kas.foto' => ['input-kas', 'kas-harian', 'input-uj', 'kas-uj'], 'kas.foto.destroy' => ['input-kas', 'input-uj']];
 
     /** Menu yang hanya untuk Super Admin (tidak bisa diberikan ke Admin). */
     public const KHUSUS_SUPER = ['dashboard-aktivitas'];

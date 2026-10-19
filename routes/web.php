@@ -105,7 +105,8 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::post('/lapor-data/pengaturan', [\App\Http\Controllers\LaporDataController::class, 'pengaturan'])->name('lapor-data.pengaturan');
     Route::post('/lapor-data/{lapor}', [\App\Http\Controllers\LaporDataController::class, 'ubah'])->whereNumber('lapor')->name('lapor-data.ubah');
     Route::get('/absen/foto/{absensi}', [\App\Http\Controllers\AbsenController::class, 'foto'])->whereNumber('absensi')->name('absen.foto');
-    Route::get('/absensi', [\App\Http\Controllers\AbsensiController::class, 'index'])->name('absensi.index');
+    // Data Absensi disatukan dengan Data Lapor Lapangan (owner 19 Okt 2026); alamat lama diarahkan ke sana.
+    Route::get('/absensi', fn (\Illuminate\Http\Request $r) => redirect()->route('lapor-data.index', array_filter(['tanggal' => $r->query('tanggal')])))->name('absensi.index');
     Route::get('/lokasi-absen', [\App\Http\Controllers\LokasiAbsenController::class, 'index'])->name('lokasi-absen.index');
     Route::get('/lokasi-absen/tambah', [\App\Http\Controllers\LokasiAbsenController::class, 'create'])->name('lokasi-absen.create');
     Route::post('/lokasi-absen', [\App\Http\Controllers\LokasiAbsenController::class, 'store'])->name('lokasi-absen.store');

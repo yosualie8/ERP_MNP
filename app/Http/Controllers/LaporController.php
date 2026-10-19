@@ -119,7 +119,7 @@ class LaporController extends Controller
     {
         $u = $request->user();
         $k = $foto->lapor?->karyawan;
-        abort_unless(($k?->email && strtolower($k->email) === strtolower((string) $u->email)) || $u->bolehMenu('lapor-data') || $u->bolehMenu('absensi'), 403);
+        abort_unless(($k?->email && strtolower($k->email) === strtolower((string) $u->email)) || $u->bolehMenu('absensi'), 403);
         $kepala = ['Content-Type' => 'image/jpeg', 'Cache-Control' => 'private, max-age=86400'];
         if ($request->boolean('kecil') && $foto->path_kecil && Storage::exists($foto->path_kecil)) {
             return response()->file(Storage::path($foto->path_kecil), $kepala);
