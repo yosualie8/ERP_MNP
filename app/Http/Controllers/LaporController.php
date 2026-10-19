@@ -114,7 +114,7 @@ class LaporController extends Controller
             // pulang / lembur baru pasti di akhir hari (kiriman terakhir) → yang pasti hanya absen masuk
             .($lapor->jenis === 'masuk' ? ' · tercatat sebagai absen masuk' : ' · tersimpan'),
             // Bagikan ke WhatsApp (owner 19 Okt 2026): foto ber-watermark + teks siap tempel di grup
-            'bagikan' => ['foto' => $lapor->foto()->get()->map(fn ($f) => route('lapor.foto', $f))->values(),
+            'bagikan' => ['foto' => $lapor->foto()->get()->map(fn ($f) => route('lapor.foto', $f, false))->values(),
                 'teks' => trim("*{$k->nama}* · ".$waktu->translatedFormat('l, j M Y H:i')
                     .($tempat ? "\n📍 {$tempat}" : '').($lapor->keterangan ? "\n{$lapor->keterangan}" : ''))]]);
     }
