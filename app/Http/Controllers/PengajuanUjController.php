@@ -55,7 +55,10 @@ class PengajuanUjController extends UjController
             'pengajuan' => match (true) {
                 $beda => $semua->filter($adaBeda)->values(),
                 (bool) $status => $semua->where('status', $status)->values(),
-                default => $semua->filter($terbuka)->merge($semua->reject($terbuka)->take(50))->values(),
+                // semua pengajuan terbuka + 50 yang sudah selesai terakhir, diurutkan tanggal pengajuan terbaru dulu (owner 19 Okt 2026:
+                // yang selesai jangan ditaruh di bawah yang terbuka, supaya mudah dicari saat menautkan transfer)
+                default => $semua->filter($terbuka)->merge($semua->reject($terbuka)->take(50))
+                    ->sortBy([fn ($a, $b) => $b->tanggal <=> $a->tanggal, fn ($a, $b) => $b->id <=> $a->id])->values(),
             },
             'semua' => $semua, 'status' => $status, 'beda' => $beda, 'detailBeda' => $detailBeda, 'kasKini' => $kasKini, 'kelompokTf' => $kelompokTf,
             'menunggu' => UjPengajuanDetail::where('status', 'menunggu')->selectRaw('COUNT(*) n, SUM(nominal) s')->first(),
