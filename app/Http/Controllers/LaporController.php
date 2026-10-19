@@ -100,7 +100,8 @@ class LaporController extends Controller
 
             return $lapor;
         });
-        PilahLapor::hari($k->id, $tanggal);
+        // Kiriman & foto sudah tersimpan: bila pemilahan gagal, karyawan tetap mendapat "terkirim" (galat dicatat di log, dipilah ulang nanti).
+        rescue(fn () => PilahLapor::hari($k->id, $tanggal), null, true);
         FotoLapor::unggahSegera();
         $lapor->refresh();
 
