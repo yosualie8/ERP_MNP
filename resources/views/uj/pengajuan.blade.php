@@ -83,6 +83,9 @@
                 <button type="button" class="tombol polos" id="tutup-semua-pj" style="padding: 5px 12px; font-size: 13px;" title="Tutup rincian semua pengajuan">⊟ Tutup semua</button>
             </span>
         @endif
+        @if ($bolehTautkan)
+            <button type="button" class="tombol polos" id="buka-tanda-tf" style="padding: 8px 14px;" title="Tautkan transfer yang sudah ditandai ke transaksi Kas Harian bernominal sama">🔗 Transfer (Kas Harian){{ count($tandaKandidat) ? ' · '.count($tandaKandidat).' ditandai' : '' }}</button>
+        @endif
         <a href="{{ route('pengajuan-uj.buat') }}" class="tombol" style="{{ $pengajuan->isNotEmpty() ? '' : 'margin-left: auto; ' }}padding: 8px 14px;">+ Ajukan uang jalan</a>
         @if ($bolehRealisasi)<a href="{{ route('uj.input') }}" class="tombol polos" style="padding: 8px 14px;">Realisasikan di Input UJ →</a>@endif
     </div>
@@ -238,7 +241,7 @@
         <span style="margin-left: auto; display: flex; gap: 8px;">
             <button type="button" class="tombol polos" id="batal-pilih-tf">Batal pilih</button>
             <button type="button" class="tombol polos" id="buka-tanda" title="Tandai pengajuan terpilih sebagai dibayar dengan transfer yang baru Anda kirim (sebelum ada di Kas Harian)">🏷 Tandai transfer</button>
-            <button type="button" class="tombol" id="buka-transfer">🔗 Transfer (Kas Harian)</button>
+            <button type="button" class="tombol" id="buka-transfer" title="Pilih sendiri transaksi Kas Harian untuk pengajuan terpilih (tanpa penanda)">🔗 Tautkan manual</button>
         </span>
     </div>
     @endif
@@ -283,6 +286,48 @@
             <div style="display: flex; gap: 8px; justify-content: flex-end;">
                 <button type="button" class="tombol polos" id="tutup-tanda">Batal</button>
                 <button type="submit" class="tombol">Simpan penanda</button>
+            </div>
+        </form>
+    </dialog>
+    {{-- Transfer (Kas Harian) dari penanda: tiap penanda dipasangkan ke transaksi Kas Harian bernominal sama (usulan otomatis, bisa diganti). --}}
+    <dialog id="dialog-tanda-tf" style="width: min(1000px, 96vw); max-height: 86vh; padding: 0; border: 1px solid var(--garis); border-radius: 12px; background: var(--kartu); color: var(--teks);">
+        <form method="POST" action="{{ route('pengajuan-uj.tanda-tautkan') }}" id="form-tanda-tf" style="display: flex; flex-direction: column; max-height: 86vh;">
+            @csrf
+            <div style="padding: 12px 16px; border-bottom: 1px solid var(--garis); display: flex; gap: 12px; align-items: center;">
+                <b>🔗 Transfer (Kas Harian) untuk transfer yang sudah ditandai</b>
+                <button type="button" class="tombol polos" id="tutup-tanda-tf" style="margin-left: auto;">Tutup</button>
+            </div>
+            <div style="flex: 1; overflow: auto; padding: 8px 16px;">
+                @forelse ($tandaKandidat as $x)
+                    @php($t = $x['tanda'])
+                    <div style="border: 1px solid var(--garis); border-radius: 8px; padding: 8px 10px; margin: 8px 0;">
+                        <div><b>{{ $t->kode() }}</b>@if ($t->uj_reimburse_id) <span class="redup">· Reimburse UJ #{{ $t->uj_reimburse_id }}</span>@endif · ditransfer {{ $t->waktu->translatedFormat('j M Y H:i') }} · <b>{{ rp($t->nominal) }}</b>
+                            <span class="redup" style="font-size: 12px;">· {{ $t->pengajuan->map->kode()->implode(', ') }} ({{ rp((int) $t->pengajuan->sum('nominal')) }})</span></div>
+                        @if (! $x['calon'])
+                            <div style="color: #f0c05a; font-size: 13px; margin-top: 4px;">Belum ada transaksi Kas Harian {{ rp($t->nominal) }} di sekitar {{ $t->waktu->translatedFormat('j M') }} — mungkin Kas Harian belum direkap. Penanda ini dilewati.</div>
+                        @else
+                            <table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 4px;">
+                                @foreach ($x['calon'] as $c)
+                                    <tr style="border-top: 1px solid var(--garis);{{ $c['dipakai'] ? ' opacity: .55;' : '' }}">
+                                        <td style="width: 28px; padding: 4px;"><input type="radio" name="pasangan[{{ $t->id }}]" value="{{ $c['no_id'] }}" @checked($x['usul'] === $c['no_id'])></td>
+                                        <td style="padding: 4px; white-space: nowrap;">{{ $c['tgl'] }}</td><td style="padding: 4px;">{{ $c['id_kas'] }}</td>
+                                        <td style="padding: 4px;">{{ $c['nama'] }}</td><td style="padding: 4px;">{{ $c['keterangan'] }}</td>
+                                        <td style="padding: 4px; text-align: right;"><b>{{ rp($c['nominal']) }}</b></td>
+                                        <td style="padding: 4px;" class="redup">{{ $c['dipakai'] ? 'sudah tertaut ke '.implode(', ', $c['dipakai']) : '' }}</td>
+                                    </tr>
+                                @endforeach
+                                <tr style="border-top: 1px solid var(--garis);"><td style="padding: 4px;"><input type="radio" name="pasangan[{{ $t->id }}]" value="" @checked(! $x['usul'])></td>
+                                    <td colspan="6" style="padding: 4px;" class="redup">Lewati dulu (tautkan nanti)</td></tr>
+                            </table>
+                        @endif
+                    </div>
+                @empty
+                    <p class="redup">Belum ada transfer yang ditandai. Centang pengajuan yang Anda bayar lalu klik <b>🏷 Tandai transfer</b>; untuk memilih transaksi Kas Harian sendiri, centang pengajuannya lalu <b>🔗 Tautkan manual</b>.</p>
+                @endforelse
+            </div>
+            <div style="padding: 10px 16px; border-top: 1px solid var(--garis); display: flex; gap: 12px; align-items: center;">
+                <span class="redup" style="font-size: 12px;">Usulan otomatis: nominal sama, penanda paling awal dipasangkan ke transaksi paling awal. Periksa bila ada beberapa transfer bernominal sama.</span>
+                <button type="submit" class="tombol" style="margin-left: auto;" @disabled(! collect($tandaKandidat)->contains(fn ($x) => $x['calon']))>🔗 Tautkan yang dipilih</button>
             </div>
         </form>
     </dialog>
@@ -414,6 +459,15 @@
                 nomTanda.focus(); nomTanda.select();
             });
             document.getElementById('tutup-tanda').addEventListener('click', () => dlgTanda.close());
+            // Transfer (Kas Harian) dari penanda
+            const dlgTandaTf = document.getElementById('dialog-tanda-tf');
+            document.getElementById('buka-tanda-tf')?.addEventListener('click', () => dlgTandaTf.showModal());
+            document.getElementById('tutup-tanda-tf').addEventListener('click', () => dlgTandaTf.close());
+            document.getElementById('form-tanda-tf').addEventListener('submit', e => {
+                const no = [...e.target.querySelectorAll('input[type=radio]:checked')].map(r => r.value).filter(Boolean);
+                if (!no.length) { e.preventDefault(); alert('Belum ada transaksi Kas Harian yang dipilih.'); return; }
+                if (new Set(no).size !== no.length) { e.preventDefault(); alert('Satu transaksi Kas Harian dipilih untuk lebih dari satu penanda — pilih transaksi yang berbeda.'); }
+            });
             hitungPilihTf();
             cari.addEventListener('input', () => { clearTimeout(jeda); jeda = setTimeout(muat, 350); });
             cari.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(jeda); muat(); } });

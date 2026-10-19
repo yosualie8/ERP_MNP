@@ -67,6 +67,8 @@ class PengajuanUjController extends UjController
             'tandaTerbuka' => \App\Models\UjTransferTanda::with(['pengajuan.transfer', 'user', 'reimburse'])->whereNull('kas_no_id')->orderBy('waktu')->get(),
             // Batch Reimburse UJ 30 hari terakhir sebagai acuan "Tandai transfer" (+ pengajuan yang sudah ditandai dengan batch itu)
             'reimburseUj' => $this->daftarReimburse(),
+            // Pasangan otomatis penanda ↔ transaksi Kas Harian bernominal sama (tombol "Transfer (Kas Harian)")
+            'tandaKandidat' => $this->kandidatTanda(),
             // Menautkan transfer Kas Harian ke pengajuan hanya untuk Super Admin (rutenya juga dijaga can:super-admin).
             'bolehTautkan' => $request->user()->isSuperAdmin(),
         ]);
@@ -253,6 +255,78 @@ class PengajuanUjController extends UjController
      * Tandai transfer (owner 19 Okt 2026): saat mentransfer, owner menandai pengajuan mana yang dibayar dengan nominal & jam
      * transfer itu. Transaksi Kas Harian-nya baru ada H+1 — saat itu penanda dipakai untuk menautkan transfer yang sebenarnya.
      */
+    /**
+     * Penanda terbuka → calon transaksi Kas Harian (keluar, bukan biaya transfer) dengan nominal SAMA, tanggal H-1 s/d H+10 dari
+     * waktu transfer. Usulan dipasangkan berurutan (penanda paling awal dapat transaksi paling awal) — sehari bisa ada beberapa
+     * penanda (UJ susulan); transaksi yang sudah tertaut ke pengajuan lain tidak diusulkan.
+     *
+     * @return array<int, array{tanda: \App\Models\UjTransferTanda, calon: array, usul: ?int}>
+     */
+    private function kandidatTanda(): array
+    {
+        $tanda = \App\Models\UjTransferTanda::with('pengajuan.transfer')->whereNull('kas_no_id')->orderBy('waktu')->orderBy('id')->get();
+        if ($tanda->isEmpty()) {
+            return [];
+        }
+        $kas = KasTransfer::whereIn('kredit', $tanda->pluck('nominal')->unique())
+            ->whereBetween('tanggal', [$tanda->min('waktu')->copy()->subDay()->toDateString(), $tanda->max('waktu')->copy()->addDays(10)->toDateString()])
+            ->where(fn ($w) => $w->whereNull('keterangan')->orWhere('keterangan', 'not like', 'biaya transfer%'))
+            ->orderBy('tanggal')->orderBy('baris')->get();
+        $dipakai = UjPengajuanTransfer::with('pengajuan')->whereIn('kas_no_id', $kas->pluck('no_id'))->get()->groupBy('kas_no_id');
+        $terpakaiUsul = [];
+        $hasil = [];
+        foreach ($tanda as $t) {
+            $calon = $kas->filter(fn ($k) => (int) $k->kredit === (int) $t->nominal
+                && $k->tanggal->between($t->waktu->copy()->subDay()->startOfDay(), $t->waktu->copy()->addDays(10)->endOfDay()))
+                ->map(fn ($k) => ['no_id' => (int) $k->no_id, 'tgl' => $k->tanggal->translatedFormat('j M Y'), 'id_kas' => $k->tanggal->format('ymd').'-Jago-'.$k->no_id,
+                    'nama' => $k->nama_tujuan, 'keterangan' => $k->keterangan, 'nominal' => (int) $k->kredit,
+                    'dipakai' => ($dipakai[$k->no_id] ?? collect())->map(fn ($x) => $x->pengajuan->kode())->unique()->values()->all()])->values()->all();
+            $usul = collect($calon)->first(fn ($c) => ! $c['dipakai'] && ! isset($terpakaiUsul[$c['no_id']]))['no_id'] ?? null;
+            if ($usul) {
+                $terpakaiUsul[$usul] = true;
+            }
+            $hasil[] = ['tanda' => $t, 'calon' => $calon, 'usul' => $usul];
+        }
+
+        return $hasil;
+    }
+
+    /** Simpan pasangan penanda ↔ transaksi Kas Harian sekaligus: semua pengajuan penanda ditautkan ke transfer itu, penanda selesai. */
+    public function tautkanTanda(Request $request): RedirectResponse
+    {
+        $pasangan = collect($request->validate(['pasangan' => ['required', 'array'], 'pasangan.*' => ['nullable', 'integer']])['pasangan'])->filter();
+        if ($pasangan->isEmpty()) {
+            return back()->with('error', 'Pilih transaksi Kas Harian untuk minimal satu penanda.');
+        }
+        if ($pasangan->duplicates()->isNotEmpty()) {
+            return back()->with('error', 'Satu transaksi Kas Harian dipilih untuk lebih dari satu penanda: NO '.$pasangan->duplicates()->unique()->implode(', ').'.');
+        }
+        $tanda = \App\Models\UjTransferTanda::with('pengajuan')->whereNull('kas_no_id')->whereIn('id', $pasangan->keys())->get()->keyBy('id');
+        $kas = KasTransfer::where('kredit', '>', 0)->whereIn('no_id', $pasangan->values())->get()->keyBy('no_id');
+        $salah = $pasangan->filter(fn ($no, $id) => ! isset($tanda[$id]) || ! isset($kas[$no]) || (int) $kas[$no]->kredit !== (int) $tanda[$id]->nominal);
+        if ($salah->isNotEmpty()) {
+            return back()->with('error', 'Pasangan tidak valid (penanda sudah selesai, transaksi tidak ditemukan, atau nominal berbeda): '.$salah->map(fn ($no, $id) => "TF-{$id} ↔ NO {$no}")->implode(', ').'.');
+        }
+        $ringkas = [];
+        DB::transaction(function () use ($pasangan, $tanda, $kas, $request, &$ringkas) {
+            foreach ($pasangan as $id => $no) {
+                $t = $tanda[$id];
+                $k = $kas[$no];
+                foreach ($t->pengajuan as $p) {
+                    UjPengajuanTransfer::firstOrCreate(['uj_pengajuan_id' => $p->id, 'kas_no_id' => (int) $no], ['kas_tanggal' => $k->tanggal->toDateString(),
+                        'nominal' => (int) $k->kredit, 'nama_tujuan' => $k->nama_tujuan, 'keterangan' => mb_substr((string) $k->keterangan, 0, 500), 'user_id' => $request->user()->id]);
+                }
+                $t->update(['kas_no_id' => (int) $no]);
+                $ringkas[] = $t->kode().' ('.$t->pengajuan->map->kode()->implode(', ').') ← '.$k->tanggal->format('ymd').'-Jago-'.$no.' '.rp((int) $k->kredit);
+            }
+        });
+        KasRiwayat::create(['aksi' => 'uj-ajukan-transfer', 'lembar' => 'Pengajuan', 'baris_awal' => 0, 'baris_akhir' => 0,
+            'ringkasan' => mb_strimwidth('Tautkan dari penanda: '.implode('; ', $ringkas), 0, 490, '…'),
+            'isi' => ['pasangan' => $pasangan->all()], 'user_id' => $request->user()->id]);
+
+        return back()->with('success', count($ringkas).' penanda ditautkan ke Kas Harian: '.implode('; ', $ringkas).'.');
+    }
+
     /** Batch Reimburse UJ 30 hari terakhir (terbaru dulu) + pengajuan yang sudah ditandai memakai batch itu. */
     private function daftarReimburse(): \Illuminate\Support\Collection
     {
