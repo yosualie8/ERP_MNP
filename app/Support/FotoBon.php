@@ -118,6 +118,12 @@ class FotoBon
      */
     private static function ubah(string $asli, int $maks, int $mutu, ?UploadedFile $file = null): array
     {
+        return self::perkecil($asli, $maks, $mutu, $file);
+    }
+
+    /** Perkecil + putar sesuai EXIF, JPEG (dipakai juga foto Lapor Lapangan). @return array{0: string, 1: string} isi, ekstensi */
+    public static function perkecil(string $asli, int $maks, int $mutu, ?UploadedFile $file = null): array
+    {
         $ext = $file ? strtolower($file->guessExtension() ?: 'jpg') : 'jpg';
         if (! function_exists('imagecreatefromstring') || ! ($img = @imagecreatefromstring($asli))) {
             return [$asli, $ext === 'jpeg' ? 'jpg' : $ext];

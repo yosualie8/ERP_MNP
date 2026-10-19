@@ -12,7 +12,7 @@ class ProyekTahap extends Model
     protected $table = 'proyek_tahap';
 
     protected $fillable = ['proyek_id', 'nama', 'tipe', 'status', 'surveyor', 'lokasi', 'cost_center', 'volume', 'luas', 'harga_m3', 'omset', 'tarif_bbm', 'tarif_rental',
-        'komisi_lapangan', 'komisi_yosua', 'komisi_verlix', 'bayar_lapangan', 'bayar_yosua', 'bayar_verlix', 'catatan', 'user_id', 'dasar_bayar', 'harga_rit', 'kata_uj', 'batas_bongkar'];
+        'komisi_lapangan', 'komisi_yosua', 'komisi_verlix', 'bayar_lapangan', 'bayar_yosua', 'bayar_verlix', 'catatan', 'user_id', 'dasar_bayar', 'harga_rit', 'kata_uj', 'batas_bongkar', 'jam_masuk', 'jam_pulang'];
 
     protected $casts = ['volume' => 'float', 'luas' => 'float', 'komisi_lapangan' => 'float', 'komisi_yosua' => 'float', 'komisi_verlix' => 'float',
         'bayar_lapangan' => 'date', 'bayar_yosua' => 'date', 'bayar_verlix' => 'date', 'anggaran_baseline' => 'array', 'anggaran_dikunci_at' => 'datetime'];

@@ -10,7 +10,7 @@ class Absensi extends Model
 {
     protected $table = 'absensi';
 
-    protected $fillable = ['karyawan_id', 'tanggal', 'jenis', 'waktu', 'lokasi_absen_id', 'lat', 'lng', 'akurasi_m', 'jarak_m', 'foto', 'ip', 'perangkat', 'user_id'];
+    protected $fillable = ['karyawan_id', 'tanggal', 'jenis', 'waktu', 'lokasi_absen_id', 'lat', 'lng', 'akurasi_m', 'jarak_m', 'foto', 'lapor_id', 'otomatis', 'ip', 'perangkat', 'user_id'];
 
     protected $casts = ['tanggal' => 'date', 'waktu' => 'datetime', 'lat' => 'float', 'lng' => 'float'];
 

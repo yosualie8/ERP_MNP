@@ -37,7 +37,13 @@ class DriveFoto
     /** Unggah file penuh foto ini ke folder Drive $folderId; kembalikan [id, link]. */
     public function unggah(KasFoto $foto, string $judul, string $folderId): array
     {
-        $isi = Storage::get($foto->path) ?? throw new RuntimeException("File sementara {$foto->path} tidak ada.");
+        return $this->unggahFile((string) $foto->path, $judul, $folderId);
+    }
+
+    /** Unggah file JPEG di storage lokal ($path) ke folder Drive $folderId; kembalikan [id, link]. */
+    public function unggahFile(string $path, string $judul, string $folderId): array
+    {
+        $isi = Storage::get($path) ?? throw new RuntimeException("File sementara {$path} tidak ada.");
         $batas = 'mnp-'.Str::random(16);
         $meta = json_encode(['name' => $judul, 'parents' => [$folderId]]);
         $body = "--{$batas}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n{$meta}\r\n"
@@ -152,9 +158,18 @@ class DriveFoto
         return (string) $res->json('name');
     }
 
-    private function folderLembar(string $lembar): string
+    /** Folder foto Lapor Lapangan satu tanggal: "Lapor Lapangan" → "2026-10" → "2026-10-19" (dibuat bila belum ada). */
+    public function folderLapor(\Carbon\CarbonInterface $tanggal): string
     {
-        $induk = config('mnp.drive_foto_folder');
+        $akar = $this->folderLembar('Lapor Lapangan');
+        $bulan = $this->folderLembar($tanggal->format('Y-m'), $akar);
+
+        return $this->folderLembar($tanggal->format('Y-m-d'), $bulan);
+    }
+
+    private function folderLembar(string $lembar, ?string $induk = null): string
+    {
+        $induk ??= config('mnp.drive_foto_folder');
 
         return Cache::rememberForever("drive-foto-folder-{$induk}-{$lembar}", function () use ($induk, $lembar) {
             $q = sprintf("name = '%s' and mimeType = '%s' and '%s' in parents and trashed = false", $lembar, self::FOLDER, $induk);

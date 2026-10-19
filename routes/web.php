@@ -95,9 +95,15 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::patch('/komponen-anggaran/{komponen}', [\App\Http\Controllers\KomponenAnggaranController::class, 'update'])->whereNumber('komponen')->name('komponen-anggaran.update');
     Route::delete('/komponen-anggaran/{komponen}', [\App\Http\Controllers\KomponenAnggaranController::class, 'hapus'])->whereNumber('komponen')->name('komponen-anggaran.hapus');
     Route::delete('/proyek/alias/{alias}', [DaftarProyekController::class, 'hapusAlias'])->whereNumber('alias')->name('proyek.alias.hapus');
-    Route::get('/absen', [\App\Http\Controllers\AbsenController::class, 'index'])->name('absen.index');
-    Route::post('/absen', [\App\Http\Controllers\AbsenController::class, 'simpan'])->name('absen.simpan');
-    Route::post('/absen/cek', [\App\Http\Controllers\AbsenController::class, 'cek'])->name('absen.cek');
+    // Menu Absen digantikan Lapor Lapangan (owner 19 Okt 2026); alamat lama diarahkan ke sana.
+    Route::get('/absen', fn () => redirect()->route('lapor.index'))->name('absen.index');
+    Route::get('/lapor', [\App\Http\Controllers\LaporController::class, 'index'])->name('lapor.index');
+    Route::post('/lapor', [\App\Http\Controllers\LaporController::class, 'simpan'])->name('lapor.simpan');
+    Route::post('/lapor/cek', [\App\Http\Controllers\LaporController::class, 'cek'])->name('lapor.cek');
+    Route::get('/lapor/foto/{foto}', [\App\Http\Controllers\LaporController::class, 'foto'])->whereNumber('foto')->name('lapor.foto');
+    Route::get('/lapor-data', [\App\Http\Controllers\LaporDataController::class, 'index'])->name('lapor-data.index');
+    Route::post('/lapor-data/pengaturan', [\App\Http\Controllers\LaporDataController::class, 'pengaturan'])->name('lapor-data.pengaturan');
+    Route::post('/lapor-data/{lapor}', [\App\Http\Controllers\LaporDataController::class, 'ubah'])->whereNumber('lapor')->name('lapor-data.ubah');
     Route::get('/absen/foto/{absensi}', [\App\Http\Controllers\AbsenController::class, 'foto'])->whereNumber('absensi')->name('absen.foto');
     Route::get('/absensi', [\App\Http\Controllers\AbsensiController::class, 'index'])->name('absensi.index');
     Route::get('/lokasi-absen', [\App\Http\Controllers\LokasiAbsenController::class, 'index'])->name('lokasi-absen.index');
