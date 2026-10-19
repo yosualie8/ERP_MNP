@@ -11,7 +11,13 @@ class UjTransferTanda extends Model
 {
     protected $table = 'uj_transfer_tanda';
 
-    protected $fillable = ['waktu', 'nominal', 'catatan', 'kas_no_id', 'user_id'];
+    protected $fillable = ['uj_reimburse_id', 'waktu', 'nominal', 'catatan', 'kas_no_id', 'user_id'];
+
+    /** Batch Reimburse UJ yang menjadi acuan nominal & waktu transfer (opsional). */
+    public function reimburse(): BelongsTo
+    {
+        return $this->belongsTo(UjReimburse::class, 'uj_reimburse_id');
+    }
 
     protected $casts = ['waktu' => 'datetime'];
 

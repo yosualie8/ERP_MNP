@@ -64,7 +64,9 @@ class PengajuanUjController extends UjController
             'menunggu' => UjPengajuanDetail::where('status', 'menunggu')->selectRaw('COUNT(*) n, SUM(nominal) s')->first(),
             'bolehRealisasi' => $request->user()->bolehMenu('input-uj'),
             // Penanda transfer yang belum ditautkan ke transaksi Kas Harian (owner menandai saat mentransfer, menautkan H+1)
-            'tandaTerbuka' => \App\Models\UjTransferTanda::with(['pengajuan.transfer', 'user'])->whereNull('kas_no_id')->orderBy('waktu')->get(),
+            'tandaTerbuka' => \App\Models\UjTransferTanda::with(['pengajuan.transfer', 'user', 'reimburse'])->whereNull('kas_no_id')->orderBy('waktu')->get(),
+            // Batch Reimburse UJ 30 hari terakhir sebagai acuan "Tandai transfer" (+ pengajuan yang sudah ditandai dengan batch itu)
+            'reimburseUj' => $this->daftarReimburse(),
             // Menautkan transfer Kas Harian ke pengajuan hanya untuk Super Admin (rutenya juga dijaga can:super-admin).
             'bolehTautkan' => $request->user()->isSuperAdmin(),
         ]);
@@ -251,27 +253,53 @@ class PengajuanUjController extends UjController
      * Tandai transfer (owner 19 Okt 2026): saat mentransfer, owner menandai pengajuan mana yang dibayar dengan nominal & jam
      * transfer itu. Transaksi Kas Harian-nya baru ada H+1 — saat itu penanda dipakai untuk menautkan transfer yang sebenarnya.
      */
+    /** Batch Reimburse UJ 30 hari terakhir (terbaru dulu) + pengajuan yang sudah ditandai memakai batch itu. */
+    private function daftarReimburse(): \Illuminate\Support\Collection
+    {
+        $tanda = \App\Models\UjTransferTanda::with('pengajuan')->whereNotNull('uj_reimburse_id')->get()->keyBy('uj_reimburse_id');
+        // Batch yang transfernya sudah ditautkan langsung (tanpa penanda): transfer Kas Harian bertanggal & bernominal sama
+        $tertaut = UjPengajuanTransfer::where('kas_tanggal', '>=', now()->subDays(32)->toDateString())->get(['kas_tanggal', 'nominal'])
+            ->map(fn ($t) => $t->kas_tanggal->toDateString().'|'.(int) $t->nominal)->flip();
+
+        return \App\Models\UjReimburse::where('created_at', '>=', now()->subDays(30))->latest('id')->get(['id', 'tanggal', 'total', 'jumlah_transfer', 'created_at'])
+            ->each(fn ($r) => $r->sudahTf = isset($tertaut[$r->tanggal->toDateString().'|'.(int) $r->total]))
+            ->map(fn ($r) => ['id' => $r->id, 'tanggal' => $r->tanggal->translatedFormat('j M Y'), 'waktu' => $r->created_at->timezone('Asia/Jakarta')->format('Y-m-d\TH:i'),
+                'jam' => $r->created_at->timezone('Asia/Jakarta')->translatedFormat('j M H:i'), 'total' => (int) $r->total,
+                'dipakai' => (int) ($tanda->get($r->id)?->pengajuan->sum('nominal') ?? 0), 'pj' => $tanda->get($r->id)?->pengajuan->map->kode()->values()->all() ?? [],
+                'selesai' => (bool) $tanda->get($r->id)?->kas_no_id || $r->sudahTf]);
+    }
+
     public function simpanTanda(Request $request): RedirectResponse
     {
         $d = $request->validate([
-            'pj' => ['required', 'array', 'min:1'], 'pj.*' => ['integer'],
-            'nominal' => ['required', 'string', 'max:20'], 'waktu' => ['required', 'date'], 'catatan' => ['nullable', 'string', 'max:300'],
-        ], ['pj.required' => 'Pilih minimal satu pengajuan.', 'nominal.required' => 'Isi nominal yang ditransfer.', 'waktu.required' => 'Isi tanggal & jam transfer.']);
-        $nominal = (int) preg_replace('/\D/', '', $d['nominal']);
+            'pj' => ['required', 'array', 'min:1'], 'pj.*' => ['integer'], 'reimburse' => ['nullable', 'integer', 'exists:uj_reimburse,id'],
+            'nominal' => ['required_without:reimburse', 'nullable', 'string', 'max:20'], 'waktu' => ['required_without:reimburse', 'nullable', 'date'], 'catatan' => ['nullable', 'string', 'max:300'],
+        ], ['pj.required' => 'Pilih minimal satu pengajuan.', 'nominal.required_without' => 'Pilih batch Reimburse UJ, atau isi nominal yang ditransfer.',
+            'waktu.required_without' => 'Pilih batch Reimburse UJ, atau isi tanggal & jam transfer.']);
         $pj = UjPengajuan::whereIn('id', $d['pj'])->orderBy('id')->get();
+        // Acuan batch Reimburse UJ: nominal = total batch, waktu = saat batch dibuat; batch yang sudah punya penanda → pengajuan ditambahkan ke penanda itu
+        $r = ! empty($d['reimburse']) ? \App\Models\UjReimburse::find($d['reimburse']) : null;
+        $nominal = $r ? (int) $r->total : (int) preg_replace('/\D/', '', (string) $d['nominal']);
         if ($nominal <= 0 || $pj->isEmpty()) {
             return back()->with('error', 'Nominal transfer harus lebih dari 0 dan minimal satu pengajuan dipilih.');
         }
-        $t = DB::transaction(function () use ($d, $nominal, $pj, $request) {
-            $t = \App\Models\UjTransferTanda::create(['waktu' => $d['waktu'], 'nominal' => $nominal, 'catatan' => $d['catatan'] ?? null, 'user_id' => $request->user()->id]);
-            $t->pengajuan()->sync($pj->pluck('id'));
+        $t = DB::transaction(function () use ($d, $r, $nominal, $pj, $request) {
+            $t = $r ? \App\Models\UjTransferTanda::firstOrCreate(['uj_reimburse_id' => $r->id],
+                ['waktu' => $r->created_at->timezone('Asia/Jakarta'), 'nominal' => $nominal, 'catatan' => $d['catatan'] ?? null, 'user_id' => $request->user()->id])
+                : \App\Models\UjTransferTanda::create(['waktu' => $d['waktu'], 'nominal' => $nominal, 'catatan' => $d['catatan'] ?? null, 'user_id' => $request->user()->id]);
+            $t->pengajuan()->syncWithoutDetaching($pj->pluck('id'));
+            if ($r && ! empty($d['catatan']) && $t->catatan !== $d['catatan']) {
+                $t->update(['catatan' => trim(($t->catatan ? $t->catatan.' · ' : '').$d['catatan'])]);
+            }
 
-            return $t;
+            return $t->load('pengajuan');
         });
-        $selisih = $nominal - (int) $pj->sum('nominal');
-        $ket = $t->kode().' '.$t->waktu->translatedFormat('j M H:i').' '.rp($nominal).' untuk '.$pj->map->kode()->implode(', ').' ('.rp((int) $pj->sum('nominal')).($selisih ? ($selisih > 0 ? ', lebih ' : ', kurang ').rp(abs($selisih)) : ', pas').')';
+        $semuaPj = $t->pengajuan;
+        $selisih = $nominal - (int) $semuaPj->sum('nominal');
+        $ket = $t->kode().($r ? ' (Reimburse UJ #'.$r->id.')' : '').' '.$t->waktu->translatedFormat('j M H:i').' '.rp($nominal).' untuk '.$semuaPj->map->kode()->implode(', ')
+            .' ('.rp((int) $semuaPj->sum('nominal')).($selisih ? ($selisih > 0 ? ', sisa ' : ', kurang ').rp(abs($selisih)) : ', pas').')';
         KasRiwayat::create(['aksi' => 'uj-ajukan-tanda', 'lembar' => 'Pengajuan', 'baris_awal' => 0, 'baris_akhir' => 0, 'ringkasan' => mb_strimwidth('Tandai transfer '.$ket, 0, 490, '…'),
-            'isi' => ['tanda_id' => $t->id, 'pengajuan_id' => $pj->pluck('id'), 'nominal' => $nominal, 'waktu' => $d['waktu']], 'user_id' => $request->user()->id]);
+            'isi' => ['tanda_id' => $t->id, 'reimburse_id' => $r?->id, 'pengajuan_id' => $pj->pluck('id'), 'nominal' => $nominal, 'waktu' => $t->waktu->toDateTimeString()], 'user_id' => $request->user()->id]);
 
         return back()->with('success', "Transfer ditandai: {$ket}. Tautkan ke Kas Harian setelah Kas Harian direkap.");
     }

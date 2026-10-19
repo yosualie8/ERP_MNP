@@ -99,7 +99,7 @@
                     @php($sel = (int) $t->nominal - $totPj)
                     @php($pjTanda = $t->pengajuan->map(fn ($p) => ['value' => (string) $p->id, 'kode' => $p->kode(), 'nominal' => (int) $p->nominal, 'tf' => $p->transfer->map(fn ($tf) => $tf->kas_no_id.':'.(int) $tf->nominal)->implode(','), 'tanggal' => $p->tanggal->toDateString()])->values())
                     <tr>
-                        <td><b>{{ $t->kode() }}</b></td>
+                        <td><b>{{ $t->kode() }}</b>@if ($t->reimburse)<div class="redup" style="font-size: 11px;">Reimburse UJ #{{ $t->uj_reimburse_id }}</div>@endif</td>
                         <td style="white-space: nowrap;">{{ $t->waktu->translatedFormat('j M Y H:i') }}</td>
                         <td class="angka"><b>{{ rp($t->nominal) }}</b></td>
                         <td>{{ $t->pengajuan->map(fn ($p) => $p->kode().' ('.rp($p->nominal).')')->implode(', ') }}</td>
@@ -262,6 +262,20 @@
             <span id="pj-tanda"></span>
             <b>🏷 Tandai transfer</b>
             <div class="redup" style="font-size: 13px;" id="info-tanda"></div>
+            <div><b style="font-size: 13px;">Acuan transfer — pilih batch Reimburse UJ</b>
+                <div style="max-height: 230px; overflow: auto; border: 1px solid var(--garis); border-radius: 6px; margin-top: 4px;">
+                    @foreach ($reimburseUj as $r)
+                        <label style="display: flex; gap: 8px; align-items: center; padding: 6px 8px; border-bottom: 1px solid var(--garis); cursor: pointer; margin: 0; font-weight: 400;{{ $r['selesai'] ? ' opacity: .55;' : '' }}">
+                            <input type="radio" name="reimburse" value="{{ $r['id'] }}" data-total="{{ $r['total'] }}" data-waktu="{{ $r['waktu'] }}" data-dipakai="{{ $r['dipakai'] }}" data-selesai="{{ $r['selesai'] ? 1 : 0 }}">
+                            <span style="flex: 1; font-size: 13px;"><b>Reimburse UJ #{{ $r['id'] }}</b> · {{ $r['tanggal'] }} <span class="redup">· dibuat {{ $r['jam'] }}</span>
+                                @if ($r['pj'])<br><span class="redup" style="font-size: 11.5px;">sudah ditandai: {{ implode(', ', $r['pj']) }} ({{ rp($r['dipakai']) }}) · sisa {{ rp($r['total'] - $r['dipakai']) }}{{ $r['selesai'] ? ' · sudah ditautkan ke Kas Harian' : '' }}</span>@endif</span>
+                            <b style="white-space: nowrap;">{{ rp($r['total']) }}</b>
+                        </label>
+                    @endforeach
+                    <label style="display: flex; gap: 8px; align-items: center; padding: 6px 8px; cursor: pointer; margin: 0; font-weight: 400; font-size: 13px;">
+                        <input type="radio" name="reimburse" value="" data-manual> ✍ Tanpa batch reimburse — isi nominal &amp; jam transfer sendiri</label>
+                </div>
+            </div>
             <label>Nominal yang ditransfer<input type="text" name="nominal" id="nominal-tanda" inputmode="numeric" autocomplete="off" required style="width: 100%;"></label>
             <label>Tanggal &amp; jam transfer<input type="datetime-local" name="waktu" id="waktu-tanda" required style="width: 100%;"></label>
             <label>Catatan <span class="redup">(opsional)</span><input type="text" name="catatan" maxlength="300" autocomplete="off" style="width: 100%;" placeholder="mis. transfer BCA ke Eddy"></label>
@@ -368,14 +382,22 @@
             const dlgTanda = document.getElementById('dialog-tanda');
             const nomTanda = document.getElementById('nominal-tanda');
             let pilihTanda = [];
+            const waktuTanda = document.getElementById('waktu-tanda');
+            const rbTerpilih = () => dlgTanda.querySelector('input[name=reimburse]:checked');
             const hitungTanda = () => {
-                const tot = pilihTanda.reduce((s, c) => s + c.nominal, 0), n = parseInt(nomTanda.value.replace(/\D/g, ''), 10) || 0;
+                const rb = rbTerpilih(), pakaiRb = rb && rb.value ? +rb.dataset.dipakai : 0;
+                // Batch Reimburse UJ = acuan: nominal & jam transfer mengikuti batch (tidak diketik)
+                [nomTanda, waktuTanda].forEach(el => el.readOnly = !!(rb && rb.value));
+                if (rb && rb.value) { nomTanda.value = rb.dataset.total; waktuTanda.value = rb.dataset.waktu; }
+                const tot = pilihTanda.reduce((s, c) => s + c.nominal, 0) + pakaiRb, n = parseInt(nomTanda.value.replace(/\D/g, ''), 10) || 0;
                 nomTanda.value = n ? new Intl.NumberFormat('id-ID').format(n) : '';
                 const sel = n - tot;
-                document.getElementById('selisih-tanda').innerHTML = !n ? '' : sel === 0 ? '<span class="label hijau">✓ pas dengan total pengajuan</span>'
-                    : `<span class="label kuning">${sel > 0 ? 'lebih' : 'kurang'} ${fmtRp(Math.abs(sel))}</span> <span class="redup">dari total pengajuan ${fmtRp(tot)}</span>`;
+                document.getElementById('selisih-tanda').innerHTML = !n ? '' : (pakaiRb ? `<span class="redup">termasuk yang sudah ditandai di batch ini ${fmtRp(pakaiRb)} · </span>` : '')
+                    + (sel === 0 ? '<span class="label hijau">✓ pas dengan total pengajuan</span>'
+                    : `<span class="label kuning">${sel > 0 ? 'sisa' : 'kurang'} ${fmtRp(Math.abs(sel))}</span> <span class="redup">dari total pengajuan ${fmtRp(tot)}</span>`);
             };
             nomTanda.addEventListener('input', hitungTanda);
+            dlgTanda.querySelectorAll('input[name=reimburse]').forEach(r => r.addEventListener('change', hitungTanda));
             document.getElementById('buka-tanda').addEventListener('click', () => {
                 pilihTanda = terpilihTf().map(dariCentang).sort((a, b) => +a.value - +b.value);
                 if (!pilihTanda.length) return;
@@ -383,7 +405,10 @@
                 document.getElementById('info-tanda').textContent = `${pilihTanda.length} pengajuan: ${pilihTanda.map(c => c.kode + ' (' + fmtRp(c.nominal) + ')').join(', ')} · total ${fmtRp(pilihTanda.reduce((s, c) => s + c.nominal, 0))}`;
                 nomTanda.value = String(pilihTanda.reduce((s, c) => s + c.nominal, 0));
                 const k = new Date(); k.setMinutes(k.getMinutes() - k.getTimezoneOffset());
-                document.getElementById('waktu-tanda').value = k.toISOString().slice(0, 16);
+                waktuTanda.value = k.toISOString().slice(0, 16);
+                // bawaan: batch Reimburse UJ terbaru yang belum ditautkan ke Kas Harian; bila tidak ada → isi manual
+                const bawaan = dlgTanda.querySelector('input[name=reimburse][data-selesai="0"]') ?? dlgTanda.querySelector('input[data-manual]');
+                bawaan.checked = true;
                 hitungTanda();
                 dlgTanda.showModal();
                 nomTanda.focus(); nomTanda.select();
