@@ -262,7 +262,9 @@ class PengajuanUjController extends UjController
             ->map(fn ($t) => $t->kas_tanggal->toDateString().'|'.(int) $t->nominal)->flip();
 
         return \App\Models\UjReimburse::where('created_at', '>=', now()->subDays(30))->latest('id')->get(['id', 'tanggal', 'total', 'jumlah_transfer', 'created_at'])
-            ->each(fn ($r) => $r->sudahTf = isset($tertaut[$r->tanggal->toDateString().'|'.(int) $r->total]))
+            ->each(function ($r) use ($tertaut) {
+                $r->sudahTf = isset($tertaut[$r->tanggal->toDateString().'|'.(int) $r->total]);
+            })
             ->map(fn ($r) => ['id' => $r->id, 'tanggal' => $r->tanggal->translatedFormat('j M Y'), 'waktu' => $r->created_at->timezone('Asia/Jakarta')->format('Y-m-d\TH:i'),
                 'jam' => $r->created_at->timezone('Asia/Jakarta')->translatedFormat('j M H:i'), 'total' => (int) $r->total,
                 'dipakai' => (int) ($tanda->get($r->id)?->pengajuan->sum('nominal') ?? 0), 'pj' => $tanda->get($r->id)?->pengajuan->map->kode()->values()->all() ?? [],
