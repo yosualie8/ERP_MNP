@@ -105,7 +105,9 @@ class LaporController extends Controller
         $lapor->refresh();
 
         return response()->json(['ok' => true, 'pesan' => 'Terkirim pukul '.$waktu->format('H:i').' · '.count($request->file('foto')).' foto'
-            .($diLokasi ? ' · '.($l->tahap?->nama ?? $l->nama) : ($l ? ' · di luar lokasi proyek' : '')).' · tercatat sebagai '.mb_strtolower(Lapor::JENIS[$lapor->jenis])]);
+            .($diLokasi ? ' · '.($l->tahap?->nama ?? $l->nama) : ($l ? ' · di luar lokasi proyek' : ''))
+            // pulang / lembur baru pasti di akhir hari (kiriman terakhir) → yang pasti hanya absen masuk
+            .($lapor->jenis === 'masuk' ? ' · tercatat sebagai absen masuk' : ' · tersimpan')]);
     }
 
     /** Foto kiriman: pemiliknya sendiri, atau admin dengan menu Data Lapor Lapangan / Data Absensi. ?kecil=1 = pratinjau. */
