@@ -87,6 +87,36 @@
         @if ($bolehRealisasi)<a href="{{ route('uj.input') }}" class="tombol polos" style="padding: 8px 14px;">Realisasikan di Input UJ →</a>@endif
     </div>
 
+    @if ($bolehTautkan && $tandaTerbuka->isNotEmpty())
+        {{-- Penanda transfer: owner menandai pengajuan yang dibayar saat mentransfer; ditautkan ke Kas Harian setelah Kas Harian direkap. --}}
+        <div class="kartu" style="padding: 10px 14px; border-left: 3px solid #60a5fa;">
+            <b>🏷 Transfer ditandai, belum ditautkan ke Kas Harian ({{ $tandaTerbuka->count() }})</b>
+            <span class="redup" style="font-size: 12px;">— setelah Kas Harian direkap, klik "Tautkan ke Kas Harian" lalu pilih transaksinya (nominal sudah terisi di pencarian)</span>
+            <table class="kas" style="margin-top: 6px; font-size: 13px;" data-tanpa-saring-kolom>
+                <thead><tr><th>Penanda</th><th>Waktu transfer</th><th class="angka">Nominal transfer</th><th>Pengajuan dibayar</th><th class="angka">Total pengajuan</th><th>Selisih</th><th>Catatan</th><th></th></tr></thead>
+                @foreach ($tandaTerbuka as $t)
+                    @php($totPj = (int) $t->pengajuan->sum('nominal'))
+                    @php($sel = (int) $t->nominal - $totPj)
+                    @php($pjTanda = $t->pengajuan->map(fn ($p) => ['value' => (string) $p->id, 'kode' => $p->kode(), 'nominal' => (int) $p->nominal, 'tf' => $p->transfer->map(fn ($tf) => $tf->kas_no_id.':'.(int) $tf->nominal)->implode(','), 'tanggal' => $p->tanggal->toDateString()])->values())
+                    <tr>
+                        <td><b>{{ $t->kode() }}</b></td>
+                        <td style="white-space: nowrap;">{{ $t->waktu->translatedFormat('j M Y H:i') }}</td>
+                        <td class="angka"><b>{{ rp($t->nominal) }}</b></td>
+                        <td>{{ $t->pengajuan->map(fn ($p) => $p->kode().' ('.rp($p->nominal).')')->implode(', ') }}</td>
+                        <td class="angka">{{ rp($totPj) }}</td>
+                        <td>@if ($sel === 0)<span class="label hijau">pas</span>@else<span class="label kuning">{{ $sel > 0 ? 'lebih' : 'kurang' }} {{ rp(abs($sel)) }}</span>@endif</td>
+                        <td class="redup">{{ $t->catatan }}<div style="font-size: 11px;">{{ $t->user?->name }} · {{ $t->created_at->translatedFormat('j M H:i') }}</div></td>
+                        <td style="white-space: nowrap;">
+                            <button type="button" class="tombol" style="padding: 3px 10px; font-size: 12px;" data-tautkan-tanda="{{ $t->id }}" data-nominal-tanda="{{ (int) $t->nominal }}"
+                                data-pj-tanda="{{ $pjTanda->toJson() }}">🔗 Tautkan ke Kas Harian</button>
+                            <form method="POST" action="{{ route('pengajuan-uj.tanda-hapus', $t) }}" style="display: inline;" onsubmit="return confirm('Hapus penanda {{ $t->kode() }}?')">@csrf @method('DELETE')<button class="tombol-hapus" type="submit" title="Hapus penanda">✕</button></form>
+                        </td>
+                    </tr>
+                @endforeach
+            </table>
+        </div>
+    @endif
+
     @if ($pengajuan->isNotEmpty())
         {{-- Saringan per kolom detail transaksi (seperti filter Excel): beberapa kata dalam satu kotak = semuanya harus ada. --}}
         <div class="kartu saring-pj" id="saring-pj">
@@ -129,8 +159,13 @@
                                     <input type="checkbox" class="pilih-tf" value="{{ $p->id }}" data-kode="{{ $p->kode() }}" data-nominal="{{ (int) $p->nominal }}"
                                         data-tanggal="{{ $p->tanggal->toDateString() }}" data-tf="{{ $p->transfer->map(fn ($tf) => $tf->kas_no_id.':'.(int) $tf->nominal)->implode(',') }}"></label>
                             @endif
+                            @foreach ($p->tanda as $t)
+                                <div class="tf-baris" style="color: {{ $t->selesai() ? 'var(--redup)' : '#93c5fd' }};" title="Penanda transfer {{ $t->kode() }}: {{ $t->pengajuan->count() > 1 ? 'bersama '.$t->pengajuan->reject(fn ($x) => $x->id === $p->id)->map->kode()->implode(', ') : 'hanya pengajuan ini' }}{{ $t->catatan ? ' · '.$t->catatan : '' }}">
+                                    🏷 {{ $t->waktu->translatedFormat('j M H:i') }} · <b>{{ rp($t->nominal) }}</b> · {{ $t->kode() }}@if ($t->pengajuan->count() > 1) <span class="redup">(+{{ $t->pengajuan->count() - 1 }} PUJ)</span>@endif @if ($t->selesai()) ✓@endif
+                                </div>
+                            @endforeach
                             @if ($p->transfer->isEmpty())
-                                <span class="label">Belum ditransfer</span>
+                                <span class="label">{{ $p->tanda->contains(fn ($t) => ! $t->selesai()) ? 'Ditandai, belum ditautkan' : 'Belum ditransfer' }}</span>
                             @else
                                 <span @class(['label', 'hijau' => $totalTf >= $totalPj, 'kuning' => $totalTf < $totalPj])>{{ $totalTf >= $totalPj ? 'Sudah ditransfer' : 'Kurang '.rp($totalPj - $totalTf) }}</span>
                                 @if ($totalTf > $totalPj)<span class="redup" style="font-size: 11px;">lebih {{ rp($totalTf - $totalPj) }}</span>@endif
@@ -202,6 +237,7 @@
         <span class="redup" id="ringkas-pilih-tf"></span>
         <span style="margin-left: auto; display: flex; gap: 8px;">
             <button type="button" class="tombol polos" id="batal-pilih-tf">Batal pilih</button>
+            <button type="button" class="tombol polos" id="buka-tanda" title="Tandai pengajuan terpilih sebagai dibayar dengan transfer yang baru Anda kirim (sebelum ada di Kas Harian)">🏷 Tandai transfer</button>
             <button type="button" class="tombol" id="buka-transfer">🔗 Transfer (Kas Harian)</button>
         </span>
     </div>
@@ -220,10 +256,27 @@
     </div>
     {{-- Pilih transfer Kas Harian yang membiayai pengajuan-pengajuan terpilih. --}}
     @if ($bolehTautkan)
+    <dialog id="dialog-tanda" style="width: min(560px, 94vw); padding: 0; border: 1px solid var(--garis); border-radius: 12px; background: var(--kartu); color: var(--teks);">
+        <form method="POST" action="{{ route('pengajuan-uj.tanda-simpan') }}" style="padding: 14px 16px; display: flex; flex-direction: column; gap: 10px;">
+            @csrf
+            <span id="pj-tanda"></span>
+            <b>🏷 Tandai transfer</b>
+            <div class="redup" style="font-size: 13px;" id="info-tanda"></div>
+            <label>Nominal yang ditransfer<input type="text" name="nominal" id="nominal-tanda" inputmode="numeric" autocomplete="off" required style="width: 100%;"></label>
+            <label>Tanggal &amp; jam transfer<input type="datetime-local" name="waktu" id="waktu-tanda" required style="width: 100%;"></label>
+            <label>Catatan <span class="redup">(opsional)</span><input type="text" name="catatan" maxlength="300" autocomplete="off" style="width: 100%;" placeholder="mis. transfer BCA ke Eddy"></label>
+            <div id="selisih-tanda" style="font-size: 13px;"></div>
+            <div style="display: flex; gap: 8px; justify-content: flex-end;">
+                <button type="button" class="tombol polos" id="tutup-tanda">Batal</button>
+                <button type="submit" class="tombol">Simpan penanda</button>
+            </div>
+        </form>
+    </dialog>
     <dialog id="dialog-transfer">
         <form method="POST" id="form-transfer" action="{{ route('pengajuan-uj.transfer-tautkan') }}">
             @csrf
             <span id="pj-dt"></span>
+            <input type="hidden" name="tanda" id="tanda-dt">
             <div class="kepala-dt">
                 <b id="judul-dt">Pilih transfer Kas Harian</b>
                 <input type="search" id="cari-dt" placeholder="Cari keterangan, tujuan, NO ID atau nominal (kosong = sekitar tanggal pengajuan)" autocomplete="off">
@@ -291,20 +344,51 @@
             pilihTf.forEach(c => c.addEventListener('change', hitungPilihTf));
             pilihTf.forEach(c => c.closest('label').addEventListener('click', e => e.stopPropagation()));
             document.getElementById('batal-pilih-tf').addEventListener('click', () => { pilihTf.forEach(c => c.checked = false); hitungPilihTf(); });
-            document.getElementById('buka-transfer').addEventListener('click', () => {
-                const p = terpilihTf();
+            // p = [{value, kode, nominal, tf: "no:nominal,…"}]; tanda = penanda transfer yang sedang ditautkan (opsional)
+            const bukaDialog = (p, tanda = null, cariAwal = '') => {
                 if (!p.length) return;
                 // Transfer yang sudah tertaut ke pengajuan terpilih (tiap NO ID sekali).
                 const tertaut = new Map();
-                p.forEach(c => (c.dataset.tf || '').split(',').filter(Boolean).forEach(x => { const [no, nom] = x.split(':'); tertaut.set(no, +nom); }));
+                p.forEach(c => (c.tf || '').split(',').filter(Boolean).forEach(x => { const [no, nom] = x.split(':'); tertaut.set(no, +nom); }));
                 aktif = {url: @json(route('pengajuan-uj.transfer-kandidat')) + '?pj=' + p.map(c => c.value).join(','),
-                    nominal: p.reduce((s, c) => s + +c.dataset.nominal, 0), ditransfer: [...tertaut.values()].reduce((s, n) => s + n, 0)};
-                document.getElementById('pj-dt').innerHTML = p.map(c => `<input type="hidden" name="pj[]" value="${c.value}">`).join('');
-                document.getElementById('judul-dt').textContent = `Transfer Kas Harian untuk ${p.length > 1 ? p.length + ' pengajuan: ' : ''}${p.map(c => c.dataset.kode).join(', ')} (${fmtRp(aktif.nominal)})`;
-                cari.value = '';
+                    nominal: p.reduce((s, c) => s + +c.nominal, 0), ditransfer: [...tertaut.values()].reduce((s, n) => s + n, 0)};
+                document.getElementById('pj-dt').innerHTML = p.map(c => `<input type="hidden" name="pj[]" value="${esc(c.value)}">`).join('');
+                document.getElementById('tanda-dt').value = tanda ?? '';
+                document.getElementById('judul-dt').textContent = `Transfer Kas Harian untuk ${p.length > 1 ? p.length + ' pengajuan: ' : ''}${p.map(c => c.kode).join(', ')} (${fmtRp(aktif.nominal)})`;
+                cari.value = cariAwal;
                 dlg.showModal();
                 muat();
+            };
+            const dariCentang = c => ({value: c.value, kode: c.dataset.kode, nominal: +c.dataset.nominal, tf: c.dataset.tf, tanggal: c.dataset.tanggal});
+            document.getElementById('buka-transfer').addEventListener('click', () => bukaDialog(terpilihTf().map(dariCentang)));
+            // Penanda transfer → tautkan: pengajuan & nominal penanda langsung terisi (transaksi Kas Harian dicari dari nominalnya).
+            document.querySelectorAll('[data-tautkan-tanda]').forEach(b => b.addEventListener('click', () =>
+                bukaDialog(JSON.parse(b.dataset.pjTanda), b.dataset.tautkanTanda, b.dataset.nominalTanda)));
+            // Tandai transfer: pengajuan terpilih + nominal & jam transfer (bawaan: total pengajuan terpilih, sekarang).
+            const dlgTanda = document.getElementById('dialog-tanda');
+            const nomTanda = document.getElementById('nominal-tanda');
+            let pilihTanda = [];
+            const hitungTanda = () => {
+                const tot = pilihTanda.reduce((s, c) => s + c.nominal, 0), n = parseInt(nomTanda.value.replace(/\D/g, ''), 10) || 0;
+                nomTanda.value = n ? new Intl.NumberFormat('id-ID').format(n) : '';
+                const sel = n - tot;
+                document.getElementById('selisih-tanda').innerHTML = !n ? '' : sel === 0 ? '<span class="label hijau">✓ pas dengan total pengajuan</span>'
+                    : `<span class="label kuning">${sel > 0 ? 'lebih' : 'kurang'} ${fmtRp(Math.abs(sel))}</span> <span class="redup">dari total pengajuan ${fmtRp(tot)}</span>`;
+            };
+            nomTanda.addEventListener('input', hitungTanda);
+            document.getElementById('buka-tanda').addEventListener('click', () => {
+                pilihTanda = terpilihTf().map(dariCentang).sort((a, b) => +a.value - +b.value);
+                if (!pilihTanda.length) return;
+                document.getElementById('pj-tanda').innerHTML = pilihTanda.map(c => `<input type="hidden" name="pj[]" value="${esc(c.value)}">`).join('');
+                document.getElementById('info-tanda').textContent = `${pilihTanda.length} pengajuan: ${pilihTanda.map(c => c.kode + ' (' + fmtRp(c.nominal) + ')').join(', ')} · total ${fmtRp(pilihTanda.reduce((s, c) => s + c.nominal, 0))}`;
+                nomTanda.value = String(pilihTanda.reduce((s, c) => s + c.nominal, 0));
+                const k = new Date(); k.setMinutes(k.getMinutes() - k.getTimezoneOffset());
+                document.getElementById('waktu-tanda').value = k.toISOString().slice(0, 16);
+                hitungTanda();
+                dlgTanda.showModal();
+                nomTanda.focus(); nomTanda.select();
             });
+            document.getElementById('tutup-tanda').addEventListener('click', () => dlgTanda.close());
             hitungPilihTf();
             cari.addEventListener('input', () => { clearTimeout(jeda); jeda = setTimeout(muat, 350); });
             cari.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); clearTimeout(jeda); muat(); } });

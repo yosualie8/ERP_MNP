@@ -24,7 +24,7 @@ class PengajuanUjController extends UjController
     {
         $status = array_key_exists($request->query('status'), UjPengajuan::STATUS) ? $request->query('status') : null;
         $beda = $request->boolean('beda');
-        $semua = UjPengajuan::with(['detail', 'user', 'transfer'])->orderByDesc('tanggal')->orderByDesc('id')->get();
+        $semua = UjPengajuan::with(['detail', 'user', 'transfer', 'tanda'])->orderByDesc('tanggal')->orderByDesc('id')->get();
         // Keabsahan tautan transfer: transaksi Kas Harian dengan NO ID itu saat ini (untuk menandai yang berubah/terhapus).
         $kasKini = KasTransfer::whereIn('no_id', $semua->flatMap->transfer->pluck('kas_no_id')->unique())->get()->keyBy('no_id');
         // Pengajuan yang dibayar dalam satu transfer yang sama (berbagi NO ID Kas Harian) dihitung bersama:
@@ -63,6 +63,8 @@ class PengajuanUjController extends UjController
             'semua' => $semua, 'status' => $status, 'beda' => $beda, 'detailBeda' => $detailBeda, 'kasKini' => $kasKini, 'kelompokTf' => $kelompokTf,
             'menunggu' => UjPengajuanDetail::where('status', 'menunggu')->selectRaw('COUNT(*) n, SUM(nominal) s')->first(),
             'bolehRealisasi' => $request->user()->bolehMenu('input-uj'),
+            // Penanda transfer yang belum ditautkan ke transaksi Kas Harian (owner menandai saat mentransfer, menautkan H+1)
+            'tandaTerbuka' => \App\Models\UjTransferTanda::with(['pengajuan.transfer', 'user'])->whereNull('kas_no_id')->orderBy('waktu')->get(),
             // Menautkan transfer Kas Harian ke pengajuan hanya untuk Super Admin (rutenya juga dijaga can:super-admin).
             'bolehTautkan' => $request->user()->isSuperAdmin(),
         ]);
@@ -220,6 +222,8 @@ class PengajuanUjController extends UjController
         ], ['pj.required' => 'Pilih minimal satu pengajuan.', 'no_id.required' => 'Pilih minimal satu transaksi Kas Harian.']);
         $pj = UjPengajuan::whereIn('id', $data['pj'])->orderBy('tanggal')->orderBy('id')->get();
         $kas = KasTransfer::where('kredit', '>', 0)->whereIn('no_id', $data['no_id'])->get()->keyBy('no_id');
+        // Ditautkan dari penanda transfer → penanda itu selesai (tercatat NO ID Kas Harian-nya)
+        $tanda = $request->filled('tanda') ? \App\Models\UjTransferTanda::whereNull('kas_no_id')->find($request->integer('tanda')) : null;
         $baru = collect();
         foreach ($pj as $p) {
             foreach (array_unique($data['no_id']) as $no) {
@@ -233,6 +237,7 @@ class PengajuanUjController extends UjController
         if ($baru->isEmpty()) {
             return back()->with('error', 'Tidak ada transfer baru yang ditautkan (sudah tertaut atau tidak ditemukan di Kas Harian).');
         }
+        $tanda?->update(['kas_no_id' => (int) $baru->first()->kas_no_id]);
         $kode = $pj->filter(fn ($p) => $baru->contains('uj_pengajuan_id', $p->id))->map->kode()->implode(', ');
         $ringkas = $baru->unique('kas_no_id')->map(fn ($x) => $x->idKas().' '.rp($x->nominal))->implode(', ');
         KasRiwayat::create(['aksi' => 'uj-ajukan-transfer', 'lembar' => 'Pengajuan', 'baris_awal' => 0, 'baris_akhir' => 0,
@@ -240,6 +245,46 @@ class PengajuanUjController extends UjController
             'isi' => ['pengajuan_id' => $pj->pluck('id')->all(), 'kas_no_id' => $baru->pluck('kas_no_id')->unique()->values()->all()], 'user_id' => $request->user()->id]);
 
         return back()->with('success', "{$kode} ditautkan ke transfer Kas Harian: {$ringkas}.");
+    }
+
+    /**
+     * Tandai transfer (owner 19 Okt 2026): saat mentransfer, owner menandai pengajuan mana yang dibayar dengan nominal & jam
+     * transfer itu. Transaksi Kas Harian-nya baru ada H+1 — saat itu penanda dipakai untuk menautkan transfer yang sebenarnya.
+     */
+    public function simpanTanda(Request $request): RedirectResponse
+    {
+        $d = $request->validate([
+            'pj' => ['required', 'array', 'min:1'], 'pj.*' => ['integer'],
+            'nominal' => ['required', 'string', 'max:20'], 'waktu' => ['required', 'date'], 'catatan' => ['nullable', 'string', 'max:300'],
+        ], ['pj.required' => 'Pilih minimal satu pengajuan.', 'nominal.required' => 'Isi nominal yang ditransfer.', 'waktu.required' => 'Isi tanggal & jam transfer.']);
+        $nominal = (int) preg_replace('/\D/', '', $d['nominal']);
+        $pj = UjPengajuan::whereIn('id', $d['pj'])->orderBy('id')->get();
+        if ($nominal <= 0 || $pj->isEmpty()) {
+            return back()->with('error', 'Nominal transfer harus lebih dari 0 dan minimal satu pengajuan dipilih.');
+        }
+        $t = DB::transaction(function () use ($d, $nominal, $pj, $request) {
+            $t = \App\Models\UjTransferTanda::create(['waktu' => $d['waktu'], 'nominal' => $nominal, 'catatan' => $d['catatan'] ?? null, 'user_id' => $request->user()->id]);
+            $t->pengajuan()->sync($pj->pluck('id'));
+
+            return $t;
+        });
+        $selisih = $nominal - (int) $pj->sum('nominal');
+        $ket = $t->kode().' '.$t->waktu->translatedFormat('j M H:i').' '.rp($nominal).' untuk '.$pj->map->kode()->implode(', ').' ('.rp((int) $pj->sum('nominal')).($selisih ? ($selisih > 0 ? ', lebih ' : ', kurang ').rp(abs($selisih)) : ', pas').')';
+        KasRiwayat::create(['aksi' => 'uj-ajukan-tanda', 'lembar' => 'Pengajuan', 'baris_awal' => 0, 'baris_akhir' => 0, 'ringkasan' => mb_strimwidth('Tandai transfer '.$ket, 0, 490, '…'),
+            'isi' => ['tanda_id' => $t->id, 'pengajuan_id' => $pj->pluck('id'), 'nominal' => $nominal, 'waktu' => $d['waktu']], 'user_id' => $request->user()->id]);
+
+        return back()->with('success', "Transfer ditandai: {$ket}. Tautkan ke Kas Harian setelah Kas Harian direkap.");
+    }
+
+    public function hapusTanda(Request $request, \App\Models\UjTransferTanda $tanda): RedirectResponse
+    {
+        $kode = $tanda->kode();
+        KasRiwayat::create(['aksi' => 'uj-ajukan-tanda', 'lembar' => 'Pengajuan', 'baris_awal' => 0, 'baris_akhir' => 0,
+            'ringkasan' => "Penanda transfer {$kode} (".rp($tanda->nominal).') dihapus: '.$tanda->pengajuan->map->kode()->implode(', '),
+            'isi' => ['hapus' => $tanda->only(['id', 'waktu', 'nominal', 'catatan', 'kas_no_id']), 'pengajuan_id' => $tanda->pengajuan->pluck('id')], 'user_id' => $request->user()->id]);
+        $tanda->delete();
+
+        return back()->with('success', "Penanda transfer {$kode} dihapus.");
     }
 
     /** "1,2,3" / [1, 2] → id pengajuan. @return int[] */

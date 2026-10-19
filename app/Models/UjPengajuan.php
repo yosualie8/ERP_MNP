@@ -28,6 +28,12 @@ class UjPengajuan extends Model
         return $this->hasMany(UjPengajuanTransfer::class)->orderBy('kas_tanggal')->orderBy('kas_no_id');
     }
 
+    /** Penanda transfer (owner menandai pengajuan yang ia bayar sebelum transfernya ada di Kas Harian). */
+    public function tanda(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(UjTransferTanda::class, 'uj_transfer_tanda_pengajuan')->orderBy('uj_transfer_tanda.waktu');
+    }
+
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
