@@ -107,11 +107,16 @@ class LaporController extends Controller
         rescue(fn () => PilahLapor::hari($k->id, $tanggal), null, true);
         FotoLapor::unggahSegera();
         $lapor->refresh();
+        $tempat = $diLokasi ? ($l->tahap?->nama ?? $l->nama) : $alamat;
 
         return response()->json(['ok' => true, 'pesan' => 'Terkirim pukul '.$waktu->format('H:i').' · '.count($request->file('foto')).' foto'
-            .($diLokasi ? ' · '.($l->tahap?->nama ?? $l->nama) : ($alamat ? " · {$alamat}" : ''))
+            .($tempat ? " · {$tempat}" : '')
             // pulang / lembur baru pasti di akhir hari (kiriman terakhir) → yang pasti hanya absen masuk
-            .($lapor->jenis === 'masuk' ? ' · tercatat sebagai absen masuk' : ' · tersimpan')]);
+            .($lapor->jenis === 'masuk' ? ' · tercatat sebagai absen masuk' : ' · tersimpan'),
+            // Bagikan ke WhatsApp (owner 19 Okt 2026): foto ber-watermark + teks siap tempel di grup
+            'bagikan' => ['foto' => $lapor->foto()->get()->map(fn ($f) => route('lapor.foto', $f))->values(),
+                'teks' => trim("*{$k->nama}* · ".$waktu->translatedFormat('l, j M Y H:i')
+                    .($tempat ? "\n📍 {$tempat}" : '').($lapor->keterangan ? "\n{$lapor->keterangan}" : ''))]]);
     }
 
     /** Foto kiriman: pemiliknya sendiri, atau admin dengan menu Data Lapor Lapangan / Data Absensi. ?kecil=1 = pratinjau. */

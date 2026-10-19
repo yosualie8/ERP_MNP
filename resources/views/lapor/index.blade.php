@@ -69,6 +69,12 @@
             <button type="button" class="tombol" id="kirim" disabled>Kirim</button>
             <div class="kemajuan" id="kemajuan" hidden><span></span></div>
             <div class="area redup" id="status"></div>
+            {{-- Setelah terkirim: bagikan foto (ber-watermark) + keterangan ke WhatsApp lewat menu bagikan HP --}}
+            <div id="panel-bagikan" style="display: none; gap: 8px; margin-top: 10px;">
+                <button type="button" class="tombol" id="bagikan" style="flex: 1; padding: 12px; font-size: 16px; background: #1fa855; border-color: #1fa855;" disabled>⏳ Menyiapkan foto…</button>
+                <button type="button" class="tombol polos" id="selesai" style="padding: 12px 16px;">Selesai</button>
+            </div>
+            <div class="redup" id="info-bagikan" style="font-size: 12px; margin-top: 4px;"></div>
             <p class="redup" style="font-size: 12px; margin: 8px 0 0;">Kirim saja semua foto seperti di grup WhatsApp: absen datang & pulang, pekerjaan, kejadian di lapangan. Waktu & lokasi dicatat otomatis; sistem yang memilah mana absen masuk, pulang, lembur dan laporan kerja.
                 Foto dari galeri tetap tersimpan tetapi tidak dihitung sebagai bukti absen.</p>
         </div>
@@ -163,6 +169,38 @@
                 }, () => { lokasi.textContent = '⚠️ Lokasi tidak didapat — nyalakan GPS & izinkan lokasi (tetap bisa kirim).'; }, {enableHighAccuracy: true, maximumAge: 0, timeout: 30000});
                 else lokasi.textContent = '⚠️ HP ini tidak mendukung GPS.';
 
+                // ===== Bagikan ke WhatsApp: foto ber-watermark dari server diunduh dulu, lalu dibagikan lewat menu bagikan HP =====
+                const panel = document.getElementById('panel-bagikan'), tombolBagi = document.getElementById('bagikan'), infoBagi = document.getElementById('info-bagikan');
+                let siapBagi = null; // {files, teks}
+                const salinTeks = async t => { try { await navigator.clipboard.writeText(t); return true; } catch { return false; } };
+                const siapkanBagikan = async b => {
+                    if (!b) { setTimeout(() => location.reload(), 1500); return; }
+                    panel.style.display = 'flex'; tombolBagi.disabled = true; tombolBagi.textContent = '⏳ Menyiapkan foto…';
+                    const files = [];
+                    for (const [i, url] of b.foto.entries()) {
+                        try { const r = await fetch(url, {credentials: 'same-origin'}); if (r.ok) files.push(new File([await r.blob()], `lapor-${i + 1}.jpg`, {type: 'image/jpeg'})); } catch {}
+                    }
+                    siapBagi = {files, teks: b.teks};
+                    const bisaFile = files.length && navigator.canShare && navigator.canShare({files});
+                    tombolBagi.disabled = false;
+                    tombolBagi.textContent = bisaFile ? `📤 Bagikan ${files.length} foto ke WhatsApp` : '📤 Kirim keterangan ke WhatsApp';
+                    infoBagi.textContent = bisaFile ? 'Pilih WhatsApp lalu grupnya. Keterangan ikut disalin — tempel (paste) bila tidak ikut terkirim.'
+                        : 'HP/browser ini tidak bisa membagikan foto langsung: keterangan dikirim ke WhatsApp, fotonya lampirkan dari galeri.';
+                };
+                tombolBagi.addEventListener('click', async () => {
+                    if (!siapBagi) return;
+                    const {files, teks} = siapBagi;
+                    // jangan ditunggu: Safari/iPhone hanya mengizinkan menu bagikan langsung dari sentuhan (tanpa jeda)
+                    salinTeks(teks);
+                    if (files.length && navigator.canShare && navigator.canShare({files})) {
+                        try { await navigator.share({files, text: teks}); infoBagi.textContent = '✅ Dibagikan. Keterangan juga sudah disalin.'; }
+                        catch (e) { if (e.name !== 'AbortError') infoBagi.textContent = '⚠️ Gagal membuka menu bagikan: ' + e.message; }
+                    } else {
+                        window.open('https://wa.me/?text=' + encodeURIComponent(teks), '_blank');
+                    }
+                });
+                document.getElementById('selesai').addEventListener('click', () => location.reload());
+
                 kirim.addEventListener('click', () => {
                     if (!foto.length) return;
                     const d = new FormData();
@@ -178,7 +216,7 @@
                         if (xhr.status >= 200 && xhr.status < 300 && h.ok) {
                             status.className = 'area'; status.style.color = 'var(--sukses)'; status.textContent = '✅ ' + h.pesan;
                             foto.splice(0).forEach(f => URL.revokeObjectURL(f.url)); gambar(); document.getElementById('keterangan').value = '';
-                            setTimeout(() => location.reload(), 1500);
+                            siapkanBagikan(h.bagikan);
                         } else {
                             status.style.color = 'var(--merah)';
                             status.textContent = '⚠️ ' + ((h.galat || Object.values(h.errors || {}).flat()).join(' ') || h.message || `Gagal mengirim (kode ${xhr.status}). Coba lagi.`);
