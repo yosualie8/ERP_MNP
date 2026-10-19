@@ -328,7 +328,7 @@
         <tr class="baris-detail">
             <td><input type="hidden" class="pengajuan-kunci"><input type="hidden" class="duluan-kunci"><input type="text" class="angka-input rupiah" data-nama="nominal" inputmode="numeric" autocomplete="off" required>
                 @if ($ajukan)<div class="saldo-sopir" hidden><span class="info-saldo"></span><button type="button" class="tombol polos pakai-saldo" title="Bayar dari saldo sopir (UJ yang dialihkan)">Pakai</button>
-                    <input type="text" class="angka-input rupiah" data-nama="saldo" inputmode="numeric" autocomplete="off" placeholder="dibayar dari saldo" title="Bagian nominal yang dibayar dari saldo sopir — tidak ditransfer"></div>@endif</td>
+                    <input type="text" class="angka-input rupiah" data-nama="saldo" data-lewati-tempel inputmode="numeric" autocomplete="off" placeholder="dibayar dari saldo" title="Bagian nominal yang dibayar dari saldo sopir — tidak ditransfer"></div>@endif</td>
             <td><input type="text" data-nama="nama" list="daftar-nama" autocomplete="off"></td>
             <td><input type="text" data-nama="keterangan" autocomplete="off" required></td>
             <td><input type="text" data-nama="kategori" list="daftar-kategori" autocomplete="off" required><div class="saran-kode"></div></td>
@@ -567,7 +567,7 @@
                         ? el.selectionStart === 0 && el.selectionEnd === 0
                         : el.selectionStart === el.value.length && el.selectionEnd === el.value.length;
                     if (!semua && !diUjung) return;
-                    const kolom = [...el.closest('tr').querySelectorAll('[data-nama]')];
+                    const kolom = [...el.closest('tr').querySelectorAll('[data-nama]:not([data-lewati-tempel])')];
                     const tujuan = kolom[kolom.indexOf(el) + (e.key === 'ArrowLeft' ? -1 : 1)];
                     if (tujuan) { e.preventDefault(); tujuan.focus(); tujuan.select(); }
                     return;
@@ -585,6 +585,13 @@
             TempelTabel.pasang(daftar, {
                 baris: barisDetail,
                 tambah: () => tambah({}),
+                // Baris utuh dari Excel "PENGAJUAN UANG JALAN" (NO | TGL | Nominal | Nama | …) ditempel di kolom Nominal:
+                // kolom NO & TGL di depan dibuang supaya Nominal, Nama, Keterangan, dst. masuk ke kolomnya.
+                rapikan: (data, kolomAwal) => {
+                    const tanggal = /^(\d{4}-\d{1,2}-\d{1,2}|\d{1,2}[\/\-. ][A-Za-z0-9]{1,9}[\/\-. ]\d{2,4})/;
+                    const utuh = kolomAwal === 0 && data.every(r => r.length >= 4 && /^\d{1,4}$/.test(r[0]) && tanggal.test(r[1]) && /\d/.test(r[2]));
+                    return utuh ? data.map(r => r.slice(2)) : data;
+                },
                 setelah: rows => rows.forEach(tr => {
                     const mobil = tr.querySelector('[data-nama=no_mobil]');
                     if (mobil.value) { mobil.value = kunciMobil(mobil.value); if (!tr.querySelector('[data-nama=jenis_kendaraan]').value) aturJenis(tr); }

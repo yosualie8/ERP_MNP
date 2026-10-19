@@ -48,11 +48,15 @@ window.TempelTabel = {
             const semua = opsi.baris();
             const trAwal = el.closest('tr');
             let idx = semua.indexOf(trAwal);
-            const kolomAwal = [...trAwal.querySelectorAll('[data-nama]')].indexOf(el);
+            // Isian tambahan di dalam sel (mis. "dibayar dari saldo" di bawah Nominal) bukan kolom tabel → dilewati.
+            const KOLOM = '[data-nama]:not([data-lewati-tempel])';
+            const kolomAwal = [...trAwal.querySelectorAll(KOLOM)].indexOf(el);
+            if (kolomAwal < 0) return;
+            if (opsi.rapikan) data.splice(0, data.length, ...opsi.rapikan(data, kolomAwal));
             const diisi = [];
             data.forEach(sel => {
                 let tr = opsi.baris()[idx] ?? opsi.tambah();
-                const kolom = [...tr.querySelectorAll('[data-nama]')];
+                const kolom = [...tr.querySelectorAll(KOLOM)];
                 sel.forEach((nilai, j) => {
                     const input = kolom[kolomAwal + j];
                     if (!input || input.readOnly) return; // kolom Excel lebih banyak dari kolom tabel / kolom terkunci (diisi sistem) → diabaikan
@@ -66,7 +70,7 @@ window.TempelTabel = {
             // Format rupiah, jumlah, dan isian otomatis lain dihitung ulang lewat event input biasa.
             diisi.forEach(tr => tr.querySelectorAll('[data-nama]').forEach(input => input.dispatchEvent(new Event('input', {bubbles: true}))));
             opsi.setelah?.(diisi);
-            const terakhir = diisi[diisi.length - 1]?.querySelectorAll('[data-nama]')[kolomAwal];
+            const terakhir = diisi[diisi.length - 1]?.querySelectorAll(KOLOM)[kolomAwal];
             terakhir?.focus();
         });
     },
