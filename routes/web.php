@@ -46,6 +46,7 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/dashboard/kas', DashboardKasController::class)->name('dashboard.kas');
     Route::get('/dashboard/uj', DashboardUjController::class)->name('dashboard.uj');
     Route::get('/dashboard/proyek', \App\Http\Controllers\DashboardProyekController::class)->name('dashboard.proyek');
+    Route::get('/dashboard/biaya-dt', \App\Http\Controllers\DashboardBiayaDtController::class)->name('dashboard.biaya-dt');
     Route::get('/dashboard/aktivitas', AktivitasAdminController::class)->name('dashboard.aktivitas')->middleware('can:super-admin');
     Route::get('/kas', [KasController::class, 'index'])->name('kas.index');
     Route::get('/kas/input', [KasInputController::class, 'create'])->name('kas.input');
