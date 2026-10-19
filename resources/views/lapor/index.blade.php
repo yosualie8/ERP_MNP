@@ -81,7 +81,7 @@
                         <div class="waktu"><b>{{ $l->waktu->format('H:i') }}</b><div class="redup">{{ $l->waktu->translatedFormat('D j M') }}</div></div>
                         <div style="flex: 1; min-width: 0;">
                             <span @class(['label', 'hijau' => in_array($l->jenisAkhir(), ['masuk', 'pulang'], true), 'kuning' => $l->jenisAkhir() === 'lembur'])>{{ \App\Models\Lapor::JENIS_ADMIN[$l->jenisAkhir()] ?? $l->jenisAkhir() }}</span>
-                            <span class="redup" style="font-size: 12px;">{{ $l->di_lokasi ? $l->tahap?->nama : ($l->alamat ?? ($l->lat ? 'lokasi tercatat' : 'tanpa GPS')) }}</span>
+                            <span class="redup" style="font-size: 12px;">{{ $l->di_lokasi ? ($l->tahap?->nama ?? $l->lokasi?->nama) :($l->alamat ?? ($l->lat ? 'lokasi tercatat' : 'tanpa GPS')) }}</span>
                             @if ($l->keterangan)<div style="font-size: 13px; margin-top: 2px;">{{ $l->keterangan }}</div>@endif
                             <div class="foto-kecil">@foreach ($l->foto as $f)<a href="{{ route('lapor.foto', $f) }}" target="_blank"><img src="{{ route('lapor.foto', ['foto' => $f, 'kecil' => 1]) }}" alt="foto" loading="lazy"></a>@endforeach</div>
                         </div>
