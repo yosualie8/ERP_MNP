@@ -24,6 +24,12 @@ class Absensi extends Model
         return $this->belongsTo(Karyawan::class);
     }
 
+    /** Kiriman Lapor Lapangan asal absen ini (absen otomatis). */
+    public function lapor(): BelongsTo
+    {
+        return $this->belongsTo(Lapor::class);
+    }
+
     public function lokasi(): BelongsTo
     {
         return $this->belongsTo(LokasiAbsen::class, 'lokasi_absen_id');

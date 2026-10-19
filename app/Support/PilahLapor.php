@@ -93,7 +93,8 @@ class PilahLapor
         }
         $baris = function (string $jenis, Lapor $l, ?Carbon $waktu = null) use ($karyawanId, $tanggal) {
             Absensi::create(['karyawan_id' => $karyawanId, 'tanggal' => $tanggal, 'jenis' => $jenis, 'waktu' => $waktu ?? $l->waktu,
-                'lokasi_absen_id' => $l->lokasi_absen_id, 'lat' => $l->lat, 'lng' => $l->lng, 'akurasi_m' => $l->akurasi_m, 'jarak_m' => $l->jarak_m,
+                // lokasi proyek hanya bila memang di dalam radiusnya (di luar → nama tempat dari kiriman, lihat Data Absensi)
+                'lokasi_absen_id' => $l->di_lokasi ? $l->lokasi_absen_id : null, 'lat' => $l->lat, 'lng' => $l->lng, 'akurasi_m' => $l->akurasi_m, 'jarak_m' => $l->jarak_m,
                 'foto' => '', 'lapor_id' => $l->id, 'otomatis' => true, 'ip' => $l->ip, 'perangkat' => $l->perangkat, 'user_id' => $l->user_id]);
         };
         $baris('masuk', $masuk);

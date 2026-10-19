@@ -7,6 +7,7 @@ use App\Models\Karyawan;
 use App\Models\Lapor;
 use App\Models\LaporFoto;
 use App\Models\LokasiAbsen;
+use App\Support\AlamatGps;
 use App\Support\DriveFoto;
 use App\Support\FotoLapor;
 use App\Support\PilahLapor;
@@ -54,15 +55,15 @@ class LaporController extends Controller
     {
         $d = $request->validate(['lat' => ['required', 'numeric', 'between:-90,90'], 'lng' => ['required', 'numeric', 'between:-180,180'], 'akurasi' => ['nullable', 'numeric', 'min:0']]);
         $t = self::terdekat((float) $d['lat'], (float) $d['lng']);
-        if (! $t) {
-            return response()->json(['di_lokasi' => false, 'pesan' => 'Lokasi tercatat (belum ada titik proyek).']);
-        }
-        [$l, $jarak] = $t;
-        $teks = $jarak >= 1000 ? number_format($jarak / 1000, 1, ',', '.').' km' : "{$jarak} m";
+        if ($t && $t[1] <= $t[0]->radius_m) {
+            [$l, $jarak] = $t;
 
-        return response()->json($jarak <= $l->radius_m
-            ? ['di_lokasi' => true, 'pesan' => ($l->tahap?->nama ?? $l->nama)." · {$teks} dari titik"]
-            : ['di_lokasi' => false, 'pesan' => "Di luar lokasi proyek — terdekat {$l->label()} ({$teks}). Tetap bisa dikirim."]);
+            return response()->json(['di_lokasi' => true, 'pesan' => ($l->tahap?->nama ?? $l->nama)." · {$jarak} m dari titik"]);
+        }
+        // Tidak di proyek mana pun → nama tempat sebenarnya (nama jalan, desa, kecamatan, kota)
+        $alamat = AlamatGps::dari((float) $d['lat'], (float) $d['lng']);
+
+        return response()->json(['di_lokasi' => false, 'pesan' => ($alamat ?: 'Lokasi tercatat').' · bukan lokasi proyek, tetap bisa dikirim']);
     }
 
     public function simpan(Request $request): JsonResponse
@@ -84,15 +85,17 @@ class LaporController extends Controller
         [$l, $jarak] = $lok ?? [null, null];
         $diLokasi = $l && $jarak <= $l->radius_m;
         $tanggal = PilahLapor::tanggalKerja($k->id, $waktu);
+        // Di luar lokasi proyek → nama tempat sebenarnya dari GPS (owner 19 Okt 2026)
+        $alamat = ! $diLokasi && isset($d['lat'], $d['lng']) ? AlamatGps::dari((float) $d['lat'], (float) $d['lng']) : null;
 
-        $lapor = DB::transaction(function () use ($request, $d, $k, $waktu, $akurasi, $l, $jarak, $diLokasi, $tanggal) {
+        $lapor = DB::transaction(function () use ($request, $d, $k, $waktu, $akurasi, $l, $jarak, $diLokasi, $tanggal, $alamat) {
             $lapor = Lapor::create(['karyawan_id' => $k->id, 'waktu' => $waktu, 'tanggal' => $tanggal, 'lat' => $d['lat'] ?? null, 'lng' => $d['lng'] ?? null,
-                'akurasi_m' => $akurasi, 'lokasi_absen_id' => $l?->id, 'proyek_tahap_id' => $diLokasi ? $l->proyek_tahap_id : null, 'jarak_m' => $jarak, 'di_lokasi' => $diLokasi,
+                'akurasi_m' => $akurasi, 'lokasi_absen_id' => $l?->id, 'proyek_tahap_id' => $diLokasi ? $l->proyek_tahap_id : null, 'jarak_m' => $jarak, 'di_lokasi' => $diLokasi, 'alamat' => $alamat,
                 'keterangan' => trim((string) ($d['keterangan'] ?? '')) ?: null, 'ip' => $request->ip(), 'perangkat' => mb_substr((string) $request->userAgent(), 0, 255),
                 'user_id' => $request->user()->id]);
             $watermark = [$waktu->translatedFormat('j M Y H:i:s').' WIB',
                 isset($d['lat']) ? sprintf('GPS %.7f, %.7f', $d['lat'], $d['lng']).($akurasi !== null ? " ±{$akurasi} m" : '') : 'GPS tidak tersedia',
-                $l ? ($diLokasi ? "{$l->label()} ({$jarak} m)" : "di luar lokasi · terdekat {$l->label()} ({$jarak} m)") : '',
+                $diLokasi ? "{$l->label()} ({$jarak} m)" : ($alamat ?? ''),
                 $k->nama];
             foreach (array_values($request->file('foto')) as $i => $file) {
                 FotoLapor::simpan($lapor, $file, $i + 1, $d['sumber'][$i] ?? 'galeri', $d['kamera'][$i] ?? null, array_values(array_filter($watermark)));
@@ -106,7 +109,7 @@ class LaporController extends Controller
         $lapor->refresh();
 
         return response()->json(['ok' => true, 'pesan' => 'Terkirim pukul '.$waktu->format('H:i').' · '.count($request->file('foto')).' foto'
-            .($diLokasi ? ' · '.($l->tahap?->nama ?? $l->nama) : ($l ? ' · di luar lokasi proyek' : ''))
+            .($diLokasi ? ' · '.($l->tahap?->nama ?? $l->nama) : ($alamat ? " · {$alamat}" : ''))
             // pulang / lembur baru pasti di akhir hari (kiriman terakhir) → yang pasti hanya absen masuk
             .($lapor->jenis === 'masuk' ? ' · tercatat sebagai absen masuk' : ' · tersimpan')]);
     }

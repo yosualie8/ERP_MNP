@@ -14,7 +14,7 @@ class AbsensiController extends Controller
     public function index(Request $request): View
     {
         $tanggal = (RitasiController::tanggal($request->query('tanggal')) ?? now())->copy()->startOfDay();
-        $absen = Absensi::with('lokasi.tahap')->whereDate('tanggal', $tanggal)->orderBy('waktu')->get()->groupBy('karyawan_id');
+        $absen = Absensi::with(['lokasi.tahap', 'lapor'])->whereDate('tanggal', $tanggal)->orderBy('waktu')->get()->groupBy('karyawan_id');
         $karyawan = Karyawan::where('status', 'aktif')->orWhereIn('id', $absen->keys())->orderBy('nama')->get();
         $baris = $karyawan->map(fn ($k) => ['k' => $k, 'absen' => ($absen[$k->id] ?? collect())->keyBy('jenis')]);
 

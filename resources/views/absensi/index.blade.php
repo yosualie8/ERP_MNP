@@ -36,7 +36,7 @@
                             <td class="sel-absen">@if (isset($a[$j])){{ $a[$j]->waktu->translatedFormat('j M Y H:i') }}<a href="{{ route('absen.foto', $a[$j]) }}" target="_blank" title="Selfie · {{ $a[$j]->jarak_m }} m dari titik · akurasi ±{{ $a[$j]->akurasi_m }} m">📷</a>@endif</td>
                         @endforeach
                         <td class="angka">{{ $kerja !== null ? intdiv($kerja, 60).' j '.($kerja % 60).' m' : '' }}@if ($lembur)<br><span class="redup">+ lembur {{ intdiv($lembur, 60) }} j {{ $lembur % 60 }} m</span>@endif</td>
-                        <td>{{ $a->first()?->lokasi?->tahap?->nama }}@if ($a->first()?->lokasi) <span class="redup">· {{ $a->first()->lokasi->lokasiProyek() }}</span>@endif</td>
+                        <td>{{ $a->first()?->lokasi?->tahap?->nama }}@if ($a->first()?->lokasi) <span class="redup">· {{ $a->first()->lokasi->lokasiProyek() }}</span>@elseif ($a->first()?->lapor)<span style="color: #f0c05a;">📍 {{ $a->first()->lapor->alamat ?? ($a->first()->lat ? 'bukan lokasi proyek' : 'tanpa GPS') }}</span>@endif</td>
                         <td>@if ($a->isEmpty())<span class="label merah">Tidak absen</span>@elseif (! isset($a['pulang']))<span class="label kuning">Belum / lupa absen pulang</span>@endif</td>
                     </tr>
                 @endforeach

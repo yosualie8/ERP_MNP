@@ -14,7 +14,7 @@ class Lapor extends Model
 {
     protected $table = 'lapor';
 
-    protected $fillable = ['karyawan_id', 'waktu', 'tanggal', 'lat', 'lng', 'akurasi_m', 'lokasi_absen_id', 'proyek_tahap_id', 'jarak_m', 'di_lokasi',
+    protected $fillable = ['karyawan_id', 'waktu', 'tanggal', 'lat', 'lng', 'akurasi_m', 'lokasi_absen_id', 'proyek_tahap_id', 'jarak_m', 'di_lokasi', 'alamat',
         'keterangan', 'jenis', 'jenis_admin', 'boq_item_id', 'catatan_admin', 'ip', 'perangkat', 'user_id'];
 
     protected $casts = ['waktu' => 'datetime', 'tanggal' => 'date', 'lat' => 'float', 'lng' => 'float', 'di_lokasi' => 'boolean'];
