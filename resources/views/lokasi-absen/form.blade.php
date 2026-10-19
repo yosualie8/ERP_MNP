@@ -15,9 +15,15 @@
         @csrf
         @if ($lokasi->exists) @method('PUT') @endif
         <h3 style="margin: 0 0 14px;">{{ $lokasi->exists ? 'Edit lokasi absen' : 'Tambah lokasi absen' }}</h3>
-        <div class="baris">
+        {{-- Basecamp (mis. Pool, mess): tempat karyawan berkumpul — bukan proyek, tetapi absen di sini tetap sah. --}}
+        @php($basecamp = (bool) old('basecamp', $lokasi->exists && ! $lokasi->proyek_tahap_id))
+        <label style="display: flex; gap: 8px; align-items: center; margin-bottom: 12px; color: var(--teks);"><input type="checkbox" name="basecamp" value="1" id="basecamp" style="width: auto;" @checked($basecamp)> Basecamp / bukan proyek <span class="redup" style="font-size: 12px;">(mis. Pool, mess — tempat karyawan berkumpul)</span></label>
+        <div class="baris" id="isian-basecamp" @unless ($basecamp) hidden @endunless>
+            <div><label for="nama_lokasi">Nama lokasi</label><input id="nama_lokasi" name="nama_lokasi" value="{{ old('nama_lokasi', $lokasi->proyek_tahap_id ? '' : $lokasi->nama) }}" maxlength="120" autocomplete="off" placeholder="mis. Pool (bedeng kayu)"></div>
+        </div>
+        <div class="baris" id="isian-proyek" @if ($basecamp) hidden @endif>
             <div><label for="proyek">Proyek (tahap di Daftar Proyek)</label>
-                <input id="proyek" name="proyek" list="daftar-tahap" value="{{ old('proyek', $lokasi->tahap?->nama) }}" autocomplete="off" placeholder="Ketik / pilih, mis. ASG Tahap 116" required>
+                <input id="proyek" name="proyek" list="daftar-tahap" value="{{ old('proyek', $lokasi->tahap?->nama) }}" autocomplete="off" placeholder="Ketik / pilih, mis. ASG Tahap 116">
                 <datalist id="daftar-tahap">@foreach ($tahapSaran as $t)<option value="{{ $t }}">@endforeach</datalist>
                 <div id="galat-proyek" style="color: var(--merah); font-size: 12px; margin-top: 4px;" hidden></div></div>
             <div><label for="lokasi-proyek">Lokasi proyek <span style="font-size: 11px;">(otomatis dari Daftar Proyek)</span></label>
@@ -60,7 +66,12 @@
             document.getElementById('radius_m').addEventListener('input', segar);
             // Proyek harus persis nama tahap yang terdaftar.
             const TAHAP = @json($tahapSemua), proyek = document.getElementById('proyek'), galat = document.getElementById('galat-proyek'), simpan = document.querySelector('.form-l button[type=submit]');
+            const basecamp = document.getElementById('basecamp'), namaLokasi = document.getElementById('nama_lokasi');
             const cekProyek = () => {
+                // Basecamp: tidak memilih proyek, cukup nama lokasi.
+                document.getElementById('isian-basecamp').hidden = !basecamp.checked;
+                document.getElementById('isian-proyek').hidden = basecamp.checked;
+                if (basecamp.checked) { galat.hidden = true; simpan.disabled = !namaLokasi.value.trim(); return; }
                 const v = proyek.value, ada = Object.hasOwn(TAHAP, v);
                 // Lokasi diisi otomatis dari Daftar Proyek (tidak bisa diketik).
                 document.getElementById('lokasi-proyek').value = ada ? (TAHAP[v] || v) : '';
@@ -71,7 +82,7 @@
                 proyek.style.borderColor = v && !ada ? 'var(--aksen)' : '';
                 simpan.disabled = !ada;
             };
-            proyek.addEventListener('input', cekProyek); cekProyek();
+            proyek.addEventListener('input', cekProyek); basecamp.addEventListener('change', cekProyek); namaLokasi.addEventListener('input', cekProyek); cekProyek();
             // Tempel "lat, lng" dari Google Maps ke kolom Latitude → dipecah otomatis.
             lat.addEventListener('input', () => { const m = lat.value.match(/^\s*(-?\d+[.,]\d+)\s*[,;\s]\s*(-?\d+[.,]\d+)\s*$/); if (m) { lat.value = m[1].replace(',', '.'); lng.value = m[2].replace(',', '.'); } segar(); });
             lng.addEventListener('input', segar); segar();

@@ -13,7 +13,7 @@
             <tbody>
                 @forelse ($lokasi as $l)
                     <tr class="t">
-                        <td><b>{{ $l->tahap?->nama }}</b></td>
+                        <td>@if ($l->tahap)<b>{{ $l->tahap->nama }}</b>@else<span class="label">🏠 Basecamp</span>@endif</td>
                         <td>{{ $l->lokasiProyek() }}</td>
                         <td><a href="{{ $l->urlPeta() }}" target="_blank" rel="noopener">{{ number_format($l->lat, 6, '.', '') }}, {{ number_format($l->lng, 6, '.', '') }}</a></td>
                         <td class="angka">{{ $l->radius_m }} m</td>

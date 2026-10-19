@@ -55,20 +55,29 @@ class LokasiAbsenController extends Controller
 
     private function baca(Request $request): array
     {
-        // Proyek diketik/dipilih dengan nama tahap; harus PERSIS terdaftar di Daftar Proyek.
-        $nama = (string) $request->input('proyek');
-        $tahap = ProyekTahap::where('nama', $nama)->where('nama', 'not like', '%(biaya%')->first();
-        if (! $tahap || $tahap->nama !== $nama) {
-            throw \Illuminate\Validation\ValidationException::withMessages(['proyek' => $nama === ''
-                ? 'Proyek belum dipilih.' : "Proyek \"{$nama}\" tidak terdaftar di Daftar Proyek — pilih dari daftar (ketik persis sama)."]);
+        if ($request->boolean('basecamp')) {
+            // Basecamp (mis. Pool, mess — owner 19 Okt 2026): bukan proyek; nama lokasi diketik.
+            $nama = trim((string) $request->input('nama_lokasi'));
+            if ($nama === '') {
+                throw \Illuminate\Validation\ValidationException::withMessages(['nama_lokasi' => 'Isi nama lokasi basecamp, mis. "Pool (bedeng kayu)".']);
+            }
+            $request->merge(['proyek_tahap_id' => null, 'nama' => mb_substr($nama, 0, 120)]);
+        } else {
+            // Proyek diketik/dipilih dengan nama tahap; harus PERSIS terdaftar di Daftar Proyek.
+            $nama = (string) $request->input('proyek');
+            $tahap = ProyekTahap::where('nama', $nama)->where('nama', 'not like', '%(biaya%')->first();
+            if (! $tahap || $tahap->nama !== $nama) {
+                throw \Illuminate\Validation\ValidationException::withMessages(['proyek' => $nama === ''
+                    ? 'Proyek belum dipilih.' : "Proyek \"{$nama}\" tidak terdaftar di Daftar Proyek — pilih dari daftar (ketik persis sama)."]);
+            }
+            // Nama lokasi tidak diketik: diambil dari kolom Lokasi tahap di Daftar Proyek (kosong → nama tahap).
+            $request->merge(['proyek_tahap_id' => $tahap->id, 'nama' => mb_substr($tahap->lokasi ?: $tahap->nama, 0, 120)]);
         }
-        // Nama lokasi tidak diketik: diambil dari kolom Lokasi tahap di Daftar Proyek (kosong → nama tahap).
-        $request->merge(['proyek_tahap_id' => $tahap->id, 'nama' => mb_substr($tahap->lokasi ?: $tahap->nama, 0, 120)]);
         $request->merge(['aktif' => $request->boolean('aktif'),
             'lat' => str_replace(',', '.', (string) $request->input('lat')), 'lng' => str_replace(',', '.', (string) $request->input('lng'))]);
 
         return $request->validate([
-            'nama' => ['required', 'string', 'max:120'], 'proyek_tahap_id' => ['required', 'exists:proyek_tahap,id'],
+            'nama' => ['required', 'string', 'max:120'], 'proyek_tahap_id' => ['nullable', 'exists:proyek_tahap,id'],
             'lat' => ['required', 'numeric', 'between:-90,90'], 'lng' => ['required', 'numeric', 'between:-180,180'],
             'radius_m' => ['required', 'integer', 'min:20', 'max:2000'], 'aktif' => ['boolean'],
         ], ['lat.required' => 'Titik GPS belum diisi — tekan "Ambil titik saya" saat berada di lokasi, atau tempel koordinat dari Google Maps.']);
