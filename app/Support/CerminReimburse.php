@@ -103,9 +103,77 @@ class CerminReimburse
             ]]], 'menyalin format baris Mutasi Reimburse');
             $this->sheets->tulis($this->id, $data);
             $this->tulisChip($baru, $mulai);
+            // Transaksi ber-NO ID lebih kecil dari data terakhir (diinput belakangan) → urutkan ulang supaya saldo berurutan.
+            if ((int) $baru->first()['no'] < $peta['no_akhir']) {
+                $this->urutkanTanpaKunci();
+            }
 
             return $baru->count();
         });
+    }
+
+    /**
+     * Urutkan baris data menurut NO (kolom A) lalu ID (B), mulai dari baris pertama yang tidak urut (sesudah baris saldo awal),
+     * lalu rantai saldo Q (=Q atas + O − P) & rumus status R ditulis ulang. Seluruh baris ikut pindah (kolom admin, chip Bon).
+     *
+     * @return array{dari: int, sampai: int}|null  null bila sudah urut
+     */
+    public function urutkan(): ?array
+    {
+        return Cache::lock('tulis-reimburse', 300)->block(120, fn () => $this->urutkanTanpaKunci());
+    }
+
+    private function urutkanTanpaKunci(): ?array
+    {
+        $l = self::LEMBAR;
+        $ab = $this->sheets->nilaiMentah($this->id, ["{$l}!A:B"])["{$l}!A:B"];
+        $q = $this->sheets->nilai($this->id, ["{$l}!Q:Q"], 'FORMULA')["{$l}!Q:Q"];
+        // baris saldo awal = baris pertama yang kolom Q-nya angka (bukan rumus); sebelum itu riwayat lama tanpa saldo
+        $awal = null;
+        foreach ($q as $i => $r) {
+            $v = $r[0] ?? '';
+            if ($i > 0 && $v !== '' && is_numeric($v)) {
+                $awal = $i + 1;
+                break;
+            }
+        }
+        $baris = [];
+        foreach ($ab as $i => $r) {
+            if ($i + 1 > ($awal ?? 1) && trim((string) ($r[1] ?? '')) !== '') {
+                $baris[$i + 1] = [(int) ($r[0] ?? 0), (string) $r[1]];
+            }
+        }
+        if (! $baris) {
+            return null;
+        }
+        $urut = $baris;
+        uasort($urut, fn ($a, $b) => [$a[0], $a[1]] <=> [$b[0], $b[1]]);
+        $dari = null;
+        foreach (array_map(null, array_keys($baris), array_values($baris), array_values($urut)) as [$n, $x, $y]) {
+            if ($x !== $y) {
+                $dari = $n;
+                break;
+            }
+        }
+        if ($dari === null) {
+            return null;
+        }
+        $sampai = max(array_keys($baris));
+        $this->sheets->permintaan($this->id, [['sortRange' => [
+            'range' => ['sheetId' => $this->sheetId(), 'startRowIndex' => $dari - 1, 'endRowIndex' => $sampai, 'startColumnIndex' => 0, 'endColumnIndex' => 18],
+            'sortSpecs' => [['dimensionIndex' => 0, 'sortOrder' => 'ASCENDING'], ['dimensionIndex' => 1, 'sortOrder' => 'ASCENDING']],
+        ]]], 'mengurutkan Mutasi Reimburse menurut NO ID');
+        // R yang diketik manual (bukan rumus, mis. "Sudah") dipertahankan; rumus R disesuaikan ke barisnya yang baru.
+        $r = $this->sheets->nilai($this->id, ["{$l}!R{$dari}:R{$sampai}"], 'FORMULA')["{$l}!R{$dari}:R{$sampai}"];
+        $rumus = [];
+        for ($n = $dari; $n <= $sampai; $n++) {
+            $lama = (string) ($r[$n - $dari][0] ?? '');
+            $rumus[] = ["=Q".($n - 1)."+O{$n}-P{$n}", $lama !== '' && ! str_starts_with($lama, '=') ? $lama
+                : "=IF(P{$n}>0;IF(ISNA(XLOOKUP(B{$n};'Sudah Reimburse'!B:B;'Sudah Reimburse'!D:D));\"Belum\";\"Sudah\");\"Saldo Masuk\")"];
+        }
+        $this->sheets->tulis($this->id, ["{$l}!Q{$dari}:R{$sampai}" => $rumus]);
+
+        return ['dari' => $dari, 'sampai' => $sampai];
     }
 
     /**
@@ -295,13 +363,15 @@ class CerminReimburse
     private function peta(): array
     {
         $l = self::LEMBAR;
-        $isi = $this->sheets->nilai($this->id, ["{$l}!B:B", "{$l}!R:R"]);
+        $isi = $this->sheets->nilai($this->id, ["{$l}!A:B", "{$l}!R:R"]);
         $baris = [];
         $akhir = 1;
-        foreach ($isi["{$l}!B:B"] as $i => $r) {
-            if (($b = trim((string) ($r[0] ?? ''))) !== '' && $i > 0) {
+        $noAkhir = 0;
+        foreach ($isi["{$l}!A:B"] as $i => $r) {
+            if (($b = trim((string) ($r[1] ?? ''))) !== '' && $i > 0) {
                 $baris[$b] ??= $i + 1;
                 $akhir = $i + 1;
+                $noAkhir = max($noAkhir, (int) preg_replace('/\D/', '', (string) ($r[0] ?? '')));
             }
         }
         $status = [];
@@ -309,7 +379,7 @@ class CerminReimburse
             $status[$i + 1] = trim((string) ($r[0] ?? ''));
         }
 
-        return ['baris' => $baris, 'status' => $status, 'akhir' => $akhir];
+        return ['baris' => $baris, 'status' => $status, 'akhir' => $akhir, 'no_akhir' => $noAkhir];
     }
 
     /** Pastikan lembar punya cukup baris (grid) sampai $sampai. */
