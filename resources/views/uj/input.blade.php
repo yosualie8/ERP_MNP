@@ -671,7 +671,8 @@
                 // 3. ringkasan untuk tempelan banyak baris: semua saran koreksi bisa diterapkan sekaligus
                 const bersaran = [...document.querySelectorAll('.sopir-nama-baru[data-saran]')];
                 let bar = document.getElementById('saran-sopir-semua');
-                if (bersaran.length >= 2) {
+                // Pengajuan UJ: TANPA "Terapkan semua" (owner 20 Okt 2026) — admin wajib memeriksa saran nama satu per satu di barisnya.
+                if (!AJUKAN && bersaran.length >= 2) {
                     if (!bar) {
                         bar = document.createElement('div');
                         bar.id = 'saran-sopir-semua';
