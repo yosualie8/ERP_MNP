@@ -90,7 +90,8 @@ class PengalihanUjController extends Controller
         ], ['uj.required' => 'Centang minimal satu UJ.', 'keterangan.*' => 'Tulis alasannya (mis. "Truk pindah lokasi sebelum bongkar").']);
         $terbuka = $this->terbuka();
         $pilih = collect($d['uj'])->unique()->values();
-        $salah = $pilih->reject(fn ($id) => isset($terbuka[$id]));
+        $sudah = UjPengalihan::whereIn('id_uj', $pilih)->pluck('id_uj')->flip();
+        $salah = $pilih->reject(fn ($id) => isset($terbuka[$id]) && ! isset($sudah[$id]));
         if ($salah->isNotEmpty()) {
             return back()->withInput()->with('error', 'UJ berikut bukan UJ belum bongkar (atau sudah dijadikan saldo / ditutup): '.$salah->implode(', '));
         }
@@ -119,6 +120,7 @@ class PengalihanUjController extends Controller
             'sopir' => ['required', 'string', 'max:100'], 'tanggal' => ['required', 'date'], 'peruntukan' => ['required', 'in:mob,lain,kembali,hangus'],
             'nominal' => ['required', 'string', 'max:20'], 'tahap' => ['nullable', 'integer', 'exists:proyek_tahap,id'], 'keterangan' => ['nullable', 'string', 'max:300'],
         ]);
+        $d += ['tahap' => null, 'keterangan' => null];
         $nominal = (float) preg_replace('/\D/', '', $d['nominal']);
         $sopir = SaldoSopir::kunci($d['sopir']);
         $s = SaldoSopir::perSopir()[$sopir] ?? null;

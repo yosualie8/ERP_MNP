@@ -131,7 +131,10 @@ class SaldoSopir
             return 0.0;
         }
 
-        return $s['saldo'] + (float) $s['pakai_rows']->whereIn('uj_pengajuan_detail_id', $kecualiDetail ?: [0])->sum('nominal');
+        // hanya potongan dari detail pengajuan yang sedang diubah (perbandingan ketat: pemakaian manual ber-detail kosong tidak ikut)
+        $kecuali = array_map('intval', $kecualiDetail);
+
+        return $s['saldo'] + (float) $s['pakai_rows']->filter(fn ($p) => $p->uj_pengajuan_detail_id && in_array((int) $p->uj_pengajuan_detail_id, $kecuali, true))->sum('nominal');
     }
 
     /** DO lama (UJ yang dijadikan saldo, belum bongkar) per sopir: [SOPIR => [kunci DO => id_uj]] — saldonya terpakai sendiri saat DO itu bongkar. */
