@@ -518,14 +518,59 @@
             const TRUK_DT = new Set(SOPIR.truk);
             const escSb = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
             let uidSb = 0;
-            const buatKotakSopir = (tr, nama, k, m) => {
+            // Sopir yang membawa truk m menurut catatan + jawaban "pindah / aktif lagi / berhenti" di form ini (sebelum disimpan).
+            const pemegang = m => {
+                const pindah = {};
+                document.querySelectorAll('.sopir-pindah').forEach(b => {
+                    const v = b.querySelector('[data-nama=sopir_pindah]').value;
+                    if (/^(pindah|aktif)/.test(v)) pindah[b.dataset.id] = {ke: b.dataset.ke, berhenti: (v.split('|')[1] || '').split(',').filter(Boolean)};
+                });
+                const berhenti = new Set(Object.values(pindah).flatMap(p => p.berhenti));
+                const daftar = SOPIR.aktif.filter(s => !berhenti.has(String(s.id)) && (pindah[s.id] ? pindah[s.id].ke === m : s.mobil === m));
+                Object.entries(pindah).forEach(([id, p]) => {
+                    if (p.ke !== m || daftar.some(s => String(s.id) === id)) return;
+                    const s = Object.values(SOPIR.peta).find(x => String(x.id) === id);
+                    if (s) daftar.push({id: s.id, nama: s.nama, mobil: m});
+                });
+                return daftar;
+            };
+            // Sopir TERDAFTAR yang muncul di truk lain dari catatannya / berstatus nonaktif: sekali jalan, atau pindah tetap / aktif lagi
+            // (sopir lain truk itu bisa dicentang berhenti). Ditanyakan sekali per sopir.
+            const buatKotakPindah = (tr, s, m) => {
                 const id = 'sb' + (++uidSb);
-                const lama = SOPIR.aktif.filter(s => s.mobil === m);
+                const lain = SOPIR.aktif.filter(x => x.mobil === m && x.id !== s.id);
+                const centang = lain.map(x => `<label style="padding-left: 18px;"><input type="checkbox" value="${x.id}"> ${escSb(x.nama)} (${escSb(m)}) berhenti → nonaktifkan</label>`).join('');
+                const box = document.createElement('div');
+                box.className = 'sopir-baru sopir-pindah';
+                Object.assign(box.dataset, {kunci: s.id + '|' + m, id: s.id, ke: m});
+                box.innerHTML = s.aktif
+                    ? `<b>🚚 Pindah truk?</b> ${escSb(s.nama)} tercatat membawa ${escSb(s.mobil || 'truk lain')} — sekarang ${escSb(m)}.
+                        <label><input type="radio" name="${id}" value="sementara"> Sekali jalan / sementara (tetap ${escSb(s.mobil || '-')})</label>
+                        <label><input type="radio" name="${id}" value="pindah"> Pindah tetap ke ${escSb(m)}</label>${centang}`
+                    : `<b>↩ Kembali bekerja?</b> ${escSb(s.nama)} tercatat NONAKTIF.
+                        <label><input type="radio" name="${id}" value="aktif"> Aktifkan lagi membawa ${escSb(m)}</label>${centang}
+                        <label><input type="radio" name="${id}" value="sementara"> Sekali jalan saja (tetap nonaktif)</label>`;
+                box.insertAdjacentHTML('beforeend', '<input type="hidden" data-nama="sopir_pindah" data-lewati-tempel>');
+                const nilai = box.querySelector('[data-nama=sopir_pindah]');
+                box.addEventListener('change', e => {
+                    if (e.target.type === 'checkbox' && e.target.checked) box.querySelector(`input[value=${s.aktif ? 'pindah' : 'aktif'}]`).checked = true;
+                    const r = box.querySelector('input[type=radio]:checked');
+                    const ids = [...box.querySelectorAll('input[type=checkbox]:checked')].map(c => c.value);
+                    nilai.value = !r ? '' : r.value + (r.value !== 'sementara' && ids.length ? '|' + ids.join(',') : '');
+                    box.classList.toggle('terjawab', !!nilai.value);
+                    setTimeout(aturSopirBaru); // kotak sopir baru di truk lain ikut menyesuaikan "tercatat dibawa"
+                    evaluasi();
+                });
+                tr.querySelector('[data-nama=nama]').closest('td').appendChild(box);
+                return box;
+            };
+            const buatKotakSopir = (tr, nama, k, m, lama) => {
+                const id = 'sb' + (++uidSb);
                 const namaLama = escSb(lama.map(s => s.nama).join(', '));
                 const opsi = SOPIR.aktif.map(s => `<option value="alias:${s.id}" ${lama.some(l => l.id === s.id) ? 'selected' : ''}>${escSb(s.nama)}${s.mobil ? ' · ' + escSb(s.mobil) : ''}</option>`).join('');
                 const box = document.createElement('div');
-                box.className = 'sopir-baru';
-                box.dataset.kunci = k + '|' + m;
+                box.className = 'sopir-baru sopir-nama-baru';
+                box.dataset.kunci = k + '|' + m + '|' + lama.map(s => s.id).join(',');
                 box.innerHTML = `<b>🆕 Sopir baru?</b> "${escSb(nama)}" belum terdaftar${lama.length ? ` — ${escSb(m)} tercatat dibawa ${namaLama}` : ` untuk ${escSb(m)}`}.
                     <label><input type="radio" name="${id}" value="ganti"> Ganti sopir${lama.length ? ` (${namaLama} dinonaktifkan)` : ''}</label>
                     <label><input type="radio" name="${id}" value="tambah"> Sopir tambahan${lama.length ? ' (sopir lama tetap aktif)' : ''}</label>
@@ -546,15 +591,28 @@
             const aturSopirBaru = () => {
                 const ditanya = {};
                 let berubah = false;
+                // 1. sopir terdaftar di truk lain / nonaktif (dulu: jawabannya memengaruhi "tercatat dibawa" kotak sopir baru)
+                barisDetail().forEach(tr => {
+                    const s = SOPIR.peta[kunciNama(tr.querySelector('[data-nama=nama]').value)];
+                    const m = kunciMobil(tr.querySelector('[data-nama=no_mobil]').value);
+                    let box = tr.querySelector('.sopir-pindah');
+                    const sudah = s?.id && ditanya['id' + s.id];
+                    if (s?.id) ditanya['id' + s.id] = true;
+                    const perlu = s?.id && TRUK_DT.has(m) && !sudah && !(s.aktif && s.mobil === m);
+                    if (!perlu) { if (box) { box.remove(); berubah = true; } return; }
+                    if (!box || box.dataset.kunci !== s.id + '|' + m) { box?.remove(); buatKotakPindah(tr, s, m); berubah = true; }
+                });
+                // 2. nama sopir baru
                 barisDetail().forEach(tr => {
                     const nama = tr.querySelector('[data-nama=nama]').value;
                     const k = kunciNama(nama);
                     const m = kunciMobil(tr.querySelector('[data-nama=no_mobil]').value);
                     const perlu = k && TRUK_DT.has(m) && !SOPIR.peta[k] && !ditanya[k];
-                    let box = tr.querySelector('.sopir-baru');
+                    let box = tr.querySelector('.sopir-nama-baru');
                     if (!perlu) { if (box) { box.remove(); berubah = true; } return; }
                     ditanya[k] = true;
-                    if (!box || box.dataset.kunci !== k + '|' + m) { box?.remove(); buatKotakSopir(tr, nama.trim(), k, m); berubah = true; }
+                    const lama = pemegang(m);
+                    if (!box || box.dataset.kunci !== k + '|' + m + '|' + lama.map(s => s.id).join(',')) { box?.remove(); buatKotakSopir(tr, nama.trim(), k, m, lama); berubah = true; }
                 });
                 if (berubah) { urutkanNama(); evaluasi(); }
             };
@@ -1145,8 +1203,8 @@
                     tanpaAlasan.push(i + 1);
                 });
                 if (tanpaAlasan.length) masalah.push(`${tanpaAlasan.length} transaksi berbeda dari pengajuannya dan belum diberi alasan (baris ${tanpaAlasan.join(', ')}) — isi alasannya di kotak tepat di bawah barisnya.`);
-                const sopirBelum = barisDetail().map((tr, i) => { const b = tr.querySelector('.sopir-baru'); return b && !b.querySelector('[data-nama=sopir_baru]').value ? i + 1 : null; }).filter(Boolean);
-                if (sopirBelum.length) masalah.push(`Baris ${sopirBelum.join(', ')}: nama sopir belum terdaftar — pilih ganti sopir / sopir tambahan / nama lain / bukan sopir di kotak bawah namanya.`);
+                const sopirBelum = barisDetail().map((tr, i) => [...tr.querySelectorAll('.sopir-baru')].some(b => !b.querySelector('[data-nama=sopir_baru], [data-nama=sopir_pindah]').value) ? i + 1 : null).filter(Boolean);
+                if (sopirBelum.length) masalah.push(`Baris ${sopirBelum.join(', ')}: data sopir perlu dijawab (sopir baru / pindah truk / kembali bekerja) — pilih di kotak bawah namanya.`);
                 return {masalah, pertama};
             };
             // Status validasi dihitung terus saat admin mengisi. Tombol Simpan hanya menyala bila SEMUA transaksi valid:

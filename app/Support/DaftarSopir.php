@@ -97,10 +97,54 @@ class DaftarSopir
         return $hasil;
     }
 
+    /**
+     * Sopir TERDAFTAR yang muncul di truk lain dari catatannya, atau yang berstatus nonaktif (owner 20 Okt 2026: sopir lama bisa pindah
+     * truk / kembali bekerja). Ditanyakan sekali per sopir (truk baris pertamanya). Jawaban (detail.*.sopir_pindah):
+     *  - sementara          : sekali jalan / pinjam truk — catatan tidak berubah;
+     *  - pindah[|id,id]     : (sopir aktif) pindah tetap ke truk ini; sopir lain truk ini yang dicentang berhenti (nonaktif);
+     *  - aktif[|id,id]      : (sopir nonaktif) aktif lagi membawa truk ini; idem.
+     *
+     * @return array<int, array{id: int, nama: string, aktif: bool, dari: ?string, ke: string, baris: int[], pilihan: ?string}> per id karyawan
+     */
+    public static function pindah(array $detail): array
+    {
+        $truk = AsetTruk::truk()->pluck('no_lambung')->flip();
+        $hasil = [];
+        foreach ($detail as $i => $d) {
+            $s = self::cari($d['nama'] ?? null);
+            $m = NomorMobil::rapikan($d['no_mobil'] ?? null);
+            if (! $s || ! $m || ! isset($truk[$m])) {
+                continue;
+            }
+            if (isset($hasil[$s['id']])) {
+                $hasil[$s['id']]['baris'][] = $i + 1;
+
+                continue;
+            }
+            if ($s['aktif'] && $s['mobil'] === $m) {
+                $hasil[$s['id']] = null; // sudah sesuai (baris lain sopir ini di truk lain = sekali jalan)
+
+                continue;
+            }
+            $hasil[$s['id']] = ['id' => $s['id'], 'nama' => $s['nama'], 'aktif' => $s['aktif'], 'dari' => $s['mobil'], 'ke' => $m, 'baris' => [$i + 1],
+                'pilihan' => ($d['sopir_pindah'] ?? null) ?: null];
+        }
+
+        return array_filter($hasil);
+    }
+
     /** Pesan galat untuk nama sopir baru yang belum dijawab / jawabannya tidak sah. */
     public static function belumDijawab(array $detail): array
     {
         $pesan = [];
+        foreach (self::pindah($detail) as $p) {
+            $pola = $p['aktif'] ? '/^(sementara|pindah(\|[\d,]+)?)$/' : '/^(sementara|aktif(\|[\d,]+)?)$/';
+            if (! preg_match($pola, (string) $p['pilihan'])) {
+                $pesan[] = 'Baris '.$p['baris'][0].': '.($p['aktif']
+                    ? "{$p['nama']} tercatat membawa ".($p['dari'] ?: 'truk lain')." — pilih: sekali jalan / pindah tetap ke {$p['ke']}."
+                    : "{$p['nama']} tercatat nonaktif — pilih: aktifkan lagi membawa {$p['ke']} / sekali jalan.");
+            }
+        }
         foreach (self::baru($detail) as $b) {
             $p = $b['pilihan'];
             $sah = in_array($p, self::PILIHAN, true) || (preg_match('/^alias:(\d+)$/', (string) $p, $m) && Karyawan::where('jabatan', self::JABATAN)->whereKey($m[1])->exists());
@@ -144,6 +188,21 @@ class DaftarSopir
     {
         $ringkas = [];
         DB::transaction(function () use ($detail, $userId, &$ringkas) {
+            // 1. Sopir lama pindah truk / aktif lagi — DULU, supaya "ganti sopir" di truk lamanya tidak ikut menonaktifkan dia.
+            foreach (self::pindah($detail) as $p) {
+                if (! preg_match('/^(pindah|aktif)(?:\|([\d,]+))?$/', (string) $p['pilihan'], $m) || ! ($s = Karyawan::find($p['id']))) {
+                    continue;
+                }
+                $s->update(['status' => 'aktif', 'no_mobil' => $p['ke']]);
+                $berhenti = Karyawan::where('jabatan', self::JABATAN)->where('status', 'aktif')->where('no_mobil', $p['ke'])
+                    ->whereIn('id', array_filter(explode(',', $m[2] ?? '')))->whereKeyNot($s->id)->get();
+                foreach ($berhenti as $b) {
+                    $b->update(['status' => 'nonaktif']);
+                }
+                $ringkas[] = ($m[1] === 'aktif' ? "{$s->nama} aktif lagi membawa {$p['ke']}" : "{$s->nama} pindah ".($p['dari'] ?: '').' → '.$p['ke'])
+                    .($berhenti->isNotEmpty() ? ', '.$berhenti->pluck('nama')->implode(', ').' dinonaktifkan' : '');
+            }
+            // 2. Nama sopir baru
             foreach (self::baru($detail) as $k => $b) {
                 $p = (string) $b['pilihan'];
                 if (preg_match('/^alias:(\d+)$/', $p, $m) && ($s = Karyawan::find($m[1]))) {
@@ -164,7 +223,7 @@ class DaftarSopir
             }
             if ($ringkas) {
                 KasRiwayat::create(['aksi' => 'sopir-baru', 'lembar' => 'Karyawan', 'baris_awal' => 0, 'baris_akhir' => 0,
-                    'ringkasan' => mb_strimwidth(implode('; ', $ringkas), 0, 490, '…'), 'isi' => ['baru' => self::baru($detail)], 'user_id' => $userId]);
+                    'ringkasan' => mb_strimwidth(implode('; ', $ringkas), 0, 490, '…'), 'isi' => ['baru' => self::baru($detail), 'pindah' => array_values(self::pindah($detail))], 'user_id' => $userId]);
             }
         });
         self::lupakan();
@@ -179,7 +238,7 @@ class DaftarSopir
         $aktif = Karyawan::where('jabatan', self::JABATAN)->where('status', 'aktif')->orderBy('nama')->get(['id', 'nama', 'no_mobil']);
 
         return [
-            'peta' => collect(self::peta())->map(fn ($s) => $s['id'] ? ['id' => $s['id'], 'nama' => $s['nama'], 'aktif' => $s['aktif']] : ['bukan' => true])->all(),
+            'peta' => collect(self::peta())->map(fn ($s) => $s['id'] ? ['id' => $s['id'], 'nama' => $s['nama'], 'aktif' => $s['aktif'], 'mobil' => $s['mobil']] : ['bukan' => true])->all(),
             'aktif' => $aktif->map(fn ($k) => ['id' => $k->id, 'nama' => $k->nama, 'mobil' => $k->no_mobil])->values()->all(),
             'truk' => AsetTruk::truk()->pluck('no_lambung')->values()->all(),
         ];

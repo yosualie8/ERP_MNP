@@ -277,6 +277,7 @@ class UjController extends Controller
             'detail.*.duluan' => ['nullable', 'string', 'max:30'],
             'detail.*.saldo' => ['nullable', 'integer', 'min:0'],
             'detail.*.sopir_baru' => ['nullable', 'string', 'max:30'],
+            'detail.*.sopir_pindah' => ['nullable', 'string', 'max:100'],
             'bayar_tanah_id' => ['nullable', 'integer'],
             'foto' => ['nullable', 'array', 'max:'.KasFotoController::MAKS_FOTO],
             'foto.*' => KasFotoController::ATURAN['foto.*'],
@@ -319,6 +320,8 @@ class UjController extends Controller
                 'saldo' => $pengajuan ? (int) ($d['saldo'] ?? 0) : 0,
                 // Jawaban admin bila nama sopir belum terdaftar (App\Support\DaftarSopir): ganti / tambah / alias:{id} / bukan.
                 'sopir_baru' => $rapi($d['sopir_baru'] ?? null),
+                // Sopir terdaftar di truk lain / nonaktif: sementara / pindah[|id..] / aktif[|id..] (DaftarSopir::pindah).
+                'sopir_pindah' => $rapi($d['sopir_pindah'] ?? null),
             ], $data['detail'])),
             'biaya_transfer' => $request->boolean('biaya_transfer'),
             'nominal_biaya' => (int) ($data['nominal_biaya'] ?? TulisUjSheet::BIAYA_TRANSFER),
