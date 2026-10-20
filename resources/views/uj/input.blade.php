@@ -1213,7 +1213,7 @@
             const teksSimpan = @json($teksTombol);
             const kunciIsi = () => {
                 const d = new FormData(form);
-                return JSON.stringify([...d.entries()].filter(([k, v]) => typeof v === 'string' && !/konfirmasi|alasan_pengajuan|_token|_method|versi|sopir_baru|^sb\d/.test(k)));
+                return JSON.stringify([...d.entries()].filter(([k, v]) => typeof v === 'string' && !/konfirmasi|alasan_pengajuan|_token|_method|versi|sopir_baru|sopir_pindah|^sb\d/.test(k)));
             };
             let diperiksa = null;   // kunciIsi() yang terakhir lolos pemeriksaan server
             let temuanTerakhir = {}; // hasil pemeriksaan server terakhir (dipakai ulang saat jawaban "Tidak")
