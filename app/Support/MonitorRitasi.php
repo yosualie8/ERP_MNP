@@ -44,7 +44,7 @@ class MonitorRitasi
             ->map(fn ($p) => (new UjDetail)->forceFill([
                 'id_uj' => 'SALDO-'.$p->id, 'baris' => null, 'tanggal' => $p->tanggal, 'nama' => $p->nama, 'nominal' => $p->nominal,
                 'keterangan' => 'Dibayar dari saldo sopir'.($p->keterangan ? ' — '.$p->keterangan : ''), 'kategori' => 'Uang Jalan',
-                'jenis_kendaraan' => null, 'no_mobil' => $p->no_mobil, 'no_do' => $p->no_do, 'status' => 'saldo sopir', 'tahap_saldo' => $p->ke_tahap_id,
+                'jenis_kendaraan' => null, 'no_mobil' => $p->no_mobil, 'no_do' => $p->no_do, 'status' => 'saldo sopir', 'tahap_saldo' => SaldoSopir::tahapPakai($p),
             ]))->all();
     }
 

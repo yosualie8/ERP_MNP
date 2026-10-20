@@ -28,7 +28,7 @@ class KontrolUj
     private static ?Collection $cache = null;
 
     /** Tahap ritasi ber-kata kunci Kas UJ (untuk menebak proyek UJ yang belum bongkar). @return Collection<int, array{t: ProyekTahap, pola: string}> */
-    private static function tahapKata(): Collection
+    public static function tahapKata(): Collection
     {
         return ProyekTahap::whereNotNull('kata_uj')->where('kata_uj', '!=', '')->get()
             ->map(fn ($t) => ['t' => $t, 'pola' => collect(preg_split('/\s*,\s*/', (string) $t->kata_uj))->filter()->map(fn ($k) => preg_quote($k, '/'))->implode('|')])

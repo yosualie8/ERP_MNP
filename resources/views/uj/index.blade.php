@@ -19,7 +19,7 @@
             }
             $sebagian = abs((float) $p->nominal - (float) $d->nominal) >= 1 ? ' (sebagian '.rp((int) $p->nominal).')' : '';
             $teks = match ($p->jenis) {
-                'alih' => '↪ Dialihkan ke '.($p->ke?->nama ?? 'proyek lain').' · saldo sopir'.$sebagian,
+                'alih' => '↪ Jadi saldo sopir '.($p->sopir ?: $p->nama).$sebagian,
                 'kembali' => '↩ Dikembalikan sopir'.$sebagian,
                 default => '✕ Ditutup tanpa bongkar',
             };
@@ -27,7 +27,7 @@
             return ['kelas' => $p->jenis, 'teks' => $teks, 'judul' => trim(\App\Models\UjPengalihan::JENIS[$p->jenis].' '.$p->tanggal?->translatedFormat('j M Y')
                 .($p->dari ? ' · dari '.$p->dari->nama : '').($p->keterangan ? ' · '.$p->keterangan : ''))];
         };
-        $namaAlih = ['alih' => '↪ Dialihkan (saldo sopir)', 'kembali' => '↩ Dikembalikan', 'batal' => '✕ Batal (tanpa bongkar)'];
+        $namaAlih = ['alih' => '↪ Jadi saldo sopir', 'kembali' => '↩ Dikembalikan', 'batal' => '✕ Batal (tanpa bongkar)'];
     @endphp
     @if (! $bulan)
         <div class="kartu">

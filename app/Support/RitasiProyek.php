@@ -50,13 +50,16 @@ class RitasiProyek
         // Pengalihan UJ (truk pindah proyek sebelum bongkar):
         //  - KELUAR (alih / kembali dari tahap ini): UJ-nya tidak lagi milik tahap ini; transaksi DO itu s/d tanggal pengalihan
         //    (uang makan, sparepart perjalanan lama) tetap milik tahap ini;
-        //  - MASUK (alih ke tahap ini) = saldo sopir: baru jadi biaya tahap ini bila DO lamanya bongkar di sini; pemakaian saldo lain
-        //    (MOB / UJ ber-DO baru / lain) = biaya tahap ini; UJ ber-DO baru dari saldo ikut dihitung diberi / bongkar / belum;
+        //  - MASUK = saldo sopir (tanpa proyek tujuan, owner 20 Okt 2026): UJ saldo sopir yang DO lamanya ternyata bongkar di tahap ini
+        //    jadi biaya tahap ini; pemakaian saldo yang ditanggung tahap ini (SaldoSopir::tahapPakai: Pengajuan UJ ber-DO / berkata
+        //    kunci tahap ini, MOB / lain yang dicatat ke tahap ini, tidak kembali dari tahap ini) = biaya; UJ ber-DO dari saldo ikut
+        //    dihitung diberi / bongkar / belum. DO lama yang ternyata bongkar di proyek asalnya sendiri = UJ biasa proyek itu.
         //  - BATAL: UJ ditutup tanpa bongkar dengan alasan — tetap biaya, tidak dihitung belum bongkar.
-        $keluar = UjPengalihan::whereIn('jenis', ['alih', 'kembali'])->where('dari_tahap_id', $t->id)->get()->keyBy('id_uj');
-        $masuk = UjPengalihan::where('ke_tahap_id', $t->id)->orderBy('tanggal')->orderBy('id')->get();
-        $alih = $masuk->where('jenis', 'alih')->keyBy('id_uj');
-        $pakai = $masuk->where('jenis', 'pakai')->values();
+        $bongkarSini = SaldoSopir::perSopir()->flatMap(fn ($s) => $s['uj'])->filter(fn ($x) => $x->tahap_bongkar === $t->id)->keyBy(fn ($x) => $x->p->id_uj);
+        $keluar = UjPengalihan::whereIn('jenis', ['alih', 'kembali'])->where('dari_tahap_id', $t->id)->get()->keyBy('id_uj')
+            ->reject(fn ($p) => $p->jenis === 'alih' && isset($bongkarSini[$p->id_uj]));
+        $alih = $bongkarSini->map(fn ($x) => $x->p)->reject(fn ($p) => $p->dari_tahap_id === $t->id);
+        $pakai = UjPengalihan::where('jenis', 'pakai')->orderBy('tanggal')->orderBy('id')->get()->filter(fn ($p) => SaldoSopir::tahapPakai($p) === $t->id)->values();
         $batal = UjPengalihan::where('jenis', 'batal')->whereNotNull('id_uj')->pluck('id_uj')->flip();
         $doKeluar = $doMasuk = [];
         foreach (UjDetail::whereIn('id_uj', $keluar->keys()->merge($alih->keys())->filter()->all() ?: ['-'])->get(['id_uj', 'no_do']) as $u) {
@@ -119,7 +122,7 @@ class RitasiProyek
         $tanah = $uj->filter(fn ($u) => $u->kategori === 'Uang Tanah' && $milik($u));
         $lain = $uj->filter(fn ($u) => ! in_array($u->kategori, ['Uang Jalan', 'Uang MOB', 'Uang Tanah'], true) && $milik($u));
         // UJ ber-DO baru yang dibayar dari saldo sopir (Pengajuan UJ → Pakai saldo): ikut dihitung diberi / bongkar / belum
-        $dariSaldo = $pakai->filter(fn ($p) => $p->no_do)->map(fn ($p) => (new UjDetail)->forceFill(['id_uj' => 'SALDO-'.$p->id, 'tanggal' => $p->tanggal, 'nama' => $p->nama,
+        $dariSaldo = $pakai->filter(fn ($p) => $p->no_do && ! isset($jalanDo[$do($p->no_do)]))->map(fn ($p) => (new UjDetail)->forceFill(['id_uj' => 'SALDO-'.$p->id, 'tanggal' => $p->tanggal, 'nama' => $p->nama,
             'keterangan' => 'Dibayar dari saldo sopir'.($p->keterangan ? ' — '.$p->keterangan : ''), 'nominal' => $p->nominal, 'kategori' => 'Uang Jalan', 'no_mobil' => $p->no_mobil, 'no_do' => $p->no_do]));
         $semuaJalan = $jalan->concat($dariSaldo);
         $bongkar = $semuaJalan->filter(fn ($u) => isset($ritDo[$do($u->no_do)]));
@@ -181,7 +184,8 @@ class RitasiProyek
             'alih_keluar' => ['n' => $keluar->count(), 'rp' => (float) $keluar->sum('nominal'), 'kembali' => (float) $keluar->where('jenis', 'kembali')->sum('nominal')],
             'alih_masuk' => ['n' => $alih->count(), 'rp' => (float) $alih->sum('nominal'), 'terpakai_do' => (float) $terpakaiDo->sum('nominal'), 'n_terpakai_do' => $terpakaiDo->count(),
                 'pakai' => (float) $pakai->sum('nominal'),
-                'saldo' => (float) $alih->sum('nominal') - (float) $terpakaiDo->sum('nominal') - (float) $pakai->sum('nominal'), 'mobil' => $alih->pluck('no_mobil')->unique()->count()],
+                'saldo' => 0.0, // saldo sopir tidak lagi milik proyek mana pun (lihat menu Pengalihan UJ)
+                'mobil' => $alih->pluck('no_mobil')->unique()->count()],
             'hari' => $hari, 'mulai' => $rit->min('tanggal')?->toDateString(), 'selesai' => $rit->max('tanggal')?->toDateString(),
         ];
     }

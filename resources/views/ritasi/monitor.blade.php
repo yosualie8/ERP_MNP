@@ -238,7 +238,7 @@
                             @if ($idTutup->isNotEmpty())
                                 <tr class="b"><td colspan="13" style="padding: 6px 10px;">
                                     <b style="font-size: 12px;">Tidak akan bongkar?</b>
-                                    @if ($k['tahap_id'] ?? null)<a href="{{ route('pengalihan-uj.index', ['asal' => $k['tahap_id'], 'mobil' => implode(',', $d['mobil'])]) }}" class="tombol polos" style="padding: 2px 10px; font-size: 12px;" title="Truk pindah proyek sebelum bongkar — UJ jadi saldo sopir">↪ Alihkan ke proyek lain</a>@endif
+                                    @if ($k['tahap_id'] ?? null)<a href="{{ route('pengalihan-uj.index', ['tab' => 'pilih', 'asal' => $k['tahap_id'], 'mobil' => implode(',', $d['mobil'])]) }}" class="tombol polos" style="padding: 2px 10px; font-size: 12px;" title="Truk pindah proyek sebelum bongkar — UJ jadi saldo sopir">↪ Jadikan saldo sopir</a>@endif
                                     <button type="button" class="tombol polos" data-tutup="kembali" data-uj="{{ $idTutup->implode(',') }}" data-do="{{ $d['do'] }}" style="padding: 2px 10px; font-size: 12px;">↩ Uang dikembalikan sopir</button>
                                     <button type="button" class="tombol polos" data-tutup="batal" data-uj="{{ $idTutup->implode(',') }}" data-do="{{ $d['do'] }}" style="padding: 2px 10px; font-size: 12px;" title="Tidak bongkar tetapi uangnya sudah terpakai (mis. breakdown) — tetap biaya proyek">✕ Batal (tidak bongkar)</button>
                                     <span class="redup" style="font-size: 11.5px;">{{ $idTutup->implode(', ') }} · wajib alasan</span>

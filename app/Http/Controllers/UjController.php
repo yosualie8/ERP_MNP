@@ -110,8 +110,9 @@ class UjController extends Controller
             'jenis' => $hitung('jenis_kendaraan', 10),
             'bank' => $bank,
             'modelKategori' => $this->modelKategori(),
-            // Pengajuan UJ: saldo sopir per mobil (UJ yang dialihkan, belum terpakai) untuk tombol "Pakai saldo"
-            'saldoSopir' => \App\Support\SaldoSopir::perMobil()->map(fn ($m) => (int) round($m['saldo']))->filter(fn ($v) => $v > 0)->all(),
+            // Pengajuan UJ: saldo per SOPIR (UJ yang dijadikan saldo, belum terpakai) dipotong otomatis; DO lama tidak boleh dipotong lagi
+            'saldoSopir' => \App\Support\SaldoSopir::perSopir()->map(fn ($s) => (int) round($s['saldo']))->filter(fn ($v) => $v > 0)->all(),
+            'doLamaSopir' => \App\Support\SaldoSopir::doLama(),
             ...$this->dariPengajuan(),
             ...$this->dariBayarTanah(),
         ]);

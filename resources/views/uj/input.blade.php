@@ -327,7 +327,7 @@
     <template id="templat-bon">
         <tr class="baris-detail">
             <td><input type="hidden" class="pengajuan-kunci"><input type="hidden" class="duluan-kunci"><input type="text" class="angka-input rupiah" data-nama="nominal" inputmode="numeric" autocomplete="off" required>
-                @if ($ajukan)<div class="saldo-sopir" hidden><span class="info-saldo"></span><button type="button" class="tombol polos pakai-saldo" title="Bayar dari saldo sopir (UJ yang dialihkan)">Pakai</button>
+                @if ($ajukan)<div class="saldo-sopir" hidden><span class="info-saldo"></span><button type="button" class="tombol polos pakai-saldo" title="Potong otomatis dari saldo sopir">Potong otomatis</button><button type="button" class="tombol polos tanpa-saldo" title="Jangan potong dari saldo — ditransfer penuh">Tanpa saldo</button>
                     <input type="text" class="angka-input rupiah" data-nama="saldo" data-lewati-tempel inputmode="numeric" autocomplete="off" placeholder="dibayar dari saldo" title="Bagian nominal yang dibayar dari saldo sopir — tidak ditransfer"></div>@endif</td>
             <td><input type="text" data-nama="nama" list="daftar-nama" autocomplete="off"></td>
             <td><input type="text" data-nama="keterangan" autocomplete="off" required></td>
@@ -430,6 +430,9 @@
             const tambah = (isi = {}) => {
                 const tr = templat.content.firstElementChild.cloneNode(true);
                 tr.querySelectorAll('[data-nama]').forEach(el => el.value = isi[el.dataset.nama] ?? '');
+                // baris tersimpan (ubah pengajuan / isian dikembalikan validasi): potongan saldonya dipertahankan, tidak dihitung ulang
+                const isiSaldo = tr.querySelector('[data-nama=saldo]');
+                if (isiSaldo && isi.saldo !== undefined && isi.saldo !== null && isi.saldo !== '') isiSaldo.dataset.manual = '1';
                 tr.querySelector('.pengajuan-kunci').value = isi.pengajuan ?? '';
                 if (isi.pengajuan) { tr.classList.add('dari-pengajuan'); tr.title = 'Dari pengajuan ' + (isi.kode ?? ''); }
                 tr.querySelectorAll('input.rupiah').forEach(rapikanRupiah);
@@ -443,30 +446,41 @@
                 setTimeout(aturSaldo);
                 return tr;
             };
-            // Pengajuan UJ: saldo sopir (UJ yang dialihkan dari proyek lain) bisa dipakai membayar detail — bagian itu tidak ditransfer.
+            // Pengajuan UJ: saldo PER SOPIR (UJ yang dijadikan saldo sopir) DIPOTONG OTOMATIS dari detail sopir itu, urut dari baris
+            // teratas (owner 20 Okt 2026) — bagian itu tidak ditransfer. Admin bisa "Tanpa saldo" / mengubah angkanya (lalu tidak disentuh lagi).
+            // DO lama milik UJ yang dijadikan saldo tidak dipotong: saldonya terpakai sendiri begitu DO itu bongkar.
             const SALDO = @json($saldoSopir ?? []);
+            const DO_LAMA = @json($doLamaSopir ?? []);
+            const kunciSopir = v => String(v || '').toUpperCase().replace(/\s+/g, ' ').trim();
+            const kunciDo = v => { const t = String(v || '').replace(/[`'\s]/g, ''); return t === '' ? '' : (t.replace(/^0+/, '') || '0'); };
             function aturSaldo() {
                 if (!AJUKAN) return;
                 const dipakai = {};
-                barisDetail().forEach(tr => {
-                    const m = kunciMobil(tr.querySelector('[data-nama=no_mobil]').value);
-                    if (m) dipakai[m] = (dipakai[m] || 0) + angka(tr.querySelector('[data-nama=saldo]')?.value);
-                });
                 let totalSaldo = 0, total = 0;
                 barisDetail().forEach(tr => {
                     const box = tr.querySelector('.saldo-sopir');
                     if (!box) return;
-                    const m = kunciMobil(tr.querySelector('[data-nama=no_mobil]').value);
+                    const s = kunciSopir(tr.querySelector('[data-nama=nama]').value);
                     const inp = box.querySelector('[data-nama=saldo]');
                     const nominal = angka(tr.querySelector('[data-nama=nominal]').value);
+                    const ada = s ? (SALDO[s] || 0) : 0;
+                    const doLama = s && DO_LAMA[s]?.[kunciDo(tr.querySelector('[data-nama=no_do]').value)];
+                    const sebelum = dipakai[s] || 0;
+                    if (inp.dataset.manual !== '1') {
+                        const potong = ada > 0 && !doLama ? Math.max(0, Math.min(nominal, ada - sebelum)) : 0;
+                        inp.value = potong ? fmt(potong) : '';
+                    }
                     const pakai = angka(inp.value);
-                    const ada = SALDO[m] || 0;
-                    const sisa = ada - (dipakai[m] || 0);
+                    if (s) dipakai[s] = sebelum + pakai;
+                    const sisa = ada - dipakai[s];
                     box.hidden = !(ada > 0 || pakai > 0);
-                    box.querySelector('.info-saldo').textContent = ada > 0
-                        ? `💰 Saldo ${m}: ${fmt(ada)}${sisa !== ada ? ' · sisa ' + fmt(Math.max(0, sisa)) : ''}` + (sisa < 0 ? ' — MELEBIHI saldo' : '')
-                        : `⚠ ${m || 'Mobil ini'} tidak punya saldo sopir`;
-                    box.querySelector('.pakai-saldo').hidden = !(sisa > 0 && pakai < nominal);
+                    box.querySelector('.info-saldo').textContent = doLama
+                        ? `💰 Saldo ${s}: ${fmt(ada)} · DO ini DO lama ${doLama} — tidak dipotong, saldonya terpakai sendiri saat DO ini bongkar`
+                        : ada > 0
+                            ? `💰 Saldo ${s}: ${fmt(ada)} · dipotong ${fmt(pakai)} · sisa ${fmt(Math.max(0, sisa))}` + (sisa < 0 ? ' — MELEBIHI saldo' : '')
+                            : `⚠ ${s || 'Sopir ini'} tidak punya saldo sopir`;
+                    box.querySelector('.pakai-saldo').hidden = inp.dataset.manual !== '1' || !!doLama;
+                    box.querySelector('.tanpa-saldo').hidden = !pakai;
                     inp.style.borderColor = sisa < 0 || pakai > nominal ? 'var(--aksen)' : '';
                     totalSaldo += pakai; total += nominal;
                 });
@@ -478,17 +492,17 @@
                 }
             }
             if (AJUKAN) {
-                daftar.addEventListener('input', () => aturSaldo());
+                daftar.addEventListener('input', e => {
+                    if (e.target.dataset?.nama === 'saldo') e.target.dataset.manual = '1'; // diketik sendiri → tidak dipotong otomatis lagi
+                    aturSaldo();
+                });
                 daftar.addEventListener('focusout', () => setTimeout(aturSaldo));
                 daftar.addEventListener('click', e => {
-                    const btn = e.target.closest('.pakai-saldo');
+                    const btn = e.target.closest('.pakai-saldo, .tanpa-saldo');
                     if (!btn) return;
-                    const tr = btn.closest('tr');
-                    const m = kunciMobil(tr.querySelector('[data-nama=no_mobil]').value);
-                    const inp = tr.querySelector('[data-nama=saldo]');
-                    const lain = barisDetail().filter(x => x !== tr && kunciMobil(x.querySelector('[data-nama=no_mobil]').value) === m)
-                        .reduce((s, x) => s + angka(x.querySelector('[data-nama=saldo]').value), 0);
-                    inp.value = fmt(Math.max(0, Math.min(angka(tr.querySelector('[data-nama=nominal]').value), (SALDO[m] || 0) - lain)));
+                    const inp = btn.closest('tr').querySelector('[data-nama=saldo]');
+                    if (btn.classList.contains('tanpa-saldo')) { inp.dataset.manual = '1'; inp.value = ''; }
+                    else delete inp.dataset.manual;
                     aturSaldo(); evaluasi();
                 });
             }
