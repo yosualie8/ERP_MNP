@@ -102,9 +102,14 @@ class UjController extends Controller
         $bank = UjTransaksi::whereNotNull('bank')->where('tanggal', '>=', $sejak)->select('bank', DB::raw('COUNT(*) as n'))->groupBy('bank')->orderByDesc('n')->limit(8)->pluck('bank')
             ->map(fn ($b) => DaftarBank::kode($b))->filter()->unique()->values();
 
+        // Master sopir: nama sopir aktif (baku) disarankan dulu; ejaan lain sopir terdaftar tidak disarankan lagi.
+        $sopir = \App\Support\DaftarSopir::untukForm();
+
         return view('uj.input', [
             'rekening' => $this->daftarRekening(),
-            'nama' => $hitung('nama', 300),
+            'nama' => collect($sopir['aktif'])->pluck('nama')->merge($hitung('nama', 300)->reject(fn ($n) => isset($sopir['peta'][\App\Support\DaftarSopir::kunci($n)])))
+                ->unique(fn ($n) => \App\Support\DaftarSopir::kunci($n))->values(),
+            'sopirForm' => $sopir,
             'kategori' => $kategori,
             'mobil' => $mobil,
             'jenis' => $hitung('jenis_kendaraan', 10),
@@ -271,6 +276,7 @@ class UjController extends Controller
             'detail.*.alasan_pengajuan' => ['nullable', 'string', 'max:1000'],
             'detail.*.duluan' => ['nullable', 'string', 'max:30'],
             'detail.*.saldo' => ['nullable', 'integer', 'min:0'],
+            'detail.*.sopir_baru' => ['nullable', 'string', 'max:30'],
             'bayar_tanah_id' => ['nullable', 'integer'],
             'foto' => ['nullable', 'array', 'max:'.KasFotoController::MAKS_FOTO],
             'foto.*' => KasFotoController::ATURAN['foto.*'],
@@ -292,7 +298,7 @@ class UjController extends Controller
         }
         $rapi = fn ($v) => ($v = trim((string) $v)) === '' ? null : $v;
 
-        return [
+        $hasil = [
             'tanggal' => Carbon::parse($data['tanggal']),
             'nama' => trim((string) ($data['nama'] ?? '')),
             'bank' => DaftarBank::kode($data['bank'] ?? null),
@@ -311,12 +317,33 @@ class UjController extends Controller
                 'duluan' => $pengajuan ? $rapi($d['duluan'] ?? null) : null,
                 // Pengajuan UJ: bagian nominal yang dibayar dari saldo sopir (UJ yang dialihkan) — tidak ditransfer.
                 'saldo' => $pengajuan ? (int) ($d['saldo'] ?? 0) : 0,
+                // Jawaban admin bila nama sopir belum terdaftar (App\Support\DaftarSopir): ganti / tambah / alias:{id} / bukan.
+                'sopir_baru' => $rapi($d['sopir_baru'] ?? null),
             ], $data['detail'])),
             'biaya_transfer' => $request->boolean('biaya_transfer'),
             'nominal_biaya' => (int) ($data['nominal_biaya'] ?? TulisUjSheet::BIAYA_TRANSFER),
             // Rekap Bayar Tanah (RBT) yang dibayar oleh transaksi ini (dari Input bayar tanah).
             'bayar_tanah_id' => $pengajuan ? null : ($data['bayar_tanah_id'] ?? null),
         ];
+        // Master sopir (owner 20 Okt 2026): nama sopir baru di baris dump truck wajib dijawab admin; nama sopir ditulis dengan nama bakunya.
+        if ($belum = \App\Support\DaftarSopir::belumDijawab($hasil['detail'])) {
+            return back()->withInput()->withErrors(['sopir_baru' => implode(' ', $belum)]);
+        }
+        $hasil['sopir_asli'] = $hasil['detail']; // untuk DaftarSopir::terapkan() setelah tersimpan
+        $hasil['detail'] = \App\Support\DaftarSopir::rapikanNama($hasil['detail']);
+        if ($hasil['nama'] !== '' && ($s = \App\Support\DaftarSopir::cari($hasil['nama']))) {
+            $hasil['nama'] = $s['nama'];
+        }
+
+        return $hasil;
+    }
+
+    /** Setelah transaksi tersimpan: catat jawaban sopir baru (karyawan baru / ganti sopir / nama lain). Teks tambahan untuk pesan sukses. */
+    protected function terapkanSopir(array $input, Request $request): string
+    {
+        $r = \App\Support\DaftarSopir::terapkan($input['sopir_asli'] ?? [], $request->user()->id);
+
+        return $r ? ' · '.implode('; ', $r) : '';
     }
 
     /**
@@ -526,7 +553,8 @@ class UjController extends Controller
             'Tersimpan di Kas Seabank baris '.$hasil['baris_awal'].'–'.$hasil['baris_akhir'].' (UJ-'.reset($hasil['ids']).(count($hasil['ids']) > 1 ? ' s/d UJ-'.end($hasil['ids']) : '')
             .($hasil['id_biaya'] ? ', biaya transfer UJ-'.$hasil['id_biaya'] : '').'): '
             .$this->ringkasanInput($input).'.'.($jumlahFoto ? " {$jumlahFoto} foto bon terlampir." : '').($rekapTanah ? ' '.$rekapTanah->kode().' tercatat dibayar.' : '')
-            .($terealisasi ? " {$terealisasi} detail pengajuan tercatat terealisasi".($berbeda ? " ({$berbeda} berbeda dari pengajuannya, tercatat beserta alasannya)" : '').'.' : '').$pesanImpor);
+            .($terealisasi ? " {$terealisasi} detail pengajuan tercatat terealisasi".($berbeda ? " ({$berbeda} berbeda dari pengajuannya, tercatat beserta alasannya)" : '').'.' : '').$pesanImpor
+            .$this->terapkanSopir($input, $request));
     }
 
     public function edit(int $noUj): View|RedirectResponse
@@ -594,7 +622,7 @@ class UjController extends Controller
 
         return redirect()->route('uj.index', ['bulan' => $input['tanggal']->format('Y-m')])->with($pesanImpor ? 'error' : 'success',
             'Perubahan tersimpan di Kas Seabank baris '.$hasil['baris_awal'].'–'.$hasil['baris_akhir'].': '.$this->ringkasanInput($input).'.'
-            .($jumlahFoto ? " {$jumlahFoto} foto bon ditambahkan." : '').$pesanImpor);
+            .($jumlahFoto ? " {$jumlahFoto} foto bon ditambahkan." : '').$pesanImpor.$this->terapkanSopir($input, $request));
     }
 
     /** Pesan penolakan Edit/Hapus bila ada detail transaksi ini yang sudah direimburse (sama seperti Kas Harian). */

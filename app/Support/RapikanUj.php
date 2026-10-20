@@ -10,13 +10,13 @@ use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 /**
- * Perbaikan penulisan Kas UJ (lembar "Kas Seabank" kolom I Kategori, J Jenis Kendaraan, K No Mobil): ditulis ke sheet dan aplikasi
+ * Perbaikan penulisan Kas UJ (lembar "Kas Seabank" kolom F Nama driver, I Kategori, J Jenis Kendaraan, K No Mobil): ditulis ke sheet dan aplikasi
  * sekaligus (selama Kas UJ masih diimpor dari sheet). Setiap baris dicek dulu masih sama di sheet (ID UJ & nominal).
  */
 class RapikanUj
 {
     /**
-     * @param  array<int, array{baris: int, kategori?: string, jenis?: ?string, no_mobil?: ?string}>  $ubah  per baris sheet
+     * @param  array<int, array{baris: int, nama?: ?string, kategori?: string, jenis?: ?string, no_mobil?: ?string}>  $ubah  per baris sheet
      * @return array{ditulis: int, dilewati: array<int, string>}
      */
     public static function tulis(array $ubah, ?int $userId, string $alasan): array
@@ -44,8 +44,9 @@ class RapikanUj
 
                     continue;
                 }
-                $sebelum[$n] = ['id_uj' => $d->id_uj, 'kategori' => $r[8] ?? null, 'jenis' => $r[9] ?? null, 'no_mobil' => $r[10] ?? null];
-                foreach (['kategori' => 'I', 'jenis' => 'J', 'no_mobil' => 'K'] as $f => $kol) {
+                $sebelum[$n] = ['id_uj' => $d->id_uj, 'nama' => $r[5] ?? null, 'kategori' => $r[8] ?? null, 'jenis' => $r[9] ?? null, 'no_mobil' => $r[10] ?? null];
+                // F = nama (driver; di baris master sekaligus nama penerima transfer)
+                foreach (['nama' => 'F', 'kategori' => 'I', 'jenis' => 'J', 'no_mobil' => 'K'] as $f => $kol) {
                     if (array_key_exists($f, $u)) {
                         $data["{$l}!{$kol}{$n}"] = [[(string) ($u[$f] ?? '')]];
                     }
@@ -58,12 +59,15 @@ class RapikanUj
                 foreach (array_keys($sebelum) as $n) {
                     $u = $baris[$n];
                     $kolom = [];
-                    foreach (['kategori' => 'kategori', 'jenis' => 'jenis_kendaraan', 'no_mobil' => 'no_mobil'] as $f => $db) {
+                    foreach (['nama' => 'nama', 'kategori' => 'kategori', 'jenis' => 'jenis_kendaraan', 'no_mobil' => 'no_mobil'] as $f => $db) {
                         if (array_key_exists($f, $u)) {
                             $kolom[$db] = $u[$f] === '' ? null : $u[$f];
                         }
                     }
                     UjDetail::where('baris', $n)->update($kolom);
+                    if (array_key_exists('nama', $u)) {
+                        \App\Models\UjTransaksi::where('baris', $n)->update(['nama' => $u['nama'] === '' ? null : $u['nama']]);
+                    }
                 }
             });
             KasRiwayat::create(['aksi' => 'uj-rapikan', 'lembar' => 'Seabank', 'baris_awal' => (int) $dari, 'baris_akhir' => (int) $sampai,

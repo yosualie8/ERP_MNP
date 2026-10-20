@@ -74,6 +74,10 @@
         .saldo-sopir[hidden] { display: none; }
         .saldo-sopir input { width: 100%; margin-top: 2px; padding: 3px 6px; font-size: 12px; border-color: #3b6ea5; }
         .saldo-sopir button { padding: 1px 8px; font-size: 11px; margin-left: 4px; }
+        .sopir-baru { margin-top: 4px; padding: 4px 6px; font-size: 11.5px; line-height: 1.5; border: 1px solid #f0c05a; border-radius: 6px; background: rgba(240, 192, 90, .08); min-width: 220px; white-space: normal; }
+        .sopir-baru.terjawab { border-color: var(--sukses, #3ecf8e); }
+        .sopir-baru label { display: block; margin: 0; font-weight: 400; color: var(--teks); cursor: pointer; }
+        .sopir-baru select { font-size: 11.5px; padding: 1px 4px; max-width: 150px; }
         .temuan .aturan { color: var(--redup); font-size: 11px; }
         .temuan label { display: block; color: var(--teks); font-size: 12px; margin: 0; }
         .aksi-massal-pj { border: 1px solid var(--aksen); background: var(--aksen-muda); border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; }
@@ -451,7 +455,10 @@
             // DO lama milik UJ yang dijadikan saldo tidak dipotong: saldonya terpakai sendiri begitu DO itu bongkar.
             const SALDO = @json($saldoSopir ?? []);
             const DO_LAMA = @json($doLamaSopir ?? []);
-            const kunciSopir = v => String(v || '').toUpperCase().replace(/\s+/g, ' ').trim();
+            // Master sopir (Data Karyawan, jabatan Supir): peta nama / nama lain → sopir; nama lain dikenali sebagai nama bakunya.
+            const SOPIR = {!! json_encode($sopirForm ?? ['peta' => [], 'aktif' => [], 'truk' => []], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG) !!};
+            const kunciNama = v => String(v || '').toUpperCase().replace(/\s+/g, ' ').trim();
+            const kunciSopir = v => { const k = kunciNama(v); return SOPIR.peta[k]?.nama || k; };
             const kunciDo = v => { const t = String(v || '').replace(/[`'\s]/g, ''); return t === '' ? '' : (t.replace(/^0+/, '') || '0'); };
             function aturSaldo() {
                 if (!AJUKAN) return;
@@ -506,6 +513,56 @@
                     aturSaldo(); evaluasi();
                 });
             }
+            // Nama sopir BARU pada baris dump truck (owner 20 Okt 2026): admin wajib memilih — ganti sopir (sopir lama truk itu dinonaktifkan),
+            // sopir tambahan, nama lain dari sopir terdaftar, atau bukan sopir. Ditanyakan sekali per nama (baris teratas).
+            const TRUK_DT = new Set(SOPIR.truk);
+            const escSb = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+            let uidSb = 0;
+            const buatKotakSopir = (tr, nama, k, m) => {
+                const id = 'sb' + (++uidSb);
+                const lama = SOPIR.aktif.filter(s => s.mobil === m);
+                const namaLama = escSb(lama.map(s => s.nama).join(', '));
+                const opsi = SOPIR.aktif.map(s => `<option value="alias:${s.id}" ${lama.some(l => l.id === s.id) ? 'selected' : ''}>${escSb(s.nama)}${s.mobil ? ' · ' + escSb(s.mobil) : ''}</option>`).join('');
+                const box = document.createElement('div');
+                box.className = 'sopir-baru';
+                box.dataset.kunci = k + '|' + m;
+                box.innerHTML = `<b>🆕 Sopir baru?</b> "${escSb(nama)}" belum terdaftar${lama.length ? ` — ${escSb(m)} tercatat dibawa ${namaLama}` : ` untuk ${escSb(m)}`}.
+                    <label><input type="radio" name="${id}" value="ganti"> Ganti sopir${lama.length ? ` (${namaLama} dinonaktifkan)` : ''}</label>
+                    <label><input type="radio" name="${id}" value="tambah"> Sopir tambahan${lama.length ? ' (sopir lama tetap aktif)' : ''}</label>
+                    <label><input type="radio" name="${id}" value="alias"> Nama lain dari <select>${opsi}</select></label>
+                    <label><input type="radio" name="${id}" value="bukan"> Bukan sopir</label>
+                    <input type="hidden" data-nama="sopir_baru" data-lewati-tempel>`;
+                const nilai = box.querySelector('[data-nama=sopir_baru]');
+                box.addEventListener('change', e => {
+                    if (e.target.tagName === 'SELECT') box.querySelector('input[value=alias]').checked = true;
+                    const r = box.querySelector('input[type=radio]:checked');
+                    nilai.value = !r ? '' : (r.value === 'alias' ? box.querySelector('select').value : r.value);
+                    box.classList.toggle('terjawab', !!nilai.value);
+                    evaluasi();
+                });
+                tr.querySelector('[data-nama=nama]').closest('td').appendChild(box);
+                return box;
+            };
+            const aturSopirBaru = () => {
+                const ditanya = {};
+                let berubah = false;
+                barisDetail().forEach(tr => {
+                    const nama = tr.querySelector('[data-nama=nama]').value;
+                    const k = kunciNama(nama);
+                    const m = kunciMobil(tr.querySelector('[data-nama=no_mobil]').value);
+                    const perlu = k && TRUK_DT.has(m) && !SOPIR.peta[k] && !ditanya[k];
+                    let box = tr.querySelector('.sopir-baru');
+                    if (!perlu) { if (box) { box.remove(); berubah = true; } return; }
+                    ditanya[k] = true;
+                    if (!box || box.dataset.kunci !== k + '|' + m) { box?.remove(); buatKotakSopir(tr, nama.trim(), k, m); berubah = true; }
+                });
+                if (berubah) { urutkanNama(); evaluasi(); }
+            };
+            daftar.addEventListener('focusout', e => { if (['nama', 'no_mobil'].includes(e.target.dataset?.nama)) setTimeout(aturSopirBaru); });
+            daftar.addEventListener('change', e => { if (['nama', 'no_mobil'].includes(e.target.dataset?.nama)) setTimeout(aturSopirBaru); });
+            document.getElementById('tambah-bon').addEventListener('click', () => setTimeout(aturSopirBaru));
+            document.getElementById('nama_tujuan')?.addEventListener('change', () => setTimeout(aturSopirBaru, 50));
+            setTimeout(aturSopirBaru, 50);
             // Tebak Kategori dari Keterangan, seketika di browser (model dari histori Kas Seabank, tepat ±99%).
             // Kategori otomatis (ungu) boleh ditimpa tebakan berikutnya; begitu admin mengetik/memilih sendiri, tidak disentuh lagi.
             const modelKategori = @json($modelKategori);
@@ -1088,6 +1145,8 @@
                     tanpaAlasan.push(i + 1);
                 });
                 if (tanpaAlasan.length) masalah.push(`${tanpaAlasan.length} transaksi berbeda dari pengajuannya dan belum diberi alasan (baris ${tanpaAlasan.join(', ')}) — isi alasannya di kotak tepat di bawah barisnya.`);
+                const sopirBelum = barisDetail().map((tr, i) => { const b = tr.querySelector('.sopir-baru'); return b && !b.querySelector('[data-nama=sopir_baru]').value ? i + 1 : null; }).filter(Boolean);
+                if (sopirBelum.length) masalah.push(`Baris ${sopirBelum.join(', ')}: nama sopir belum terdaftar — pilih ganti sopir / sopir tambahan / nama lain / bukan sopir di kotak bawah namanya.`);
                 return {masalah, pertama};
             };
             // Status validasi dihitung terus saat admin mengisi. Tombol Simpan hanya menyala bila SEMUA transaksi valid:
@@ -1096,7 +1155,7 @@
             const teksSimpan = @json($teksTombol);
             const kunciIsi = () => {
                 const d = new FormData(form);
-                return JSON.stringify([...d.entries()].filter(([k, v]) => typeof v === 'string' && !/konfirmasi|alasan_pengajuan|_token|_method|versi/.test(k)));
+                return JSON.stringify([...d.entries()].filter(([k, v]) => typeof v === 'string' && !/konfirmasi|alasan_pengajuan|_token|_method|versi|sopir_baru|^sb\d/.test(k)));
             };
             let diperiksa = null;   // kunciIsi() yang terakhir lolos pemeriksaan server
             let temuanTerakhir = {}; // hasil pemeriksaan server terakhir (dipakai ulang saat jawaban "Tidak")

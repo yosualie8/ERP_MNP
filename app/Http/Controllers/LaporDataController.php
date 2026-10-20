@@ -30,14 +30,17 @@ class LaporDataController extends Controller
         // Rekap absensi (dulu halaman Data Absensi): semua karyawan aktif + yang absen hari itu; saringan proyek → yang mengirim di proyek itu
         $absen = Absensi::with(['lokasi.tahap', 'lapor'])->whereDate('tanggal', $tanggal)->orderBy('waktu')->get()->groupBy('karyawan_id');
         $karyawan = $tahapId ? Karyawan::whereIn('id', $kiriman->pluck('karyawan_id')->unique())->orderBy('nama')->get()
-            : Karyawan::where('status', 'aktif')->orWhereIn('id', $absen->keys()->merge($semua->pluck('karyawan_id')))->orderBy('nama')->get();
+            // sopir DT (jabatan Supir yang membawa truk) tidak wajib absen → hanya tampil bila memang mengirim / absen
+            : Karyawan::where(fn ($q) => $q->where('status', 'aktif')->where(fn ($w) => $w->whereNull('jabatan')->orWhere('jabatan', '!=', \App\Support\DaftarSopir::JABATAN)->orWhereNull('no_mobil')))
+                ->orWhereIn('id', $absen->keys()->merge($semua->pluck('karyawan_id')))->orderBy('nama')->get();
         $tahapIds = $semua->pluck('proyek_tahap_id')->filter()->unique();
+        $wajibAbsen = fn () => Karyawan::where('status', 'aktif')->where(fn ($w) => $w->whereNull('jabatan')->orWhere('jabatan', '!=', \App\Support\DaftarSopir::JABATAN)->orWhereNull('no_mobil'));
 
         return view('lapor.data', [
             'tanggal' => $tanggal, 'tahapId' => $tahapId,
             'rekap' => $karyawan->map(fn ($k) => ['k' => $k, 'absen' => ($absen[$k->id] ?? collect())->keyBy('jenis'), 'kiriman' => $kiriman->where('karyawan_id', $k->id)->count()]),
-            'hadir' => $absen->count(), 'aktif' => Karyawan::where('status', 'aktif')->count(),
-            'tanpaEmail' => Karyawan::where('status', 'aktif')->whereNull('email')->count(),
+            'hadir' => $absen->count(), 'aktif' => $wajibAbsen()->count(),
+            'tanpaEmail' => $wajibAbsen()->whereNull('email')->count(),
             'perKaryawan' => $kiriman->groupBy('karyawan_id')->sortBy(fn ($g) => $g->first()->karyawan?->nama),
             'absen' => $absen,
             'proyek' => ProyekTahap::whereIn('id', $tahapIds)->orderBy('nama')->get()->map(fn ($t) => ['t' => $t, 'n' => $semua->where('proyek_tahap_id', $t->id)->count()]),

@@ -9,7 +9,13 @@ class Karyawan extends Model
 {
     protected $table = 'karyawan';
 
-    protected $fillable = ['no_master', 'nama', 'email', 'nik', 'npwp', 'status', 'site', 'jabatan', 'bank', 'no_rekening', 'nama_rekening', 'user_id'];
+    protected $fillable = ['no_master', 'nama', 'email', 'nik', 'npwp', 'status', 'site', 'jabatan', 'no_mobil', 'bank', 'no_rekening', 'nama_rekening', 'user_id'];
+
+    /** Nama lain / ejaan sopir di Kas UJ. */
+    public function alias(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(KaryawanAlias::class);
+    }
 
     public const STATUS = ['aktif' => 'Aktif', 'nonaktif' => 'Non Aktif'];
 

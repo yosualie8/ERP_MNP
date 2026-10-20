@@ -15,7 +15,7 @@ class KaryawanController extends Controller
     public function index(Request $request): View
     {
         $status = array_key_exists($request->query('status'), Karyawan::STATUS) ? $request->query('status') : (($request->query('status') === 'semua') ? null : 'aktif');
-        $semua = Karyawan::orderBy('nama')->get();
+        $semua = Karyawan::with('alias')->orderBy('nama')->get();
         $nikDobel = $semua->whereNotNull('nik')->groupBy('nik')->filter(fn ($g) => $g->count() > 1)->keys()->flip();
 
         return view('karyawan.index', [
@@ -60,6 +60,7 @@ class KaryawanController extends Controller
             'npwp' => $t($request->input('npwp')), 'site' => Karyawan::rapikanSite($request->input('site')), 'jabatan' => $t($request->input('jabatan')),
             'bank' => $t($request->input('bank')), 'no_rekening' => ($r = preg_replace('/\s+/', '', (string) $request->input('no_rekening'))) === '' ? null : $r,
             'nama_rekening' => $t($request->input('nama_rekening')),
+            'no_mobil' => \App\Support\NomorMobil::rapikan($request->input('no_mobil')),
         ]);
 
         return $request->validate([
@@ -78,6 +79,7 @@ class KaryawanController extends Controller
             }],
             'bank' => ['nullable', 'string', 'max:40'], 'no_rekening' => ['nullable', 'regex:/^\d{5,30}$/'],
             'nama_rekening' => ['nullable', 'string', 'max:120'],
+            'no_mobil' => ['nullable', 'string', 'max:20'],
         ], [
             'nama.required' => 'Nama belum diisi.',
             'nik.regex' => 'NIK harus 16 digit angka (sesuai KTP).',
@@ -93,6 +95,7 @@ class KaryawanController extends Controller
             'saranSite' => collect(Karyawan::SITE)->merge(Karyawan::whereNotNull('site')->distinct()->pluck('site'))->unique()->sort()->values(),
             'saranBank' => Karyawan::whereNotNull('bank')->select('bank')->groupBy('bank')->orderByRaw('COUNT(*) DESC')->pluck('bank'),
             'saranJabatan' => \App\Models\JabatanMenu::orderBy('jabatan')->pluck('jabatan'),
+            'saranTruk' => \App\Models\AsetTruk::truk()->where('status', '!=', 'dijual')->orderBy('no_lambung')->pluck('no_lambung'),
         ];
     }
 

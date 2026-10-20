@@ -35,16 +35,17 @@ class SaldoSopir
         return LembarRitasi::kunciAngka(str_replace(['`', "'"], '', (string) $do));
     }
 
-    /** Nama sopir baku: huruf besar, spasi tunggal ("Lupi " → "LUPI"). */
+    /** Nama sopir baku: huruf besar, spasi tunggal ("Lupi " → "LUPI"); nama lain sopir di master (WSAL) → nama bakunya (WISAL). */
     public static function kunci(?string $nama): ?string
     {
-        $v = mb_strtoupper(trim(preg_replace('/\s+/', ' ', (string) $nama)));
+        $v = DaftarSopir::kunci($nama);
 
-        return $v === '' ? null : $v;
+        return $v === null ? null : (DaftarSopir::cari($v)['nama'] ?? $v);
     }
 
     public static function lupakan(): void
     {
+        DaftarSopir::lupakan();
         self::$cache = null;
         self::$ritDo = null;
         self::$tahapPakai = [];

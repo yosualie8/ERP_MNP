@@ -23,12 +23,12 @@
             <tbody>
                 @forelse ($karyawan as $k)
                     <tr class="t">
-                        <td><b>{{ $k->nama }}</b></td>
+                        <td><b>{{ $k->nama }}</b>@if (($lain = $k->alias->reject(fn ($a) => \App\Support\DaftarSopir::kunci($a->nama) === \App\Support\DaftarSopir::kunci($k->nama))->pluck('nama'))->isNotEmpty())<div class="redup" style="font-size: 11px;" title="Nama lain / ejaan di Kas UJ">juga: {{ $lain->implode(', ') }}</div>@endif</td>
                         <td>{{ $k->email }}</td>
                         <td style="white-space: nowrap;">{{ $k->nik }}@if ($k->nik && isset($nikDobel[$k->nik])) <span class="label merah" title="NIK sama dengan karyawan lain">dobel</span>@endif</td>
                         <td><span @class(['label', 'hijau' => $k->status === 'aktif'])>{{ $k->labelStatus() }}</span></td>
                         <td>{{ $k->site }}</td>
-                        <td>{{ $k->jabatan }}</td>
+                        <td>{{ $k->jabatan }}@if ($k->no_mobil) <span class="label">{{ $k->no_mobil }}</span>@endif</td>
                         <td>{{ $k->bank }}</td>
                         <td class="i">{{ $k->no_rekening }}</td>
                         <td>{{ $k->nama_rekening }}</td>

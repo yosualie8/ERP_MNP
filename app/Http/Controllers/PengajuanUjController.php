@@ -114,7 +114,7 @@ class PengajuanUjController extends UjController
         KasRiwayat::create(['aksi' => 'uj-ajukan', 'lembar' => 'Pengajuan', 'baris_awal' => 0, 'baris_akhir' => 0,
             'ringkasan' => mb_strimwidth($p->kode().' '.$this->ringkas($p), 0, 490, '…'), 'isi' => ['pengajuan_id' => $p->id], 'user_id' => $request->user()->id]);
 
-        return redirect()->route('pengajuan-uj.daftar')->with('success', "Pengajuan {$p->kode()} tersimpan: ".$this->ringkas($p).'.');
+        return redirect()->route('pengajuan-uj.daftar')->with('success', "Pengajuan {$p->kode()} tersimpan: ".$this->ringkas($p).'.'.$this->terapkanSopir($input, $request));
     }
 
     public function ubah(UjPengajuan $pengajuan): View|RedirectResponse
@@ -171,7 +171,7 @@ class PengajuanUjController extends UjController
         KasRiwayat::create(['aksi' => 'uj-ajukan-ubah', 'lembar' => 'Pengajuan', 'baris_awal' => 0, 'baris_akhir' => 0,
             'ringkasan' => mb_strimwidth($pengajuan->kode().' diubah: '.$this->ringkas($pengajuan->fresh()), 0, 490, '…'), 'isi' => ['pengajuan_id' => $pengajuan->id], 'user_id' => $request->user()->id]);
 
-        return redirect()->route('pengajuan-uj.daftar')->with('success', "Pengajuan {$pengajuan->kode()} diperbarui.");
+        return redirect()->route('pengajuan-uj.daftar')->with('success', "Pengajuan {$pengajuan->kode()} diperbarui.".$this->terapkanSopir($input, $request));
     }
 
     /** Batalkan detail yang masih menunggu (detail yang sudah terealisasi tidak berubah). */

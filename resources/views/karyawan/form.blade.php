@@ -30,6 +30,8 @@
                 <datalist id="saran-site">@foreach ($saranSite as $s)<option value="{{ $s }}">@endforeach</datalist></div>
             <div><label for="jabatan">Jabatan <span style="font-size: 11px;">(dari Master Jabatan)</span></label><input id="jabatan" name="jabatan" list="saran-jabatan" value="{{ old('jabatan', $karyawan->jabatan) }}" autocomplete="off" placeholder="mis. Operator Excavator">
                 <datalist id="saran-jabatan">@foreach ($saranJabatan as $s)<option value="{{ $s }}">@endforeach</datalist></div>
+            <div><label for="no_mobil">Truk yang dibawa <span style="font-size: 11px;">(khusus Supir)</span></label><input id="no_mobil" name="no_mobil" list="saran-truk" value="{{ old('no_mobil', $karyawan->no_mobil) }}" autocomplete="off" placeholder="mis. DT 040">
+                <datalist id="saran-truk">@foreach ($saranTruk as $s)<option value="{{ $s }}">@endforeach</datalist></div>
         </div>
         <div class="baris">
             <div><label for="bank">Bank</label><input id="bank" name="bank" list="saran-bank" value="{{ old('bank', $karyawan->bank) }}" autocomplete="off">
