@@ -590,7 +590,8 @@
                     const q = kk.replace(/ /g, '');
                     let d = jarak(p, q);
                     const awalan = Math.min(p.length, q.length) >= 3 && (q.startsWith(p) || p.startsWith(q));
-                    if (d > (Math.max(p.length, q.length) >= 6 ? 2 : 1) && !awalan) continue;
+                    // beda 1 huruf / awalan sama; beda 2 huruf hanya bila nama panjang DAN truknya sama ("Faisal" ≠ Wisal)
+                    if (d > (Math.max(p.length, q.length) >= 6 && s.mobil === m ? 2 : 1) && !awalan) continue;
                     if (awalan) d = Math.min(d, 1);
                     const skor = d * 10 - (s.mobil === m ? 5 : 0) - (s.aktif ? 2 : 0);
                     if (!hasil[s.id] || skor < hasil[s.id].skor) hasil[s.id] = {s, skor};
