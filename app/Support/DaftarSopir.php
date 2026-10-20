@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Master sopir (owner 20 Okt 2026): sopir = karyawan berjabatan "Supir" + nama lainnya (karyawan_alias). Nama sopir di Kas UJ /
- * Pengajuan UJ dikenali lewat kunci (huruf besar, spasi tunggal) dan ditulis dengan nama baku (huruf besar). Nama baru pada baris
+ * Pengajuan UJ dikenali lewat kunci (huruf besar, spasi tunggal) dan ditulis dengan nama bakunya (= nama di Data Karyawan). Nama baru pada baris
  * dump truck ditanyakan ke admin: ganti sopir (sopir lama truk itu nonaktif), sopir tambahan, nama lain sopir yang ada, atau bukan sopir.
  */
 class DaftarSopir
@@ -34,7 +34,13 @@ class DaftarSopir
         self::$peta = null;
     }
 
-    /** kunci nama → ['id', 'nama' (baku, huruf besar), 'aktif', 'mobil'] ; nama yang dijawab "bukan sopir" → ['id' => null, 'bukan' => true]. */
+    /** Penulisan nama sopir baru: huruf besar di awal kata ("ARIS  b" → "Aris B"), sama dengan kebiasaan Kas UJ. */
+    public static function namaBaru(?string $nama): string
+    {
+        return mb_convert_case(mb_strtolower(trim(preg_replace('/\s+/', ' ', (string) $nama))), MB_CASE_TITLE);
+    }
+
+    /** kunci nama → ['id', 'nama' (baku = nama di Data Karyawan), 'aktif', 'mobil'] ; nama yang dijawab "bukan sopir" → ['id' => null, 'bukan' => true]. */
     public static function peta(): array
     {
         if (self::$peta !== null) {
@@ -42,7 +48,7 @@ class DaftarSopir
         }
         $peta = [];
         $sopir = Karyawan::where('jabatan', self::JABATAN)->get(['id', 'nama', 'status', 'no_mobil'])->keyBy('id');
-        $isi = fn (Karyawan $k) => ['id' => $k->id, 'nama' => self::kunci($k->nama), 'aktif' => $k->status === 'aktif', 'mobil' => $k->no_mobil];
+        $isi = fn (Karyawan $k) => ['id' => $k->id, 'nama' => $k->nama, 'aktif' => $k->status === 'aktif', 'mobil' => $k->no_mobil];
         foreach (KaryawanAlias::get(['karyawan_id', 'kunci']) as $a) {
             if ($a->karyawan_id === null) {
                 $peta[$a->kunci] = ['id' => null, 'bukan' => true];
@@ -66,7 +72,7 @@ class DaftarSopir
         return $s && $s['id'] ? $s : null;
     }
 
-    /** Nama baku (huruf besar) untuk ditulis di Kas UJ; nama yang belum terdaftar dikembalikan apa adanya. */
+    /** Nama baku (nama di Data Karyawan) untuk ditulis di Kas UJ; nama yang belum terdaftar dikembalikan apa adanya. */
     public static function baku(?string $nama): ?string
     {
         return self::cari($nama)['nama'] ?? $nama;
@@ -116,9 +122,9 @@ class DaftarSopir
                 continue;
             }
             if (isset($baru[$k]) && preg_match('/^alias:(\d+)$/', (string) $baru[$k]['pilihan'], $m)) {
-                $detail[$i]['nama'] = self::kunci(Karyawan::find($m[1])?->nama) ?? $d['nama'];
+                $detail[$i]['nama'] = Karyawan::find($m[1])?->nama ?? $d['nama'];
             } elseif (isset($baru[$k]) && in_array($baru[$k]['pilihan'], ['ganti', 'tambah'], true)) {
-                $detail[$i]['nama'] = $k;
+                $detail[$i]['nama'] = self::namaBaru($d['nama']);
             } elseif ($s = self::cari($k)) {
                 $detail[$i]['nama'] = $s['nama'];
             }
@@ -151,7 +157,7 @@ class DaftarSopir
                     foreach ($lama as $l) {
                         $l->update(['status' => 'nonaktif']);
                     }
-                    $s = Karyawan::create(['nama' => mb_convert_case(mb_strtolower($b['nama']), MB_CASE_TITLE), 'jabatan' => self::JABATAN, 'status' => 'aktif', 'no_mobil' => $b['mobil']]);
+                    $s = Karyawan::create(['nama' => self::namaBaru($b['nama']), 'jabatan' => self::JABATAN, 'status' => 'aktif', 'no_mobil' => $b['mobil']]);
                     KaryawanAlias::firstOrCreate(['kunci' => $k], ['karyawan_id' => $s->id, 'nama' => $b['nama'], 'user_id' => $userId]);
                     $ringkas[] = "Sopir baru {$s->nama} ({$b['mobil']}) ditambahkan ke Data Karyawan".($lama->isNotEmpty() ? ', '.$lama->pluck('nama')->implode(', ').' dinonaktifkan (ganti sopir)' : '');
                 }
@@ -174,7 +180,7 @@ class DaftarSopir
 
         return [
             'peta' => collect(self::peta())->map(fn ($s) => $s['id'] ? ['id' => $s['id'], 'nama' => $s['nama'], 'aktif' => $s['aktif']] : ['bukan' => true])->all(),
-            'aktif' => $aktif->map(fn ($k) => ['id' => $k->id, 'nama' => self::kunci($k->nama), 'mobil' => $k->no_mobil])->values()->all(),
+            'aktif' => $aktif->map(fn ($k) => ['id' => $k->id, 'nama' => $k->nama, 'mobil' => $k->no_mobil])->values()->all(),
             'truk' => AsetTruk::truk()->pluck('no_lambung')->values()->all(),
         ];
     }

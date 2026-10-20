@@ -35,7 +35,7 @@ class SaldoSopir
         return LembarRitasi::kunciAngka(str_replace(['`', "'"], '', (string) $do));
     }
 
-    /** Nama sopir baku: huruf besar, spasi tunggal ("Lupi " → "LUPI"); nama lain sopir di master (WSAL) → nama bakunya (WISAL). */
+    /** Nama sopir baku: sopir di master (termasuk nama lainnya, mis. WSAL) → nama di Data Karyawan (Wisal); selain itu huruf besar, spasi tunggal. */
     public static function kunci(?string $nama): ?string
     {
         $v = DaftarSopir::kunci($nama);
