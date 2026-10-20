@@ -616,7 +616,8 @@
                 const box = document.createElement('div');
                 box.className = 'sopir-baru sopir-nama-baru';
                 box.dataset.kunci = k + '|' + m + '|' + lama.map(s => s.id).join(',');
-                if (saran.length) Object.assign(box.dataset, {saran: saran[0].nama, ketik: nama});
+                // "Terapkan semua" hanya untuk saran tunggal; lebih dari satu kemungkinan dipilih sendiri di barisnya
+                if (saran.length === 1) Object.assign(box.dataset, {saran: saran[0].nama, ketik: nama});
                 box.innerHTML = (saran.length ? `<div class="saran-nama">✏️ Apakah yang benar: ${tombolSaran} ?</div>` : '') + `<b>🆕 Sopir baru?</b> "${escSb(nama)}" belum terdaftar${lama.length ? ` — ${escSb(m)} tercatat dibawa ${namaLama}` : ` untuk ${escSb(m)}`}.
                     <label><input type="radio" name="${id}" value="ganti"> Ganti sopir${lama.length ? ` (${namaLama} dinonaktifkan)` : ''}</label>
                     <label><input type="radio" name="${id}" value="tambah"> Sopir tambahan${lama.length ? ' (sopir lama tetap aktif)' : ''}</label>
