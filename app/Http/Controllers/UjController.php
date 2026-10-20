@@ -14,6 +14,7 @@ use App\Support\GoogleSheets;
 use App\Models\AsetTruk;
 use App\Models\UjPengajuan;
 use App\Models\UjPengajuanDetail;
+use App\Models\UjPengalihan;
 use App\Support\KasSeabank;
 use App\Support\KategoriUj;
 use App\Support\Periode;
@@ -44,10 +45,17 @@ class UjController extends Controller
         $bulan = $daftarBulan->isNotEmpty() ? $periode->label() : null;
         $q = trim((string) $request->query('q'));
 
+        // Penanda Pengalihan UJ (owner 20 Okt 2026): UJ yang dialihkan jadi saldo sopir / dikembalikan / dibatalkan.
+        // ?alih=alih|kembali|batal|semua → hanya transaksi itu (semua periode; detail lain disembunyikan).
+        $pengalihan = UjPengalihan::with(['dari', 'ke'])->whereIn('jenis', UjPengalihan::MENUTUP)->whereNotNull('id_uj')->get()->keyBy('id_uj');
+        $alih = in_array($request->query('alih'), [...UjPengalihan::MENUTUP, 'semua'], true) ? $request->query('alih') : null;
+        $idAlih = $alih ? $pengalihan->filter(fn ($p) => $alih === 'semua' || $p->jenis === $alih)->keys()->all() : [];
+
         $transaksi = collect();
         if ($bulan) {
             $transaksi = UjTransaksi::with('detail')
-                ->whereBetween('tanggal', [$periode->awal(), $periode->akhir()])
+                ->when($alih, fn ($query) => $query->whereHas('detail', fn ($d) => $d->whereIn('id_uj', $idAlih)),
+                    fn ($query) => $query->whereBetween('tanggal', [$periode->awal(), $periode->akhir()]))
                 ->when($q !== '', function ($query) use ($q) {
                     $like = '%'.$q.'%';
                     $query->where(fn ($w) => $w->where('nama', 'like', $like)->orWhere('rekening', 'like', $like)
@@ -56,12 +64,19 @@ class UjController extends Controller
                             ->orWhere('kategori', 'like', $like)));
                 })
                 ->orderByDesc('baris')->get();
+            if ($alih) {
+                $transaksi->each(function ($t) use ($idAlih) {
+                    $t->setRelation('detail', $t->detail->whereIn('id_uj', $idAlih)->values());
+                });
+            }
         }
+        $jumlahPengalihan = $pengalihan->countBy('jenis')->all();
         $jumlahFoto = KasFoto::uj()->whereIn('no_id', $transaksi->pluck('no_uj')->filter())
             ->selectRaw('no_id, COUNT(*) as n')->groupBy('no_id')->pluck('n', 'no_id');
         $diimpor = Cache::get('uj-diimpor-pada');
 
-        return view('uj.index', compact('daftarBulan', 'bulan', 'q', 'transaksi', 'jumlahFoto', 'diimpor', 'periode') + ['bolehInput' => $request->user()->bolehMenu('input-uj')]);
+        return view('uj.index', compact('daftarBulan', 'bulan', 'q', 'transaksi', 'jumlahFoto', 'diimpor', 'periode', 'pengalihan', 'alih', 'jumlahPengalihan')
+            + ['bolehInput' => $request->user()->bolehMenu('input-uj'), 'bolehPengalihan' => $request->user()->bolehMenu('pengalihan-uj')]);
     }
 
     public function create(): View

@@ -6,7 +6,29 @@
     <style>
         table.kas td.mobil { white-space: nowrap; }
         table.kas tr.b.fee td { color: var(--redup); font-style: italic; }
+        .label.alih { background: rgba(78, 161, 255, .16); color: #8cc4ff; }
+        .label.kembali { background: rgba(167, 139, 250, .16); color: #c4b5fd; }
+        .label.batal { background: var(--merah-muda); color: var(--merah); }
     </style>
+    @php
+        // Penanda Pengalihan UJ per ID UJ.
+        $tandaAlih = function ($d) use ($pengalihan) {
+            $p = $d->id_uj ? ($pengalihan[$d->id_uj] ?? null) : null;
+            if (! $p) {
+                return null;
+            }
+            $sebagian = abs((float) $p->nominal - (float) $d->nominal) >= 1 ? ' (sebagian '.rp((int) $p->nominal).')' : '';
+            $teks = match ($p->jenis) {
+                'alih' => '↪ Dialihkan ke '.($p->ke?->nama ?? 'proyek lain').' · saldo sopir'.$sebagian,
+                'kembali' => '↩ Dikembalikan sopir'.$sebagian,
+                default => '✕ Ditutup tanpa bongkar',
+            };
+
+            return ['kelas' => $p->jenis, 'teks' => $teks, 'judul' => trim(\App\Models\UjPengalihan::JENIS[$p->jenis].' '.$p->tanggal?->translatedFormat('j M Y')
+                .($p->dari ? ' · dari '.$p->dari->nama : '').($p->keterangan ? ' · '.$p->keterangan : ''))];
+        };
+        $namaAlih = ['alih' => '↪ Dialihkan (saldo sopir)', 'kembali' => '↩ Dikembalikan', 'batal' => '✕ Batal (tanpa bongkar)'];
+    @endphp
     @if (! $bulan)
         <div class="kartu">
             <h3 style="margin-top: 0;">Belum ada data Kas Seabank</h3>
@@ -25,6 +47,7 @@
 
         <form method="GET" action="{{ route('uj.index') }}" style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
             @foreach ($periode->param() as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
+            @if ($alih)<input type="hidden" name="alih" value="{{ $alih }}">@endif
             <input type="search" name="q" value="{{ $q }}" placeholder="Cari nama, keterangan, ID UJ, no mobil, DO, kategori…">
             <button class="tombol" type="submit" style="padding: 8px 14px;">Cari</button>
             @if ($q !== '')
@@ -35,6 +58,27 @@
             <span class="redup" style="margin-left: auto;">@if ($diimpor)Data diperbarui otomatis · terakhir {{ \Illuminate\Support\Carbon::parse($diimpor)->translatedFormat('j M Y H:i') }}@endif</span>
             @if ($bolehInput)<a href="{{ route('uj.input') }}" class="tombol" style="padding: 8px 14px;">+ Input UJ</a>@endif
         </form>
+
+        @if ($jumlahPengalihan)
+            <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: -4px 0 12px;">
+                <span class="redup" style="font-size: 13px;">Pengalihan UJ:</span>
+                <a href="{{ route('uj.index', array_filter(['q' => $q]) + $periode->param()) }}" @class(['chip', 'aktif' => ! $alih]) style="margin: 0;">Semua transaksi</a>
+                @foreach ($namaAlih as $j => $nama)
+                    @if ($jumlahPengalihan[$j] ?? 0)
+                        <a href="{{ route('uj.index', ['alih' => $j] + array_filter(['q' => $q]) + $periode->param()) }}" @class(['chip', 'aktif' => $alih === $j]) style="margin: 0;">{{ $nama }} · {{ $jumlahPengalihan[$j] }}</a>
+                    @endif
+                @endforeach
+                @if (count($jumlahPengalihan) > 1)<a href="{{ route('uj.index', ['alih' => 'semua'] + array_filter(['q' => $q]) + $periode->param()) }}" @class(['chip', 'aktif' => $alih === 'semua']) style="margin: 0;">Semua pengalihan · {{ array_sum($jumlahPengalihan) }}</a>@endif
+                @if ($bolehPengalihan)<a href="{{ route('pengalihan-uj.index') }}" class="redup" style="font-size: 13px; margin-left: auto;">Buka Pengalihan UJ →</a>@endif
+            </div>
+            @if ($alih)
+                <div class="kartu" style="padding: 10px 14px; margin-bottom: 12px; border-left: 3px solid #4ea1ff;">
+                    Menampilkan <b>{{ $detailSemua->count() }} UJ</b> {{ $alih === 'semua' ? 'yang dialihkan / dikembalikan / dibatalkan' : mb_strtolower(\App\Models\UjPengalihan::JENIS[$alih]) }}
+                    senilai <b>{{ rp($detailSemua->sum('nominal')) }}</b> dari <b>semua periode</b> (pilihan bulan di atas diabaikan). Detail lain di transfer yang sama disembunyikan.
+                    <a href="{{ route('uj.index', array_filter(['q' => $q]) + $periode->param()) }}">Tampilkan semua transaksi</a>
+                </div>
+            @endif
+        @endif
 
         <div class="kartu gulir" style="padding: 0;">
             <table class="kas" data-saring-kolom="grup">
@@ -57,7 +101,8 @@
                     @php($jumlah = $detail->reject->biaya_transfer->sum('nominal'))
                     @php($sudah = $t->sudahReimburse())
                     @php($jumlahSudah = $detail->whereNotNull('tanggal_reimburse')->count())
-                    <tbody @class(['grup', 'buka' => $q !== ''])>
+                    @php($nAlih = $detail->filter(fn ($d) => $d->id_uj && isset($pengalihan[$d->id_uj]))->count())
+                    <tbody @class(['grup', 'buka' => $q !== '' || $alih])>
                         <tr @class(['t', 'ada-bon' => $detail->isNotEmpty()])>
                             <td>
                                 <span class="panah" aria-hidden="true">@if ($detail->isNotEmpty())▸@endif</span>
@@ -73,7 +118,8 @@
                             <td class="angka"><b>{{ rp($t->nominal, true) }}</b></td>
                             <td class="i">@if ($t->no_uj)UJ-{{ $t->no_uj }}@else<i title="Baris master belum diberi ID UJ di sheet">tanpa ID</i>@endif
                                 @if ($jumlahSudah === $detail->count() && $sudah)<span class="label hijau">Sudah reimburse</span>
-                                @elseif ($sudah)<span class="label kuning" title="{{ $jumlahSudah }} dari {{ $detail->count() }} detail sudah direimburse">Sebagian {{ $jumlahSudah }}/{{ $detail->count() }}</span>@endif</td>
+                                @elseif ($sudah)<span class="label kuning" title="{{ $jumlahSudah }} dari {{ $detail->count() }} detail sudah direimburse">Sebagian {{ $jumlahSudah }}/{{ $detail->count() }}</span>@endif
+                                @if ($nAlih && ! $alih)<span class="label alih" title="Ada UJ di transfer ini yang dialihkan / dikembalikan / dibatalkan (menu Pengalihan UJ)">↪ {{ $nAlih }} pengalihan</span>@endif</td>
                             <td style="white-space: nowrap;">
                                 {{-- Edit, foto bon & Hapus hanya untuk akun yang punya menu Input UJ; yang sudah (sebagian) direimburse dikunci. --}}
                                 @if ($bolehInput && $sudah)
@@ -104,7 +150,9 @@
                                 <td>{{ $d->jenis_kendaraan }}</td>
                                 <td>{{ $d->no_do }}</td>
                                 <td class="angka">{{ rp($d->nominal) }}</td>
-                                <td class="i">{{ $d->id_uj }} @if ($d->tanggal_reimburse)<i title="Tanggal reimburse">✓ {{ $d->tanggal_reimburse->translatedFormat('j M') }}</i>@endif</td>
+                                @php($ta = $tandaAlih($d))
+                                <td class="i" @if ($ta) data-v="{{ $d->id_uj }} {{ $ta['teks'] }}" @endif>{{ $d->id_uj }} @if ($d->tanggal_reimburse)<i title="Tanggal reimburse">✓ {{ $d->tanggal_reimburse->translatedFormat('j M') }}</i>@endif
+                                    @if ($ta)<span class="label {{ $ta['kelas'] }}" title="{{ $ta['judul'] }}" style="white-space: nowrap;">{{ $ta['teks'] }}</span>@endif</td>
                                 <td></td>
                             </tr>
                         @endforeach
