@@ -74,7 +74,9 @@
             @if ($alih)
                 <div class="kartu" style="padding: 10px 14px; margin-bottom: 12px; border-left: 3px solid #4ea1ff;">
                     Menampilkan <b>{{ $detailSemua->count() }} UJ</b> {{ $alih === 'semua' ? 'yang dialihkan / dikembalikan / dibatalkan' : mb_strtolower(\App\Models\UjPengalihan::JENIS[$alih]) }}
-                    senilai <b>{{ rp($detailSemua->sum('nominal')) }}</b> dari <b>semua periode</b> (pilihan bulan di atas diabaikan). Detail lain di transfer yang sama disembunyikan.
+                    senilai <b>{{ rp($detailSemua->sum('nominal')) }}</b>@php($nilaiAlih = (int) round($detailSemua->sum(fn ($d) => (float) ($pengalihan[$d->id_uj]->nominal ?? 0))))
+                    @if ($nilaiAlih !== (int) $detailSemua->sum('nominal')), yang dialihkan <b>{{ rp($nilaiAlih) }}</b> ({{ $detailSemua->filter(fn ($d) => abs((float) $pengalihan[$d->id_uj]->nominal - (float) $d->nominal) >= 1)->count() }} UJ hanya sebagian)@endif
+                    dari <b>semua periode</b> (pilihan bulan di atas diabaikan). Detail lain di transfer yang sama disembunyikan.
                     <a href="{{ route('uj.index', array_filter(['q' => $q]) + $periode->param()) }}">Tampilkan semua transaksi</a>
                 </div>
             @endif
