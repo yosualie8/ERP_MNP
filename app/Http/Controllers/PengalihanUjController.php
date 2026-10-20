@@ -49,9 +49,9 @@ class PengalihanUjController extends Controller
         $data = ['tab' => $tab, 'saldo' => $saldo, 'tahap' => ProyekTahap::orderBy('nama')->get(['id', 'nama', 'status', 'tipe'])->keyBy('id')];
 
         if ($tab === 'pilih') {
-            // UJ yang SUDAH diproses (jadi saldo sopir / dikembalikan / dibatalkan) tetap tampil dengan keterangannya (owner 20 Okt 2026),
-            // tanpa centang — bisa dibatalkan dari sini.
-            $proses = UjPengalihan::with('dari')->whereIn('jenis', UjPengalihan::MENUTUP)->whereNotNull('id_uj')->get();
+            // UJ yang SUDAH jadi saldo sopir tetap tampil (owner 20 Okt 2026): kolom Status hanya "Sudah jadi saldo sopir" / "Belum"; tanpa centang,
+            // bisa dibatalkan dari sini. UJ yang dikembalikan / ditutup tanpa bongkar tidak ditampilkan (bukan saldo).
+            $proses = UjPengalihan::with('dari')->where('jenis', 'alih')->whereNotNull('id_uj')->get();
             $ujProses = UjDetail::whereIn('id_uj', $proses->pluck('id_uj'))->get()->keyBy('id_uj');
             $bongkar = $saldo->flatMap(fn ($s) => $s['uj'])->keyBy(fn ($x) => $x->p->id_uj);
             $sejak = \Illuminate\Support\Carbon::parse(KontrolUj::SEJAK);

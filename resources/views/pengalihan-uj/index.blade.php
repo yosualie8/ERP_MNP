@@ -166,8 +166,8 @@
             <div><label>Status</label>
                 <select name="status" onchange="this.form.submit()">
                     <option value="semua">Semua ({{ array_sum($jumlahStatus) }})</option>
-                    <option value="belum" @selected($status === 'belum')>Belum diproses ({{ $jumlahStatus['belum'] }})</option>
-                    <option value="sudah" @selected($status === 'sudah')>Sudah jadi saldo / ditutup ({{ $jumlahStatus['sudah'] }})</option>
+                    <option value="belum" @selected($status === 'belum')>Belum ({{ $jumlahStatus['belum'] }})</option>
+                    <option value="sudah" @selected($status === 'sudah')>Sudah jadi saldo sopir ({{ $jumlahStatus['sudah'] }})</option>
                 </select></div>
             <label style="display: flex; gap: 6px; align-items: center; margin: 0 0 8px; color: var(--teks); font-size: 13px;"><input type="checkbox" name="lama" value="1" @checked($lama) onchange="this.form.submit()"> termasuk data lama sebelum Mei 2026 ({{ $jumlahLama }})</label>
             <button class="tombol polos" type="submit">Tampilkan</button>
@@ -175,10 +175,10 @@
         </form>
 
         <form method="POST" action="{{ route('pengalihan-uj.simpan') }}" class="kartu gulir" style="padding: 0;">@csrf
-            <div style="padding: 12px 14px 6px;"><b style="color: var(--aksen-terang);">UJ belum bongkar ({{ $calon->count() }}{{ ($n = $calon->filter(fn ($c) => isset($c->p))->count()) ? ', '.$n.' sudah diproses' : '' }})</b>
-                <span class="redup" style="font-size: 12px;">Catatan kuning = mungkin sudah jalan tetapi belum diinput di Ritasi — cek dulu sebelum dijadikan saldo. Catatan biru = sudah jadi saldo sopir / ditutup (tanpa centang; bisa dibatalkan).</span></div>
+            <div style="padding: 12px 14px 6px;"><b style="color: var(--aksen-terang);">UJ belum bongkar ({{ $calon->count() }}{{ ($n = $calon->filter(fn ($c) => isset($c->p))->count()) ? ', '.$n.' sudah jadi saldo sopir' : '' }})</b>
+                <span class="redup" style="font-size: 12px;">⚠ = mungkin sudah jalan tetapi belum diinput di Ritasi (arahkan kursor untuk alasannya) — cek dulu sebelum dijadikan saldo.</span></div>
             <table class="kas">
-                <thead><tr><th data-tanpa-saring style="width: 30px;"><input type="checkbox" id="semua" title="Centang semua yang tampil"></th><th>Sopir</th><th>Truk</th><th>Tanggal UJ</th><th class="angka">Umur</th><th>ID UJ</th><th>No DO</th><th>Kategori</th><th>Keterangan</th><th>Proyek asal</th><th class="angka">Nominal</th><th>Catatan</th></tr></thead>
+                <thead><tr><th data-tanpa-saring style="width: 30px;"><input type="checkbox" id="semua" title="Centang semua yang tampil"></th><th>Sopir</th><th>Truk</th><th>Tanggal UJ</th><th class="angka">Umur</th><th>ID UJ</th><th>No DO</th><th>Kategori</th><th>Keterangan</th><th>Proyek asal</th><th class="angka">Nominal</th><th>Status</th></tr></thead>
                 <tbody>
                     @forelse ($calon as $c)
                         @php($sudah = isset($c->p))
@@ -188,11 +188,12 @@
                             <td class="angka" data-n="{{ $c->umur }}">@if ($sudah)<span class="redup">{{ $c->umur }} hari</span>@else<span class="label {{ ['merah' => 'merah', 'lewat' => 'kuning', 'wajar' => 'hijau'][$c->status] ?? '' }}">{{ $c->umur }} hari</span>@endif</td>
                             <td>{{ $c->u->id_uj }}</td><td>{{ $c->u->no_do }}</td><td>{{ $c->u->kategori }}</td><td style="font-size: 12px;">{{ $c->u->keterangan }}</td>
                             <td>{{ $c->tahap ?? '—' }}</td><td class="angka" data-n="{{ (int) $c->u->nominal }}">{{ rp((int) $c->u->nominal) }}</td>
+                            {{-- Status ringkas (2 nilai untuk saringan kolom); rinciannya di tooltip --}}
                             @if ($sudah)
-                                <td style="font-size: 12px; color: #8cc4ff;" data-v="{{ $c->info }}">{{ $c->info }}
+                                <td data-v="Sudah jadi saldo sopir" style="white-space: nowrap;"><span class="label hijau" title="{{ $c->info }}">Sudah jadi saldo sopir</span>
                                     <button type="submit" form="batal-{{ $c->p->id }}" class="tombol polos" style="padding: 1px 8px; font-size: 11px; margin-left: 4px;">Batalkan</button></td>
                             @else
-                                <td style="font-size: 12px; color: #f0c05a;">{{ $c->catatan }}</td>
+                                <td data-v="Belum" style="white-space: nowrap;"><span class="label">Belum</span>@if ($c->catatan) <span title="{{ $c->catatan }}" style="cursor: help; color: #f0c05a;">⚠</span>@endif</td>
                             @endif
                         </tr>
                     @empty
