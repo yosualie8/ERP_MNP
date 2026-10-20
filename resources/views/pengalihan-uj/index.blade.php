@@ -163,25 +163,37 @@
                 <select name="asal" onchange="this.form.submit()"><option value="">Semua proyek ({{ $daftarAsal->sum('n') }})</option>
                     @foreach ($daftarAsal->sortBy('nama') as $id => $a)<option value="{{ $id }}" @selected($asal === (int) $id)>{{ $a['nama'] }} ({{ $a['n'] }})</option>@endforeach</select></div>
             <div style="flex: 1; min-width: 240px;"><label>Cari sopir / truk / ID UJ / DO / keterangan</label><input name="cari" value="{{ $cari }}" style="width: 100%;"></div>
+            <div><label>Status</label>
+                <select name="status" onchange="this.form.submit()">
+                    <option value="semua">Semua ({{ array_sum($jumlahStatus) }})</option>
+                    <option value="belum" @selected($status === 'belum')>Belum diproses ({{ $jumlahStatus['belum'] }})</option>
+                    <option value="sudah" @selected($status === 'sudah')>Sudah jadi saldo / ditutup ({{ $jumlahStatus['sudah'] }})</option>
+                </select></div>
             <label style="display: flex; gap: 6px; align-items: center; margin: 0 0 8px; color: var(--teks); font-size: 13px;"><input type="checkbox" name="lama" value="1" @checked($lama) onchange="this.form.submit()"> termasuk data lama sebelum Mei 2026 ({{ $jumlahLama }})</label>
             <button class="tombol polos" type="submit">Tampilkan</button>
             @if ($mobil->isNotEmpty())<span class="redup" style="font-size: 12px;">Truk: {{ $mobil->implode(', ') }} · <a href="{{ route('pengalihan-uj.index', ['tab' => 'pilih']) }}">semua truk</a></span>@endif
         </form>
 
         <form method="POST" action="{{ route('pengalihan-uj.simpan') }}" class="kartu gulir" style="padding: 0;">@csrf
-            <div style="padding: 12px 14px 6px;"><b style="color: var(--aksen-terang);">UJ belum bongkar ({{ $calon->count() }})</b>
-                <span class="redup" style="font-size: 12px;">Catatan kuning = mungkin sudah jalan tetapi belum diinput di Ritasi — cek dulu sebelum dijadikan saldo.</span></div>
+            <div style="padding: 12px 14px 6px;"><b style="color: var(--aksen-terang);">UJ belum bongkar ({{ $calon->count() }}{{ ($n = $calon->filter(fn ($c) => isset($c->p))->count()) ? ', '.$n.' sudah diproses' : '' }})</b>
+                <span class="redup" style="font-size: 12px;">Catatan kuning = mungkin sudah jalan tetapi belum diinput di Ritasi — cek dulu sebelum dijadikan saldo. Catatan biru = sudah jadi saldo sopir / ditutup (tanpa centang; bisa dibatalkan).</span></div>
             <table class="kas">
                 <thead><tr><th data-tanpa-saring style="width: 30px;"><input type="checkbox" id="semua" title="Centang semua yang tampil"></th><th>Sopir</th><th>Truk</th><th>Tanggal UJ</th><th class="angka">Umur</th><th>ID UJ</th><th>No DO</th><th>Kategori</th><th>Keterangan</th><th>Proyek asal</th><th class="angka">Nominal</th><th>Catatan</th></tr></thead>
                 <tbody>
                     @forelse ($calon as $c)
-                        <tr class="t">
-                            <td><input type="checkbox" name="uj[]" value="{{ $c->u->id_uj }}" data-rp="{{ (int) $c->u->nominal }}" @checked(collect(old('uj'))->contains($c->u->id_uj) || (! old('uj') && $c->usul))></td>
+                        @php($sudah = isset($c->p))
+                        <tr class="t" @if ($sudah) style="opacity: .8;" @endif>
+                            <td>@if ($sudah)<span title="Sudah diproses — batalkan dulu bila ingin diubah">✓</span>@else<input type="checkbox" name="uj[]" value="{{ $c->u->id_uj }}" data-rp="{{ (int) $c->u->nominal }}" @checked(collect(old('uj'))->contains($c->u->id_uj) || (! old('uj') && $c->usul))>@endif</td>
                             <td><b>{{ \App\Support\SaldoSopir::kunci($c->u->nama) }}</b></td><td>{{ $c->u->no_mobil }}</td><td data-n="{{ $c->tgl }}">{{ $tgl($c->tgl) }}</td>
-                            <td class="angka" data-n="{{ $c->umur }}"><span class="label {{ ['merah' => 'merah', 'lewat' => 'kuning', 'wajar' => 'hijau'][$c->status] ?? '' }}">{{ $c->umur }} hari</span></td>
+                            <td class="angka" data-n="{{ $c->umur }}">@if ($sudah)<span class="redup">{{ $c->umur }} hari</span>@else<span class="label {{ ['merah' => 'merah', 'lewat' => 'kuning', 'wajar' => 'hijau'][$c->status] ?? '' }}">{{ $c->umur }} hari</span>@endif</td>
                             <td>{{ $c->u->id_uj }}</td><td>{{ $c->u->no_do }}</td><td>{{ $c->u->kategori }}</td><td style="font-size: 12px;">{{ $c->u->keterangan }}</td>
                             <td>{{ $c->tahap ?? '—' }}</td><td class="angka" data-n="{{ (int) $c->u->nominal }}">{{ rp((int) $c->u->nominal) }}</td>
-                            <td style="font-size: 12px; color: #f0c05a;">{{ $c->catatan }}</td>
+                            @if ($sudah)
+                                <td style="font-size: 12px; color: #8cc4ff;" data-v="{{ $c->info }}">{{ $c->info }}
+                                    <button type="submit" form="batal-{{ $c->p->id }}" class="tombol polos" style="padding: 1px 8px; font-size: 11px; margin-left: 4px;">Batalkan</button></td>
+                            @else
+                                <td style="font-size: 12px; color: #f0c05a;">{{ $c->catatan }}</td>
+                            @endif
                         </tr>
                     @empty
                         <tr><td colspan="12" class="redup" style="padding: 18px 14px;">Tidak ada UJ belum bongkar{{ $asal || $cari !== '' ? ' yang cocok' : '' }}.</td></tr>
@@ -198,21 +210,11 @@
             @endif
         </form>
 
-        @if ($riwayat->isNotEmpty())
-            <div class="kartu gulir" style="padding: 0;">
-                <div style="padding: 12px 14px 6px;"><b style="color: var(--aksen-terang);">UJ dikembalikan / dibatalkan (terbaru)</b></div>
-                <table class="kas">
-                    <thead><tr><th>Tanggal</th><th>Jenis</th><th>Sopir</th><th>Truk</th><th>ID UJ</th><th>Proyek asal</th><th class="angka">Nominal</th><th>Keterangan</th><th data-tanpa-saring></th></tr></thead>
-                    <tbody>
-                        @foreach ($riwayat as $p)
-                            <tr class="t"><td data-n="{{ $p->tanggal->toDateString() }}">{{ $tgl($p->tanggal) }}</td><td>{{ \App\Models\UjPengalihan::JENIS[$p->jenis] }}</td><td>{{ $p->sopir ?: $p->nama }}</td><td>{{ $p->no_mobil }}</td><td>{{ $p->id_uj }}</td>
-                                <td>{{ $p->dari?->nama }}</td><td class="angka">{{ rp((int) $p->nominal) }}</td><td style="font-size: 12px;">{{ $p->keterangan }}</td>
-                                <td><form method="POST" action="{{ route('pengalihan-uj.hapus', $p) }}" onsubmit="return confirm('Hapus catatan ini? UJ-nya kembali dihitung belum bongkar.')">@csrf @method('DELETE')<button class="tombol polos" style="padding: 2px 8px; font-size: 12px;">Hapus</button></form></td></tr>
-                        @endforeach
-                    </tbody>
-                </table>
-            </div>
-        @endif
+        {{-- Form batal untuk UJ yang sudah diproses (di luar form utama; tombolnya memakai atribut form=) --}}
+        @foreach ($calon->filter(fn ($c) => isset($c->p)) as $c)
+            <form method="POST" action="{{ route('pengalihan-uj.hapus', $c->p) }}" id="batal-{{ $c->p->id }}" hidden
+                onsubmit="return confirm('Batalkan {{ $c->u->id_uj }} ({{ \App\Models\UjPengalihan::JENIS[$c->p->jenis] }})? UJ-nya kembali dihitung belum bongkar.')">@csrf @method('DELETE')</form>
+        @endforeach
 
         <script>
             (() => {

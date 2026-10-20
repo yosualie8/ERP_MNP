@@ -49,12 +49,34 @@ class PengalihanUjController extends Controller
         $data = ['tab' => $tab, 'saldo' => $saldo, 'tahap' => ProyekTahap::orderBy('nama')->get(['id', 'nama', 'status', 'tipe'])->keyBy('id')];
 
         if ($tab === 'pilih') {
-            $semua = $this->terbuka();
+            // UJ yang SUDAH diproses (jadi saldo sopir / dikembalikan / dibatalkan) tetap tampil dengan keterangannya (owner 20 Okt 2026),
+            // tanpa centang — bisa dibatalkan dari sini.
+            $proses = UjPengalihan::with('dari')->whereIn('jenis', UjPengalihan::MENUTUP)->whereNotNull('id_uj')->get();
+            $ujProses = UjDetail::whereIn('id_uj', $proses->pluck('id_uj'))->get()->keyBy('id_uj');
+            $bongkar = $saldo->flatMap(fn ($s) => $s['uj'])->keyBy(fn ($x) => $x->p->id_uj);
+            $sejak = \Illuminate\Support\Carbon::parse(KontrolUj::SEJAK);
+            $diproses = $proses->filter(fn ($p) => isset($ujProses[$p->id_uj]))->mapWithKeys(function ($p) use ($ujProses, $bongkar, $sejak, $data) {
+                $u = $ujProses[$p->id_uj];
+                $x = $bongkar[$p->id_uj] ?? null;
+                $info = match ($p->jenis) {
+                    'alih' => '💰 Sudah jadi saldo sopir '.($p->sopir ?: $p->nama).' ('.$p->tanggal->translatedFormat('j M').')'
+                        .($x?->bongkar ? ' · DO lama sudah bongkar '.$x->bongkar->tanggal->translatedFormat('j M').' di '.($data['tahap'][$x->tahap_bongkar]->nama ?? $x->bongkar->tahap).' — saldonya terpakai' : ''),
+                    'kembali' => '↩ Sudah dikembalikan sopir ('.$p->tanggal->translatedFormat('j M').')',
+                    default => '✕ Sudah ditutup tanpa bongkar ('.$p->tanggal->translatedFormat('j M').')',
+                };
+
+                return [$p->id_uj => (object) ['u' => $u, 'do' => SaldoSopir::kunciDo($u->no_do), 'tgl' => $u->tanggal?->toDateString(),
+                    'umur' => $u->tanggal ? (int) $u->tanggal->copy()->startOfDay()->diffInDays(today()) : null, 'tahap' => $p->dari?->nama, 'tahap_id' => $p->dari_tahap_id,
+                    'status' => 'proses', 'lama' => $u->tanggal && $u->tanggal->lt($sejak), 'p' => $p, 'info' => $info.($p->keterangan ? ' — '.$p->keterangan : '')]];
+            });
+            $semua = $this->terbuka()->union($diproses);
             $asal = $request->integer('asal') ?: null;
             $lama = $request->boolean('lama');
+            $status = in_array($request->query('status'), ['belum', 'sudah'], true) ? $request->query('status') : 'semua';
             $cari = trim((string) $request->query('cari'));
             $mobil = collect(explode(',', (string) $request->query('mobil')))->map(fn ($m) => NomorMobil::rapikan(trim($m)))->filter()->values();
             $calon = $semua->filter(fn ($c) => ($lama || ! $c->lama) && (! $asal || $c->tahap_id === $asal) && ($mobil->isEmpty() || $mobil->contains(NomorMobil::rapikan($c->u->no_mobil)))
+                && ($status === 'semua' || ($status === 'sudah') === isset($c->p))
                 && ($cari === '' || str_contains(mb_strtolower($c->u->nama.' '.$c->u->no_mobil.' '.$c->u->id_uj.' '.$c->u->no_do.' '.$c->u->keterangan), mb_strtolower($cari))));
 
             // Petunjuk "mungkin sudah jalan": uang tanah DO itu sudah dibayar, atau truk itu sudah ada rit sesudah tanggal UJ.
@@ -65,17 +87,18 @@ class PengalihanUjController extends Controller
             $calon = $calon->map(function ($c) use ($tanah, $ritAkhir, $kunci, $mobil) {
                 $akhir = ($t = $ritAkhir[$c->u->no_mobil] ?? null) ? \Illuminate\Support\Carbon::parse($t)->toDateString() : null;
                 $c->rit_akhir = $akhir;
-                $c->catatan = $c->u->kategori === 'Uang MOB' ? 'Uang MOB — biasanya sudah terpakai untuk mobilisasi'
-                    : (isset($tanah[$kunci($c->u->no_do)]) ? 'uang tanah DO ini sudah dibayar — mungkin sudah jalan' : ($akhir && $c->tgl < $akhir ? "truk ini sudah ada rit sesudahnya ({$akhir}) — cek dulu" : null));
-                $c->usul = $mobil->isNotEmpty() && ! $c->catatan;
+                $c->catatan = isset($c->p) ? null : ($c->u->kategori === 'Uang MOB' ? 'Uang MOB — biasanya sudah terpakai untuk mobilisasi'
+                    : (isset($tanah[$kunci($c->u->no_do)]) ? 'uang tanah DO ini sudah dibayar — mungkin sudah jalan' : ($akhir && $c->tgl < $akhir ? "truk ini sudah ada rit sesudahnya ({$akhir}) — cek dulu" : null)));
+                $c->usul = $mobil->isNotEmpty() && ! $c->catatan && ! isset($c->p);
 
                 return $c;
             })->sortBy(fn ($c) => [SaldoSopir::kunci($c->u->nama), $c->tgl])->values();
 
-            $data += ['calon' => $calon, 'asal' => $asal, 'lama' => $lama, 'cari' => $cari, 'mobil' => $mobil,
-                'daftarAsal' => $semua->filter(fn ($c) => $lama || ! $c->lama)->groupBy('tahap_id')->map(fn ($g) => ['nama' => $g->first()->tahap ?? 'Proyek tidak dikenali', 'n' => $g->count()]),
-                'jumlahLama' => $semua->where('lama', true)->count(),
-                'riwayat' => UjPengalihan::with(['dari'])->whereIn('jenis', ['kembali', 'batal'])->orderByDesc('tanggal')->orderByDesc('id')->limit(50)->get()];
+            $tampil = $semua->filter(fn ($c) => $lama || ! $c->lama);
+            $data += ['calon' => $calon, 'asal' => $asal, 'lama' => $lama, 'cari' => $cari, 'mobil' => $mobil, 'status' => $status,
+                'daftarAsal' => $tampil->groupBy(fn ($c) => (int) $c->tahap_id)->map(fn ($g) => ['nama' => $g->first()->tahap ?? 'Proyek tidak dikenali', 'n' => $g->count()]),
+                'jumlahStatus' => ['belum' => $tampil->filter(fn ($c) => ! isset($c->p))->count(), 'sudah' => $tampil->filter(fn ($c) => isset($c->p))->count()],
+                'jumlahLama' => $semua->where('lama', true)->count()];
         }
 
         return view('pengalihan-uj.index', $data);
