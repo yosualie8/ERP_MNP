@@ -78,6 +78,9 @@
         .sopir-baru.terjawab { border-color: var(--sukses, #3ecf8e); }
         .sopir-baru label { display: block; margin: 0; font-weight: 400; color: var(--teks); cursor: pointer; }
         .sopir-baru select { font-size: 11.5px; padding: 1px 4px; max-width: 150px; }
+        .sopir-baru .saran-nama { margin-bottom: 3px; padding-bottom: 3px; border-bottom: 1px dashed #f0c05a; }
+        .sopir-baru .saran-sopir { padding: 0 8px; font-size: 11.5px; margin: 1px 0; border-color: #3ecf8e; color: #3ecf8e; }
+        .saran-semua { margin: 0 0 8px; padding: 6px 10px; font-size: 13px; border: 1px solid #3ecf8e; border-radius: 8px; background: rgba(62, 207, 142, .08); }
         .temuan .aturan { color: var(--redup); font-size: 11px; }
         .temuan label { display: block; color: var(--teks); font-size: 12px; margin: 0; }
         .aksi-massal-pj { border: 1px solid var(--aksen); background: var(--aksen-muda); border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; }
@@ -564,20 +567,63 @@
                 tr.querySelector('[data-nama=nama]').closest('td').appendChild(box);
                 return box;
             };
+            // Saran koreksi nama (owner 20 Okt 2026, data ditempel dari Excel): nama yang mirip sopir terdaftar / nama lainnya ("Arus" → Aris B).
+            // Hanya rekomendasi — admin menekan sarannya, atau menjawab sebagai sopir baru.
+            const jarak = (a, b) => {
+                const d = Array.from({length: b.length + 1}, (_, j) => j);
+                for (let i = 1; i <= a.length; i++) {
+                    let kiri = i, atasKiri = i - 1;
+                    for (let j = 1; j <= b.length; j++) {
+                        const atas = d[j];
+                        d[j] = Math.min(atas + 1, kiri + 1, atasKiri + (a[i - 1] === b[j - 1] ? 0 : 1));
+                        atasKiri = atas; kiri = d[j];
+                    }
+                }
+                return d[b.length];
+            };
+            const saranSopir = (k, m) => {
+                const p = k.replace(/ /g, '');
+                if (p.length < 3) return [];
+                const hasil = {};
+                for (const [kk, s] of Object.entries(SOPIR.peta)) {
+                    if (!s.id) continue;
+                    const q = kk.replace(/ /g, '');
+                    let d = jarak(p, q);
+                    const awalan = Math.min(p.length, q.length) >= 3 && (q.startsWith(p) || p.startsWith(q));
+                    if (d > (Math.max(p.length, q.length) >= 6 ? 2 : 1) && !awalan) continue;
+                    if (awalan) d = Math.min(d, 1);
+                    const skor = d * 10 - (s.mobil === m ? 5 : 0) - (s.aktif ? 2 : 0);
+                    if (!hasil[s.id] || skor < hasil[s.id].skor) hasil[s.id] = {s, skor};
+                }
+                return Object.values(hasil).sort((a, b) => a.skor - b.skor).slice(0, 3).map(x => x.s);
+            };
+            // Ganti nama di SEMUA baris yang ditulis sama (kunci k) dengan nama baku sopir terpilih.
+            const pakaiSaran = (k, nama) => {
+                barisDetail().forEach(tr => {
+                    const el = tr.querySelector('[data-nama=nama]');
+                    if (kunciNama(el.value) === k) { el.title = `Dikoreksi dari "${el.value.trim()}"`; el.value = nama; el.dispatchEvent(new Event('input', {bubbles: true})); }
+                });
+                setTimeout(aturSopirBaru);
+            };
             const buatKotakSopir = (tr, nama, k, m, lama) => {
                 const id = 'sb' + (++uidSb);
                 const namaLama = escSb(lama.map(s => s.nama).join(', '));
-                const opsi = SOPIR.aktif.map(s => `<option value="alias:${s.id}" ${lama.some(l => l.id === s.id) ? 'selected' : ''}>${escSb(s.nama)}${s.mobil ? ' · ' + escSb(s.mobil) : ''}</option>`).join('');
+                const saran = saranSopir(k, m);
+                const pilihAlias = saran[0]?.id ?? lama[0]?.id;
+                const opsi = SOPIR.aktif.map(s => `<option value="alias:${s.id}" ${s.id === pilihAlias ? 'selected' : ''}>${escSb(s.nama)}${s.mobil ? ' · ' + escSb(s.mobil) : ''}</option>`).join('');
+                const tombolSaran = saran.map(s => `<button type="button" class="tombol polos saran-sopir" data-ganti="${escSb(s.nama)}">${escSb(s.nama)}${s.mobil ? ' · ' + escSb(s.mobil) : ''}${s.aktif ? '' : ' (nonaktif)'}</button>`).join(' ');
                 const box = document.createElement('div');
                 box.className = 'sopir-baru sopir-nama-baru';
                 box.dataset.kunci = k + '|' + m + '|' + lama.map(s => s.id).join(',');
-                box.innerHTML = `<b>🆕 Sopir baru?</b> "${escSb(nama)}" belum terdaftar${lama.length ? ` — ${escSb(m)} tercatat dibawa ${namaLama}` : ` untuk ${escSb(m)}`}.
+                if (saran.length) Object.assign(box.dataset, {saran: saran[0].nama, ketik: nama});
+                box.innerHTML = (saran.length ? `<div class="saran-nama">✏️ Apakah yang benar: ${tombolSaran} ?</div>` : '') + `<b>🆕 Sopir baru?</b> "${escSb(nama)}" belum terdaftar${lama.length ? ` — ${escSb(m)} tercatat dibawa ${namaLama}` : ` untuk ${escSb(m)}`}.
                     <label><input type="radio" name="${id}" value="ganti"> Ganti sopir${lama.length ? ` (${namaLama} dinonaktifkan)` : ''}</label>
                     <label><input type="radio" name="${id}" value="tambah"> Sopir tambahan${lama.length ? ' (sopir lama tetap aktif)' : ''}</label>
                     <label><input type="radio" name="${id}" value="alias"> Nama lain dari <select>${opsi}</select></label>
                     <label><input type="radio" name="${id}" value="bukan"> Bukan sopir</label>
                     <input type="hidden" data-nama="sopir_baru" data-lewati-tempel>`;
                 const nilai = box.querySelector('[data-nama=sopir_baru]');
+                box.querySelectorAll('.saran-sopir').forEach(b => b.addEventListener('click', () => pakaiSaran(k, b.dataset.ganti)));
                 box.addEventListener('change', e => {
                     if (e.target.tagName === 'SELECT') box.querySelector('input[value=alias]').checked = true;
                     const r = box.querySelector('input[type=radio]:checked');
@@ -591,6 +637,12 @@
             const aturSopirBaru = () => {
                 const ditanya = {};
                 let berubah = false;
+                // 0. nama lain / ejaan sopir terdaftar langsung ditulis dengan nama bakunya ("wsal" → Wisal)
+                barisDetail().forEach(tr => {
+                    const el = tr.querySelector('[data-nama=nama]');
+                    const s = SOPIR.peta[kunciNama(el.value)];
+                    if (s?.id && el.value !== s.nama && document.activeElement !== el) { el.title = `Dirapikan dari "${el.value.trim()}"`; el.value = s.nama; berubah = true; }
+                });
                 // 1. sopir terdaftar di truk lain / nonaktif (dulu: jawabannya memengaruhi "tercatat dibawa" kotak sopir baru)
                 barisDetail().forEach(tr => {
                     const s = SOPIR.peta[kunciNama(tr.querySelector('[data-nama=nama]').value)];
@@ -614,6 +666,20 @@
                     const lama = pemegang(m);
                     if (!box || box.dataset.kunci !== k + '|' + m + '|' + lama.map(s => s.id).join(',')) { box?.remove(); buatKotakSopir(tr, nama.trim(), k, m, lama); berubah = true; }
                 });
+                // 3. ringkasan untuk tempelan banyak baris: semua saran koreksi bisa diterapkan sekaligus
+                const bersaran = [...document.querySelectorAll('.sopir-nama-baru[data-saran]')];
+                let bar = document.getElementById('saran-sopir-semua');
+                if (bersaran.length >= 2) {
+                    if (!bar) {
+                        bar = document.createElement('div');
+                        bar.id = 'saran-sopir-semua';
+                        bar.className = 'saran-semua';
+                        daftar.closest('table').before(bar);
+                    }
+                    bar.innerHTML = `✏️ ${bersaran.length} nama sopir mirip sopir terdaftar: ${bersaran.map(b => `"${escSb(b.dataset.ketik)}" → <b>${escSb(b.dataset.saran)}</b>`).join(', ')}
+                        <button type="button" class="tombol polos" style="padding: 2px 10px; font-size: 12px; margin-left: 6px;">Terapkan semua saran</button>`;
+                    bar.querySelector('button').onclick = () => bersaran.forEach(b => pakaiSaran(b.dataset.kunci.split('|')[0], b.dataset.saran));
+                } else bar?.remove();
                 if (berubah) { urutkanNama(); evaluasi(); }
             };
             daftar.addEventListener('focusout', e => { if (['nama', 'no_mobil'].includes(e.target.dataset?.nama)) setTimeout(aturSopirBaru); });
@@ -721,10 +787,13 @@
                     const utuh = kolomAwal === 0 && data.every(r => r.length >= 4 && /^\d{1,4}$/.test(r[0]) && tanggal.test(r[1]) && /\d/.test(r[2]));
                     return utuh ? data.map(r => r.slice(2)) : data;
                 },
-                setelah: rows => rows.forEach(tr => {
-                    const mobil = tr.querySelector('[data-nama=no_mobil]');
-                    if (mobil.value) { mobil.value = kunciMobil(mobil.value); if (!tr.querySelector('[data-nama=jenis_kendaraan]').value) aturJenis(tr); }
-                }),
+                setelah: rows => {
+                    rows.forEach(tr => {
+                        const mobil = tr.querySelector('[data-nama=no_mobil]');
+                        if (mobil.value) { mobil.value = kunciMobil(mobil.value); if (!tr.querySelector('[data-nama=jenis_kendaraan]').value) aturJenis(tr); }
+                    });
+                    setTimeout(aturSopirBaru); // nama sopir hasil tempel langsung dirapikan / ditanyakan
+                },
             });
             if (!awal.length) aturNamaPertama();
             // Dibuka dari Pengajuan UJ: kursor langsung ke data penerima transfer.
