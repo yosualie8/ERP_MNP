@@ -38,7 +38,13 @@
         <div class="baris">
             <div><label for="status">Status</label>
                 <select id="status" name="status">@foreach (\App\Models\AsetTruk::STATUS as $k => $l)<option value="{{ $k }}" @selected(old('status', $aset->status) === $k)>{{ $l }}</option>@endforeach</select></div>
-            <div><label for="driver_tetap">Driver tetap</label><input id="driver_tetap" name="driver_tetap" value="{{ old('driver_tetap', $aset->driver_tetap) }}" autocomplete="off"></div>
+            @if (in_array($aset->kategori ?? 'dump_truck', \App\Models\AsetTruk::KATEGORI_TRUK, true) && $aset->exists)
+                {{-- Dump truck: driver mengikuti master sopir (Data Karyawan jabatan Supir → "Truk yang dibawa"), owner 21 Okt 2026 --}}
+                <div><label>Driver tetap</label><input value="{{ $aset->driver_tetap }}" readonly title="Otomatis dari Data Karyawan (Supir, kolom Truk yang dibawa)" style="opacity: .75;">
+                    <input type="hidden" name="driver_tetap" value="{{ $aset->driver_tetap }}"><small class="redup">Otomatis dari Data Karyawan — ubah truk sopirnya di sana.</small></div>
+            @else
+                <div><label for="driver_tetap">Driver tetap</label><input id="driver_tetap" name="driver_tetap" value="{{ old('driver_tetap', $aset->driver_tetap) }}" autocomplete="off"></div>
+            @endif
         </div>
         <div style="margin-bottom: 14px;"><label for="catatan">Catatan</label><textarea id="catatan" name="catatan" rows="3">{{ old('catatan', $aset->catatan) }}</textarea></div>
         <script>

@@ -228,8 +228,31 @@ class DaftarSopir
         });
         self::lupakan();
         SaldoSopir::lupakan();
+        if ($ringkas) {
+            self::sinkronAset();
+        }
 
         return $ringkas;
+    }
+
+    /**
+     * Data Aset "driver tetap" mengikuti master sopir (owner 21 Okt 2026): nama sopir AKTIF yang membawa truk itu (koma bila lebih dari
+     * satu); truk tanpa sopir aktif → kosong. Dipanggil setiap data sopir berubah.
+     */
+    public static function sinkronAset(): int
+    {
+        $per = Karyawan::where('jabatan', self::JABATAN)->where('status', 'aktif')->whereNotNull('no_mobil')->orderBy('nama')->get(['nama', 'no_mobil'])
+            ->groupBy('no_mobil')->map(fn ($g) => mb_strimwidth($g->pluck('nama')->implode(', '), 0, 60, '…')); // isian Data Aset maks. 60 huruf
+        $n = 0;
+        foreach (AsetTruk::truk()->get() as $a) {
+            $baru = $per[$a->no_lambung] ?? null;
+            if ($a->driver_tetap !== $baru) {
+                $a->update(['driver_tetap' => $baru]);
+                $n++;
+            }
+        }
+
+        return $n;
     }
 
     /** Data untuk form Input UJ / Pengajuan UJ. */

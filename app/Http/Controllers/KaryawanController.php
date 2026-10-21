@@ -38,6 +38,7 @@ class KaryawanController extends Controller
     {
         $k = Karyawan::create([...$this->baca($request, null), 'user_id' => $request->user()->id]);
         $this->catat($request, 'karyawan-tambah', "Karyawan baru {$k->nama}", $k->toArray());
+        \App\Support\DaftarSopir::sinkronAset(); // driver tetap Data Aset mengikuti master sopir
 
         return redirect()->route('karyawan.index')->with('success', "{$k->nama} ditambahkan ke Data Karyawan.");
     }
@@ -48,6 +49,7 @@ class KaryawanController extends Controller
         $karyawan->update([...$this->baca($request, $karyawan), 'user_id' => $request->user()->id]);
         $berubah = collect($karyawan->getChanges())->except(['updated_at', 'user_id'])->keys()->implode(', ');
         $this->catat($request, 'karyawan-ubah', "Karyawan {$karyawan->nama} diubah: ".($berubah ?: 'tanpa perubahan'), ['sebelum' => $lama, 'sesudah' => $karyawan->fresh()->toArray()]);
+        \App\Support\DaftarSopir::sinkronAset(); // driver tetap Data Aset mengikuti master sopir
 
         return redirect()->route('karyawan.index')->with('success', "Data {$karyawan->nama} disimpan.");
     }
