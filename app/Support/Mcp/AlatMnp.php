@@ -586,8 +586,13 @@ class AlatMnp
             if ($sebutBca) {
                 $hasil[] = ['id' => 'ringkasan:rekening_pt', 'title' => 'Ringkasan Rekening PT BCA: saldo terakhir, masuk/keluar per bulan, penandaan biaya per proyek', 'url' => route('mutasi-pt.index')];
             }
-            $kataBca = trim(preg_replace('/\b(bca|rekening ?pt|mutasi|pt)\b/i', '', $q));
-            foreach ($kataBca !== '' ? self::cariBca(['kata' => $kataBca, 'batas' => 15])['mutasi'] : [] as $m) {
+            // kalimat bebas ("pembayaran Lancarjaya dari BCA") → buang kata umum; bila tetap kosong, coba kata terpanjang saja
+            $kataBca = trim(preg_replace('/\s+/', ' ', preg_replace('/\b(bca|rekening|pt|mutasi|pembayaran|bayar|dibayar|sudah|belum|dari|ke|untuk|yang|apakah|transaksi|transfer|faktur|invoice|tagihan|ada|di|dan|atau)\b/i', ' ', $q)));
+            $mutasi = $kataBca !== '' ? self::cariBca(['kata' => $kataBca, 'batas' => 15])['mutasi'] : collect();
+            if ($mutasi->isEmpty() && $kataBca !== '' && ($terpanjang = collect(explode(' ', $kataBca))->sortByDesc(fn ($w) => mb_strlen($w))->first()) && mb_strlen($terpanjang) >= 4) {
+                $mutasi = self::cariBca(['kata' => $terpanjang, 'batas' => 15])['mutasi'];
+            }
+            foreach ($mutasi as $m) {
                 $hasil[] = ['id' => 'bca:'.$m['id'], 'title' => "Mutasi BCA {$m['tanggal']} · {$m['arah']} ".$rp($m['jumlah']).' · '.mb_strimwidth((string) $m['keterangan'], 0, 90, '…').' · biaya: '.$m['status_biaya'],
                     'url' => route('mutasi-pt.index', ['q' => $kataBca])];
             }
