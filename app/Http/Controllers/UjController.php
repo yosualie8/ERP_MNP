@@ -143,6 +143,11 @@ class UjController extends Controller
             'id' => $r->id, 'kode' => $r->kode(), 'judul' => $r->created_at->translatedFormat('l, j M Y'), 'jam' => $r->created_at->format('H:i'),
             'jumlah' => $r->jumlah, 'total' => (int) $r->total, 'status' => $r->status, 'no_uj' => $r->no_uj, 'catatan' => $r->catatan, 'pengajuan' => $r->pengajuan?->kode(),
             'oleh' => $r->user?->name,
+            // Rekap yang sudah diajukan: detail Uang Tanah pengajuannya yang masih menunggu → Input UJ dibuka berisi & tertaut ke detail itu.
+            'pj_detail' => $r->status === 'diajukan' && $r->pengajuan
+                ? $r->pengajuan->detail()->where('status', 'menunggu')->whereIn('no_do', array_map('strval', array_column($r->isi, 'do')))
+                    ->get()->filter(fn ($d) => \App\Support\ValidasiUj::jenisKategori($d->kategori) === 'ut')->pluck('id')->values()
+                : [],
             'detail' => collect($r->isi)->map(fn ($x) => [
                 'do' => (string) $x['do'], 'harga' => (int) $x['harga'], 'mobil' => $uj[(string) $x['do']]->no_mobil ?? null,
                 'driver' => $uj[(string) $x['do']]->nama ?? null, 'keterangan' => $uj[(string) $x['do']]->keterangan ?? null,

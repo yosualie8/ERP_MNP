@@ -1493,6 +1493,7 @@
         (() => {
             const panel = document.getElementById('panel-bt');
             if (!panel) return;
+            const AJUKAN_BT = @json($ajukan);
             const daftar = document.getElementById('daftar-bt');
             const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
             const fmt = n => (+n || 0).toLocaleString('id-ID');
@@ -1518,7 +1519,7 @@
                     const status = sudah
                         ? (r.status === 'diajukan' ? `<span class="label kuning">Diajukan ${esc(r.pengajuan || '')}</span>` : `<span class="label hijau">✓ Sudah dibayar${r.no_uj ? ' · UJ-' + r.no_uj : ''}</span>`)
                         : '<span class="label merah">Belum dibayar</span>';
-                    el.innerHTML = `<div class="rui-master${sudah ? ' sudah' : ''}" title="${sudah ? 'Sudah dibayar' : 'Klik untuk memasukkan semua DO rekap ini ke form'}">
+                    el.innerHTML = `<div class="rui-master${sudah ? ' sudah' : ''}" title="${r.status === 'diajukan' && !AJUKAN_BT && r.pj_detail?.length ? `Klik untuk memasukkan ${r.pj_detail.length} Uang Tanah dari ${esc(r.pengajuan)} (tertaut ke pengajuannya)` : sudah ? 'Sudah dibayar' : 'Klik untuk memasukkan semua DO rekap ini ke form'}">
                             <button type="button" class="rui-buka" title="Lihat rincian">▸</button>
                             <span class="rui-judul"><b>${esc(r.judul)} · ${esc(r.kode)}</b><span class="redup">${r.jumlah} DO · dibuat ${esc(r.jam)}${r.oleh ? ' · ' + esc(r.oleh) : ''}${r.catatan ? ' · ' + esc(r.catatan) : ''}</span></span>
                             ${status}<span class="rui-total">${rp(r.total)}</span></div><div class="rui-detail" hidden></div>`;
@@ -1530,6 +1531,14 @@
                         if (!detail.hidden && !detail.innerHTML) detail.innerHTML = tabelDetail(r);
                     });
                     el.querySelector('.rui-master').addEventListener('click', () => {
+                        // Input UJ: rekap yang sudah diajukan → buka form berisi detail Uang Tanah pengajuannya (tertaut; tercatat terealisasi saat disimpan).
+                        if (r.status === 'diajukan' && !AJUKAN_BT && r.pj_detail?.length) {
+                            const adaIsi = [...document.querySelectorAll('#daftar-bon [data-nama=keterangan], #daftar-bon [data-nama=nominal]')].some(x => x.value.trim());
+                            if (adaIsi && !confirm(`Isi form sekarang akan diganti dengan ${r.pj_detail.length} Uang Tanah dari ${r.pengajuan} (${r.kode}). Lanjutkan?`)) return;
+                            window.onbeforeunload = null;
+                            location.href = @json(route('uj.input')) + '?pengajuan=' + r.pj_detail.join(',');
+                            return;
+                        }
                         if (sudah) { alert(r.status === 'diajukan' ? `${r.kode} sudah diajukan di ${r.pengajuan || 'Pengajuan UJ'} — realisasikan lewat Input UJ dari menu Pengajuan UJ.` : `${r.kode} sudah dibayar${r.no_uj ? ' (UJ-' + r.no_uj + ')' : ''}.`); return; }
                         masukkan(r);
                     });
