@@ -39,7 +39,7 @@
         @endphp
         <p class="redup" style="font-size: 13px; margin: 0 0 12px;">Saldo sopir = UJ yang sudah diberikan tetapi belum bongkar dan <b>dijadikan saldo</b> — uang perusahaan yang masih dipegang sopir,
             <b>belum biaya proyek mana pun</b>. Dihitung per sopir (bukan per truk). Saldo berkurang dan menjadi biaya proyek <b>tempat dipakai</b>: DO lamanya ternyata bongkar,
-            <b>dipotong otomatis</b> di Pengajuan UJ, atau dicatat manual di sini (Uang MOB / lain). Dikembalikan sopir = bukan biaya; tidak kembali = dibebankan ke proyek asal.
+            <b>dipotong di Pengajuan UJ</b> (jumlahnya ditentukan admin per transaksi), atau dicatat manual di sini (Uang MOB / lain). Dikembalikan sopir = bukan biaya; tidak kembali = dibebankan ke proyek asal.
             Umur &gt; {{ \App\Support\SaldoSopir::KUNING }} hari kuning, &gt; {{ \App\Support\SaldoSopir::MERAH }} hari merah — tagih atau putuskan.</p>
 
         <div class="ringkas-alih">
@@ -130,7 +130,7 @@
                         <div style="flex: 1; min-width: 220px;"><label>Keterangan / alasan</label><input name="keterangan" value="{{ old('keterangan') }}" style="width: 100%;" placeholder="mis. Uang MOB Kendal ke Jogja / transfer balik ke rekening PT"></div>
                         <button class="tombol" type="submit">Catat</button>
                     </form>
-                    <p class="redup" style="font-size: 12px; margin: -4px 14px 12px;">Potongan untuk uang jalan baru tidak perlu dicatat di sini — Pengajuan UJ memotong saldo sopir ini otomatis.</p>
+                    <p class="redup" style="font-size: 12px; margin: -4px 14px 12px;">Potongan untuk uang jalan baru tidak perlu dicatat di sini — isi kolom potongan saldo di Pengajuan UJ (jumlah per transaksi ditentukan admin).</p>
                 @endif
                 <form method="POST" action="{{ route('pengalihan-uj.sopir') }}" class="baris-isian" style="padding: 0 14px 14px;">@csrf
                     <input type="hidden" name="lama" value="{{ $s['sopir'] }}">

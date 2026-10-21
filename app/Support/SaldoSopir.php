@@ -12,7 +12,7 @@ use Illuminate\Support\Collection;
  * belum biaya proyek mana pun (masa tunggu). Saldo dihitung PER SOPIR (nama baku huruf besar), bukan per truk: sopir sering pindah
  * truk. Proyek tidak dipilih saat dialihkan; biaya baru ditentukan saat saldo berkurang:
  *  - DO lama ternyata bongkar (ada di Ritasi, tanggal rit ≥ tanggal UJ) → biaya proyek tempat DO itu bongkar;
- *  - dipotong di Pengajuan UJ (otomatis) → biaya proyek UJ itu (DO bongkar di mana / kata kunci keterangan, sama seperti UJ biasa);
+ *  - dipotong di Pengajuan UJ (jumlah per transaksi ditentukan admin) → biaya proyek UJ itu (DO bongkar di mana / kata kunci keterangan, sama seperti UJ biasa);
  *  - dipakai manual (Uang MOB / lain) → proyek dipilih saat dicatat;
  *  - dikembalikan sopir → bukan biaya; tidak kembali → dibebankan ke proyek asal.
  * Saldo = dijadikan saldo − terpakai lewat DO lama − berkurang (pakai). Umur = hari sejak UJ tertua yang saldonya belum terpakai (FIFO).

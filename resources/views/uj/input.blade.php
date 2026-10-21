@@ -74,6 +74,7 @@
         .saldo-sopir[hidden] { display: none; }
         .saldo-sopir input { width: 100%; margin-top: 2px; padding: 3px 6px; font-size: 12px; border-color: #3b6ea5; }
         .saldo-sopir button { padding: 1px 8px; font-size: 11px; margin-left: 4px; }
+        .saldo-sopir.belum-diisi input { border-color: #f0c05a; background: rgba(240, 192, 90, .08); }
         .sopir-baru { margin-top: 4px; padding: 4px 6px; font-size: 11.5px; line-height: 1.5; border: 1px solid #f0c05a; border-radius: 6px; background: rgba(240, 192, 90, .08); min-width: 220px; white-space: normal; }
         .sopir-baru.terjawab { border-color: var(--sukses, #3ecf8e); }
         .sopir-baru label { display: block; margin: 0; font-weight: 400; color: var(--teks); cursor: pointer; }
@@ -334,8 +335,8 @@
     <template id="templat-bon">
         <tr class="baris-detail">
             <td><input type="hidden" class="pengajuan-kunci"><input type="hidden" class="duluan-kunci"><input type="text" class="angka-input rupiah" data-nama="nominal" inputmode="numeric" autocomplete="off" required>
-                @if ($ajukan)<div class="saldo-sopir" hidden><span class="info-saldo"></span><button type="button" class="tombol polos pakai-saldo" title="Potong otomatis dari saldo sopir">Potong otomatis</button><button type="button" class="tombol polos tanpa-saldo" title="Jangan potong dari saldo — ditransfer penuh">Tanpa saldo</button>
-                    <input type="text" class="angka-input rupiah" data-nama="saldo" data-lewati-tempel inputmode="numeric" autocomplete="off" placeholder="dibayar dari saldo" title="Bagian nominal yang dibayar dari saldo sopir — tidak ditransfer"></div>@endif</td>
+                @if ($ajukan)<div class="saldo-sopir" hidden><span class="info-saldo"></span><button type="button" class="tombol polos pakai-saldo" title="Isi potongan sebesar sisa saldo (maks. nominal baris ini)">Potong penuh</button><button type="button" class="tombol polos tanpa-saldo" title="Tidak dipotong dari saldo — ditransfer penuh">Tidak dipotong</button>
+                    <input type="text" class="angka-input rupiah" data-nama="saldo" data-lewati-tempel inputmode="numeric" autocomplete="off" placeholder="potongan saldo (wajib, 0 = tidak)" title="Bagian nominal yang dibayar dari saldo sopir — tidak ditransfer. Wajib diisi bila sopir punya saldo; 0 = tidak dipotong."></div>@endif</td>
             <td><input type="text" data-nama="nama" list="daftar-nama" autocomplete="off"></td>
             <td><input type="text" data-nama="keterangan" autocomplete="off" required></td>
             <td><input type="text" data-nama="kategori" list="daftar-kategori" autocomplete="off" required><div class="saran-kode"></div></td>
@@ -437,9 +438,6 @@
             const tambah = (isi = {}) => {
                 const tr = templat.content.firstElementChild.cloneNode(true);
                 tr.querySelectorAll('[data-nama]').forEach(el => el.value = isi[el.dataset.nama] ?? '');
-                // baris tersimpan (ubah pengajuan / isian dikembalikan validasi): potongan saldonya dipertahankan, tidak dihitung ulang
-                const isiSaldo = tr.querySelector('[data-nama=saldo]');
-                if (isiSaldo && isi.saldo !== undefined && isi.saldo !== null && isi.saldo !== '') isiSaldo.dataset.manual = '1';
                 tr.querySelector('.pengajuan-kunci').value = isi.pengajuan ?? '';
                 if (isi.pengajuan) { tr.classList.add('dari-pengajuan'); tr.title = 'Dari pengajuan ' + (isi.kode ?? ''); }
                 tr.querySelectorAll('input.rupiah').forEach(rapikanRupiah);
@@ -453,8 +451,8 @@
                 setTimeout(aturSaldo);
                 return tr;
             };
-            // Pengajuan UJ: saldo PER SOPIR (UJ yang dijadikan saldo sopir) DIPOTONG OTOMATIS dari detail sopir itu, urut dari baris
-            // teratas (owner 20 Okt 2026) — bagian itu tidak ditransfer. Admin bisa "Tanpa saldo" / mengubah angkanya (lalu tidak disentuh lagi).
+            // Pengajuan UJ: saldo PER SOPIR (UJ yang dijadikan saldo sopir). Potongan ditentukan admin per baris (owner 21 Okt 2026, tidak otomatis):
+            // bila sopir punya saldo, kolom potongan wajib diisi (0 = tidak dipotong; "Potong penuh" = sisa saldo). Bagian itu tidak ditransfer.
             // DO lama milik UJ yang dijadikan saldo tidak dipotong: saldonya terpakai sendiri begitu DO itu bongkar.
             const SALDO = @json($saldoSopir ?? []);
             const DO_LAMA = @json($doLamaSopir ?? []);
@@ -476,21 +474,25 @@
                     const ada = s ? (SALDO[s] || 0) : 0;
                     const doLama = s && DO_LAMA[s]?.[kunciDo(tr.querySelector('[data-nama=no_do]').value)];
                     const sebelum = dipakai[s] || 0;
-                    if (inp.dataset.manual !== '1') {
-                        const potong = ada > 0 && !doLama ? Math.max(0, Math.min(nominal, ada - sebelum)) : 0;
-                        inp.value = potong ? fmt(potong) : '';
-                    }
+                    // Potongan TIDAK otomatis (owner 21 Okt 2026): admin menentukan jumlahnya per baris; bila sopir punya saldo, wajib diisi (0 = tidak dipotong).
+                    if (doLama && inp.value) inp.value = '';
                     const pakai = angka(inp.value);
                     if (s) dipakai[s] = sebelum + pakai;
                     const sisa = ada - dipakai[s];
+                    const wajib = ada > 0 && !doLama;
+                    box.dataset.wajib = wajib && inp.value.trim() === '' ? '1' : '';
                     box.hidden = !(ada > 0 || pakai > 0);
+                    inp.hidden = !!doLama;
                     box.querySelector('.info-saldo').textContent = doLama
                         ? `💰 Saldo ${s}: ${fmt(ada)} · DO ini DO lama ${doLama} — tidak dipotong, saldonya terpakai sendiri saat DO ini bongkar`
                         : ada > 0
-                            ? `💰 Saldo ${s}: ${fmt(ada)} · dipotong ${fmt(pakai)} · sisa ${fmt(Math.max(0, sisa))}` + (sisa < 0 ? ' — MELEBIHI saldo' : '')
+                            ? (inp.value.trim() === ''
+                                ? `💰 Saldo ${s}: ${fmt(Math.max(0, ada - sebelum))}${sebelum ? ` (setelah baris atas ${fmt(sebelum)})` : ''} — isi potongan untuk transaksi ini (0 = tidak dipotong)`
+                                : `💰 Saldo ${s}: ${fmt(ada)} · dipotong ${fmt(pakai)} · sisa ${fmt(Math.max(0, sisa))}` + (sisa < 0 ? ' — MELEBIHI saldo' : ''))
                             : `⚠ ${s || 'Sopir ini'} tidak punya saldo sopir`;
-                    box.querySelector('.pakai-saldo').hidden = inp.dataset.manual !== '1' || !!doLama;
-                    box.querySelector('.tanpa-saldo').hidden = !pakai;
+                    box.querySelector('.pakai-saldo').hidden = !wajib || pakai >= Math.min(nominal, ada - sebelum);
+                    box.querySelector('.tanpa-saldo').hidden = !wajib || inp.value.trim() === '0';
+                    box.classList.toggle('belum-diisi', box.dataset.wajib === '1');
                     inp.style.borderColor = sisa < 0 || pakai > nominal ? 'var(--aksen)' : '';
                     totalSaldo += pakai; total += nominal;
                 });
@@ -502,17 +504,21 @@
                 }
             }
             if (AJUKAN) {
-                daftar.addEventListener('input', e => {
-                    if (e.target.dataset?.nama === 'saldo') e.target.dataset.manual = '1'; // diketik sendiri → tidak dipotong otomatis lagi
-                    aturSaldo();
-                });
+                daftar.addEventListener('input', () => aturSaldo());
                 daftar.addEventListener('focusout', () => setTimeout(aturSaldo));
                 daftar.addEventListener('click', e => {
                     const btn = e.target.closest('.pakai-saldo, .tanpa-saldo');
                     if (!btn) return;
-                    const inp = btn.closest('tr').querySelector('[data-nama=saldo]');
-                    if (btn.classList.contains('tanpa-saldo')) { inp.dataset.manual = '1'; inp.value = ''; }
-                    else delete inp.dataset.manual;
+                    const tr = btn.closest('tr');
+                    const inp = tr.querySelector('[data-nama=saldo]');
+                    if (btn.classList.contains('tanpa-saldo')) inp.value = '0';
+                    else {
+                        // Potong penuh = sisa saldo setelah baris lain sopir ini (maks. nominal baris ini)
+                        const s = kunciSopir(tr.querySelector('[data-nama=nama]').value);
+                        const lain = barisDetail().filter(x => x !== tr && kunciSopir(x.querySelector('[data-nama=nama]').value) === s)
+                            .reduce((n, x) => n + angka(x.querySelector('[data-nama=saldo]')?.value), 0);
+                        inp.value = fmt(Math.max(0, Math.min(angka(tr.querySelector('[data-nama=nominal]').value), (SALDO[s] || 0) - lain)));
+                    }
                     aturSaldo(); evaluasi();
                 });
             }
@@ -1276,6 +1282,8 @@
                 });
                 if (tanpaAlasan.length) masalah.push(`${tanpaAlasan.length} transaksi berbeda dari pengajuannya dan belum diberi alasan (baris ${tanpaAlasan.join(', ')}) — isi alasannya di kotak tepat di bawah barisnya.`);
                 const sopirBelum = barisDetail().map((tr, i) => [...tr.querySelectorAll('.sopir-baru')].some(b => !b.querySelector('[data-nama=sopir_baru], [data-nama=sopir_pindah]').value) ? i + 1 : null).filter(Boolean);
+                const saldoBelum = barisDetail().map((tr, i) => { const b = tr.querySelector('.saldo-sopir'); return b && !b.hidden && b.dataset.wajib === '1' ? i + 1 : null; }).filter(Boolean);
+                if (saldoBelum.length) masalah.push(`Baris ${saldoBelum.join(', ')}: sopir punya saldo — isi potongan saldo untuk transaksinya (0 bila tidak dipotong).`);
                 if (sopirBelum.length) masalah.push(`Baris ${sopirBelum.join(', ')}: data sopir perlu dijawab (sopir baru / pindah truk / kembali bekerja) — pilih di kotak bawah namanya.`);
                 return {masalah, pertama};
             };

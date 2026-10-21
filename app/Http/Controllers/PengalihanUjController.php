@@ -19,7 +19,7 @@ use Illuminate\View\View;
 /**
  * Pengalihan UJ (dirancang ulang owner 20 Okt 2026): tugasnya hanya MEMILIH UJ belum bongkar yang dijadikan SALDO SOPIR — proyeknya
  * belum diketahui (ada masa tunggu). Kas UJ aslinya tidak diubah. Saldo per sopir (sopir sering pindah truk); biaya baru ditentukan saat
- * saldo berkurang: DO lama bongkar (proyek tempat bongkar), dipotong otomatis di Pengajuan UJ (proyek UJ itu), dipakai manual (proyek
+ * saldo berkurang: DO lama bongkar (proyek tempat bongkar), dipotong di Pengajuan UJ (jumlah ditentukan admin; proyek UJ itu), dipakai manual (proyek
  * dipilih saat dicatat), dikembalikan sopir (bukan biaya), atau tidak kembali (proyek asal). Lihat App\Support\SaldoSopir.
  */
 class PengalihanUjController extends Controller
