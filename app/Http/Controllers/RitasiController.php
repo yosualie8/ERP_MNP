@@ -222,7 +222,9 @@ class RitasiController extends Controller
                 $proyek = $t ? [$namaTahap[$t] ?? (string) $t] : [];
             }
             if (! $proyek && ($d['umur'] ?? 999) <= 14) {
-                $proyek = collect($d['mobil'])->map(fn ($m) => $tujuanTruk[$m] ?? null)->filter()->unique()->values()->all();
+                // nama tujuan buangan ("KIK") → nama proyeknya bila dikenal (alias Daftar Proyek), supaya satu proyek satu chip
+                $proyek = collect($d['mobil'])->map(fn ($m) => $tujuanTruk[$m] ?? null)->filter()
+                    ->map(fn ($n) => ($id = \App\Support\DaftarProyek::tahapId('ritasi', $n)) ? ($namaTahap[$id] ?? $n) : $n)->unique()->values()->all();
             }
 
             return [...$d, 'buangan' => $proyek];
