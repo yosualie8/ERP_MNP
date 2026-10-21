@@ -807,7 +807,7 @@
                 tr.bedaEl?.remove(); tr.bedaEl = null;
             };
             const segarkanPj = () => { urutkanNama(); hitung(); tampilModePj(); evaluasi(); };
-            const pakaiPj = (tr, p) => {
+            const pakaiPj = (tr, p, segar = true) => {
                 const isi = {nama: p.nama, keterangan: p.keterangan, nominal: fmt(p.nominal), no_mobil: p.no_mobil, jenis_kendaraan: p.jenis_kendaraan};
                 // hanya kolom kosong / isian otomatis / salinan baris atas yang diisi — yang diketik admin dipertahankan (bedanya ditanyakan saat Simpan)
                 Object.entries(isi).forEach(([k, v]) => { const el = tr.querySelector(`[data-nama=${k}]`);
@@ -825,9 +825,9 @@
                 t.querySelector('.lepas-pj').addEventListener('click', e => { e.preventDefault(); tr.pjTolak = tr.pjOtomatis?.doK + '|' + tr.pjOtomatis?.jk; lepasPj(tr); t.remove(); tr.pjEl = null; segarkanPj(); });
                 tr.after(t);
                 tr.pjEl = t;
-                segarkanPj();
+                if (segar) segarkanPj();
             };
-            const cocokPj = tr => {
+            const cocokPj = (tr, segar = true) => {
                 if (!PJ.length || AJUKAN || EDIT) return;
                 const doK = kunciDoPj(tr.querySelector('[data-nama=no_do]').value);
                 const kat = tr.querySelector('[data-nama=kategori]').value.trim();
@@ -837,11 +837,11 @@
                 if (tr.pjOtomatis && (tr.pjOtomatis.doK !== doK || tr.pjOtomatis.jk !== jk)) lepasPj(tr);
                 if (kunci.value) return; // sudah tertaut (otomatis, tombol Tautkan, atau dari menu Pengajuan UJ)
                 tr.pjEl?.remove(); tr.pjEl = null;
-                if (!doK || !kat || tr.pjTolak === doK + '|' + jk) { segarkanPj(); return; }
+                if (!doK || !kat || tr.pjTolak === doK + '|' + jk) { if (segar) segarkanPj(); return; }
                 const dipakai = new Set(barisDetail().filter(x => x !== tr).map(x => x.querySelector('.pengajuan-kunci').value).filter(Boolean));
                 const calon = PJ.filter(p => kunciDoPj(p.no_do) === doK && p.jenis_kat === jk && !dipakai.has(String(p.id)));
-                if (!calon.length) { segarkanPj(); return; }
-                if (calon.length === 1 && !HANYA_TAWAR.includes(jk)) { pakaiPj(tr, calon[0]); return; }
+                if (!calon.length) { if (segar) segarkanPj(); return; }
+                if (calon.length === 1 && !HANYA_TAWAR.includes(jk)) { pakaiPj(tr, calon[0], segar); return; }
                 const t = document.createElement('tr');
                 t.className = 'pj-baris';
                 t.innerHTML = `<td colspan="8"><div class="pj-info">🔗 DO ${escPj(tr.querySelector('[data-nama=no_do]').value)} ${escPj(kat)}: ${calon.length} detail pengajuan menunggu — pilih yang direalisasikan baris ini
@@ -1483,6 +1483,15 @@
                 barisDetail().forEach(tr => { tr.querySelector('.pengajuan-kunci').value = ''; tr.classList.remove('dari-pengajuan'); tr.title = ''; tr.bedaEl?.remove(); tr.bedaEl = null; });
                 urutkanNama(); tampilModePj(); evaluasi();
             });
+            // Baris awal (mis. dari rekap bayar tanah) yang No DO + Kategorinya sudah diajukan di Pengajuan UJ langsung tertaut ke pengajuannya.
+            // Keterangan dari rekap boleh diganti keterangan pengajuannya (supaya tidak dianggap berbeda); nominal rekap dipertahankan.
+            const DARI_BT = @json(! old('detail') && empty($edit) && empty($dariPengajuan) && ! empty($dariBayarTanah['detail'] ?? []));
+            barisDetail().forEach(tr => {
+                if (tr.querySelector('.pengajuan-kunci').value) return;
+                if (DARI_BT) tr.querySelector('[data-nama=keterangan]').classList.add('salinan');
+                cocokPj(tr, false);
+            });
+            urutkanNama();
             tampilModePj();
             evaluasi();
         })();
@@ -1493,7 +1502,6 @@
         (() => {
             const panel = document.getElementById('panel-bt');
             if (!panel) return;
-            const AJUKAN_BT = @json($ajukan);
             const daftar = document.getElementById('daftar-bt');
             const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
             const fmt = n => (+n || 0).toLocaleString('id-ID');
@@ -1513,13 +1521,12 @@
                 if (!rekap.length) { daftar.innerHTML = '<p class="redup">Belum ada rekap bayar tanah dalam 30 hari terakhir. Buat rekapnya di menu Ritasi → Bayar Tanah.</p>'; return; }
                 daftar.innerHTML = '';
                 rekap.forEach(r => {
-                    const sudah = r.status === 'dibayar' || r.status === 'diajukan';
+                    // Rekap = catatan DO mana saja yang dibayar tanahnya (owner 21 Okt 2026): selalu bisa dipakai; "dibayar" hanya keterangan.
+                    const sudah = r.status === 'dibayar';
                     const el = document.createElement('div');
                     el.className = 'rui-grup';
-                    const status = sudah
-                        ? (r.status === 'diajukan' ? `<span class="label kuning">Diajukan ${esc(r.pengajuan || '')}</span>` : `<span class="label hijau">✓ Sudah dibayar${r.no_uj ? ' · UJ-' + r.no_uj : ''}</span>`)
-                        : '<span class="label merah">Belum dibayar</span>';
-                    el.innerHTML = `<div class="rui-master${sudah ? ' sudah' : ''}" title="${r.status === 'diajukan' && !AJUKAN_BT && r.pj_detail?.length ? `Klik untuk memasukkan ${r.pj_detail.length} Uang Tanah dari ${esc(r.pengajuan)} (tertaut ke pengajuannya)` : sudah ? 'Sudah dibayar' : 'Klik untuk memasukkan semua DO rekap ini ke form'}">
+                    const status = sudah ? `<span class="label hijau">✓ Pernah dipakai${r.no_uj ? ' · UJ-' + r.no_uj : ''}</span>` : '';
+                    el.innerHTML = `<div class="rui-master" title="Klik untuk memasukkan semua DO rekap ini ke form">
                             <button type="button" class="rui-buka" title="Lihat rincian">▸</button>
                             <span class="rui-judul"><b>${esc(r.judul)} · ${esc(r.kode)}</b><span class="redup">${r.jumlah} DO · dibuat ${esc(r.jam)}${r.oleh ? ' · ' + esc(r.oleh) : ''}${r.catatan ? ' · ' + esc(r.catatan) : ''}</span></span>
                             ${status}<span class="rui-total">${rp(r.total)}</span></div><div class="rui-detail" hidden></div>`;
@@ -1531,15 +1538,7 @@
                         if (!detail.hidden && !detail.innerHTML) detail.innerHTML = tabelDetail(r);
                     });
                     el.querySelector('.rui-master').addEventListener('click', () => {
-                        // Input UJ: rekap yang sudah diajukan → buka form berisi detail Uang Tanah pengajuannya (tertaut; tercatat terealisasi saat disimpan).
-                        if (r.status === 'diajukan' && !AJUKAN_BT && r.pj_detail?.length) {
-                            const adaIsi = [...document.querySelectorAll('#daftar-bon [data-nama=keterangan], #daftar-bon [data-nama=nominal]')].some(x => x.value.trim());
-                            if (adaIsi && !confirm(`Isi form sekarang akan diganti dengan ${r.pj_detail.length} Uang Tanah dari ${r.pengajuan} (${r.kode}). Lanjutkan?`)) return;
-                            window.onbeforeunload = null;
-                            location.href = @json(route('uj.input')) + '?pengajuan=' + r.pj_detail.join(',');
-                            return;
-                        }
-                        if (sudah) { alert(r.status === 'diajukan' ? `${r.kode} sudah diajukan di ${r.pengajuan || 'Pengajuan UJ'} — realisasikan lewat Input UJ dari menu Pengajuan UJ.` : `${r.kode} sudah dibayar${r.no_uj ? ' (UJ-' + r.no_uj + ')' : ''}.`); return; }
+                        if (sudah && !confirm(`${r.kode} pernah dipakai${r.no_uj ? ' di UJ-' + r.no_uj : ''}. Tetap masukkan DO-nya ke form?`)) return;
                         masukkan(r);
                     });
                     daftar.appendChild(el);

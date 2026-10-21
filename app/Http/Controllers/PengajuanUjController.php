@@ -103,17 +103,12 @@ class PengajuanUjController extends UjController
         if ($tolak = $this->periksaSaldo($input, [])) {
             return $tolak;
         }
-        // Dari rekap bayar tanah (RBT): rekap harus masih menunggu; setelah tersimpan berstatus "diajukan" dengan pengajuan ini.
-        $rekapTanah = $input['bayar_tanah_id'] ? \App\Models\BayarTanahRekap::find($input['bayar_tanah_id']) : null;
-        if ($input['bayar_tanah_id'] && $rekapTanah?->status !== 'menunggu') {
-            return back()->withInput()->with('error', 'Rekap bayar tanah itu sudah diajukan / dibayar / dibatalkan (mungkin oleh admin lain). Pengajuan tidak disimpan.');
-        }
-        $p = DB::transaction(function () use ($input, $temuan, $request, $rekapTanah) {
+        // Rekap bayar tanah (RBT) hanya catatan DO mana saja yang dibayar tanahnya (owner 21 Okt 2026) — tidak ditautkan ke pengajuan.
+        $p = DB::transaction(function () use ($input, $temuan, $request) {
             // Pengajuan = daftar transaksi (tanpa penerima/rekening); nominal = jumlah yang DITRANSFER (detail − bagian dari saldo sopir).
             $p = UjPengajuan::create(['tanggal' => $input['tanggal']->toDateString(), 'nama' => null, 'bank' => null, 'rekening' => null,
                 'nominal' => $input['nominal'] - array_sum(array_column($input['detail'], 'saldo')), 'status' => 'diajukan', 'user_id' => $request->user()->id]);
             $this->simpanDetail($p, $input, $temuan);
-            $rekapTanah?->update(['status' => 'diajukan', 'uj_pengajuan_id' => $p->id]);
 
             return $p;
         });
@@ -121,7 +116,7 @@ class PengajuanUjController extends UjController
             'ringkasan' => mb_strimwidth($p->kode().' '.$this->ringkas($p), 0, 490, '…'), 'isi' => ['pengajuan_id' => $p->id], 'user_id' => $request->user()->id]);
 
         return redirect()->route('pengajuan-uj.daftar')->with('success', "Pengajuan {$p->kode()} tersimpan: ".$this->ringkas($p).'.'
-            .($rekapTanah ? ' '.$rekapTanah->kode().' tercatat diajukan.' : '').$this->terapkanSopir($input, $request));
+            .$this->terapkanSopir($input, $request));
     }
 
     public function ubah(UjPengajuan $pengajuan): View|RedirectResponse
@@ -188,8 +183,6 @@ class PengajuanUjController extends UjController
         \App\Models\UjPengalihan::whereIn('uj_pengajuan_detail_id', $pengajuan->detail()->where('status', 'menunggu')->pluck('id'))->delete();
         $n = $pengajuan->detail()->where('status', 'menunggu')->update(['status' => 'batal']);
         $pengajuan->hitungStatus();
-        // Rekap bayar tanah yang diajukan lewat pengajuan ini kembali menunggu (bisa diajukan / dibayar lagi).
-        \App\Models\BayarTanahRekap::where('uj_pengajuan_id', $pengajuan->id)->where('status', 'diajukan')->update(['status' => 'menunggu', 'uj_pengajuan_id' => null]);
         KasRiwayat::create(['aksi' => 'uj-ajukan-batal', 'lembar' => 'Pengajuan', 'baris_awal' => 0, 'baris_akhir' => 0,
             'ringkasan' => "{$pengajuan->kode()} dibatalkan ({$n} detail)", 'isi' => ['pengajuan_id' => $pengajuan->id], 'user_id' => $request->user()->id]);
 

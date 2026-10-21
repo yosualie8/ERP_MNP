@@ -5,7 +5,10 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-/** Rekap Bayar Tanah (RBT-0001): daftar DO + harga tanah yang menunggu dibayar lewat Input UJ. */
+/**
+ * Rekap Bayar Tanah (RBT-0001): CATATAN daftar DO + harga tanah, supaya admin tahu bayar tanah n rit itu untuk DO mana saja
+ * (owner 21 Okt 2026). Tidak ditautkan ke Pengajuan UJ & tidak memblokir apa pun; "dibayar" hanya keterangan bila dipakai di Input UJ.
+ */
 class BayarTanahRekap extends Model
 {
     protected $table = 'bayar_tanah_rekap';
@@ -20,26 +23,6 @@ class BayarTanahRekap extends Model
     public function pengajuan(): BelongsTo
     {
         return $this->belongsTo(UjPengajuan::class, 'uj_pengajuan_id');
-    }
-
-    /**
-     * Setelah detail pengajuan terealisasi di Input UJ: rekap "diajukan" yang semua Uang Tanah DO-nya di pengajuan itu sudah
-     * terealisasi → "dibayar". @param  int[]  $pengajuanId  @return string[] kode rekap yang jadi dibayar
-     */
-    public static function cekRealisasi(array $pengajuanId, ?int $userId): array
-    {
-        $kode = [];
-        foreach (self::where('status', 'diajukan')->whereIn('uj_pengajuan_id', $pengajuanId ?: [0])->get() as $r) {
-            $do = array_map('strval', array_column($r->isi, 'do'));
-            $tanah = UjPengajuanDetail::where('uj_pengajuan_id', $r->uj_pengajuan_id)->where('kategori', 'Uang Tanah')->whereIn('no_do', $do)->get();
-            if ($tanah->isNotEmpty() && $tanah->every(fn ($d) => $d->status === 'terealisasi')) {
-                $noUj = UjTransaksi::find(UjDetail::where('id_uj', $tanah->last()->id_uj)->value('uj_transaksi_id'))?->no_uj;
-                $r->update(['status' => 'dibayar', 'no_uj' => $noUj, 'dibayar_pada' => now(), 'dibayar_oleh' => $userId]);
-                $kode[] = $r->kode();
-            }
-        }
-
-        return $kode;
     }
 
     public function kode(): string
