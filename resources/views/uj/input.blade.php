@@ -735,7 +735,7 @@
                 const el = e.target;
                 const tr = el.closest('tr');
                 // Hanya ketikan admin yang menjadikan isian "pilihan sendiri" (isian dari tempel/kode tidak).
-                if (e.isTrusted) el.classList.remove('otomatis');
+                if (e.isTrusted) el.classList.remove('otomatis', 'salinan');
                 if (el.dataset.nama === 'no_mobil') aturJenis(tr);
                 if (el.dataset.nama === 'keterangan') tebakKategori(tr);
                 if (el.dataset.nama === 'kategori' && e.isTrusted) tr.querySelector('.saran-kode').innerHTML = '';
@@ -758,6 +758,8 @@
                     // Kategori salinan ditandai otomatis supaya diganti tebakan bila keterangannya diubah ke jenis lain.
                     const kat = tr.querySelector('[data-nama=kategori]');
                     if (kat.value) kat.classList.add('otomatis');
+                    // Keterangan & Nominal salinan boleh ditimpa isian dari Pengajuan UJ (No DO + Kategori cocok); begitu diketik, tidak lagi.
+                    ['keterangan', 'nominal'].forEach(f => { const el = tr.querySelector(`[data-nama=${f}]`); if (el.value) el.classList.add('salinan'); });
                     pertama ??= tr;
                 }
                 jumlahDetail.value = '1';
@@ -807,8 +809,9 @@
             const segarkanPj = () => { urutkanNama(); hitung(); tampilModePj(); evaluasi(); };
             const pakaiPj = (tr, p) => {
                 const isi = {nama: p.nama, keterangan: p.keterangan, nominal: fmt(p.nominal), no_mobil: p.no_mobil, jenis_kendaraan: p.jenis_kendaraan};
-                // hanya kolom kosong / isian otomatis yang diisi — yang sudah diketik admin dipertahankan (bedanya ditanyakan saat Simpan)
-                Object.entries(isi).forEach(([k, v]) => { const el = tr.querySelector(`[data-nama=${k}]`); if (!el.value.trim() || el.classList.contains('otomatis')) { el.value = v ?? ''; el.classList.remove('otomatis'); } });
+                // hanya kolom kosong / isian otomatis / salinan baris atas yang diisi — yang diketik admin dipertahankan (bedanya ditanyakan saat Simpan)
+                Object.entries(isi).forEach(([k, v]) => { const el = tr.querySelector(`[data-nama=${k}]`);
+                    if (!el.value.trim() || el.classList.contains('otomatis') || el.classList.contains('salinan')) { el.value = v ?? ''; el.classList.remove('otomatis', 'salinan'); } });
                 tr.querySelector('.pengajuan-kunci').value = p.id;
                 tr.classList.add('dari-pengajuan');
                 tr.title = 'Dari pengajuan ' + p.kode;
