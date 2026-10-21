@@ -40,7 +40,8 @@
                 <tbody>
                     @forelse ($rit as $r)
                         <tr class="t">
-                            <td>{{ $r->tanggal?->translatedFormat('j M') }} <span class="redup">{{ $r->jam }}</span></td>
+                            {{-- data-v: saring kolom Tanggal hanya membaca tanggalnya (jam 16:21 tidak ikut cocok dengan "21") --}}
+                            <td data-v="{{ $r->tanggal?->translatedFormat('j M Y') }}">{{ $r->tanggal?->translatedFormat('j M') }} <span class="redup">{{ $r->jam }}</span></td>
                             <td>{{ $r->tahap }}</td>
                             <td class="i">{{ $r->no_seri }}</td>
                             <td>@if ($r->no_lambung)<b>{{ $r->no_lambung }}</b> @endif<span class="redup">{{ $r->plat }}</span>@if ($r->driver) · {{ $r->driver }}@endif</td>
