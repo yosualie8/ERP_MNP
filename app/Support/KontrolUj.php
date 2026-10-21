@@ -23,7 +23,8 @@ class KontrolUj
 
     public const SEJAK = '2026-05-01';
 
-    public const KATEGORI = ['Uang Jalan', 'Uang MOB'];
+    /** Kategori yang wajib ada bongkarnya. Uang MOB TIDAK (owner 21 Okt 2026): ongkos mobilisasi truk pindah lokasi, bukan rit muatan. */
+    public const KATEGORI = ['Uang Jalan'];
 
     private static ?Collection $cache = null;
 
@@ -36,7 +37,7 @@ class KontrolUj
     }
 
     /**
-     * DO belum bongkar yang punya Uang Jalan / Uang MOB (termasuk pemakaian saldo sopir), lengkap dengan proyek, batas & status.
+     * DO belum bongkar yang punya Uang Jalan (termasuk pemakaian saldo sopir), lengkap dengan proyek, batas & status.
      *
      * @return Collection<int, array> baris MonitorRitasi::belumBongkar + uj, tahap, batas, status, lama (sebelum SEJAK)
      */

@@ -357,7 +357,7 @@ class ValidasiUj
     }
 
     /**
-     * Pengajuan UJ (Kontrol UJ, owner 18 Okt 2026): mobil yang masih punya Uang Jalan / MOB belum bongkar melewati batas wajar
+     * Pengajuan UJ (Kontrol UJ, owner 18 Okt 2026): mobil yang masih punya Uang Jalan belum bongkar melewati batas wajar
      * proyeknya → peringatan (info, tidak wajib dikonfirmasi); lebih dari 7 hari → wajib diberi alasan. Tidak memblokir.
      *
      * @return array<int, array{kode: string, prioritas: string, pesan: string}>

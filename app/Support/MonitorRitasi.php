@@ -34,7 +34,9 @@ class MonitorRitasi
         $idTutup = $tutup->pluck('id_uj')->flip();
         $saring = fn ($d, string $k) => ! isset($idTutup[$d->id_uj]) && ! (isset($doTutup[$k]) && $d->tanggal && $d->tanggal->lte($doTutup[$k]));
 
-        return self::kelompok(fn (string $do, Collection $baris, array $ritasi) => ! isset($ritasi[$do]), $saring, self::dariSaldo());
+        // DO yang hanya berisi Uang MOB (tanpa Uang Jalan) = mobilisasi truk, tidak akan pernah bongkar → tidak dipantau (owner 21 Okt 2026).
+        return self::kelompok(fn (string $do, Collection $baris, array $ritasi) => ! isset($ritasi[$do])
+            && ! ($baris->contains('kategori', 'Uang MOB') && ! $baris->contains('kategori', 'Uang Jalan')), $saring, self::dariSaldo());
     }
 
     /** Pemakaian saldo sopir ber-DO (Pengajuan UJ → Pakai saldo) dalam bentuk baris Kas UJ supaya ikut dipantau bongkarnya. */

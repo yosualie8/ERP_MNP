@@ -126,7 +126,7 @@ class RitasiProyek
             'keterangan' => 'Dibayar dari saldo sopir'.($p->keterangan ? ' — '.$p->keterangan : ''), 'nominal' => $p->nominal, 'kategori' => 'Uang Jalan', 'no_mobil' => $p->no_mobil, 'no_do' => $p->no_do]));
         $semuaJalan = $jalan->concat($dariSaldo);
         $bongkar = $semuaJalan->filter(fn ($u) => isset($ritDo[$do($u->no_do)]));
-        $belum = $semuaJalan->reject(fn ($u) => isset($ritDo[$do($u->no_do)]) || isset($sebagian[$u->id_uj]) || isset($batal[$u->id_uj]))->sortBy('tanggal')->values();
+        $belum = $semuaJalan->reject(fn ($u) => $u->kategori === 'Uang MOB' || isset($ritDo[$do($u->no_do)]) || isset($sebagian[$u->id_uj]) || isset($batal[$u->id_uj]))->sortBy('tanggal')->values();
         $terpakaiDo = $alih->filter(fn ($a) => $jalan->contains('id_uj', $a->id_uj));
 
         $m3 = (float) $urug->sum('kubikasi');
