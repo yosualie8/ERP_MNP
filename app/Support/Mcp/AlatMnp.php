@@ -19,8 +19,9 @@ use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
 
 /**
- * Tool MCP (HANYA BACA) untuk ChatGPT: setiap tool = [deskripsi, skema input, fungsi]. Semua nominal dalam rupiah (bilangan
- * bulat), tanggal YYYY-MM-DD. Tidak ada tool yang mengubah data aplikasi maupun sheet.
+ * Tool MCP untuk ChatGPT / Claude: setiap tool = [deskripsi, skema input, fungsi]. Semua nominal dalam rupiah (bilangan
+ * bulat), tanggal YYYY-MM-DD. Semua tool hanya membaca, KECUALI yang bertanda 'ubah' (update_biaya_report_proyek: menulis
+ * biaya ERP ke file Report Proyek di Drive — bawaan pratinjau, menulis hanya untuk Super Admin). Data aplikasi tidak diubah.
  */
 class AlatMnp
 {
@@ -37,6 +38,7 @@ class AlatMnp
         // 21 Okt 2026: rekening PT BCA, saldo sopir, biaya DT, UJ belum bongkar, data sopir
         'ringkasan_rekening_pt' => 'mutasi-pt', 'cari_mutasi_rekening_pt' => 'mutasi-pt', 'saldo_sopir' => 'pengalihan-uj', 'biaya_dt' => 'dashboard-biaya-dt',
         'uj_belum_bongkar' => 'monitor-ritasi', 'data_sopir' => 'karyawan',
+        'update_biaya_report_proyek' => 'dashboard-proyek',
     ];
 
     /** Tool yang boleh dipakai pengguna ini (mengikuti menu yang boleh dibukanya di aplikasi). */
@@ -179,6 +181,24 @@ class AlatMnp
                 'deskripsi' => 'Master sopir dump truck (Data Karyawan jabatan Supir): nama baku, nama lain / ejaan di Kas UJ, status aktif / nonaktif, truk yang dibawa, rekening.',
                 'skema' => $obj(['status' => ['type' => 'string', 'enum' => ['semua', 'aktif', 'nonaktif']], 'kata' => $kata]),
                 'jalankan' => fn (array $a) => self::dataSopir($a),
+            ],
+            'update_biaya_report_proyek' => [
+                'judul' => 'Update biaya Report Proyek',
+                'deskripsi' => 'Isi kolom "Nilai" bagian "Proyek Masih Dikerjakan (Biaya yang Sudah Keluar)" di file Report Proyek (laporan tagihan ke Sedayu, mis. '
+                    .'"Report Proyek ASG - 20261021.xlsx"; Excel di Google Drive atau Google Sheet) dengan biaya yang sudah tercatat di ERP per tahap = ritasi (rit × harga jual) '
+                    .'+ ngepok + solar (liter × tarif BBM) + rental alat (jam HM × tarif) + operasional Kas Harian, TANPA biaya umum. SubTotal & total di bawahnya dihitung ulang; '
+                    .'tanggal "Update Ritasi Terakhir" diisi tanggal ritasi terakhir di ERP. Bagian proyek selesai (nilai tagihan) & kolom lain tidak diubah. '
+                    .'Bawaan tulis=false = PRATINJAU (nilai lama → baru + rincian per proyek); tunjukkan pratinjaunya ke pengguna dan minta persetujuan sebelum tulis=true '
+                    .'(menulis hanya untuk Super Admin; versi lama tetap ada di riwayat versi Drive). Baris yang tahapnya tidak dikenali dibiarkan — isi "pemetaan" '
+                    .'{"nama baris di sheet": "nama tahap ERP"} (tersimpan untuk berikutnya); isi "-" untuk sengaja melewati satu baris. '
+                    .'Sebutkan ke pengguna baris yang nilai ERP-nya jauh lebih kecil dari nilai lama (biaya mungkin belum tercatat di ERP).',
+                'skema' => ['type' => 'object', 'properties' => [
+                    'link' => ['type' => 'string', 'description' => 'Link atau ID file di Google Drive / Google Sheets'],
+                    'tulis' => ['type' => 'boolean', 'description' => 'true = tulis ke file (bawaan false = pratinjau)'],
+                    'pemetaan' => ['type' => 'object', 'additionalProperties' => ['type' => 'string'], 'description' => 'nama baris di sheet => nama tahap ERP (atau id tahap), atau "-" untuk melewati baris itu'],
+                ], 'required' => ['link'], 'additionalProperties' => false],
+                'ubah' => true,
+                'jalankan' => fn (array $a) => self::reportProyek($a),
             ],
             'search' => [
                 'judul' => 'Cari di ERP MNP',
@@ -439,6 +459,18 @@ class AlatMnp
     }
 
     // ===== Uang Jalan =====
+
+    // ===== Report Proyek =====
+
+    private static function reportProyek(array $a): array
+    {
+        $tulis = (bool) ($a['tulis'] ?? false);
+        if ($tulis && self::$pengguna && ! self::$pengguna->isSuperAdmin()) {
+            throw new InvalidArgumentException('Menulis ke file Report Proyek hanya untuk Super Admin. Pratinjau (tulis=false) tetap bisa.');
+        }
+
+        return \App\Support\ReportProyek::jalankan((string) ($a['link'] ?? ''), $tulis, (array) ($a['pemetaan'] ?? []), self::$pengguna?->id);
+    }
 
     private static function ringkasanUj(): array
     {

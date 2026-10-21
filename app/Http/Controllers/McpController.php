@@ -11,7 +11,8 @@ use Illuminate\Http\Response;
 use InvalidArgumentException;
 
 /**
- * MCP server (Model Context Protocol, transport Streamable HTTP tanpa sesi) untuk ChatGPT: HANYA BACA, di /api/mcp.
+ * MCP server (Model Context Protocol, transport Streamable HTTP tanpa sesi) untuk ChatGPT / Claude, di /api/mcp. Hanya baca,
+ * kecuali tool bertanda 'ubah' di AlatMnp (menulis ke file Report Proyek di Drive, bukan ke data aplikasi).
  * Akses wajib token OAuth (OAuthMcpController): hanya email yang terdaftar di menu Pengguna yang bisa login & memberi izin.
  * Tool yang tampil mengikuti menu yang boleh dibuka pengguna itu; setiap pemanggilan dicatat atas namanya (aksi "mcp-chatgpt").
  */
@@ -63,8 +64,9 @@ class McpController extends Controller
             'initialize' => self::hasil($id, [
                 'protocolVersion' => in_array($param['protocolVersion'] ?? null, self::VERSI, true) ? $param['protocolVersion'] : self::VERSI[0],
                 'capabilities' => ['tools' => ['listChanged' => false]],
-                'serverInfo' => ['name' => 'erp-mnp', 'title' => 'ERP PT Multi Niaga Putra', 'version' => '1.1.0'],
-                'instructions' => 'Data ERP PT Multi Niaga Putra (MNP) — HANYA BACA. Rekening PT = rekening utama perusahaan di BCA (mutasi + penandaan biaya dihitung / tidak per proyek). '
+                'serverInfo' => ['name' => 'erp-mnp', 'title' => 'ERP PT Multi Niaga Putra', 'version' => '1.2.0'],
+                'instructions' => 'Data ERP PT Multi Niaga Putra (MNP) — hanya baca, kecuali update_biaya_report_proyek (mengisi biaya ERP ke file Report Proyek di Drive: '
+                    .'selalu pratinjau dulu, tunjukkan ke pengguna, baru tulis=true bila disetujui). Rekening PT = rekening utama perusahaan di BCA (mutasi + penandaan biaya dihitung / tidak per proyek). '
                     .'Kas Harian = rekening Bank Jago PT (transfer + transaksi detail/bon dengan Kode GL; "reimburse" = penggantian dana kas, dari BCA). '
                     .'Kas UJ = uang jalan dump truck (lembar Kas Seabank). Pengajuan UJ (PUJ) = permintaan uang jalan sebelum ditransfer. Saldo sopir = UJ belum bongkar '
                     .'yang dijadikan saldo (uang di tangan sopir). Ritasi = perjalanan dump truck (galian → tujuan buangan). Nominal dalam rupiah; tanggal YYYY-MM-DD. '
@@ -73,7 +75,7 @@ class McpController extends Controller
             'ping' => self::hasil($id, (object) []),
             'tools/list' => self::hasil($id, ['tools' => collect(AlatMnp::untuk($this->pengguna))->map(fn ($t, $nama) => [
                 'name' => $nama, 'title' => $t['judul'], 'description' => $t['deskripsi'], 'inputSchema' => $t['skema'],
-                'annotations' => ['title' => $t['judul'], 'readOnlyHint' => true, 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => false],
+                'annotations' => ['title' => $t['judul'], 'readOnlyHint' => empty($t['ubah']), 'destructiveHint' => false, 'idempotentHint' => true, 'openWorldHint' => ! empty($t['ubah'])],
             ])->values()]),
             'tools/call' => $this->panggil($id, (string) ($param['name'] ?? ''), (array) ($param['arguments'] ?? [])),
             'resources/list' => self::hasil($id, ['resources' => []]),

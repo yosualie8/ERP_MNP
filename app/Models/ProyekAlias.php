@@ -12,7 +12,8 @@ class ProyekAlias extends Model
 
     protected $fillable = ['proyek_tahap_id', 'sumber', 'nama', 'kunci'];
 
-    public const SUMBER = ['ritasi' => 'Ritasi', 'bbm' => 'Penggunaan BBM', 'cost_project' => 'Cost Project', 'kas' => 'Kas Harian (kode tahap)', 'kas_cc' => 'Kas Harian (cost center)'];
+    public const SUMBER = ['ritasi' => 'Ritasi', 'bbm' => 'Penggunaan BBM', 'cost_project' => 'Cost Project', 'kas' => 'Kas Harian (kode tahap)', 'kas_cc' => 'Kas Harian (cost center)',
+        'report_proyek' => 'Report Proyek (sheet tagihan)'];
 
     public function tahap(): BelongsTo
     {
