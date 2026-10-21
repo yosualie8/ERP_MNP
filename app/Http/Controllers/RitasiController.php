@@ -215,7 +215,7 @@ class RitasiController extends Controller
         $kata = \App\Support\KontrolUj::tahapKata();
         $tujuanTruk = BuanganTruk::daftar()->filter(fn ($t) => $t['status_aset'] === 'aktif' && $t['tujuan'])->pluck('tujuan', 'no_lambung');
         $semua = $semua->map(function ($d) use ($namaTahap, $ritDo, $kata, $tujuanTruk) {
-            $proyek = collect($ritDo[$d['do']] ?? [])->map(fn ($r) => ($id = AppSupportDaftarProyek::tahapId('ritasi', $r->tahap)) ? ($namaTahap[$id] ?? $r->tahap) : $r->tahap)->filter()->unique()->values()->all();
+            $proyek = collect($ritDo[$d['do']] ?? [])->map(fn ($r) => ($id = \App\Support\DaftarProyek::tahapId('ritasi', $r->tahap)) ? ($namaTahap[$id] ?? $r->tahap) : $r->tahap)->filter()->unique()->values()->all();
             if (! $proyek) {
                 $ket = collect($d['detail'])->pluck('keterangan')->implode(' | ');
                 $t = collect($d['detail'])->pluck('tahap_saldo')->filter()->first() ?: ($kata->first(fn ($x) => preg_match("/\\b({$x['pola']})\\b/i", $ket))['t']->id ?? null);
