@@ -118,6 +118,8 @@ class UjController extends Controller
             // Pengajuan UJ: saldo per SOPIR (UJ yang dijadikan saldo, belum terpakai) dipotong otomatis; DO lama tidak boleh dipotong lagi
             'saldoSopir' => \App\Support\SaldoSopir::perSopir()->map(fn ($s) => (int) round($s['saldo']))->filter(fn ($v) => $v > 0)->all(),
             'doLamaSopir' => \App\Support\SaldoSopir::doLama(),
+            // Input UJ: detail pengajuan yang menunggu realisasi — No DO + Kategori diketik/ditempel → kolom lain terisi & tertaut otomatis.
+            'pjMenunggu' => $this->tawarkanTautan() ? $this->pengajuanMenunggu() : [],
             ...$this->dariPengajuan(),
             ...$this->dariBayarTanah(),
         ]);
@@ -204,6 +206,21 @@ class UjController extends Controller
         return ['dariPengajuan' => $baris, 'pesanPengajuan' => $hilang
             ? ($detail->isEmpty() ? 'Detail pengajuan itu sudah direalisasikan atau dibatalkan — tidak ada yang dimasukkan ke form.' : "{$hilang} detail pengajuan sudah direalisasikan/dibatalkan dan tidak dimasukkan.")
             : null];
+    }
+
+    /**
+     * Detail Pengajuan UJ ber-No DO yang masih menunggu realisasi, untuk isi otomatis Input UJ (kunci: No DO + jenis kategori,
+     * sama dengan tawaran "Tautkan" di ValidasiUj). Nominal = yang ditransfer (nominal − bagian yang dibayar dari saldo sopir).
+     */
+    private function pengajuanMenunggu(): array
+    {
+        return UjPengajuanDetail::with('pengajuan')->where('status', 'menunggu')->whereNotNull('no_do')->where('no_do', '!=', '')
+            ->orderBy('uj_pengajuan_id')->orderBy('urut')->get()
+            ->map(fn ($d) => ['id' => $d->id, 'kode' => $d->pengajuan->kode(), 'tanggal' => $d->pengajuan->tanggal?->translatedFormat('j M'),
+                'nama' => $d->nama, 'keterangan' => $d->keterangan, 'nominal' => (int) $d->nominal - (int) $d->saldo, 'penuh' => (int) $d->nominal, 'saldo' => (int) $d->saldo,
+                'kategori' => KategoriUj::baku($d->kategori), 'jenis_kat' => ValidasiUj::jenisKategori($d->kategori),
+                'jenis_kendaraan' => $d->jenis_kendaraan, 'no_mobil' => $d->no_mobil, 'no_do' => $d->no_do])
+            ->values()->all();
     }
 
     /**

@@ -86,6 +86,9 @@
         .temuan label { display: block; color: var(--teks); font-size: 12px; margin: 0; }
         .aksi-massal-pj { border: 1px solid var(--aksen); background: var(--aksen-muda); border-radius: 8px; padding: 8px 12px; margin-bottom: 10px; }
         .aksi-massal-pj[hidden] { display: none; }
+        .pj-info { font-size: 13px; padding: 4px 8px; background: var(--otomatis-latar, #f3eefc); border-left: 4px solid var(--otomatis-garis, #8a63d2); border-radius: 4px; }
+        .pj-calon { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; margin-top: 4px; }
+        .pj-calon .tombol { padding: 3px 10px; font-size: 12px; text-align: left; }
         .baris-massal-pj { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; font-size: 13px; padding: 3px 0; }
         .duluan-tanya { margin: 6px 0 8px; padding: 8px 10px; border: 1px solid #e0a526; border-radius: 8px; background: rgba(224, 165, 38, .08); }
         .duluan-tanya .rinci { font-size: 12px; margin: 4px 0 6px; }
@@ -444,7 +447,7 @@
                 tr.querySelectorAll('input.rupiah').forEach(rapikanRupiah);
                 tr.konfirmasi = isi.konfirmasi ?? '';
                 tr.querySelector('.hapus').addEventListener('click', () => {
-                    if (barisDetail().length > 1) { tr.temuan?.remove(); tr.kurangEl?.remove(); tr.bedaEl?.remove(); tr.duluanEl?.remove(); tr.remove(); urutkanNama(); hitung(); aturNamaPertama(); }
+                    if (barisDetail().length > 1) { tr.temuan?.remove(); tr.kurangEl?.remove(); tr.bedaEl?.remove(); tr.duluanEl?.remove(); tr.pjEl?.remove(); tr.remove(); urutkanNama(); hitung(); aturNamaPertama(); }
                 });
                 daftar.appendChild(tr);
                 urutkanNama();
@@ -784,6 +787,69 @@
                 const tujuan = tetangga(el.closest('tr'), turun ? 1 : -1)?.querySelector(`[data-nama="${el.dataset.nama}"]`);
                 if (tujuan) { tujuan.focus(); tujuan.select(); }
             });
+            // ===== Input UJ: No DO + Kategori cocok dengan detail Pengajuan UJ yang menunggu → kolom lain terisi & tertaut otomatis =====
+            // Kunci sama dengan tawaran "Tautkan" di server (ValidasiUj): No DO + jenis kategori. Satu calon → langsung diisi & ditautkan;
+            // lebih dari satu (mis. UJ awal & kekurangan sama-sama menunggu) → admin memilih. Sparepart & uang makan wajar banyak per DO → hanya ditawarkan.
+            // Nominal = bagian yang ditransfer dari Kas UJ; bagian yang dibayar dari saldo sopir sudah tercatat di pengajuannya (satu transaksi, bukan UJ kedua).
+            const PJ = @json($pjMenunggu ?? []);
+            const EDIT = @json((bool) $edit);
+            const kunciDoPj = v => { const t = String(v ?? '').replace(/[\s`']/g, ''); return t === '' ? '' : (t.replace(/^0+/, '') || '0'); };
+            const jenisKat = v => { const k = String(v ?? '').toLowerCase();
+                return k.includes('transfer') ? 'biaya' : k.includes('jalan') ? 'uj' : k.includes('tanah') ? 'ut' : k.includes('makan') ? 'um'
+                    : k.includes('perangsang') ? 'pr' : (k.includes('spare') || k.includes('tambal') || k.includes('ban')) ? 'sp' : 'lain'; };
+            const HANYA_TAWAR = ['sp', 'um', 'biaya'];
+            const escPj = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+            const lepasPj = tr => {
+                tr.querySelector('.pengajuan-kunci').value = '';
+                tr.classList.remove('dari-pengajuan'); tr.title = ''; tr.pjOtomatis = null;
+                tr.bedaEl?.remove(); tr.bedaEl = null;
+            };
+            const segarkanPj = () => { urutkanNama(); hitung(); tampilModePj(); evaluasi(); };
+            const pakaiPj = (tr, p) => {
+                const isi = {nama: p.nama, keterangan: p.keterangan, nominal: fmt(p.nominal), no_mobil: p.no_mobil, jenis_kendaraan: p.jenis_kendaraan};
+                // hanya kolom kosong / isian otomatis yang diisi — yang sudah diketik admin dipertahankan (bedanya ditanyakan saat Simpan)
+                Object.entries(isi).forEach(([k, v]) => { const el = tr.querySelector(`[data-nama=${k}]`); if (!el.value.trim() || el.classList.contains('otomatis')) { el.value = v ?? ''; el.classList.remove('otomatis'); } });
+                tr.querySelector('.pengajuan-kunci').value = p.id;
+                tr.classList.add('dari-pengajuan');
+                tr.title = 'Dari pengajuan ' + p.kode;
+                tr.pjOtomatis = {doK: kunciDoPj(p.no_do), jk: p.jenis_kat, id: String(p.id)};
+                tr.pjEl?.remove();
+                const t = document.createElement('tr');
+                t.className = 'pj-baris';
+                t.innerHTML = `<td colspan="8"><div class="pj-info">🔗 Terisi &amp; tertaut ke <b>${escPj(p.kode)}</b>${p.tanggal ? ' (' + escPj(p.tanggal) + ')' : ''} — ${escPj(p.kategori)} DO ${escPj(p.no_do)}`
+                    + (p.saldo > 0 ? `: total <b>${fmt(p.penuh)}</b>, <b>${fmt(p.saldo)}</b> sudah dibayar dari saldo sopir, baris ini <b>${fmt(p.nominal)}</b> dari Kas UJ. Satu transaksi — bukan UJ kedua.` : '.')
+                    + ` <a href="#" class="lepas-pj">Lepas</a></div></td>`;
+                t.querySelector('.lepas-pj').addEventListener('click', e => { e.preventDefault(); tr.pjTolak = tr.pjOtomatis?.doK + '|' + tr.pjOtomatis?.jk; lepasPj(tr); t.remove(); tr.pjEl = null; segarkanPj(); });
+                tr.after(t);
+                tr.pjEl = t;
+                segarkanPj();
+            };
+            const cocokPj = tr => {
+                if (!PJ.length || AJUKAN || EDIT) return;
+                const doK = kunciDoPj(tr.querySelector('[data-nama=no_do]').value);
+                const kat = tr.querySelector('[data-nama=kategori]').value.trim();
+                const jk = kat ? jenisKat(kat) : '';
+                const kunci = tr.querySelector('.pengajuan-kunci');
+                // tautan otomatis yang No DO / kategorinya diganti dilepas
+                if (tr.pjOtomatis && (tr.pjOtomatis.doK !== doK || tr.pjOtomatis.jk !== jk)) lepasPj(tr);
+                if (kunci.value) return; // sudah tertaut (otomatis, tombol Tautkan, atau dari menu Pengajuan UJ)
+                tr.pjEl?.remove(); tr.pjEl = null;
+                if (!doK || !kat || tr.pjTolak === doK + '|' + jk) { segarkanPj(); return; }
+                const dipakai = new Set(barisDetail().filter(x => x !== tr).map(x => x.querySelector('.pengajuan-kunci').value).filter(Boolean));
+                const calon = PJ.filter(p => kunciDoPj(p.no_do) === doK && p.jenis_kat === jk && !dipakai.has(String(p.id)));
+                if (!calon.length) { segarkanPj(); return; }
+                if (calon.length === 1 && !HANYA_TAWAR.includes(jk)) { pakaiPj(tr, calon[0]); return; }
+                const t = document.createElement('tr');
+                t.className = 'pj-baris';
+                t.innerHTML = `<td colspan="8"><div class="pj-info">🔗 DO ${escPj(tr.querySelector('[data-nama=no_do]').value)} ${escPj(kat)}: ${calon.length} detail pengajuan menunggu — pilih yang direalisasikan baris ini
+                    (abaikan bila transaksi terpisah):<div class="pj-calon">${calon.map(p => `<button type="button" class="tombol polos" data-pj="${p.id}">${escPj(p.kode)} · ${escPj(p.nama)} · ${escPj(p.no_mobil || '')} · ${fmt(p.nominal)}${p.saldo > 0 ? ' (+' + fmt(p.saldo) + ' saldo)' : ''} · ${escPj(p.keterangan)}</button>`).join('')}</div></div></td>`;
+                t.querySelectorAll('[data-pj]').forEach(btn => btn.addEventListener('click', () => pakaiPj(tr, calon.find(p => String(p.id) === btn.dataset.pj))));
+                tr.after(t);
+                tr.pjEl = t;
+            };
+            daftar.addEventListener('change', e => {
+                if (['no_do', 'kategori'].includes(e.target.dataset?.nama)) cocokPj(e.target.closest('tr'));
+            });
             (awal.length ? awal : [{}]).forEach(b => tambah(b));
             barisDetail().forEach(tr => { if (!tr.querySelector('[data-nama=jenis_kendaraan]').value) aturJenis(tr); });
             // Tempel blok sel dari Excel (Ctrl+V): isi mulai sel aktif, baris kurang ditambah otomatis.
@@ -802,6 +868,7 @@
                         const mobil = tr.querySelector('[data-nama=no_mobil]');
                         if (mobil.value) { mobil.value = kunciMobil(mobil.value); if (!tr.querySelector('[data-nama=jenis_kendaraan]').value) aturJenis(tr); }
                     });
+                    rows.forEach(cocokPj); // No DO + Kategori hasil tempel → isi dari pengajuan yang menunggu
                     setTimeout(aturSopirBaru); // nama sopir hasil tempel langsung dirapikan / ditanyakan
                 },
             });
