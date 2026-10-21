@@ -138,16 +138,25 @@ class UjController extends Controller
         $uj = UjDetail::where('biaya_transfer', false)->whereIn('no_do', $semuaDo->all() ?: ['-'])->orderBy('baris')->get(['no_do', 'no_mobil', 'nama', 'keterangan', 'kategori'])
             ->groupBy(fn ($d) => (string) $d->no_do)
             ->map(fn ($g) => $g->first(fn ($d) => \App\Support\ValidasiUj::jenisKategori($d->kategori) === 'uj') ?? $g->first());
+        $belum = \App\Support\MonitorRitasi::belumBayarTanah(true)['do']->keyBy('do');
 
         return response()->json(['rekap' => $rekap->map(fn ($r) => [
             'id' => $r->id, 'kode' => $r->kode(), 'judul' => $r->created_at->translatedFormat('l, j M Y'), 'jam' => $r->created_at->format('H:i'),
             'jumlah' => $r->jumlah, 'total' => (int) $r->total, 'status' => $r->status, 'no_uj' => $r->no_uj, 'catatan' => $r->catatan, 'pengajuan' => $r->pengajuan?->kode(),
+            // Sudah direalisasikan = pernah dibayar lewat Input UJ, atau semua DO-nya sudah punya Uang Tanah di Kas UJ.
+            'terealisasi' => self::rekapTerealisasi($r, $belum),
             'oleh' => $r->user?->name,
             'detail' => collect($r->isi)->map(fn ($x) => [
                 'do' => (string) $x['do'], 'harga' => (int) $x['harga'], 'mobil' => $uj[(string) $x['do']]->no_mobil ?? null,
                 'driver' => $uj[(string) $x['do']]->nama ?? null, 'keterangan' => $uj[(string) $x['do']]->keterangan ?? null,
             ])->values(),
         ])->values()]);
+    }
+
+    /** Rekap bayar tanah sudah direalisasikan: dibayar lewat Input UJ, atau tidak ada lagi DO-nya yang belum punya Uang Tanah di Kas UJ. */
+    private static function rekapTerealisasi(\App\Models\BayarTanahRekap $r, \Illuminate\Support\Collection $belum): bool
+    {
+        return $r->status === 'dibayar' || collect($r->isi)->every(fn ($x) => ! isset($belum[(string) $x['do']]));
     }
 
     /**
@@ -163,6 +172,11 @@ class UjController extends Controller
             $rekap = \App\Models\BayarTanahRekap::where('status', '!=', 'batal')->find($id);
             if (! $rekap) {
                 return ['dariBayarTanah' => ['detail' => [], 'master' => [], 'galian' => [], 'catatan' => ['Rekap itu dibatalkan atau tidak ada.'], 'rekap' => null]];
+            }
+            // Ajukan Uang Jalan: rekap yang sudah direalisasikan tidak bisa dipakai lagi (owner 21 Okt 2026).
+            if ($this instanceof PengajuanUjController && self::rekapTerealisasi($rekap, \App\Support\MonitorRitasi::belumBayarTanah(true)['do']->keyBy('do'))) {
+                return ['dariBayarTanah' => ['detail' => [], 'master' => [], 'galian' => [],
+                    'catatan' => [$rekap->kode().' sudah direalisasikan'.($rekap->no_uj ? ' (UJ-'.$rekap->no_uj.')' : '').' — tidak bisa dipakai lagi untuk pengajuan.'], 'rekap' => null]];
             }
 
             return ['dariBayarTanah' => [...\App\Support\BayarTanah::untukForm(array_column($rekap->isi, 'do'), $rekap->harga()), 'rekap' => ['id' => $rekap->id, 'kode' => $rekap->kode()]]];

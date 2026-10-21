@@ -1513,20 +1513,23 @@
                 const adaIsi = [...document.querySelectorAll('#daftar-bon [data-nama=keterangan], #daftar-bon [data-nama=nominal]')].some(el => el.value.trim());
                 if (adaIsi && !confirm(`Isi form sekarang akan diganti dengan ${r.kode}. Lanjutkan?`)) return;
                 window.onbeforeunload = null;
-                location.href = @json($ajukan ? route('pengajuan-uj.buat') : route('uj.input')) + '?rbt=' + r.id; // Pengajuan UJ: rekap jadi "diajukan"
+                location.href = @json($ajukan ? route('pengajuan-uj.buat') : route('uj.input')) + '?rbt=' + r.id;
             };
+            const AJUKAN_BT = @json($ajukan);
             const muat = async () => {
                 daftar.innerHTML = '<p class="redup">Memuat…</p>';
                 const {rekap} = await (await fetch(@json(route('uj.input.bayar-tanah')), {headers: {Accept: 'application/json'}})).json();
                 if (!rekap.length) { daftar.innerHTML = '<p class="redup">Belum ada rekap bayar tanah dalam 30 hari terakhir. Buat rekapnya di menu Ritasi → Bayar Tanah.</p>'; return; }
                 daftar.innerHTML = '';
                 rekap.forEach(r => {
-                    // Rekap = catatan DO mana saja yang dibayar tanahnya (owner 21 Okt 2026): selalu bisa dipakai; "dibayar" hanya keterangan.
-                    const sudah = r.status === 'dibayar';
+                    // Rekap = catatan DO mana saja yang dibayar tanahnya (owner 21 Okt 2026). Sudah direalisasikan (dibayar lewat Input UJ,
+                    // atau semua DO-nya sudah punya Uang Tanah di Kas UJ): di Ajukan Uang Jalan tidak bisa dipakai lagi; di Input UJ hanya ditanya.
+                    const sudah = r.terealisasi;
+                    const kunci = sudah && AJUKAN_BT;
                     const el = document.createElement('div');
                     el.className = 'rui-grup';
-                    const status = sudah ? `<span class="label hijau">✓ Pernah dipakai${r.no_uj ? ' · UJ-' + r.no_uj : ''}</span>` : '';
-                    el.innerHTML = `<div class="rui-master" title="Klik untuk memasukkan semua DO rekap ini ke form">
+                    const status = sudah ? `<span class="label hijau">✓ Sudah direalisasikan${r.no_uj ? ' · UJ-' + r.no_uj : ''}</span>` : '';
+                    el.innerHTML = `<div class="rui-master${kunci ? ' sudah' : ''}" title="${kunci ? 'Sudah direalisasikan — tidak bisa dipakai lagi untuk pengajuan' : 'Klik untuk memasukkan semua DO rekap ini ke form'}">
                             <button type="button" class="rui-buka" title="Lihat rincian">▸</button>
                             <span class="rui-judul"><b>${esc(r.judul)} · ${esc(r.kode)}</b><span class="redup">${r.jumlah} DO · dibuat ${esc(r.jam)}${r.oleh ? ' · ' + esc(r.oleh) : ''}${r.catatan ? ' · ' + esc(r.catatan) : ''}</span></span>
                             ${status}<span class="rui-total">${rp(r.total)}</span></div><div class="rui-detail" hidden></div>`;
@@ -1538,7 +1541,8 @@
                         if (!detail.hidden && !detail.innerHTML) detail.innerHTML = tabelDetail(r);
                     });
                     el.querySelector('.rui-master').addEventListener('click', () => {
-                        if (sudah && !confirm(`${r.kode} pernah dipakai${r.no_uj ? ' di UJ-' + r.no_uj : ''}. Tetap masukkan DO-nya ke form?`)) return;
+                        if (kunci) { alert(`${r.kode} sudah direalisasikan${r.no_uj ? ' (UJ-' + r.no_uj + ')' : ''} — tidak bisa dipakai lagi untuk pengajuan uang jalan.`); return; }
+                        if (sudah && !confirm(`${r.kode} sudah direalisasikan${r.no_uj ? ' di UJ-' + r.no_uj : ''}. Tetap masukkan DO-nya ke form?`)) return;
                         masukkan(r);
                     });
                     daftar.appendChild(el);
