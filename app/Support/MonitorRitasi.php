@@ -56,10 +56,11 @@ class MonitorRitasi
      *
      * @return array{do: Collection<int, array>, bukan_angka: Collection<int, string>}
      */
-    public static function belumBayarTanah(): array
+    public static function belumBayarTanah(bool $termasukDiajukan = false): array
     {
         $jenis = fn (Collection $baris, string $k) => $baris->contains(fn ($d) => ValidasiUj::jenisKategori($d->kategori) === $k);
-        $diajukan = \App\Models\UjPengajuanDetail::where('kategori', 'Uang Tanah')->where('status', 'menunggu')->whereNotNull('no_do')->pluck('no_do')
+        // $termasukDiajukan: untuk mengisi form Input UJ (bayar tanah yang sudah diajukan memang dibayar lewat Input UJ).
+        $diajukan = $termasukDiajukan ? collect() : \App\Models\UjPengajuanDetail::where('kategori', 'Uang Tanah')->where('status', 'menunggu')->whereNotNull('no_do')->pluck('no_do')
             ->map(fn ($v) => LembarRitasi::kunciAngka(str_replace(['`', "'"], '', (string) $v)))->filter()->flip();
 
         return self::kelompok(fn (string $do, Collection $baris) => $jenis($baris, 'uj') && ! $jenis($baris, 'ut') && ! isset($diajukan[$do]), null, self::dariSaldo());
