@@ -180,7 +180,7 @@
                 ({{ collect($dariPengajuan)->pluck('kode')->unique()->implode(', ') }} · Rp {{ number_format(array_sum(array_column($dariPengajuan, 'nominal')), 0, ',', '.') }})
                 sudah terisi persis seperti pengajuannya. Isi <b>nama, rekening & bank penerima transfer</b>, lalu klik Simpan — semuanya tercatat sebagai satu transfer.</div>
         @endif
-        @unless ($edit || $ajukan)
+        @unless ($edit)
             {{-- Input bayar tanah: rekap bayar tanah (RBT) dari menu Bayar Tanah — tampilan sama dengan Input reimburse Kas UJ. --}}
             <div class="kartu kartu-rui" id="panel-bt" hidden>
                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">
@@ -201,6 +201,7 @@
             <h3 style="margin: 0;">
                 @if ($ajukan)
                     {{ $edit ? 'Edit Pengajuan Uang Jalan' : 'Pengajuan Uang Jalan' }} <span class="redup" style="font-size: 13px; font-weight: normal;">{{ $edit['kode'] ?? 'belum ditransfer · divalidasi sama seperti Input UJ' }}</span>
+                    @unless ($edit)<button type="button" class="tombol polos" id="buka-bt" style="margin-left: 10px; padding: 5px 12px; font-size: 13px;" title="Isi otomatis dari rekap bayar tanah (menu Ritasi → Bayar Tanah)">🏔️ Dari rekap bayar tanah</button>@endunless
                 @elseif ($edit)
                     Edit Transaksi Master UJ <span class="redup" style="font-size: 13px; font-weight: normal;">UJ-{{ $edit['no_uj'] }} · Kas Seabank baris {{ $edit['baris'] }}</span>
                 @else
@@ -1416,7 +1417,7 @@
             evaluasi();
         })();
     </script>
-    @unless ($edit || $ajukan)
+    @unless ($edit)
     <script>
         // ===== Input bayar tanah: pilih satu rekap bayar tanah (RBT) → master + semua DO-nya masuk ke form (seperti reimburse UJ di Kas Harian) =====
         (() => {
@@ -1433,7 +1434,7 @@
                 const adaIsi = [...document.querySelectorAll('#daftar-bon [data-nama=keterangan], #daftar-bon [data-nama=nominal]')].some(el => el.value.trim());
                 if (adaIsi && !confirm(`Isi form sekarang akan diganti dengan ${r.kode}. Lanjutkan?`)) return;
                 window.onbeforeunload = null;
-                location.href = @json(route('uj.input')) + '?rbt=' + r.id;
+                location.href = @json($ajukan ? route('pengajuan-uj.buat') : route('uj.input')) + '?rbt=' + r.id; // Pengajuan UJ: rekap jadi "diajukan"
             };
             const muat = async () => {
                 daftar.innerHTML = '<p class="redup">Memuat…</p>';
@@ -1441,11 +1442,11 @@
                 if (!rekap.length) { daftar.innerHTML = '<p class="redup">Belum ada rekap bayar tanah dalam 30 hari terakhir. Buat rekapnya di menu Ritasi → Bayar Tanah.</p>'; return; }
                 daftar.innerHTML = '';
                 rekap.forEach(r => {
-                    const sudah = r.status === 'dibayar';
+                    const sudah = r.status === 'dibayar' || r.status === 'diajukan';
                     const el = document.createElement('div');
                     el.className = 'rui-grup';
                     const status = sudah
-                        ? `<span class="label hijau">✓ Sudah dibayar${r.no_uj ? ' · UJ-' + r.no_uj : ''}</span>`
+                        ? (r.status === 'diajukan' ? `<span class="label kuning">Diajukan ${esc(r.pengajuan || '')}</span>` : `<span class="label hijau">✓ Sudah dibayar${r.no_uj ? ' · UJ-' + r.no_uj : ''}</span>`)
                         : '<span class="label merah">Belum dibayar</span>';
                     el.innerHTML = `<div class="rui-master${sudah ? ' sudah' : ''}" title="${sudah ? 'Sudah dibayar' : 'Klik untuk memasukkan semua DO rekap ini ke form'}">
                             <button type="button" class="rui-buka" title="Lihat rincian">▸</button>
@@ -1459,7 +1460,7 @@
                         if (!detail.hidden && !detail.innerHTML) detail.innerHTML = tabelDetail(r);
                     });
                     el.querySelector('.rui-master').addEventListener('click', () => {
-                        if (sudah) { alert(`${r.kode} sudah dibayar${r.no_uj ? ' (UJ-' + r.no_uj + ')' : ''}.`); return; }
+                        if (sudah) { alert(r.status === 'diajukan' ? `${r.kode} sudah diajukan di ${r.pengajuan || 'Pengajuan UJ'} — realisasikan lewat Input UJ dari menu Pengajuan UJ.` : `${r.kode} sudah dibayar${r.no_uj ? ' (UJ-' + r.no_uj + ')' : ''}.`); return; }
                         masukkan(r);
                     });
                     daftar.appendChild(el);

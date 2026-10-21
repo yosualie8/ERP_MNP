@@ -10,11 +10,37 @@ class BayarTanahRekap extends Model
 {
     protected $table = 'bayar_tanah_rekap';
 
-    protected $fillable = ['status', 'jumlah', 'total', 'isi', 'catatan', 'no_uj', 'dibayar_pada', 'dibayar_oleh', 'user_id'];
+    protected $fillable = ['status', 'jumlah', 'total', 'isi', 'catatan', 'no_uj', 'uj_pengajuan_id', 'dibayar_pada', 'dibayar_oleh', 'user_id'];
 
     protected $casts = ['isi' => 'array', 'dibayar_pada' => 'datetime'];
 
-    public const STATUS = ['menunggu' => 'Menunggu dibayar', 'dibayar' => 'Dibayar', 'batal' => 'Batal'];
+    /** diajukan = sudah dimasukkan ke Pengajuan UJ (uj_pengajuan_id), menunggu realisasinya di Input UJ. */
+    public const STATUS = ['menunggu' => 'Menunggu dibayar', 'diajukan' => 'Diajukan (Pengajuan UJ)', 'dibayar' => 'Dibayar', 'batal' => 'Batal'];
+
+    public function pengajuan(): BelongsTo
+    {
+        return $this->belongsTo(UjPengajuan::class, 'uj_pengajuan_id');
+    }
+
+    /**
+     * Setelah detail pengajuan terealisasi di Input UJ: rekap "diajukan" yang semua Uang Tanah DO-nya di pengajuan itu sudah
+     * terealisasi → "dibayar". @param  int[]  $pengajuanId  @return string[] kode rekap yang jadi dibayar
+     */
+    public static function cekRealisasi(array $pengajuanId, ?int $userId): array
+    {
+        $kode = [];
+        foreach (self::where('status', 'diajukan')->whereIn('uj_pengajuan_id', $pengajuanId ?: [0])->get() as $r) {
+            $do = array_map('strval', array_column($r->isi, 'do'));
+            $tanah = UjPengajuanDetail::where('uj_pengajuan_id', $r->uj_pengajuan_id)->where('kategori', 'Uang Tanah')->whereIn('no_do', $do)->get();
+            if ($tanah->isNotEmpty() && $tanah->every(fn ($d) => $d->status === 'terealisasi')) {
+                $noUj = UjTransaksi::find(UjDetail::where('id_uj', $tanah->last()->id_uj)->value('uj_transaksi_id'))?->no_uj;
+                $r->update(['status' => 'dibayar', 'no_uj' => $noUj, 'dibayar_pada' => now(), 'dibayar_oleh' => $userId]);
+                $kode[] = $r->kode();
+            }
+        }
+
+        return $kode;
+    }
 
     public function kode(): string
     {
@@ -30,7 +56,7 @@ class BayarTanahRekap extends Model
     public static function doMenunggu(): array
     {
         $hasil = [];
-        foreach (self::where('status', 'menunggu')->get() as $r) {
+        foreach (self::whereIn('status', ['menunggu', 'diajukan'])->get() as $r) {
             foreach ($r->isi as $x) {
                 $hasil[(string) $x['do']] = $r->kode();
             }

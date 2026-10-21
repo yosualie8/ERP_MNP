@@ -246,7 +246,7 @@ class RitasiController extends Controller
         return view('ritasi.monitor', [
             'unggah' => $unggah, 'doUnggah' => $doUnggah,
             // Bayar Tanah: rekap (RBT) terbaru & DO yang sudah ada di rekap yang menunggu dibayar.
-            'rekapTanah' => $mode === 'tanah' ? \App\Models\BayarTanahRekap::with('user')->where(fn ($q) => $q->where('status', 'menunggu')->orWhere('updated_at', '>=', now()->subDays(14)))->orderByDesc('id')->get() : collect(),
+            'rekapTanah' => $mode === 'tanah' ? \App\Models\BayarTanahRekap::with(['user', 'pengajuan'])->where(fn ($q) => $q->whereIn('status', ['menunggu', 'diajukan'])->orWhere('updated_at', '>=', now()->subDays(14)))->orderByDesc('id')->get() : collect(),
             'doDirekap' => $mode === 'tanah' ? \App\Models\BayarTanahRekap::doMenunggu() : [],
             'mode' => $mode, 'rute' => $mode === 'tanah' ? 'ritasi.bayar-tanah' : 'ritasi.monitor', 'saran' => $saran,
             'daftar' => $doUnggah !== null ? $semua->filter(fn ($d) => in_array($d['do'], $doUnggah, true))->values()

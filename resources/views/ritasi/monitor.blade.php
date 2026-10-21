@@ -285,7 +285,7 @@
                 @foreach ($rekapTanah as $rb)
                     <tr>
                         <td><b>{{ $rb->kode() }}</b></td>
-                        <td><span @class(['label', 'kuning' => $rb->status === 'menunggu', 'hijau' => $rb->status === 'dibayar', 'merah' => $rb->status === 'batal'])>{{ \App\Models\BayarTanahRekap::STATUS[$rb->status] }}{{ $rb->no_uj ? ' · UJ-'.$rb->no_uj : '' }}</span></td>
+                        <td><span @class(['label', 'kuning' => in_array($rb->status, ['menunggu', 'diajukan'], true), 'hijau' => $rb->status === 'dibayar', 'merah' => $rb->status === 'batal'])>{{ \App\Models\BayarTanahRekap::STATUS[$rb->status] ?? $rb->status }}{{ $rb->status === 'diajukan' && $rb->pengajuan ? ' · '.$rb->pengajuan->kode() : '' }}{{ $rb->no_uj ? ' · UJ-'.$rb->no_uj : '' }}</span></td>
                         <td class="angka">{{ $rb->jumlah }}</td>
                         <td class="angka">{{ rp($rb->total) }}</td>
                         <td class="redup">{{ $rb->created_at->translatedFormat('j M H:i') }} · {{ $rb->user?->name }}</td>

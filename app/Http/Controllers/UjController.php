@@ -129,7 +129,7 @@ class UjController extends Controller
      */
     public function daftarBayarTanah(): JsonResponse
     {
-        $rekap = \App\Models\BayarTanahRekap::with('user')->where('status', '!=', 'batal')->where('created_at', '>=', now()->subDays(30))
+        $rekap = \App\Models\BayarTanahRekap::with(['user', 'pengajuan'])->where('status', '!=', 'batal')->where('created_at', '>=', now()->subDays(30))
             ->orderByDesc('id')->get();
         $semuaDo = $rekap->flatMap(fn ($r) => array_column($r->isi, 'do'))->unique()->values();
         // DO → baris uang jalannya (DT, driver, keterangan) untuk rincian.
@@ -139,7 +139,7 @@ class UjController extends Controller
 
         return response()->json(['rekap' => $rekap->map(fn ($r) => [
             'id' => $r->id, 'kode' => $r->kode(), 'judul' => $r->created_at->translatedFormat('l, j M Y'), 'jam' => $r->created_at->format('H:i'),
-            'jumlah' => $r->jumlah, 'total' => (int) $r->total, 'status' => $r->status, 'no_uj' => $r->no_uj, 'catatan' => $r->catatan,
+            'jumlah' => $r->jumlah, 'total' => (int) $r->total, 'status' => $r->status, 'no_uj' => $r->no_uj, 'catatan' => $r->catatan, 'pengajuan' => $r->pengajuan?->kode(),
             'oleh' => $r->user?->name,
             'detail' => collect($r->isi)->map(fn ($x) => [
                 'do' => (string) $x['do'], 'harga' => (int) $x['harga'], 'mobil' => $uj[(string) $x['do']]->no_mobil ?? null,
@@ -326,7 +326,7 @@ class UjController extends Controller
             'biaya_transfer' => $request->boolean('biaya_transfer'),
             'nominal_biaya' => (int) ($data['nominal_biaya'] ?? TulisUjSheet::BIAYA_TRANSFER),
             // Rekap Bayar Tanah (RBT) yang dibayar oleh transaksi ini (dari Input bayar tanah).
-            'bayar_tanah_id' => $pengajuan ? null : ($data['bayar_tanah_id'] ?? null),
+            'bayar_tanah_id' => $data['bayar_tanah_id'] ?? null, // Pengajuan UJ juga (rekap jadi "diajukan")
         ];
         // Master sopir (owner 20 Okt 2026): nama sopir baru di baris dump truck wajib dijawab admin; nama sopir ditulis dengan nama bakunya.
         if ($belum = \App\Support\DaftarSopir::belumDijawab($hasil['detail'])) {
@@ -540,7 +540,10 @@ class UjController extends Controller
                 $berbeda += $sesuai ? 0 : 1;
             }
         }
-        UjPengajuan::whereIn('id', UjPengajuanDetail::whereIn('id', $idPengajuan)->pluck('uj_pengajuan_id')->unique())->get()->each->hitungStatus();
+        $pjTerkait = UjPengajuanDetail::whereIn('id', $idPengajuan)->pluck('uj_pengajuan_id')->unique();
+        UjPengajuan::whereIn('id', $pjTerkait)->get()->each->hitungStatus();
+        // Rekap bayar tanah yang diajukan lewat pengajuan itu → dibayar bila semua uang tanahnya kini terealisasi.
+        $rekapLunas = \App\Models\BayarTanahRekap::cekRealisasi($pjTerkait->all(), $request->user()->id);
         $pesanImpor = $this->perbarui(fn () => KasSeabank::perbaruiBlok(null, 0, 0, $hasil['mentah'], $hasil['baris_awal']));
         $this->catatTemuan($temuan, $input, $hasil['ids'], $request->user()->id);
         $jumlahFoto = $this->simpanFoto($request, $hasil['no_uj'], $input['tanggal']);
@@ -556,6 +559,7 @@ class UjController extends Controller
             'Tersimpan di Kas Seabank baris '.$hasil['baris_awal'].'–'.$hasil['baris_akhir'].' (UJ-'.reset($hasil['ids']).(count($hasil['ids']) > 1 ? ' s/d UJ-'.end($hasil['ids']) : '')
             .($hasil['id_biaya'] ? ', biaya transfer UJ-'.$hasil['id_biaya'] : '').'): '
             .$this->ringkasanInput($input).'.'.($jumlahFoto ? " {$jumlahFoto} foto bon terlampir." : '').($rekapTanah ? ' '.$rekapTanah->kode().' tercatat dibayar.' : '')
+            .($rekapLunas ? ' '.implode(', ', $rekapLunas).' tercatat dibayar.' : '')
             .($terealisasi ? " {$terealisasi} detail pengajuan tercatat terealisasi".($berbeda ? " ({$berbeda} berbeda dari pengajuannya, tercatat beserta alasannya)" : '').'.' : '').$pesanImpor
             .$this->terapkanSopir($input, $request));
     }
