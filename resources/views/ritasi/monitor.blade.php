@@ -77,12 +77,7 @@
         <input type="hidden" name="umur" value="{{ $umur ?? 'semua' }}">
         @if ($tujuan !== '')<input type="hidden" name="tujuan" value="{{ $tujuan }}">@endif
         @if ($galian !== '')<input type="hidden" name="galian" value="{{ $galian }}">@endif
-        {{-- Monitor Ritasi: tanpa kotak cari atas (owner 21 Okt 2026) — pakai saringan per kolom di tabel. Bayar Tanah tetap. --}}
-        @if ($mode !== 'ritasi')
-            <input type="search" name="q" value="{{ $q }}" placeholder="Cari No DO, DT, driver, galian, keterangan…" style="margin-left: auto;">
-            <button class="tombol polos" type="submit">Cari</button>
-            @if ($q)<a href="{{ $tautan(['q' => null]) }}" class="redup">Hapus pencarian</a>@endif
-        @endif
+        {{-- Monitor Ritasi & Bayar Tanah: tanpa kotak cari atas (owner 21 Okt 2026) — pakai saringan per kolom di tabel. --}}
     </form>
     <div class="cari-monitor">
         <span class="redup">Tujuan buangan:</span>
