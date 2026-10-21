@@ -63,11 +63,12 @@ class McpController extends Controller
             'initialize' => self::hasil($id, [
                 'protocolVersion' => in_array($param['protocolVersion'] ?? null, self::VERSI, true) ? $param['protocolVersion'] : self::VERSI[0],
                 'capabilities' => ['tools' => ['listChanged' => false]],
-                'serverInfo' => ['name' => 'erp-mnp', 'title' => 'ERP PT Multi Niaga Putra', 'version' => '1.0.0'],
-                'instructions' => 'Data ERP PT Multi Niaga Putra (MNP) — HANYA BACA. Kas Harian = rekening Bank Jago PT (transfer + transaksi detail/bon dengan Kode GL; '
-                    .'"reimburse" = penggantian dana kas oleh owner). Kas UJ = uang jalan dump truck (lembar Kas Seabank). Pengajuan UJ (PUJ) = permintaan uang jalan '
-                    .'sebelum ditransfer. Ritasi = perjalanan dump truck (galian → tujuan buangan). Nominal dalam rupiah; tanggal YYYY-MM-DD. '
-                    .'Mulai dari ringkasan_kas_harian / ringkasan_uj untuk gambaran umum.',
+                'serverInfo' => ['name' => 'erp-mnp', 'title' => 'ERP PT Multi Niaga Putra', 'version' => '1.1.0'],
+                'instructions' => 'Data ERP PT Multi Niaga Putra (MNP) — HANYA BACA. Rekening PT = rekening utama perusahaan di BCA (mutasi + penandaan biaya dihitung / tidak per proyek). '
+                    .'Kas Harian = rekening Bank Jago PT (transfer + transaksi detail/bon dengan Kode GL; "reimburse" = penggantian dana kas, dari BCA). '
+                    .'Kas UJ = uang jalan dump truck (lembar Kas Seabank). Pengajuan UJ (PUJ) = permintaan uang jalan sebelum ditransfer. Saldo sopir = UJ belum bongkar '
+                    .'yang dijadikan saldo (uang di tangan sopir). Ritasi = perjalanan dump truck (galian → tujuan buangan). Nominal dalam rupiah; tanggal YYYY-MM-DD. '
+                    .'Mulai dari ringkasan_rekening_pt / ringkasan_kas_harian / ringkasan_uj untuk gambaran umum. Sebut transaksi UJ dengan ID UJ-nya (UJ-xxxxx).',
             ]),
             'ping' => self::hasil($id, (object) []),
             'tools/list' => self::hasil($id, ['tools' => collect(AlatMnp::untuk($this->pengguna))->map(fn ($t, $nama) => [

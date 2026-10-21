@@ -34,6 +34,9 @@ class AlatMnp
         'ringkasan_kas_harian' => 'kas-harian', 'cari_transaksi_kas' => 'kas-harian', 'daftar_belum_reimburse_kas' => 'kas-harian',
         'riwayat_reimburse_kas' => 'riwayat-reimburse', 'rekap_biaya' => 'rekap', 'ringkasan_uj' => 'kas-uj', 'cari_transaksi_uj' => 'kas-uj',
         'pengajuan_uj' => 'pengajuan-uj', 'cari_ritasi' => 'ritasi', 'data_aset_truk' => 'aset', 'aktivitas_admin' => 'dashboard-aktivitas',
+        // 21 Okt 2026: rekening PT BCA, saldo sopir, biaya DT, UJ belum bongkar, data sopir
+        'ringkasan_rekening_pt' => 'mutasi-pt', 'cari_mutasi_rekening_pt' => 'mutasi-pt', 'saldo_sopir' => 'pengalihan-uj', 'biaya_dt' => 'dashboard-biaya-dt',
+        'uj_belum_bongkar' => 'monitor-ritasi', 'data_sopir' => 'karyawan',
     ];
 
     /** Tool yang boleh dipakai pengguna ini (mengikuti menu yang boleh dibukanya di aplikasi). */
@@ -132,6 +135,50 @@ class AlatMnp
                 'deskripsi' => 'Log kegiatan pengguna di aplikasi (input/edit/hapus kas, UJ, ritasi, reimburse, dll.), bisa disaring nama, area (Kas Harian, Uang Jalan, Ritasi, Aset) & tanggal.',
                 'skema' => $obj(['dari' => $tanggal, 'sampai' => $tanggal, 'nama' => ['type' => 'string'], 'area' => ['type' => 'string'], 'kata' => $kata, 'batas' => $batas]),
                 'jalankan' => fn (array $a) => self::aktivitas($a),
+            ],
+            'ringkasan_rekening_pt' => [
+                'judul' => 'Ringkasan Rekening PT (BCA)',
+                'deskripsi' => 'Ringkasan mutasi rekening PT MNP di BCA (rekening utama perusahaan; Kas Harian Jago diisi dari sini lewat reimburse): saldo terakhir, '
+                    .'masuk/keluar & saldo akhir per bulan (12 bulan), jumlah transaksi per status penandaan biaya (dihitung / tidak dihitung / belum dicek, sejak 2026), '
+                    .'dan biaya yang DIHITUNG per proyek (tahap). Kapan file mutasi terakhir diimpor.',
+                'skema' => $obj(),
+                'jalankan' => fn (array $a) => self::ringkasanBca(),
+            ],
+            'cari_mutasi_rekening_pt' => [
+                'judul' => 'Cari mutasi Rekening PT (BCA)',
+                'deskripsi' => 'Cari baris mutasi rekening PT di BCA (tanggal, keterangan bank, masuk/keluar, jumlah, saldo) beserta status biayanya (dihitung → proyek / tidak dihitung + alasan / '
+                    .'belum dicek) dan catatan admin. Kata kunci dicari di keterangan bank & catatan admin. Urut terbaru.',
+                'skema' => $obj(['dari' => $tanggal, 'sampai' => $tanggal, 'kata' => $kata, 'arah' => ['type' => 'string', 'enum' => ['semua', 'masuk', 'keluar']],
+                    'status_biaya' => ['type' => 'string', 'enum' => ['semua', 'dihitung', 'tidak', 'belum']], 'batas' => $batas]),
+                'jalankan' => fn (array $a) => self::cariBca($a),
+            ],
+            'saldo_sopir' => [
+                'judul' => 'Saldo sopir',
+                'deskripsi' => 'Saldo sopir: uang jalan yang sudah diberikan tetapi belum bongkar lalu dijadikan saldo (uang perusahaan di tangan sopir, belum biaya proyek). '
+                    .'Per sopir: dijadikan saldo, terpakai lewat DO lama, dipotong di Pengajuan UJ / dipakai, dikembalikan, tidak kembali, sisa & umur (hari). '
+                    .'Isi "sopir" untuk rincian (UJ asal & pemakaian beserta proyek yang menanggung).',
+                'skema' => $obj(['sopir' => ['type' => 'string'], 'hanya_ada_saldo' => ['type' => 'boolean', 'description' => 'bawaan true']]),
+                'jalankan' => fn (array $a) => self::saldoSopir($a),
+            ],
+            'biaya_dt' => [
+                'judul' => 'Biaya dump truck (DT)',
+                'deskripsi' => 'Biaya per dump truck per bulan & kategori (Kas UJ per No Mobil + Kas Harian ber-No Mobil; reimburse UJ di Kas Harian tidak dihitung dobel), '
+                    .'jumlah rit & biaya per rit. Isi no_mobil untuk rincian satu truk beserta transaksinya.',
+                'skema' => $obj(['dari_bulan' => ['type' => 'string', 'description' => 'YYYY-MM (bawaan 3 bulan terakhir)'], 'sampai_bulan' => ['type' => 'string', 'description' => 'YYYY-MM'],
+                    'no_mobil' => ['type' => 'string'], 'batas' => $batas]),
+                'jalankan' => fn (array $a) => self::biayaDt($a),
+            ],
+            'uj_belum_bongkar' => [
+                'judul' => 'UJ belum bongkar',
+                'deskripsi' => 'DO yang sudah diberi uang jalan (Kas UJ / saldo sopir) tetapi belum ada data bongkarnya di Ritasi: umur (hari), proyek, batas wajar, status wajar / lewat / merah, truk & driver.',
+                'skema' => $obj(['status' => ['type' => 'string', 'enum' => ['semua', 'wajar', 'lewat', 'merah']], 'no_mobil' => ['type' => 'string'], 'batas' => $batas]),
+                'jalankan' => fn (array $a) => self::ujBelumBongkar($a),
+            ],
+            'data_sopir' => [
+                'judul' => 'Data sopir',
+                'deskripsi' => 'Master sopir dump truck (Data Karyawan jabatan Supir): nama baku, nama lain / ejaan di Kas UJ, status aktif / nonaktif, truk yang dibawa, rekening.',
+                'skema' => $obj(['status' => ['type' => 'string', 'enum' => ['semua', 'aktif', 'nonaktif']], 'kata' => $kata]),
+                'jalankan' => fn (array $a) => self::dataSopir($a),
             ],
             'search' => [
                 'judul' => 'Cari di ERP MNP',
@@ -255,6 +302,140 @@ class AlatMnp
         return ['periode' => [$dari->format('Y-m'), $sampai->format('Y-m')], 'cost_center' => $a['cost_center'] ?? 'semua',
             'total_per_kelompok' => collect($hasil)->map(fn ($akun) => array_sum(array_map('array_sum', $akun))),
             'kelompok_akun_bulan' => $hasil, 'cost_center_tersedia' => DB::table('cost_center')->orderBy('kode')->pluck('kode')];
+    }
+
+    // ===== Rekening PT (BCA) =====
+
+    private static function ringkasanBca(): array
+    {
+        $akhir = \App\Models\MutasiPt::orderByDesc('tanggal')->orderByDesc('baris')->first();
+        $bulan = \App\Models\MutasiPt::selectRaw("DATE_FORMAT(tanggal, '%Y-%m') ym, SUM(CASE WHEN dbcr = 'CR' THEN jumlah ELSE 0 END) masuk, "
+            ."SUM(CASE WHEN dbcr = 'DB' THEN jumlah ELSE 0 END) keluar, COUNT(*) n, MAX(tanggal) akhir")->groupBy('ym')->orderByDesc('ym')->limit(12)->get();
+        $baris = \App\Support\TandaMutasiPt::baris();
+        $tahap = \App\Models\ProyekTahap::pluck('nama', 'id');
+        $impor = \Illuminate\Support\Facades\Cache::get(\App\Support\ImporMutasiPt::KUNCI);
+
+        return [
+            'saldo_terakhir' => $akhir ? ['tanggal' => $akhir->tanggal?->toDateString(), 'saldo' => (int) $akhir->saldo] : null,
+            'file_mutasi_diimpor' => $impor ? ['waktu' => $impor['waktu'] ?? null, 'file' => $impor['nama'] ?? null, 'file_diubah' => $impor['diubah'] ?? null] : null,
+            'per_bulan' => $bulan->map(fn ($b) => ['bulan' => $b->ym, 'masuk' => (int) $b->masuk, 'keluar' => (int) $b->keluar, 'transaksi' => (int) $b->n,
+                'saldo_akhir' => (int) \App\Models\MutasiPt::where('tanggal', $b->akhir)->orderByDesc('baris')->value('saldo')]),
+            'penandaan_biaya_sejak_2026' => collect(\App\Support\TandaMutasiPt::STATUS)->map(fn ($label, $s) => ['status' => $label,
+                'transaksi' => $baris->where('status', $s)->count(), 'keluar' => (int) $baris->where('status', $s)->filter(fn ($b) => $b->m->dbcr === 'DB')->sum(fn ($b) => $b->m->jumlah)]),
+            'biaya_dihitung_per_proyek' => \App\Support\TandaMutasiPt::dihitung()->groupBy(fn ($d) => $tahap[$d->tahap_id ?? $d->pos_id] ?? 'tanpa proyek')
+                ->map(fn ($g) => (int) $g->sum('rp'))->sortDesc(),
+        ];
+    }
+
+    private static function cariBca(array $a): array
+    {
+        $kata = self::kata($a['kata'] ?? null);
+        $tanda = \App\Support\TandaMutasiPt::baris()->keyBy('kunci');
+        $tahap = \App\Models\ProyekTahap::pluck('nama', 'id');
+        // kata kunci juga dicari di catatan admin (tersimpan terpisah)
+        $kunciCatatan = $kata ? $tanda->filter(fn ($b) => $b->tanda?->catatan && collect($kata)->every(fn ($k) => mb_stripos($b->tanda->catatan, $k) !== false))->keys()->flip() : collect();
+        $data = \App\Models\MutasiPt::query()
+            ->when($a['dari'] ?? null, fn ($q, $v) => $q->where('tanggal', '>=', self::tgl($v)))
+            ->when($a['sampai'] ?? null, fn ($q, $v) => $q->where('tanggal', '<=', self::tgl($v)))
+            ->when(($a['arah'] ?? '') === 'masuk', fn ($q) => $q->where('dbcr', 'CR'))
+            ->when(($a['arah'] ?? '') === 'keluar', fn ($q) => $q->where('dbcr', 'DB'))
+            ->orderByDesc('tanggal')->orderByDesc('baris')->limit(5000)->get()
+            ->filter(fn ($m) => ! $kata || collect($kata)->every(fn ($k) => mb_stripos((string) $m->keterangan, $k) !== false) || isset($kunciCatatan[\App\Support\TandaMutasiPt::kunci($m)]))
+            ->map(function ($m) use ($tanda, $tahap) {
+                $t = $tanda[\App\Support\TandaMutasiPt::kunci($m)] ?? null;
+
+                return ['tanggal' => $m->tanggal?->toDateString(), 'keterangan' => $m->keterangan, 'cabang' => $m->cabang, 'arah' => $m->dbcr === 'CR' ? 'masuk' : 'keluar',
+                    'jumlah' => (int) $m->jumlah, 'saldo' => (int) $m->saldo, 'status_biaya' => $t?->status ?? 'sebelum 2026', 'alasan' => $t?->alasan,
+                    'proyek' => $t?->tanda?->proyek_tahap_id ? ($tahap[$t->tanda->proyek_tahap_id] ?? null) : null, 'catatan_admin' => $t?->tanda?->catatan];
+            });
+        $pilih = $a['status_biaya'] ?? 'semua';
+        if ($pilih !== 'semua') {
+            $data = $data->where('status_biaya', $pilih);
+        }
+
+        return ['jumlah_cocok' => $data->count(), 'total_masuk' => (int) $data->where('arah', 'masuk')->sum('jumlah'), 'total_keluar' => (int) $data->where('arah', 'keluar')->sum('jumlah'),
+            'ditampilkan' => min(self::batas($a), $data->count()), 'mutasi' => $data->take(self::batas($a))->values()];
+    }
+
+    // ===== Saldo sopir, biaya DT, UJ belum bongkar, data sopir =====
+
+    private static function saldoSopir(array $a): array
+    {
+        $semua = \App\Support\SaldoSopir::perSopir();
+        $tahap = \App\Models\ProyekTahap::pluck('nama', 'id');
+        $ringkas = fn ($s) => ['sopir' => $s['sopir'], 'truk' => $s['mobil'], 'dijadikan_saldo' => (int) $s['alih'], 'jumlah_uj' => $s['n_alih'], 'terpakai_do_lama' => (int) $s['terpakai_do'],
+            'dipotong_atau_dipakai' => (int) $s['dipakai'], 'dikembalikan' => (int) $s['kembali'], 'tidak_kembali' => (int) $s['hangus'], 'sisa_saldo' => (int) $s['saldo'],
+            'umur_hari' => $s['umur'], 'status' => $s['status']];
+        if ($n = \App\Support\SaldoSopir::kunci($a['sopir'] ?? null)) {
+            $s = $semua[$n] ?? $semua->first(fn ($x) => mb_stripos($x['sopir'], (string) $a['sopir']) !== false);
+            if (! $s) {
+                return ['galat' => "Sopir \"{$a['sopir']}\" tidak punya catatan saldo.", 'sopir_tersedia' => $semua->keys()->values()];
+            }
+
+            return [...$ringkas($s),
+                'uj_dijadikan_saldo' => $s['uj']->map(fn ($x) => ['id_uj' => $x->p->id_uj, 'tanggal' => $x->p->tanggal?->toDateString(), 'no_do' => $x->no_do, 'nominal' => (int) $x->p->nominal,
+                    'proyek_asal' => $x->p->dari?->nama, 'do_lama_bongkar' => $x->bongkar ? $x->bongkar->tanggal->toDateString().' di '.($tahap[$x->tahap_bongkar] ?? $x->bongkar->tahap) : null])->values(),
+                'pemakaian' => $s['pakai_rows']->map(fn ($p) => ['tanggal' => $p->tanggal?->toDateString(), 'cara' => \App\Models\UjPengalihan::PERUNTUKAN[$p->peruntukan] ?? $p->peruntukan,
+                    'nominal' => (int) $p->nominal, 'no_do' => $p->no_do, 'keterangan' => $p->keterangan,
+                    'proyek' => ($t = \App\Support\SaldoSopir::tahapPakai($p)) ? ($tahap[$t] ?? null) : null])->values()];
+        }
+        $daftar = $semua->filter(fn ($s) => ($a['hanya_ada_saldo'] ?? true) === false || $s['saldo'] > 0.5)->sortByDesc('saldo');
+
+        return ['total_saldo_di_sopir' => (int) $semua->sum(fn ($s) => max(0, $s['saldo'])), 'sopir_bersaldo' => $semua->filter(fn ($s) => $s['saldo'] > 0.5)->count(),
+            'merah_lebih_14_hari' => $semua->where('status', 'merah')->count(), 'sopir' => $daftar->map($ringkas)->values()];
+    }
+
+    private static function biayaDt(array $a): array
+    {
+        $dari = isset($a['dari_bulan']) ? Carbon::parse($a['dari_bulan'].'-01') : now()->subMonths(2)->startOfMonth();
+        $sampai = isset($a['sampai_bulan']) ? Carbon::parse($a['sampai_bulan'].'-01')->endOfMonth() : now()->endOfMonth();
+        $baris = \App\Support\BiayaDt::baris($dari, $sampai);
+        $rit = \App\Support\BiayaDt::rit($dari, $sampai);
+        $mobil = \App\Support\NomorMobil::rapikan($a['no_mobil'] ?? null);
+        if ($mobil) {
+            $milik = $baris->where('mobil', $mobil);
+            $nRit = array_sum($rit[$mobil] ?? []);
+
+            return ['no_mobil' => $mobil, 'periode' => [$dari->format('Y-m'), $sampai->format('Y-m')], 'total' => (int) $milik->sum('rp'), 'rit' => $nRit,
+                'biaya_per_rit' => $nRit ? (int) round($milik->sum('rp') / $nRit) : null,
+                'per_kategori_bulan' => $milik->groupBy('kategori')->map(fn ($g) => $g->groupBy('bulan')->map(fn ($x) => (int) $x->sum('rp'))),
+                'rit_per_bulan' => $rit[$mobil] ?? [],
+                'transaksi' => \App\Support\BiayaDt::transaksi($mobil, $dari, $sampai)->take(self::batas($a))->values()];
+        }
+        $truk = $baris->groupBy('mobil')->map(fn ($g, $m) => ['no_mobil' => $m, 'total' => (int) $g->sum('rp'), 'rit' => array_sum($rit[$m] ?? []),
+            'per_kategori' => $g->groupBy('kategori')->map(fn ($x) => (int) $x->sum('rp'))])->sortByDesc('total')->values();
+        $totalRit = array_sum(array_map('array_sum', $rit));
+
+        return ['periode' => [$dari->format('Y-m'), $sampai->format('Y-m')], 'total' => (int) $baris->sum('rp'), 'rit' => $totalRit,
+            'biaya_per_rit' => $totalRit ? (int) round($baris->sum('rp') / $totalRit) : null,
+            'per_kategori' => $baris->groupBy('kategori')->map(fn ($g) => ['total' => (int) $g->sum('rp'), 'kelompok' => \App\Support\BiayaDt::kelompok($g->first()['kategori'])])->sortByDesc('total'),
+            'per_bulan' => $baris->groupBy('bulan')->map(fn ($g) => (int) $g->sum('rp'))->sortKeys(),
+            'per_truk' => $truk->take(self::batas($a))];
+    }
+
+    private static function ujBelumBongkar(array $a): array
+    {
+        $semua = \App\Support\KontrolUj::terbuka();
+        $mobil = \App\Support\NomorMobil::rapikan($a['no_mobil'] ?? null);
+        $pilih = $semua->when(($a['status'] ?? 'semua') !== 'semua', fn ($c) => $c->where('status', $a['status']))
+            ->when($mobil, fn ($c) => $c->filter(fn ($d) => in_array($mobil, $d['mobil'], true)))->sortByDesc('umur');
+
+        return ['ringkas' => collect(['merah', 'lewat', 'wajar'])->mapWithKeys(fn ($s) => [$s => ['do' => $semua->where('status', $s)->count(), 'uang_jalan' => (int) $semua->where('status', $s)->sum('uj')]]),
+            'jumlah_cocok' => $pilih->count(), 'do' => $pilih->take(self::batas($a))->map(fn ($d) => ['no_do' => $d['do'], 'tanggal_uj' => $d['pertama']?->toDateString(), 'umur_hari' => $d['umur'],
+                'proyek' => $d['tahap'], 'batas_hari' => $d['batas'], 'status' => $d['status'], 'truk' => $d['mobil'], 'driver' => $d['driver'], 'uang_jalan' => $d['uj'],
+                'id_uj' => collect($d['detail'])->pluck('id_uj')->filter()->values()])->values()];
+    }
+
+    private static function dataSopir(array $a): array
+    {
+        $kata = self::kata($a['kata'] ?? null);
+        $sopir = \App\Models\Karyawan::with('alias')->where('jabatan', \App\Support\DaftarSopir::JABATAN)
+            ->when(in_array($a['status'] ?? 'semua', ['aktif', 'nonaktif'], true), fn ($q) => $q->where('status', $a['status']))->orderBy('nama')->get()
+            ->filter(fn ($k) => ! $kata || collect($kata)->every(fn ($w) => mb_stripos($k->nama.' '.$k->alias->pluck('nama')->implode(' ').' '.$k->no_mobil, $w) !== false));
+
+        return ['jumlah' => $sopir->count(), 'aktif' => $sopir->where('status', 'aktif')->count(), 'sopir' => $sopir->map(fn ($k) => ['nama' => $k->nama, 'status' => $k->status,
+            'truk' => $k->no_mobil, 'nama_lain' => $k->alias->pluck('nama')->reject(fn ($n) => mb_strtoupper($n) === mb_strtoupper($k->nama))->values(),
+            'bank' => $k->bank, 'no_rekening' => $k->no_rekening, 'nama_rekening' => $k->nama_rekening])->values()];
     }
 
     // ===== Uang Jalan =====
