@@ -73,6 +73,14 @@ class ValidasiUj
                 && self::jenisKategori($d->realisasi['kategori'] ?? null) === self::jenisKategori($d->kategori))
             ->map(fn ($d) => self::baris($d->pengajuan->kode().' (dialihkan ke '.$d->id_uj.')', $d->pengajuan->tanggal, $d->nama, $d->keterangan, (int) $d->nominal,
                 $d->kategori, $d->jenis_kendaraan, $d->no_mobil, $d->no_do)));
+        // Pengajuan yang LUNAS DARI SALDO SOPIR (tidak ada transfer → tidak pernah masuk Kas UJ, owner 21 Okt 2026): tetap UJ yang sah
+        // untuk DO itu (mis. Uang Tanah DO-nya tidak lagi kena aturan 19 "belum ada UJ utama").
+        $histori = $histori->concat(\App\Models\UjPengajuanDetail::query()->where('status', 'terealisasi')->where('jenis_realisasi', 'saldo')
+            ->whereNotIn('id', $kecualiPengajuan ?: [0])
+            ->whereHas('pengajuan', fn ($q) => $q->whereBetween('tanggal', $rentang))
+            ->with('pengajuan')->orderBy('id')->get()
+            ->map(fn ($d) => self::baris($d->pengajuan->kode().' (dibayar saldo sopir)', $d->pengajuan->tanggal, $d->nama, $d->keterangan, (int) $d->nominal,
+                $d->kategori, $d->jenis_kendaraan, $d->no_mobil, $d->no_do)));
 
         // Jenis kendaraan per DT dari seluruh histori (bukan hanya 30 hari).
         $jenisDt = UjDetail::whereNotNull('no_mobil')->whereNotNull('jenis_kendaraan')
