@@ -42,20 +42,27 @@ class MonitorRitasi
     /** Pemakaian saldo sopir ber-DO (Pengajuan UJ → Pakai saldo) dalam bentuk baris Kas UJ supaya ikut dipantau bongkarnya. */
     public static function dariSaldo(): array
     {
-        return UjPengalihan::where('jenis', 'pakai')->whereNotNull('no_do')->orderBy('tanggal')->get()
+        return UjPengalihan::with('detailPengajuan')->where('jenis', 'pakai')->whereNotNull('no_do')->orderBy('tanggal')->get()
             ->map(fn ($p) => (new UjDetail)->forceFill([
-                'id_uj' => 'SALDO-'.$p->id, 'baris' => null, 'tanggal' => $p->tanggal, 'nama' => $p->nama, 'nominal' => $p->nominal,
+                'id_uj' => 'SALDO-'.$p->id, 'baris' => null, 'tanggal' => $p->tanggal, 'nama' => $p->detailPengajuan?->nama ?: $p->nama, 'nominal' => $p->nominal,
                 'keterangan' => 'Dibayar dari saldo sopir'.($p->keterangan ? ' — '.$p->keterangan : ''), 'kategori' => 'Uang Jalan',
-                'jenis_kendaraan' => null, 'no_mobil' => $p->no_mobil, 'no_do' => $p->no_do, 'status' => 'saldo sopir', 'tahap_saldo' => SaldoSopir::tahapPakai($p),
+                'jenis_kendaraan' => $p->detailPengajuan?->jenis_kendaraan, 'no_mobil' => $p->no_mobil, 'no_do' => $p->no_do, 'status' => 'saldo sopir', 'tahap_saldo' => SaldoSopir::tahapPakai($p),
             ]))->all();
     }
 
-    /** @return array{do: Collection<int, array>, bukan_angka: Collection<int, string>} */
+    /**
+     * DO yang sudah ada Uang Jalan-nya (Kas UJ, ATAU dibayar dari saldo sopir lewat Pengajuan UJ — owner 21 Okt 2026) tetapi belum ada
+     * Uang Tanah-nya di Kas UJ. DO yang Uang Tanah-nya sudah diajukan (Pengajuan UJ, menunggu realisasi) tidak ditampilkan supaya tidak dobel.
+     *
+     * @return array{do: Collection<int, array>, bukan_angka: Collection<int, string>}
+     */
     public static function belumBayarTanah(): array
     {
         $jenis = fn (Collection $baris, string $k) => $baris->contains(fn ($d) => ValidasiUj::jenisKategori($d->kategori) === $k);
+        $diajukan = \App\Models\UjPengajuanDetail::where('kategori', 'Uang Tanah')->where('status', 'menunggu')->whereNotNull('no_do')->pluck('no_do')
+            ->map(fn ($v) => LembarRitasi::kunciAngka(str_replace(['`', "'"], '', (string) $v)))->filter()->flip();
 
-        return self::kelompok(fn (string $do, Collection $baris) => $jenis($baris, 'uj') && ! $jenis($baris, 'ut'));
+        return self::kelompok(fn (string $do, Collection $baris) => $jenis($baris, 'uj') && ! $jenis($baris, 'ut') && ! isset($diajukan[$do]), null, self::dariSaldo());
     }
 
     /**
