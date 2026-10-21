@@ -68,6 +68,25 @@ class ValidasiRitasi
             ];
         }
 
+        // UJ yang DIBAYAR DARI SALDO SOPIR (Pengajuan UJ, owner 21 Okt 2026): tidak pernah masuk Kas UJ (tidak ada transfernya) —
+        // DO-nya tetap sah untuk data bongkar. Truk, sopir & jenis dari detail pengajuannya.
+        $sisa = $kunci->reject(fn ($k) => isset($hasil[$k]))->values();
+        if ($sisa->isNotEmpty()) {
+            $saldo = \App\Models\UjPengalihan::with('detailPengajuan.pengajuan')->where('jenis', 'pakai')->whereNotNull('no_do')
+                ->whereIn(DB::raw(self::sqlKunci('no_do')), $sisa->all())->orderBy('id')->get()->groupBy(fn ($p) => LembarRitasi::kunciAngka($p->no_do));
+            foreach ($saldo as $k => $g) {
+                $p = $g->last();
+                $d = $p->detailPengajuan;
+                $hasil[$k] = [
+                    'tempat' => TebakGalian::tempat($g->map(fn ($x) => $x->detailPengajuan?->keterangan ?? $x->keterangan)),
+                    'no_lambung' => NomorMobil::rapikan($d?->no_mobil ?: $p->no_mobil),
+                    'driver' => $d?->nama ?: ($p->sopir ?: $p->nama),
+                    'jenis_kendaraan' => NomorMobil::rapikanJenis($d?->jenis_kendaraan),
+                    'id_uj' => 'saldo sopir '.($d?->pengajuan?->kode() ?? 'SALDO-'.$p->id),
+                ];
+            }
+        }
+
         return $hasil;
     }
 
