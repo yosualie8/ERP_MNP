@@ -581,13 +581,19 @@ class AlatMnp
         // 21 Okt 2026: ChatGPT di luar Developer Mode hanya memakai search/fetch → data baru ikut dicari di sini.
         $rp = fn ($v) => 'Rp '.number_format((float) $v, 0, ',', '.');
         if (self::boleh('mutasi-pt')) {
-            if (preg_match('/\b(bca|rekening ?pt|rekening perusahaan|mutasi|saldo rekening)\b/i', $q)) {
+            $sebutBca = (bool) preg_match('/\b(bca|rekening ?pt|rekening perusahaan|mutasi|saldo rekening)\b/i', $q);
+            $sebelumBca = count($hasil);
+            if ($sebutBca) {
                 $hasil[] = ['id' => 'ringkasan:rekening_pt', 'title' => 'Ringkasan Rekening PT BCA: saldo terakhir, masuk/keluar per bulan, penandaan biaya per proyek', 'url' => route('mutasi-pt.index')];
             }
             $kataBca = trim(preg_replace('/\b(bca|rekening ?pt|mutasi|pt)\b/i', '', $q));
             foreach ($kataBca !== '' ? self::cariBca(['kata' => $kataBca, 'batas' => 15])['mutasi'] : [] as $m) {
                 $hasil[] = ['id' => 'bca:'.$m['id'], 'title' => "Mutasi BCA {$m['tanggal']} · {$m['arah']} ".$rp($m['jumlah']).' · '.mb_strimwidth((string) $m['keterangan'], 0, 90, '…').' · biaya: '.$m['status_biaya'],
                     'url' => route('mutasi-pt.index', ['q' => $kataBca])];
+            }
+            // kata "BCA" disebut → hasil rekening PT di urutan teratas
+            if ($sebutBca) {
+                $hasil = [...array_slice($hasil, $sebelumBca), ...array_slice($hasil, 0, $sebelumBca)];
             }
         }
         if (self::boleh('pengalihan-uj')) {
