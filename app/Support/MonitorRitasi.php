@@ -52,18 +52,29 @@ class MonitorRitasi
 
     /**
      * DO yang sudah ada Uang Jalan-nya (Kas UJ, ATAU dibayar dari saldo sopir lewat Pengajuan UJ — owner 21 Okt 2026) tetapi belum ada
-     * Uang Tanah-nya di Kas UJ. DO yang Uang Tanah-nya sudah diajukan (Pengajuan UJ, menunggu realisasi) tidak ditampilkan supaya tidak dobel.
+     * Uang Tanah-nya di Kas UJ. DO yang Uang Tanah-nya baru diajukan (Pengajuan UJ, menunggu) TETAP termasuk — belum dibayar
+     * (owner 21 Okt 2026: sudah bongkar = pasti ada uang tanah yang harus dibayar); lihat uangTanahDiajukan() untuk labelnya.
      *
      * @return array{do: Collection<int, array>, bukan_angka: Collection<int, string>}
      */
-    public static function belumBayarTanah(bool $termasukDiajukan = false): array
+    public static function belumBayarTanah(): array
     {
         $jenis = fn (Collection $baris, string $k) => $baris->contains(fn ($d) => ValidasiUj::jenisKategori($d->kategori) === $k);
-        // $termasukDiajukan: untuk mengisi form Input UJ (bayar tanah yang sudah diajukan memang dibayar lewat Input UJ).
-        $diajukan = $termasukDiajukan ? collect() : \App\Models\UjPengajuanDetail::where('kategori', 'Uang Tanah')->where('status', 'menunggu')->whereNotNull('no_do')->pluck('no_do')
-            ->map(fn ($v) => LembarRitasi::kunciAngka(str_replace(['`', "'"], '', (string) $v)))->filter()->flip();
 
-        return self::kelompok(fn (string $do, Collection $baris) => $jenis($baris, 'uj') && ! $jenis($baris, 'ut') && ! isset($diajukan[$do]), null, self::dariSaldo());
+        return self::kelompok(fn (string $do, Collection $baris) => $jenis($baris, 'uj') && ! $jenis($baris, 'ut'), null, self::dariSaldo());
+    }
+
+    /** @return array<string, string> kunci DO → kode pengajuan yang Uang Tanah-nya masih menunggu realisasi (mis. "PUJ-0052"). */
+    public static function uangTanahDiajukan(): array
+    {
+        $hasil = [];
+        foreach (\App\Models\UjPengajuanDetail::with('pengajuan')->where('status', 'menunggu')->whereNotNull('no_do')->get() as $d) {
+            if (ValidasiUj::jenisKategori($d->kategori) === 'ut' && ($k = LembarRitasi::kunciAngka(str_replace(['`', "'"], '', (string) $d->no_do)))) {
+                $hasil[$k] = $d->pengajuan?->kode();
+            }
+        }
+
+        return $hasil;
     }
 
     /**

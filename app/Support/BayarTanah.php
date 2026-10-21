@@ -23,7 +23,7 @@ class BayarTanah
     public static function untukForm(array $daftarDo, array $harga = []): array
     {
         // Termasuk DO yang Uang Tanahnya sudah diajukan di Pengajuan UJ (belum dibayar) — barisnya tertaut ke pengajuan itu di form.
-        $belum = MonitorRitasi::belumBayarTanah(true)['do']->keyBy('do');
+        $belum = MonitorRitasi::belumBayarTanah()['do']->keyBy('do');
         $riwayat = self::riwayat();
         $detail = [];
         $catatan = [];

@@ -138,7 +138,7 @@ class UjController extends Controller
         $uj = UjDetail::where('biaya_transfer', false)->whereIn('no_do', $semuaDo->all() ?: ['-'])->orderBy('baris')->get(['no_do', 'no_mobil', 'nama', 'keterangan', 'kategori'])
             ->groupBy(fn ($d) => (string) $d->no_do)
             ->map(fn ($g) => $g->first(fn ($d) => \App\Support\ValidasiUj::jenisKategori($d->kategori) === 'uj') ?? $g->first());
-        $belum = \App\Support\MonitorRitasi::belumBayarTanah(true)['do']->keyBy('do');
+        $belum = \App\Support\MonitorRitasi::belumBayarTanah()['do']->keyBy('do');
 
         return response()->json(['rekap' => $rekap->map(fn ($r) => [
             'id' => $r->id, 'kode' => $r->kode(), 'judul' => $r->created_at->translatedFormat('l, j M Y'), 'jam' => $r->created_at->format('H:i'),
@@ -174,7 +174,7 @@ class UjController extends Controller
                 return ['dariBayarTanah' => ['detail' => [], 'master' => [], 'galian' => [], 'catatan' => ['Rekap itu dibatalkan atau tidak ada.'], 'rekap' => null]];
             }
             // Ajukan Uang Jalan: rekap yang sudah direalisasikan tidak bisa dipakai lagi (owner 21 Okt 2026).
-            if ($this instanceof PengajuanUjController && self::rekapTerealisasi($rekap, \App\Support\MonitorRitasi::belumBayarTanah(true)['do']->keyBy('do'))) {
+            if ($this instanceof PengajuanUjController && self::rekapTerealisasi($rekap, \App\Support\MonitorRitasi::belumBayarTanah()['do']->keyBy('do'))) {
                 return ['dariBayarTanah' => ['detail' => [], 'master' => [], 'galian' => [],
                     'catatan' => [$rekap->kode().' sudah direalisasikan'.($rekap->no_uj ? ' (UJ-'.$rekap->no_uj.')' : '').' — tidak bisa dipakai lagi untuk pengajuan.'], 'rekap' => null]];
             }
