@@ -80,14 +80,14 @@
         {{-- Monitor Ritasi & Bayar Tanah: tanpa kotak cari atas (owner 21 Okt 2026) — pakai saringan per kolom di tabel. --}}
     </form>
     <div class="cari-monitor">
-        <span class="redup">Tujuan buangan:</span>
+        <span class="redup" title="Proyek rit DO itu: tempat bongkar di Ritasi, atau kata kunci proyek di keterangan UJ; DO baru tanpa keduanya memakai tujuan buangan truknya">Proyek DO:</span>
         <a href="{{ $tautan(['tujuan' => null]) }}" @class(['chip', 'aktif' => $tujuan === ''])>Semua</a>
         @foreach ($jumlahTujuan as $t => $n)
             <a href="{{ $tautan(['tujuan' => $t]) }}" @class(['chip', 'aktif' => $tujuan === $t])>{{ $t }} · {{ $n }}</a>
         @endforeach
         @if ($jumlahTanpa)
             <a href="{{ $tautan(['tujuan' => \App\Support\BuanganTruk::TANPA]) }}" @class(['chip', 'aktif' => $tujuan === \App\Support\BuanganTruk::TANPA])
-                title="DO yang truknya tidak terdaftar / tidak aktif di Buangan Truck" style="opacity: .75;">Truk tidak aktif · {{ $jumlahTanpa }}</a>
+                title="DO yang proyeknya tidak bisa ditentukan (belum bongkar, keterangan tanpa kata kunci proyek)" style="opacity: .75;">Proyek tidak diketahui · {{ $jumlahTanpa }}</a>
         @endif
         <a href="{{ route('ritasi.buangan') }}" class="redup" style="margin-left: auto; font-size: 13px;">Atur tujuan buangan truk →</a>
     </div>
@@ -306,7 +306,7 @@
     @endif
     <div class="kartu gulir" style="padding: 0;">
         <table class="kas" data-saring-kolom="grup">
-            <thead><tr><th>@if ($bolehBayar)<input type="checkbox" id="pilih-semua" title="Pilih semua DO yang sedang tampil (hasil saringan)" style="margin-right: 6px; vertical-align: middle;">@endif No DO</th><th>UJ pertama</th><th>Umur</th><th>No Mobil</th><th>Tujuan buangan</th><th>Driver</th><th>Galian</th>@if ($tanah)<th>Bongkar</th><th>No Surat Jalan</th>@endif<th>Kategori</th><th class="angka">Transaksi</th><th class="angka">Total UJ</th>@if ($bolehBayar)<th class="angka" data-tanpa-saring>Harga tanah</th>@endif</tr></thead>
+            <thead><tr><th>@if ($bolehBayar)<input type="checkbox" id="pilih-semua" title="Pilih semua DO yang sedang tampil (hasil saringan)" style="margin-right: 6px; vertical-align: middle;">@endif No DO</th><th>UJ pertama</th><th>Umur</th><th>No Mobil</th><th>Proyek DO</th><th>Driver</th><th>Galian</th>@if ($tanah)<th>Bongkar</th><th>No Surat Jalan</th>@endif<th>Kategori</th><th class="angka">Transaksi</th><th class="angka">Total UJ</th>@if ($bolehBayar)<th class="angka" data-tanpa-saring>Harga tanah</th>@endif</tr></thead>
             @forelse ($daftar as $d)
                 <tbody class="grup">
                     <tr class="t ada-bon">

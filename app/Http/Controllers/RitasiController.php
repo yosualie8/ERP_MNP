@@ -206,10 +206,27 @@ class RitasiController extends Controller
         $galian = trim((string) $request->query('galian'));
         $namaGalian = fn ($d) => $d['tujuan'] ? ucwords($d['tujuan']) : '(tidak diketahui)';
         $cocokGalian = fn ($d) => $galian === '' || $namaGalian($d) === $galian;
-        // Tujuan buangan DO = tujuan buangan truk-truknya, hanya truk yang terdaftar di Buangan Truck (aktif 30 hari terakhir)
-        // dan berstatus aktif di Data Aset. Truk lain (mis. DO lama dari truk yang sudah tidak jalan) tidak diberi tujuan.
+        // Proyek DO (owner 21 Okt 2026 — dulu "tujuan buangan truk saat ini", sehingga DO lama truk yang kini di Jogja ikut tampil di Jogja):
+        //  1. sudah bongkar → proyek tempat bongkar (data Ritasi); 2. kata kunci proyek di keterangan UJ (kata_uj, mis. KIK, JOGJA);
+        //  3. bila tidak ada keduanya & DO masih baru (≤ 14 hari) → tujuan buangan truknya saat ini (Buangan Truck).
+        $namaTahap = \App\Models\ProyekTahap::pluck('nama', 'id');
+        $ritDo = Ritasi::whereNotNull('no_do')->whereIn(DB::raw("TRIM(LEADING '0' FROM REPLACE(no_do, ' ', ''))"), $semua->pluck('do')->all() ?: ['-'])
+            ->get(['no_do', 'tahap'])->groupBy(fn ($r) => LembarRitasi::kunciAngka($r->no_do));
+        $kata = \App\Support\KontrolUj::tahapKata();
         $tujuanTruk = BuanganTruk::daftar()->filter(fn ($t) => $t['status_aset'] === 'aktif' && $t['tujuan'])->pluck('tujuan', 'no_lambung');
-        $semua = $semua->map(fn ($d) => [...$d, 'buangan' => collect($d['mobil'])->map(fn ($m) => $tujuanTruk[$m] ?? null)->filter()->unique()->values()->all()]);
+        $semua = $semua->map(function ($d) use ($namaTahap, $ritDo, $kata, $tujuanTruk) {
+            $proyek = collect($ritDo[$d['do']] ?? [])->map(fn ($r) => ($id = AppSupportDaftarProyek::tahapId('ritasi', $r->tahap)) ? ($namaTahap[$id] ?? $r->tahap) : $r->tahap)->filter()->unique()->values()->all();
+            if (! $proyek) {
+                $ket = collect($d['detail'])->pluck('keterangan')->implode(' | ');
+                $t = collect($d['detail'])->pluck('tahap_saldo')->filter()->first() ?: ($kata->first(fn ($x) => preg_match("/\\b({$x['pola']})\\b/i", $ket))['t']->id ?? null);
+                $proyek = $t ? [$namaTahap[$t] ?? (string) $t] : [];
+            }
+            if (! $proyek && ($d['umur'] ?? 999) <= 14) {
+                $proyek = collect($d['mobil'])->map(fn ($m) => $tujuanTruk[$m] ?? null)->filter()->unique()->values()->all();
+            }
+
+            return [...$d, 'buangan' => $proyek];
+        });
         $tujuan = trim((string) $request->query('tujuan'));
         $cocokTujuan = fn ($d) => $tujuan === '' || ($tujuan === BuanganTruk::TANPA ? ! $d['buangan'] : in_array($tujuan, $d['buangan'], true));
         $cocokUmur = fn ($d) => $umur === null || ($d['umur'] !== null && $d['umur'] <= (int) $umur);
