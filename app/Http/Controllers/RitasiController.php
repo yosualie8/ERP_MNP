@@ -197,12 +197,11 @@ class RitasiController extends Controller
     /** Halaman monitor DO bersama (Monitor Ritasi & Bayar Tanah): saringan umur, tujuan buangan, galian & pencarian. */
     private function tampilMonitor(Request $request, string $mode, array $hasil): View
     {
-        // Umur DO: ≤ 7 hari, ≤ 30 hari, atau all time (bawaan).
-        // Umur DO: ≤ 7 hari, ≤ 30 hari, atau semua (?umur=semua). Bawaan ≤ 7 hari (Monitor Ritasi & Bayar Tanah) supaya halaman
-        // ringan; DO lama tetap bisa dilihat lewat "≤ 30 hari" / "All time".
+        // Monitor Ritasi (owner 21 Okt 2026): bawaan SEMUA umur — DO yang lewat batas justru yang dicari (peringatan Input UJ), dan DO lama
+        // > 10 hari sudah ditutup 20 Okt. Bayar Tanah tetap ≤ 7 hari. Pencarian selalu di semua umur.
         $pilihUmur = $request->query('umur');
-        $umur = in_array($pilihUmur, ['7', '30'], true) ? $pilihUmur : ($pilihUmur === 'semua' ? null : '7');
         $q = trim((string) $request->query('q'));
+        $umur = in_array($pilihUmur, ['7', '30'], true) && $q === '' ? $pilihUmur : ($pilihUmur === 'semua' || $q !== '' || $mode === 'ritasi' ? null : '7');
         ['do' => $semua, 'bukan_angka' => $bukanAngka] = $hasil;
         $galian = trim((string) $request->query('galian'));
         $namaGalian = fn ($d) => $d['tujuan'] ? ucwords($d['tujuan']) : '(tidak diketahui)';
