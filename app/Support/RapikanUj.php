@@ -10,13 +10,13 @@ use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 /**
- * Perbaikan penulisan Kas UJ (lembar "Kas Seabank" kolom F Nama driver, I Kategori, J Jenis Kendaraan, K No Mobil): ditulis ke sheet dan aplikasi
+ * Perbaikan penulisan Kas UJ (lembar "Kas Seabank" kolom F Nama driver, I Kategori, J Jenis Kendaraan, K No Mobil, L No DO): ditulis ke sheet dan aplikasi
  * sekaligus (selama Kas UJ masih diimpor dari sheet). Setiap baris dicek dulu masih sama di sheet (ID UJ & nominal).
  */
 class RapikanUj
 {
     /**
-     * @param  array<int, array{baris: int, nama?: ?string, kategori?: string, jenis?: ?string, no_mobil?: ?string}>  $ubah  per baris sheet
+     * @param  array<int, array{baris: int, nama?: ?string, kategori?: string, jenis?: ?string, no_mobil?: ?string, no_do?: ?string}>  $ubah  per baris sheet
      * @return array{ditulis: int, dilewati: array<int, string>}
      */
     public static function tulis(array $ubah, ?int $userId, string $alasan): array
@@ -31,7 +31,7 @@ class RapikanUj
             $baris = collect($ubah)->keyBy('baris');
             $db = UjDetail::whereIn('baris', $baris->keys())->get()->keyBy('baris');
             [$dari, $sampai] = [$baris->keys()->min(), $baris->keys()->max()];
-            $isi = $sheets->nilaiMentah(KasSeabank::id(), ["{$l}!A{$dari}:K{$sampai}"])["{$l}!A{$dari}:K{$sampai}"];
+            $isi = $sheets->nilaiMentah(KasSeabank::id(), ["{$l}!A{$dari}:L{$sampai}"])["{$l}!A{$dari}:L{$sampai}"];
 
             $data = [];
             $dilewati = [];
@@ -44,9 +44,9 @@ class RapikanUj
 
                     continue;
                 }
-                $sebelum[$n] = ['id_uj' => $d->id_uj, 'nama' => $r[5] ?? null, 'kategori' => $r[8] ?? null, 'jenis' => $r[9] ?? null, 'no_mobil' => $r[10] ?? null];
+                $sebelum[$n] = ['id_uj' => $d->id_uj, 'nama' => $r[5] ?? null, 'kategori' => $r[8] ?? null, 'jenis' => $r[9] ?? null, 'no_mobil' => $r[10] ?? null, 'no_do' => $r[11] ?? null];
                 // F = nama (driver; di baris master sekaligus nama penerima transfer)
-                foreach (['nama' => 'F', 'kategori' => 'I', 'jenis' => 'J', 'no_mobil' => 'K'] as $f => $kol) {
+                foreach (['nama' => 'F', 'kategori' => 'I', 'jenis' => 'J', 'no_mobil' => 'K', 'no_do' => 'L'] as $f => $kol) {
                     if (array_key_exists($f, $u)) {
                         $data["{$l}!{$kol}{$n}"] = [[(string) ($u[$f] ?? '')]];
                     }
@@ -59,7 +59,7 @@ class RapikanUj
                 foreach (array_keys($sebelum) as $n) {
                     $u = $baris[$n];
                     $kolom = [];
-                    foreach (['nama' => 'nama', 'kategori' => 'kategori', 'jenis' => 'jenis_kendaraan', 'no_mobil' => 'no_mobil'] as $f => $db) {
+                    foreach (['nama' => 'nama', 'kategori' => 'kategori', 'jenis' => 'jenis_kendaraan', 'no_mobil' => 'no_mobil', 'no_do' => 'no_do'] as $f => $db) {
                         if (array_key_exists($f, $u)) {
                             $kolom[$db] = $u[$f] === '' ? null : $u[$f];
                         }
