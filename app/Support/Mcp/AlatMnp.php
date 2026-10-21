@@ -182,13 +182,13 @@ class AlatMnp
             ],
             'search' => [
                 'judul' => 'Cari di ERP MNP',
-                'deskripsi' => 'Pencarian umum di ERP MNP (Kas Harian, Uang Jalan, Pengajuan UJ). Mengembalikan daftar hasil {id, title, url}; buka isinya dengan tool fetch.',
+                'deskripsi' => 'Pencarian umum di ERP MNP: Kas Harian (Bank Jago), Uang Jalan, Pengajuan UJ, MUTASI REKENING PT BCA (kata kunci di keterangan bank / catatan; tambahkan kata "BCA" untuk ringkasan rekening), saldo sopir (nama sopir / "saldo sopir"), biaya truk ("DT 041" / "biaya DT") dan "belum bongkar". Mengembalikan {id, title, url}; buka isinya dengan tool fetch.',
                 'skema' => ['type' => 'object', 'properties' => ['query' => ['type' => 'string']], 'required' => ['query'], 'additionalProperties' => false],
                 'jalankan' => fn (array $a) => self::search($a),
             ],
             'fetch' => [
                 'judul' => 'Buka data ERP MNP',
-                'deskripsi' => 'Ambil isi lengkap satu hasil dari tool search berdasarkan id-nya (mis. kas:30827, uj:UJ-13361, pengajuan:27).',
+                'deskripsi' => 'Ambil isi lengkap satu hasil dari tool search berdasarkan id-nya (mis. kas:30827, uj:UJ-13361, pengajuan:27, bca:1234, sopir:Tobing, dt:DT 041, ringkasan:rekening_pt / saldo_sopir / uj_belum_bongkar / biaya_dt).',
                 'skema' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string']], 'required' => ['id'], 'additionalProperties' => false],
                 'jalankan' => fn (array $a) => self::fetch($a),
             ],
@@ -344,7 +344,7 @@ class AlatMnp
             ->map(function ($m) use ($tanda, $tahap) {
                 $t = $tanda[\App\Support\TandaMutasiPt::kunci($m)] ?? null;
 
-                return ['tanggal' => $m->tanggal?->toDateString(), 'keterangan' => $m->keterangan, 'cabang' => $m->cabang, 'arah' => $m->dbcr === 'CR' ? 'masuk' : 'keluar',
+                return ['id' => $m->id, 'tanggal' => $m->tanggal?->toDateString(), 'keterangan' => $m->keterangan, 'cabang' => $m->cabang, 'arah' => $m->dbcr === 'CR' ? 'masuk' : 'keluar',
                     'jumlah' => (int) $m->jumlah, 'saldo' => (int) $m->saldo, 'status_biaya' => $t?->status ?? 'sebelum 2026', 'alasan' => $t?->alasan,
                     'proyek' => $t?->tanda?->proyek_tahap_id ? ($tahap[$t->tanda->proyek_tahap_id] ?? null) : null, 'catatan_admin' => $t?->tanda?->catatan];
             });
@@ -578,6 +578,37 @@ class AlatMnp
             $hasil[] = ['id' => 'pengajuan:'.$p['id'], 'title' => "Pengajuan {$p['kode']} {$p['tanggal']} · {$p['status']} · Rp ".number_format($p['nominal'], 0, ',', '.'),
                 'url' => route('pengajuan-uj.daftar')];
         }
+        // 21 Okt 2026: ChatGPT di luar Developer Mode hanya memakai search/fetch → data baru ikut dicari di sini.
+        $rp = fn ($v) => 'Rp '.number_format((float) $v, 0, ',', '.');
+        if (self::boleh('mutasi-pt')) {
+            if (preg_match('/\b(bca|rekening ?pt|rekening perusahaan|mutasi|saldo rekening)\b/i', $q)) {
+                $hasil[] = ['id' => 'ringkasan:rekening_pt', 'title' => 'Ringkasan Rekening PT BCA: saldo terakhir, masuk/keluar per bulan, penandaan biaya per proyek', 'url' => route('mutasi-pt.index')];
+            }
+            $kataBca = trim(preg_replace('/\b(bca|rekening ?pt|mutasi|pt)\b/i', '', $q));
+            foreach ($kataBca !== '' ? self::cariBca(['kata' => $kataBca, 'batas' => 15])['mutasi'] : [] as $m) {
+                $hasil[] = ['id' => 'bca:'.$m['id'], 'title' => "Mutasi BCA {$m['tanggal']} · {$m['arah']} ".$rp($m['jumlah']).' · '.mb_strimwidth((string) $m['keterangan'], 0, 90, '…').' · biaya: '.$m['status_biaya'],
+                    'url' => route('mutasi-pt.index', ['q' => $kataBca])];
+            }
+        }
+        if (self::boleh('pengalihan-uj')) {
+            if (preg_match('/saldo ?sopir|saldo ?supir|hutang sopir|hutang supir/i', $q)) {
+                $hasil[] = ['id' => 'ringkasan:saldo_sopir', 'title' => 'Saldo sopir: daftar sopir yang masih memegang saldo UJ', 'url' => route('pengalihan-uj.index', ['tab' => 'saldo'])];
+            }
+            foreach (\App\Support\SaldoSopir::perSopir() as $s) {
+                if (mb_stripos($q, $s['sopir']) !== false || mb_stripos($s['sopir'], $q) !== false) {
+                    $hasil[] = ['id' => 'sopir:'.$s['sopir'], 'title' => "Saldo sopir {$s['sopir']} · sisa ".$rp($s['saldo']).($s['umur'] !== null ? " · {$s['umur']} hari" : ''), 'url' => route('pengalihan-uj.index', ['tab' => 'saldo', 'sopir' => $s['sopir']])];
+                }
+            }
+        }
+        if (self::boleh('monitor-ritasi') && preg_match('/belum bongkar|tidak bongkar|kontrol uj/i', $q)) {
+            $hasil[] = ['id' => 'ringkasan:uj_belum_bongkar', 'title' => 'UJ belum bongkar: DO tanpa data bongkar, umur & status merah/lewat/wajar', 'url' => route('ritasi.monitor')];
+        }
+        if (self::boleh('dashboard-biaya-dt') && preg_match('/\bDT\s*0?(\d{2,3})\b/i', $q, $mm)) {
+            $dt = \App\Support\NomorMobil::rapikan('DT '.$mm[1]);
+            $hasil[] = ['id' => 'dt:'.$dt, 'title' => "Biaya {$dt} 3 bulan terakhir per kategori & bulan, rit, biaya per rit", 'url' => route('dashboard.biaya-dt', ['mobil' => $dt])];
+        } elseif (self::boleh('dashboard-biaya-dt') && preg_match('/biaya (dt|truk|dump)/i', $q)) {
+            $hasil[] = ['id' => 'ringkasan:biaya_dt', 'title' => 'Biaya dump truck 3 bulan terakhir per kategori, bulan & truk', 'url' => route('dashboard.biaya-dt')];
+        }
 
         return ['results' => $hasil];
     }
@@ -585,10 +616,21 @@ class AlatMnp
     private static function fetch(array $a): array
     {
         [$jenis, $kunci] = array_pad(explode(':', (string) ($a['id'] ?? ''), 2), 2, '');
-        if (! self::boleh(['kas' => 'kas-harian', 'uj' => 'kas-uj', 'pengajuan' => 'pengajuan-uj'][$jenis] ?? 'kas-harian')) {
+        $ringkasan = ['rekening_pt' => 'mutasi-pt', 'saldo_sopir' => 'pengalihan-uj', 'uj_belum_bongkar' => 'monitor-ritasi', 'biaya_dt' => 'dashboard-biaya-dt'];
+        $menu = ['kas' => 'kas-harian', 'uj' => 'kas-uj', 'pengajuan' => 'pengajuan-uj', 'bca' => 'mutasi-pt', 'sopir' => 'pengalihan-uj', 'dt' => 'dashboard-biaya-dt',
+            'ringkasan' => $ringkasan[$kunci] ?? 'kas-harian'][$jenis] ?? 'kas-harian';
+        if (! self::boleh($menu)) {
             throw new InvalidArgumentException('Akun Anda tidak punya akses ke data ini.');
         }
         $isi = match ($jenis) {
+            'bca' => ($m = \App\Models\MutasiPt::find((int) $kunci)) ? (self::cariBca(['dari' => $m->tanggal->toDateString(), 'sampai' => $m->tanggal->toDateString(), 'batas' => 200])['mutasi']
+                ->firstWhere('id', $m->id) ?? null) : null,
+            'sopir' => self::saldoSopir(['sopir' => $kunci]),
+            'dt' => self::biayaDt(['no_mobil' => $kunci, 'batas' => 100]),
+            'ringkasan' => match ($kunci) {
+                'rekening_pt' => self::ringkasanBca(), 'saldo_sopir' => self::saldoSopir([]), 'uj_belum_bongkar' => self::ujBelumBongkar(['batas' => 100]),
+                'biaya_dt' => self::biayaDt(['batas' => 50]), default => null,
+            },
             'kas' => ($t = KasTransfer::with('bon.kodeGl', 'kasBulan')->where('no_id', (int) $kunci)->first())
                 ? self::transferKas($t, StatusReimburse::untuk($t->bon->map(fn ($b) => StatusReimburse::idBon($b, $t))->all())) : null,
             'uj' => self::cariUj(['kata' => $kunci, 'batas' => 5])['transaksi']->firstWhere('id_uj', $kunci),
@@ -600,7 +642,8 @@ class AlatMnp
         }
 
         return ['id' => $a['id'], 'title' => $a['id'], 'text' => json_encode($isi, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT), 'url' => match ($jenis) {
-            'kas' => route('kas.index', ['q' => $kunci]), 'uj' => route('uj.index', ['q' => $kunci]), default => route('pengajuan-uj.daftar'),
+            'kas' => route('kas.index', ['q' => $kunci]), 'uj' => route('uj.index', ['q' => $kunci]), 'bca' => route('mutasi-pt.index'), 'sopir' => route('pengalihan-uj.index', ['tab' => 'saldo', 'sopir' => $kunci]),
+            'dt' => route('dashboard.biaya-dt', ['mobil' => $kunci]), 'ringkasan' => url('/'), default => route('pengajuan-uj.daftar'),
         }, 'metadata' => ['sumber' => 'ERP MNP']];
     }
 
