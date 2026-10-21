@@ -196,7 +196,7 @@
                             @endif
                         </td>
                     </tr>
-                    <tr class="bh"><td>Detail</td><td>No Mobil</td><td>Driver</td><td class="angka">Nominal</td><td>Kategori</td><td>No DO</td><td></td><td></td><td></td></tr>
+                    <tr class="bh"><td>Detail</td><td>No Mobil</td><td>Driver</td><td class="angka">Nominal</td><td>Kategori</td><td>No DO</td><td>Keterangan</td><td>Status</td><td></td></tr>
                     @foreach ($p->detail as $d)
                         @php($teksStatus = $d->jenis_realisasi === 'penyesuaian' ? 'Terealisasi (berbeda)' : ['menunggu' => 'Menunggu', 'terealisasi' => 'Terealisasi', 'dialihkan' => 'Dialihkan', 'batal' => 'Dibatalkan'][$d->status] ?? $d->status)
                         <tr @class(['b', $d->status, 'berbeda' => $d->jenis_realisasi === 'penyesuaian']) data-detail
@@ -211,7 +211,8 @@
                             <td class="angka">{{ rp($d->nominal) }}@if ($d->saldo)<div style="font-size: 11px; color: #93c5fd;" title="Dibayar dari saldo sopir (UJ yang dialihkan) — tidak ditransfer">💰 saldo {{ rp($d->saldo) }} · transfer {{ rp($d->nominal - $d->saldo) }}</div>@endif</td>
                             <td>{{ $d->kategori }}</td>
                             <td>{{ $d->no_do ?: '–' }}</td>
-                            <td></td><td></td><td></td>
+                            <td style="font-size: 12px; min-width: 180px;">{{ $d->keterangan }}</td>
+                            <td style="font-size: 12px; white-space: nowrap;" class="redup">{{ $teksStatus }}{{ $d->id_uj ? ' · '.$d->id_uj : '' }}</td><td></td>
                         </tr>
                         @if ($d->berbeda() && $d->realisasi)
                             @php($r = $d->realisasi)
