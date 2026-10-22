@@ -33,6 +33,7 @@ class RitasiController extends Controller
     /**
      * Performa Ritasi: jumlah rit per truk per bulan/tanggal (setahun), disaring per PROYEK/TAHAP — kolom Tahap di Data Ritasi,
      * dicocokkan ke Daftar Proyek (owner 22 Okt 2026; menggantikan saringan tujuan buangan) — dan bisa dibagikan sebagai gambar.
+     * ?tahap=id = satu tahap; ?kata=ASG = semua tahap yang namanya mengandung kata itu.
      */
     public function performa(Request $request): View
     {
@@ -40,9 +41,15 @@ class RitasiController extends Controller
         $tahun = in_array($request->integer('tahun'), $daftarTahun, true) ? $request->integer('tahun') : ($daftarTahun[0] ?? (int) now()->year);
         $daftarTahap = collect(PerformaRitasi::daftarTahap($tahun));
         $tahap = $daftarTahap->firstWhere('id', $request->integer('tahap'));
-        $data = PerformaRitasi::data($tahun, null, $tahap['id'] ?? null);
+        $kata = $tahap ? '' : trim((string) $request->query('kata'));
+        $cocokKata = $kata !== '' ? $daftarTahap->filter(fn ($t) => mb_stripos($t['nama'], $kata) !== false)->values() : collect();
+        // Saran grup: kata depan nama tahap yang dipakai lebih dari satu tahap (ASG, Infra, …).
+        $grup = $daftarTahap->groupBy(fn ($t) => strtok($t['nama'], ' '))->filter(fn ($g) => $g->count() > 1)->map->count()->sortDesc();
+        $pilihan = $tahap ? ['label' => $tahap['nama'], 'isi' => $tahap['nama']]
+            : ($kata !== '' ? ['label' => "Semua proyek mengandung \"{$kata}\" ({$cocokKata->count()} tahap)", 'isi' => "Semua yang mengandung: {$kata}"] : null);
+        $data = PerformaRitasi::data($tahun, null, $tahap ? [$tahap['id']] : ($kata !== '' ? $cocokKata->pluck('id')->all() : null));
 
-        return view('ritasi.performa', compact('daftarTahun', 'tahun', 'daftarTahap', 'tahap', 'data'));
+        return view('ritasi.performa', compact('daftarTahun', 'tahun', 'daftarTahap', 'tahap', 'kata', 'grup', 'pilihan', 'data'));
     }
 
     /** Monitor Ritasi: DO yang sudah ada uang jalannya di Kas UJ tetapi belum ada di data Ritasi (belum bongkar). */

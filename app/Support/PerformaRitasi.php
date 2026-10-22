@@ -44,18 +44,19 @@ class PerformaRitasi
 
     /**
      * @param  string[]|null  $hanyaTruk  batasi ke truk-truk ini (saringan tujuan buangan); null = semua truk MNP
-     * @param  int|null  $tahapId  hanya rit yang kolom Tahap-nya di Data Ritasi = tahap Daftar Proyek ini (owner 22 Okt 2026)
+     * @param  int[]|null  $tahapIds  hanya rit yang kolom Tahap-nya di Data Ritasi = salah satu tahap Daftar Proyek ini (owner 22 Okt 2026)
      * @return array{truk: string[], bulan: array<int, array>, total: array<string, int>, jumlah: int, terakhir: ?Carbon}
      */
-    public static function data(int $tahun, ?array $hanyaTruk = null, ?int $tahapId = null): array
+    public static function data(int $tahun, ?array $hanyaTruk = null, ?array $tahapIds = null): array
     {
         $aset = AsetTruk::truk()->pluck('no_lambung')->flip();
+        $pilih = $tahapIds !== null ? array_flip($tahapIds) : null;
         $hitung = []; // [Y-m-d][DT] => n
         $terakhir = null;
         foreach (Ritasi::whereYear('tanggal', $tahun)->whereNotNull('no_lambung')->get(['tanggal', 'no_lambung', 'tahap']) as $r) {
             $dt = NomorMobil::rapikan($r->no_lambung);
             if (! $dt || ! isset($aset[$dt]) || ($hanyaTruk !== null && ! in_array($dt, $hanyaTruk, true))
-                || ($tahapId !== null && DaftarProyek::tahapId('ritasi', $r->tahap) !== $tahapId)) {
+                || ($pilih !== null && ! isset($pilih[DaftarProyek::tahapId('ritasi', $r->tahap) ?? 0]))) {
                 continue;
             }
             $tgl = $r->tanggal->toDateString();

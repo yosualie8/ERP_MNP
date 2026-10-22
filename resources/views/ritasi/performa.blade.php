@@ -32,8 +32,8 @@
 
     @php
         $bulanKini = array_key_last($data['bulan']);
-        $judulTujuan = $tahap['nama'] ?? 'Semua proyek';
-        $namaFile = 'Performa Ritasi '.$tahun.' - '.($tahap['nama'] ?? 'Semua').' ('.now()->format('Y-m-d').').png';
+        $judulTujuan = $pilihan['label'] ?? 'Semua proyek';
+        $namaFile = 'Performa Ritasi '.$tahun.' - '.($tahap['nama'] ?? ($kata !== '' ? 'Semua '.$kata : 'Semua')).' ('.now()->format('Y-m-d').').png';
         // Teks yang ikut dibagikan = rekap bulan terakhir (bukan total setahun).
         $teksBagikan = '';
         if ($bulanKini) {
@@ -66,14 +66,18 @@
     {{-- Proyek = kolom Tahap di Data Ritasi (dicocokkan ke Daftar Proyek), terbaru dibongkar dulu. --}}
     <div class="alat-performa pilih-proyek">
         <span class="redup">Proyek:</span>
-        <input type="search" id="cari-proyek" list="daftar-proyek" autocomplete="off" placeholder="Semua proyek — ketik nama proyek / tahap…"
-            value="{{ $tahap['nama'] ?? '' }}" title="Ketik sebagian nama, lalu pilih dari saran">
+        <input type="search" id="cari-proyek" list="daftar-proyek" autocomplete="off" placeholder="Semua proyek — ketik nama proyek / tahap, atau kata lalu Enter (mis. ASG)…"
+            value="{{ $pilihan['isi'] ?? '' }}" title="Pilih satu proyek dari saran, pilih &quot;Semua yang mengandung: …&quot;, atau ketik kata lalu tekan Enter">
         <datalist id="daftar-proyek">
+            {{-- Grup: semua tahap yang namanya mengandung kata depan yang sama (ASG, Infra, …). --}}
+            @foreach ($grup as $g => $n)
+                <option value="Semua yang mengandung: {{ $g }}">{{ $n }} tahap</option>
+            @endforeach
             @foreach ($daftarTahap as $t)
                 <option value="{{ $t['nama'] }}">{{ number_format($t['rit'], 0, ',', '.') }} rit · bongkar terakhir {{ \Illuminate\Support\Carbon::parse($t['terakhir'])->translatedFormat('j M') }}{{ $t['status'] ? ' · '.$t['status'] : '' }}</option>
             @endforeach
         </datalist>
-        @if ($tahap)<a href="{{ route('ritasi.performa', ['tahun' => $tahun]) }}" class="tombol polos" style="padding: 4px 10px;">× Semua proyek</a>@endif
+        @if ($pilihan)<a href="{{ route('ritasi.performa', ['tahun' => $tahun]) }}" class="tombol polos" style="padding: 4px 10px;">× Semua proyek</a>@endif
     </div>
     <div class="alat-performa">
         <button type="button" class="tombol polos" id="buka-semua">Buka semua bulan</button>
@@ -91,7 +95,7 @@
             <div class="sub-rekap">{{ $judulTujuan }} · {{ count($data['truk']) }} truk
                 @if ($data['terakhir']) · data ritasi s/d {{ $data['terakhir']->translatedFormat('j M Y') }}@endif</div>
             @if (! $data['truk'])
-                <p style="margin: 10px 0;">Belum ada ritasi truk MNP di tahun ini{{ $tahap ? ' untuk proyek ini' : '' }}.</p>
+                <p style="margin: 10px 0;">Belum ada ritasi truk MNP di tahun ini{{ $pilihan ? ' untuk '.$pilihan['label'] : '' }}.</p>
             @else
                 <table class="pivot" data-tanpa-urut data-tanpa-saring-kolom>
                     <thead><tr><th class="kol-label">Bulan / Tanggal</th>
@@ -136,18 +140,26 @@
     <script src="{{ asset('js/html2canvas.min.js') }}"></script>
     <script>
         (() => {
-            // Saringan proyek: pilih dari saran (datalist) → muat ulang dengan ?tahap=; kosongkan → semua proyek.
+            // Saringan proyek: satu tahap dari saran (?tahap=), "Semua yang mengandung: ASG" atau kata + Enter (?kata=), kosong = semua proyek.
             const PROYEK = @json(collect($daftarTahap)->mapWithKeys(fn ($t) => [mb_strtolower($t['nama']) => $t['id']]));
+            const KINI = @json($tahap ? 'tahap='.$tahap['id'] : ($kata !== '' ? 'kata='.rawurlencode($kata) : ''));
             const cariProyek = document.getElementById('cari-proyek');
-            const keProyek = () => {
-                const v = cariProyek.value.trim().toLowerCase();
-                const id = v === '' ? '' : PROYEK[v];
-                if (id === undefined || String(id) === @json((string) ($tahap['id'] ?? ''))) return;
-                location.href = @json(route('ritasi.performa', ['tahun' => $tahun])) + (id ? '&tahap=' + id : '');
+            const tujuanProyek = (bebas) => {
+                const asli = cariProyek.value.trim(), v = asli.toLowerCase();
+                if (v === '') return '';
+                if (PROYEK[v] !== undefined) return 'tahap=' + PROYEK[v];
+                const g = asli.match(/^semua yang mengandung:\s*(.+)$/i);
+                if (g) return 'kata=' + encodeURIComponent(g[1].trim());
+                return bebas ? 'kata=' + encodeURIComponent(asli) : null; // kata bebas hanya lewat Enter
             };
-            cariProyek.addEventListener('change', keProyek);
-            cariProyek.addEventListener('input', () => { if (PROYEK[cariProyek.value.trim().toLowerCase()] !== undefined) keProyek(); });
-            cariProyek.addEventListener('search', keProyek); // tombol × di kotak isian
+            const keProyek = bebas => {
+                const q = tujuanProyek(bebas);
+                if (q === null || q === KINI) return;
+                location.href = @json(route('ritasi.performa', ['tahun' => $tahun])) + (q ? '&' + q : '');
+            };
+            cariProyek.addEventListener('change', () => keProyek(false));
+            cariProyek.addEventListener('input', () => { if (tujuanProyek(false)) keProyek(false); }); // dipilih dari saran
+            cariProyek.addEventListener('search', () => keProyek(true)); // Enter atau tombol × di kotak isian
             cariProyek.addEventListener('focus', () => cariProyek.select());
 
             const rekap = document.getElementById('rekap');
