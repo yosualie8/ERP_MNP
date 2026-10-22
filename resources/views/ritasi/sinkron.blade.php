@@ -60,7 +60,7 @@
                     @endforeach
                     @php
                         $nDo = collect($rencana['per_dt'])->sum(fn ($x) => count($x['buang']));
-                        $perKat = collect($rencana['per_dt'])->flatMap(fn ($x) => collect($x['kategori_batal'])->map(fn ($k, $kat) => [$kat, $k]))
+                        $perKat = collect($rencana['per_dt'])->flatMap(fn ($x) => collect($x['kategori_batal'])->map(fn ($k, $kat) => [$kat, $k])->values())
                             ->groupBy(0)->map(fn ($g) => ['n' => $g->sum(fn ($y) => $y[1]['n']), 'rp' => $g->sum(fn ($y) => $y[1]['rp'])]);
                     @endphp
                     <tr><td colspan="5"><b>Total</b></td><td><b>{{ $nDo }} DO</b></td>
