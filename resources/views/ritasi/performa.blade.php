@@ -35,13 +35,13 @@
     </style>
 
     @php
-        $bulanKini = array_key_last($data['bulan']);
+        // Hanya satu bulan yang terbuka (owner 22 Okt 2026): bawaan bulan terakhir, atau ?bulan=.
+        $bulanKini = $bulanBuka;
         $judulTujuan = ($pilihan['label'] ?? 'Semua proyek').($pemilik ? ' · pemilik: '.implode(', ', $pemilik) : '');
         $namaFile = 'Performa Ritasi '.$tahun.' - '.($tahap['nama'] ?? ($kata !== '' ? 'Semua '.$kata : 'Semua')).' ('.now()->format('Y-m-d').').png';
-        // Teks yang ikut dibagikan = rekap bulan terakhir (bukan total setahun).
-        $teksBagikan = '';
-        if ($bulanKini) {
-            $b = $data['bulan'][$bulanKini];
+        // Teks yang ikut dibagikan = rekap bulan yang sedang dibuka (disiapkan untuk tiap bulan; berganti saat bulan lain dibuka).
+        $teksPerBulan = [];
+        foreach ($data['bulan'] as $mTeks => $b) {
             $hariData = collect($b['hari']);
             $akhir = $hariData->last();
             $perTruk = collect($b['truk'])->sortDesc();
@@ -49,7 +49,7 @@
             $nol = $perTruk->reject(fn ($n) => $n > 0)->keys()->map(fn ($k) => str_starts_with($k, '~') ? substr($k, 1) : $k);
             $namaKolom = fn ($k) => str_starts_with($k, '~') ? substr($k, 1).' (non-MNP)' : $k;
             $rata = $hariData->count() ? $b['total'] / $hariData->count() : 0;
-            $teksBagikan = implode("\n", array_filter([
+            $teksPerBulan[$mTeks] = implode("\n", array_filter([
                 '*Rekap Ritasi '.$b['awal']->translatedFormat('F Y').'*',
                 $judulTujuan.' · data s/d '.$akhir['tanggal']->translatedFormat('j M Y'),
                 'Total: *'.number_format($b['total'], 0, ',', '.').' rit* dari '.$jalan->keys()->reject(fn ($k) => str_starts_with($k, '~'))->count().' truk MNP'
@@ -62,6 +62,7 @@
                 $nol->isNotEmpty() ? "\nTanpa rit bulan ini: ".$nol->implode(', ') : null,
             ], fn ($x) => $x !== null));
         }
+        $teksBagikan = $teksPerBulan[$bulanKini] ?? '';
     @endphp
     <div class="alat-performa">
         <span class="redup">Tahun:</span>
@@ -85,15 +86,18 @@
         </datalist>
         @if ($pilihan)<a href="{{ route('ritasi.performa', ['tahun' => $tahun]) }}" class="tombol polos" style="padding: 4px 10px;">× Semua proyek</a>@endif
     </div>
-    {{-- Proyek ASG: pilih pemilik truk yang ditampilkan (MNP = semua DT MNP; lainnya kolom oranye per pemilik). --}}
+    {{-- Proyek ASG: pilih pemilik truk yang ditampilkan (MNP = semua DT MNP; lainnya kolom oranye per pemilik). Pilihannya hanya
+         pemilik yang bongkar di bulan yang sedang dibuka (owner 22 Okt 2026); berganti saat bulan lain dibuka. --}}
     @if ($mitra && $data['pemilik_ada'])
         <form method="GET" action="{{ route('ritasi.performa') }}" class="alat-performa pilih-pemilik" id="form-pemilik">
             <input type="hidden" name="tahun" value="{{ $tahun }}">
             @if ($tahap)<input type="hidden" name="tahap" value="{{ $tahap['id'] }}">@else<input type="hidden" name="kata" value="{{ $kata }}">@endif
-            <span class="redup">Pemilik truk:</span>
+            <input type="hidden" name="bulan" id="bulan-pemilik" value="{{ $bulanKini }}">
+            <span class="redup">Pemilik truk <b id="judul-bulan-pemilik">{{ $bulanKini ? \Illuminate\Support\Carbon::create($tahun, $bulanKini, 1)->translatedFormat('F') : '' }}</b>:</span>
             @foreach ($data['pemilik_ada'] as $p => $n)
-                <label class="centang-pemilik"><input type="checkbox" name="pemilik[]" value="{{ $p }}" @checked(! $pemilik || in_array($p, $pemilik, true))>
-                    {{ $p }} <span class="redup">{{ number_format($n, 0, ',', '.') }}</span></label>
+                <label class="centang-pemilik" data-n='@json(collect($data['pemilik_bulan'])->map(fn ($x) => $x[$p] ?? 0)->filter())'>
+                    <input type="checkbox" name="pemilik[]" value="{{ $p }}" @checked(! $pemilik || in_array($p, $pemilik, true))>
+                    {{ $p }} <span class="redup n-pemilik"></span></label>
             @endforeach
             <button type="button" class="tombol polos" data-semua-pemilik="1" style="padding: 3px 10px; font-size: 12px;">Semua</button>
             <button type="button" class="tombol polos" data-semua-pemilik="0" style="padding: 3px 10px; font-size: 12px;">Kosongkan</button>
@@ -101,9 +105,7 @@
         </form>
     @endif
     <div class="alat-performa">
-        <button type="button" class="tombol polos" id="buka-semua">Buka semua bulan</button>
-        <button type="button" class="tombol polos" id="tutup-semua">Tutup semua</button>
-        <span class="redup" style="font-size: 13px;">Klik baris bulan untuk membuka/menutup rincian per tanggal. Gambar yang dibagikan mengikuti tampilan saat ini.</span>
+        <span class="redup" style="font-size: 13px;">Klik baris bulan untuk membuka rincian per tanggal — hanya satu bulan yang terbuka. Gambar yang dibagikan mengikuti tampilan saat ini.</span>
         <span style="margin-left: auto; display: flex; gap: 8px;">
             <button type="button" class="tombol polos" id="unduh-gambar">⬇ Unduh gambar</button>
             <button type="button" class="tombol" id="bagikan-gambar">📤 Bagikan ke WhatsApp</button>
@@ -196,16 +198,40 @@
             });
 
             const rekap = document.getElementById('rekap');
+            // Hanya satu bulan terbuka (warna kuning ikut bulan yang terbuka); pilihan pemilik & teks rekap mengikuti bulan itu.
+            const TEKS_BULAN = @json((object) $teksPerBulan);
+            const NAMA_BULAN = @json((object) collect($data['bulan'])->map(fn ($b) => $b['awal']->translatedFormat('F'))->all());
+            let teks = @json($teksBagikan);
+            const aturPemilik = m => {
+                const form = document.getElementById('form-pemilik');
+                if (!form) return;
+                form.hidden = !m;
+                document.getElementById('bulan-pemilik').value = m || '';
+                document.getElementById('judul-bulan-pemilik').textContent = m ? NAMA_BULAN[m] : '';
+                form.querySelectorAll('label.centang-pemilik').forEach(l => {
+                    const n = JSON.parse(l.dataset.n || '{}')[m] || 0;
+                    l.hidden = !n;
+                    l.querySelector('input').disabled = !n; // pemilik yang tidak bongkar di bulan ini tidak ikut dikirim
+                    l.querySelector('.n-pemilik').textContent = n ? n.toLocaleString('id-ID') : '';
+                });
+            };
             const atur = (tb, buka) => {
-                tb.querySelectorAll('tr.hari').forEach(tr => tr.hidden = !buka);
+                tb.querySelectorAll('tr.hari').forEach(tr => { tr.hidden = !buka; tr.classList.toggle('kini', buka); });
+                tb.querySelector('tr.bln').classList.toggle('kini', buka);
                 const t = tb.querySelector('tr.bln .tanda'); if (t) t.textContent = buka ? '⊟' : '⊞';
             };
-            rekap.querySelectorAll('tbody[data-bulan]').forEach(tb => tb.querySelector('tr.bln').addEventListener('click', () => atur(tb, tb.querySelector('tr.hari')?.hidden)));
-            document.getElementById('buka-semua').addEventListener('click', () => rekap.querySelectorAll('tbody[data-bulan]').forEach(tb => atur(tb, true)));
-            document.getElementById('tutup-semua').addEventListener('click', () => rekap.querySelectorAll('tbody[data-bulan]').forEach(tb => atur(tb, false)));
+            const bukaBulan = tbBuka => {
+                rekap.querySelectorAll('tbody[data-bulan]').forEach(tb => atur(tb, tb === tbBuka));
+                const m = tbBuka?.dataset.bulan || '';
+                aturPemilik(m);
+                teks = TEKS_BULAN[m] || '';
+                const pre = document.getElementById('teks-rekap'); if (pre) pre.textContent = teks;
+            };
+            rekap.querySelectorAll('tbody[data-bulan]').forEach(tb => tb.querySelector('tr.bln').addEventListener('click', () =>
+                bukaBulan(tb.querySelector('tr.hari')?.hidden ? tb : null)));
+            aturPemilik(@json((string) ($bulanKini ?? '')));
 
             const namaFile = @json($namaFile);
-            const teks = @json($teksBagikan);
             // Seluruh tabel (termasuk kolom yang tergulir) dijadikan PNG.
             const gambar = async () => {
                 const kanvas = await html2canvas(rekap, {

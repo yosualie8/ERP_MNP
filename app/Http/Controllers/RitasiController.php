@@ -55,7 +55,10 @@ class RitasiController extends Controller
         $pemilik = $mitra && is_array($request->query('pemilik')) ? array_values(array_filter(array_map('strval', $request->query('pemilik')))) : null;
         $data = PerformaRitasi::data($tahun, null, $tahap ? [$tahap['id']] : ($kata !== '' ? $idKata : null), $mitra, $pemilik ?: null);
 
-        return view('ritasi.performa', compact('daftarTahun', 'tahun', 'daftarTahap', 'tahap', 'kata', 'grup', 'pilihan', 'mitra', 'pemilik', 'data'));
+        // Hanya satu bulan yang dibuka (?bulan=, bawaan bulan terakhir); pilihan pemilik mengikuti bulan itu.
+        $bulanBuka = isset($data['bulan'][$request->integer('bulan')]) ? $request->integer('bulan') : array_key_last($data['bulan']);
+
+        return view('ritasi.performa', compact('daftarTahun', 'tahun', 'daftarTahap', 'tahap', 'kata', 'grup', 'pilihan', 'mitra', 'pemilik', 'data', 'bulanBuka'));
     }
 
     /** Monitor Ritasi: DO yang sudah ada uang jalannya di Kas UJ tetapi belum ada di data Ritasi (belum bongkar). */
