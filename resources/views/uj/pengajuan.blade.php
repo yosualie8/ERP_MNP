@@ -126,7 +126,8 @@
                     <tr class="t ada-bon">
                         <td>@if ($bolehRealisasi && $p->detail->where('status', 'menunggu')->isNotEmpty())<input type="checkbox" class="pilih-semua-pj" data-pj="{{ $p->id }}" title="Pilih semua detail {{ $p->kode() }} yang masih menunggu"> @endif<span class="panah">▸</span> <b>{{ $p->kode() }}</b> <span class="jumlah-bon">{{ $p->detail->count() }}</span></td>
                         <td>{{ $p->tanggal->translatedFormat('j M Y') }}</td>
-                        <td><b>{{ $p->detail->pluck('nama')->filter()->unique()->take(4)->implode(', ') }}</b>@if ($p->detail->pluck('nama')->filter()->unique()->count() > 4) …@endif</td>
+                        {{-- ringkas-gl: ringkasan sopir detail — saringan kolom Driver dicek per baris detail, bukan ringkasan ini. --}}
+                        <td class="ringkas-gl"><b>{{ $p->detail->pluck('nama')->filter()->unique()->take(4)->implode(', ') }}</b>@if ($p->detail->pluck('nama')->filter()->unique()->count() > 4) …@endif</td>
                         <td class="ringkas-gl">{{ $p->detail->pluck('kategori')->unique()->take(3)->implode(', ') }}</td>
                         <td class="angka"><b>{{ rp($p->nominal) }}</b></td>
                         <td><span @class(['label', 'kuning' => $p->status === 'sebagian', 'hijau' => $p->status === 'selesai', 'merah' => $p->status === 'batal'])>{{ \App\Models\UjPengajuan::STATUS[$p->status] }}</span>
