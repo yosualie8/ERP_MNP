@@ -36,6 +36,14 @@
                 <input id="cost_center_baru" name="cost_center_baru" value="{{ old('cost_center_baru') }}" placeholder="nama cost center, mis. Subang" maxlength="20" autocomplete="off" style="margin-top: 6px;"></div>
         </div>
         <div class="baris">
+            {{-- Kata kunci Kode GL (owner 22 Okt 2026): Kode GL Kas Harian yang memuat salah satu kata ini dihitung ke tahap ini. --}}
+            <div style="grid-column: 1 / -1;"><label for="kata_gl">Kata kunci Kode GL <span class="redup" style="font-weight: 400;">(boleh beberapa, pisahkan dengan koma)</span></label>
+                <input id="kata_gl" name="kata_gl" value="{{ $isi('kata_gl') }}" maxlength="500" placeholder="mis. Subang, Ritasi Subang" autocomplete="off">
+                <div class="redup" style="font-size: 12px; margin-top: 4px;">Transaksi Kas Harian yang Kode GL-nya memuat salah satu kata ini (kata utuh, huruf besar/kecil sama) dihitung ke tahap ini.
+                    Urutan: Pilah Transaksi manual → nomor tahap di Kode GL (mis. "ASG T113") → kata kunci ini → cost center.
+                    Bila satu Kode GL cocok dengan kata kunci beberapa tahap, yang kata kuncinya paling panjang menang; bila tetap seri, tidak dibagi otomatis (pilih di Pilah Transaksi).</div></div>
+        </div>
+        <div class="baris">
             <div><label for="surveyor">Surveyor</label><input id="surveyor" name="surveyor" value="{{ $isi('surveyor') }}" list="daftar-surveyor" placeholder="mis. Bobby" autocomplete="off">
                 <datalist id="daftar-surveyor">@foreach (\App\Models\ProyekTahap::whereNotNull('surveyor')->distinct()->orderBy('surveyor')->pluck('surveyor') as $s)<option value="{{ $s }}">@endforeach</datalist></div>
             <div style="grid-column: span 2;"><label for="lokasi">Lokasi pekerjaan</label><input id="lokasi" name="lokasi" value="{{ $isi('lokasi') }}" placeholder="mis. Parkiran Ginza" autocomplete="off"></div>

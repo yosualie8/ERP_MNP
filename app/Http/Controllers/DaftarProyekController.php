@@ -141,7 +141,22 @@ class DaftarProyekController extends Controller
         }
         $this->catat($request, 'proyek-tambah', "Tahap baru {$tahap->nama} ({$tahap->proyek->nama})", $tahap->toArray());
 
-        return redirect()->route('proyek.show', $tahap)->with('success', "Tahap {$tahap->nama} ditambahkan.");
+        return redirect()->route('proyek.show', $tahap)->with('success', "Tahap {$tahap->nama} ditambahkan.".$this->pesanKataGl($tahap));
+    }
+
+    /** Peringatan bila kata kunci Kode GL tahap ini juga dipakai tahap lain (Kode GL itu tidak dibagi otomatis — Pilah Transaksi). */
+    private function pesanKataGl(ProyekTahap $tahap): string
+    {
+        $kata = collect(DaftarProyek::pecahKata($tahap->kata_gl))->map(fn ($k) => mb_strtolower($k))->flip();
+        if ($kata->isEmpty()) {
+            return '';
+        }
+        $sama = ProyekTahap::where('id', '!=', $tahap->id)->whereNotNull('kata_gl')->where('kata_gl', '!=', '')->get(['nama', 'kata_gl'])
+            ->map(fn ($t) => [$t->nama, collect(DaftarProyek::pecahKata($t->kata_gl))->filter(fn ($k) => isset($kata[mb_strtolower($k)]))->implode(', ')])
+            ->filter(fn ($x) => $x[1] !== '');
+
+        return $sama->isEmpty() ? '' : ' Perhatian: kata kunci Kode GL yang sama juga dipakai '.$sama->map(fn ($x) => "{$x[0]} ({$x[1]})")->implode('; ')
+            .' — Kode GL yang cocok ke keduanya tidak dibagi otomatis, pilih tahapnya di Pilah Transaksi.';
     }
 
     public function update(Request $request, ProyekTahap $tahap): RedirectResponse
@@ -156,7 +171,7 @@ class DaftarProyekController extends Controller
             $induk->delete();
         }
 
-        return redirect()->route('proyek.show', $tahap)->with('success', "Tahap {$tahap->nama} disimpan.");
+        return redirect()->route('proyek.show', $tahap)->with('success', "Tahap {$tahap->nama} disimpan.".$this->pesanKataGl($tahap));
     }
 
     /** Petakan nama dari Ritasi/BBM/Kas ke sebuah tahap (dari panel "belum terpetakan" atau form tahap). */
@@ -221,6 +236,7 @@ class DaftarProyekController extends Controller
             'surveyor' => ['nullable', 'string', 'max:100'],
             'lokasi' => ['nullable', 'string', 'max:200'],
             'cost_center' => ['nullable', Rule::exists('cost_center', 'kode')],
+            'kata_gl' => ['nullable', 'string', 'max:500'],
             'volume' => ['nullable', 'numeric', 'min:0'],
             'luas' => ['nullable', 'numeric', 'min:0'],
             'catatan' => ['nullable', 'string', 'max:2000'],
@@ -243,6 +259,8 @@ class DaftarProyekController extends Controller
             'bayar_verlix.date' => 'Tanggal bayar komisi Verlix belum benar (contoh 15-Agu-2025).',
             '*.numeric' => 'Isian angka belum benar.', '*.integer' => 'Isian angka belum benar.',
         ]);
+        // Kata kunci Kode GL: dipisah koma, dirapikan & tanpa dobel ("Subang,  ritasi subang" → "Subang, ritasi subang").
+        $d['kata_gl'] = implode(', ', DaftarProyek::pecahKata($d['kata_gl'] ?? null)) ?: null;
         if (! empty($d['proyek_baru'])) {
             $d['proyek_id'] = Proyek::firstOrCreate(['nama' => trim($d['proyek_baru'])], ['urutan' => (int) Proyek::max('urutan') + 1])->id;
         }

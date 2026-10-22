@@ -45,7 +45,8 @@ class DaftarProyek
     }
 
     /**
-     * Tahap untuk satu transaksi detail Kas Harian: kode tahap (cost center + T-nomor), lalu cost center saja.
+     * Tahap untuk satu transaksi detail Kas Harian (Pilah Transaksi manual didahulukan oleh pemanggil): kode tahap (cost center
+     * + T-nomor), lalu KATA KUNCI Kode GL tahap (proyek_tahap.kata_gl, owner 22 Okt 2026), lalu cost center saja.
      * Aturan owner: Biaya BBM PM dibagi menurut tanggal (Tahap 1 < 11 Jul 2026 ≤ Tahap 2 ≤ 5 Agu 2026 < Infra).
      */
     public static function tahapKas(?string $cc, ?string $ref, ?string $akun, string $tanggal): ?int
@@ -58,8 +59,61 @@ class DaftarProyek
         if ($cc && $ref && ($id = self::tahapId('kas', $cc.' '.$ref))) {
             return $id;
         }
+        // Kode GL = akun + cost center + T-nomor (lihat UraiKodeGl::urai). Cocok ke kata kunci >1 tahap (seri) = tidak dibagi
+        // otomatis — muncul di Pilah Transaksi untuk dipilih admin.
+        $kata = self::tahapKataGl(trim(implode(' ', array_filter([$akun, $cc, $ref]))));
+        if ($kata !== null) {
+            return $kata ?: null;
+        }
 
         return self::tahapId('kas_cc', $cc ?: '-');
+    }
+
+    /** @var array<int, array{0: string, 1: int}>|null [kata, id tahap] */
+    private static ?array $kataGl = null;
+
+    /** @var array<string, int|false|null> hasil per teks Kode GL */
+    private static array $hasilKataGl = [];
+
+    /** Daftar kata kunci Kode GL dari isian tahap ("Subang, Ritasi Subang"), dipakai ulang selama satu permintaan. */
+    public static function kataGl(): array
+    {
+        return self::$kataGl ??= \App\Models\ProyekTahap::whereNotNull('kata_gl')->where('kata_gl', '!=', '')->get(['id', 'kata_gl'])
+            ->flatMap(fn ($t) => collect(self::pecahKata($t->kata_gl))->map(fn ($k) => [$k, $t->id]))->values()->all();
+    }
+
+    /** @return string[] kata kunci yang dipisah koma, dirapikan & tanpa dobel */
+    public static function pecahKata(?string $isi): array
+    {
+        return collect(explode(',', (string) $isi))->map(fn ($k) => trim(preg_replace('/\s+/', ' ', $k)))->filter()
+            ->unique(fn ($k) => mb_strtolower($k))->values()->all();
+    }
+
+    /**
+     * Tahap yang kata kuncinya ada di teks Kode GL (kata utuh, huruf besar/kecil diabaikan). Beberapa tahap cocok: yang kata
+     * kuncinya paling panjang menang; masih seri antar tahap berbeda = false (tidak dibagi otomatis). null = tidak ada yang cocok.
+     */
+    public static function tahapKataGl(string $teks): int|false|null
+    {
+        if ($teks === '' || ! self::kataGl()) {
+            return null;
+        }
+        if (array_key_exists($teks, self::$hasilKataGl)) {
+            return self::$hasilKataGl[$teks];
+        }
+        $cocok = [];
+        foreach (self::kataGl() as [$kata, $id]) {
+            if (preg_match('/(?<![\pL\d])'.preg_quote($kata, '/').'(?![\pL\d])/iu', $teks)) {
+                $cocok[$id] = max($cocok[$id] ?? 0, mb_strlen($kata));
+            }
+        }
+        if (! $cocok) {
+            return self::$hasilKataGl[$teks] = null;
+        }
+        $terpanjang = max($cocok);
+        $menang = array_keys(array_filter($cocok, fn ($n) => $n === $terpanjang));
+
+        return self::$hasilKataGl[$teks] = count($menang) === 1 ? $menang[0] : false;
     }
 
     /**
