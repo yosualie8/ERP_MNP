@@ -31,6 +31,8 @@ class Kernel extends ConsoleKernel
         $schedule->command('mnp:impor-bbm')->everyFiveMinutes()->withoutOverlapping();
         // Mutasi Rekening PT (BCA): file Drive diperiksa tiap 30 menit, diimpor hanya bila berubah.
         $schedule->command('mnp:impor-mutasi-pt')->everyThirtyMinutes()->withoutOverlapping();
+        // Rekening baru yang diketik langsung di sheet Kas Harian / Kas UJ ikut masuk Daftar Rekening (yang sudah ada tidak diubah).
+        $schedule->command('mnp:isi-rekening')->hourlyAt(20)->withoutOverlapping();
     }
 
     /**

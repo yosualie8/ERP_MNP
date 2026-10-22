@@ -111,7 +111,9 @@
                                 {{ $t->tanggal?->translatedFormat('j M') }}
                                 @if ($detail->count() > 1)<span class="jumlah-bon" title="{{ $detail->count() }} baris detail">{{ $detail->count() }}</span>@endif
                             </td>
-                            <td><b>{{ $t->nama ?? '—' }}</b> <span class="redup">{{ $t->bank }} {{ $t->rekening }}</span></td>
+                            @php($pemilik = $pemilikRek[\App\Models\Rekening::kunci($t->rekening)] ?? null)
+                            {{-- Penerima = pemilik rekening (Daftar Rekening); nama di sheet adalah sopir baris pertama. --}}
+                            <td title="{{ $pemilik && $pemilik !== $t->nama ? 'Pemilik rekening (Daftar Rekening). Nama di sheet: '.$t->nama : '' }}"><b>{{ $pemilik ?? $t->nama ?? '—' }}</b> <span class="redup">{{ $t->bank }} {{ $t->rekening }}</span></td>
                             <td>{{ $detail->first()?->keterangan }}@if ($t->nominal && $jumlah !== $t->nominal) <i class="x" title="Jumlah detail (tanpa biaya transfer) tidak sama dengan Nominal Master">detail {{ rp($jumlah) }}</i>@endif</td>
                             <td class="ringkas-gl">{{ $detail->reject->biaya_transfer->pluck('kategori')->filter()->unique()->take(3)->implode(', ') }}</td>
                             <td class="ringkas-gl">{{ $detail->pluck('no_mobil')->filter()->unique()->take(3)->implode(', ') }}</td>

@@ -110,6 +110,8 @@
         .saran .rek { font-size: 13px; color: var(--redup); }
         .saran .rek b { color: var(--teks); font-weight: 600; font-variant-numeric: tabular-nums; }
         .saran .pakai { font-size: 11px; color: var(--redup); white-space: nowrap; }
+        .catatan-rek { margin-top: 6px; font-size: 12.5px; color: #f0c05a; }
+        .catatan-rek button { margin-left: 6px; font-size: 12px; padding: 2px 8px; border-radius: 6px; border: 1px solid var(--garis-kuat); background: var(--kartu-2); color: var(--teks); cursor: pointer; }
         .saran mark { background: var(--tanda); color: inherit; padding: 0; }
         .kartu-foto .penampil { height: 62vh; margin-top: 10px; }
         .gambar-kecil .tambah-foto { width: 68px; height: 68px; border: 2px dashed var(--garis); color: var(--redup); font-size: 26px; }
@@ -231,6 +233,7 @@
                     <label for="nama_tujuan">Nama penerima transfer</label>
                     <input type="text" name="nama" id="nama_tujuan" value="{{ old('nama', $edit['nama'] ?? ($dariBayarTanah['master']['nama'] ?? (count($driverPengajuan = collect($dariPengajuan ?? [])->pluck('nama')->filter()->unique()) === 1 ? $driverPengajuan->first() : ''))) }}" autocomplete="off" required placeholder="Ketik nama, pilih rekeningnya dari daftar">
                     <div class="saran" id="saran-nama" hidden></div>
+                    <div class="catatan-rek" id="catatan-rek" hidden></div>
                 </div>
             </div>
             <div class="baris2" @if ($ajukan) style="display: none;" @endif>
@@ -446,6 +449,16 @@
             const aturJenis = tr => isiOtomatis(tr.querySelector('[data-nama=jenis_kendaraan]'), jenisMobil[kunciMobil(tr.querySelector('[data-nama=no_mobil]').value)] || '');
             const nama = document.getElementById('nama_tujuan');
             const aturNamaPertama = () => { const tr = barisDetail()[0]; if (tr && !AJUKAN) isiOtomatis(tr.querySelector('[data-nama=nama]'), nama.value.trim()); };
+            // Rekening dipilih dari Daftar Rekening: penerima = pemilik rekening, tetapi kolom Nama baris pertama = SOPIR. Isi dengan sopir yang
+            // dicari ("dipakai untuk Bambang"), atau pemilik bila rekening itu memang dipakai pemiliknya sendiri / belum pernah dipakai di Kas UJ.
+            const isiSopirPertama = r => {
+                const tr = barisDetail()[0];
+                if (!tr || AJUKAN) return;
+                const sopir = r.sopir || [];
+                const nm = r.via && sopir.some(s => s.toLowerCase() === r.via.toLowerCase()) ? r.via
+                    : (!sopir.length || sopir.some(s => s.toLowerCase() === (r.nama || '').toLowerCase()) ? r.nama : '');
+                if (nm) isiOtomatis(tr.querySelector('[data-nama=nama]'), nm);
+            };
 
             const tambah = (isi = {}) => {
                 const tr = templat.content.firstElementChild.cloneNode(true);
@@ -908,13 +921,25 @@
             };
             const otomatis = new Set();
             const isi = (el, v) => { el.value = v ?? ''; otomatis.add(el); };
+            // Nama yang diketik berbeda dengan pemilik rekening di Daftar Rekening → diingatkan (tidak memblokir).
+            const catatanRek = document.getElementById('catatan-rek');
+            const cekPemilik = () => {
+                const r = rekening.find(x => x.kunci && x.kunci === kunciRek(noRek.value));
+                const beda = !!(r && !r.belum && nama.value.trim() && kecil(nama.value) !== kecil(r.nama));
+                catatanRek.hidden = !beda;
+                if (!beda) return;
+                catatanRek.innerHTML = `ⓘ Rekening ini terdaftar atas nama <b>${esc(r.nama)}</b> di Daftar Rekening.<button type="button">Pakai nama ini</button>`;
+                catatanRek.querySelector('button').addEventListener('click', () => { nama.value = r.nama; otomatis.delete(nama); cekPemilik(); });
+            };
             const cocokNama = q => {
                 q = kecil(q);
                 if (!q) return [];
+                const skorTeks = n => n === q ? 0 : n.startsWith(q) ? 1 : n.split(/\s+/).some(k => k.startsWith(q)) ? 2 : n.includes(q) ? 3 : -1;
                 return rekening.map(r => {
-                    const n = kecil(r.nama);
-                    const skor = n === q ? 0 : n.startsWith(q) ? 1 : n.split(/\s+/).some(k => k.startsWith(q)) ? 2 : n.includes(q) ? 3 : -1;
-                    return {r, skor};
+                    let skor = skorTeks(kecil(r.nama)), via = null;
+                    // Daftar Rekening: tulisan lain & nama sopir yang memakai rekening ini ikut dicari (ketik "Bambang" → rekening yang biasa dipakai Bambang).
+                    if (skor < 0) (r.alias || []).forEach(a => { const s = skorTeks(kecil(a)); if (s >= 0 && (via === null || s + 4 < skor)) { skor = s + 4; via = a; } });
+                    return {r: via ? {...r, via} : r, skor};
                 }).filter(x => x.skor >= 0).sort((a, b) => a.skor - b.skor || b.r.dipakai - a.r.dipakai).map(x => x.r);
             };
             const cocokNorek = q => {
@@ -930,7 +955,7 @@
                 const tampilkan = daftar.slice(0, 8);
                 panel.innerHTML = (judul ? `<div class="judul-saran">${esc(judul)}</div>` : '') + tampilkan.map((r, i) => `
                     <button type="button" data-i="${i}">
-                        <span><b>${tandai(r.nama, cariNama)}</b><br><span class="rek">${esc(r.bank || 'Bank ?')} · <b>${tandai(r.no_rek, cariNorek)}</b></span></span>
+                        <span><b>${r.nama ? tandai(r.nama, cariNama) : '<i>pemilik belum diisi</i>'}</b>${r.via ? ` <span class="rek">· dipakai untuk ${tandai(r.via, cariNama)}</span>` : ''}<br><span class="rek">${esc(r.bank || 'Bank ?')} · <b>${tandai(r.no_rek, cariNorek)}</b></span></span>
                         <span class="pakai">${r.dipakai}× · terakhir ${esc(r.terakhir)}</span>
                     </button>`).join('') + (daftar.length > 8 ? `<div class="judul-saran">${daftar.length - 8} lainnya, ketik lebih lengkap</div>` : '');
                 panel.classList.toggle('menetap', menetap);
@@ -941,8 +966,8 @@
             const pilih = r => {
                 nama.value = r.nama; noRek.value = r.no_rek; bank.value = r.bank || ''; bank.rapikan();
                 [nama, noRek, bank].forEach(el => otomatis.delete(el));
-                tutup(saranNama); tutup(saranNorek);
-                aturBiaya(); aturNamaPertama();
+                tutup(saranNama); tutup(saranNorek); cekPemilik();
+                aturBiaya(); isiSopirPertama(r);
                 nominalTransfer.focus();
             };
             nama.addEventListener('input', () => {
@@ -955,6 +980,7 @@
             nama.addEventListener('focus', () => nama.value.trim() && nama.dispatchEvent(new Event('input')));
             nama.addEventListener('blur', () => {
                 tutup(saranNama);
+                setTimeout(cekPemilik);
                 const persis = rekening.filter(r => kecil(r.nama) === kecil(nama.value));
                 const norekBebas = !noRek.value || otomatis.has(noRek);
                 if (persis.length === 1 && norekBebas) {
@@ -975,9 +1001,10 @@
             noRek.addEventListener('focus', () => noRek.value.trim() && noRek.dispatchEvent(new Event('input')));
             noRek.addEventListener('blur', () => {
                 tutup(saranNorek);
+                setTimeout(cekPemilik);
                 const persis = rekening.filter(r => r.kunci === kunciRek(noRek.value));
                 if (persis.length === 1) {
-                    if (!nama.value || otomatis.has(nama)) { isi(nama, persis[0].nama); aturNamaPertama(); }
+                    if (!nama.value || otomatis.has(nama)) { isi(nama, persis[0].nama); isiSopirPertama(persis[0]); }
                     if (!bank.value || otomatis.has(bank)) { isi(bank, persis[0].bank); bank.rapikan(); }
                     aturBiaya();
                 } else if (persis.length > 1 && (!nama.value || otomatis.has(nama))) {

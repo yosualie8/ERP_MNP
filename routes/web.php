@@ -138,6 +138,10 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/kas/belum-reimburse.xlsx', [ReimburseKasController::class, 'unduhBelum'])->name('kas.belum-reimburse');
     Route::get('/kas/kode-gl', [KasController::class, 'kodeGl'])->name('kas.kode-gl');
     // Kas uang jalan dump truck (lembar "Kas Seabank").
+    // Daftar Rekening: database rekening bersama Kas Harian & Kas UJ (satu nomor = satu nama pemilik).
+    Route::get('/rekening', [\App\Http\Controllers\RekeningController::class, 'index'])->name('rekening.index');
+    Route::post('/rekening', [\App\Http\Controllers\RekeningController::class, 'simpan'])->name('rekening.simpan');
+    Route::patch('/rekening/{rekening}', [\App\Http\Controllers\RekeningController::class, 'ubah'])->whereNumber('rekening')->name('rekening.ubah');
     Route::get('/uj', [UjController::class, 'index'])->name('uj.index');
     Route::get('/uj/input', [UjController::class, 'create'])->name('uj.input');
     Route::post('/uj/input', [UjController::class, 'store'])->name('uj.store');

@@ -58,7 +58,10 @@ class UjController extends Controller
                     fn ($query) => $query->whereBetween('tanggal', [$periode->awal(), $periode->akhir()]))
                 ->when($q !== '', function ($query) use ($q) {
                     $like = '%'.$q.'%';
+                    // Cari juga nama pemilik rekening (Daftar Rekening), mis. "Jumagar" → transfer ke rekeningnya.
+                    $kunciRek = \App\Models\Rekening::where('nama', 'like', $like)->pluck('kunci')->all();
                     $query->where(fn ($w) => $w->where('nama', 'like', $like)->orWhere('rekening', 'like', $like)
+                        ->when($kunciRek, fn ($x) => $x->orWhereIn(DB::raw("TRIM(LEADING '0' FROM REGEXP_REPLACE(rekening, '[^0-9]', ''))"), $kunciRek))
                         ->orWhereHas('detail', fn ($d) => $d->where('keterangan', 'like', $like)->orWhere('nama', 'like', $like)
                             ->orWhere('id_uj', 'like', $like)->orWhere('no_mobil', 'like', $like)->orWhere('no_do', 'like', $like)
                             ->orWhere('kategori', 'like', $like)));
@@ -70,12 +73,14 @@ class UjController extends Controller
                 });
             }
         }
+        // Pemilik rekening dari Daftar Rekening (kolom Nama di sheet = sopir, bukan penerima transfer).
+        $pemilikRek = \App\Support\DaftarRekening::pemilik($transaksi->pluck('rekening'));
         $jumlahPengalihan = $pengalihan->countBy('jenis')->all();
         $jumlahFoto = KasFoto::uj()->whereIn('no_id', $transaksi->pluck('no_uj')->filter())
             ->selectRaw('no_id, COUNT(*) as n')->groupBy('no_id')->pluck('n', 'no_id');
         $diimpor = Cache::get('uj-diimpor-pada');
 
-        return view('uj.index', compact('daftarBulan', 'bulan', 'q', 'transaksi', 'jumlahFoto', 'diimpor', 'periode', 'pengalihan', 'alih', 'jumlahPengalihan')
+        return view('uj.index', compact('daftarBulan', 'bulan', 'q', 'transaksi', 'jumlahFoto', 'diimpor', 'periode', 'pengalihan', 'alih', 'jumlahPengalihan', 'pemilikRek')
             + ['bolehInput' => $request->user()->bolehMenu('input-uj'), 'bolehPengalihan' => $request->user()->bolehMenu('pengalihan-uj')]);
     }
 
@@ -255,19 +260,10 @@ class UjController extends Controller
         });
     }
 
-    /** Rekening tujuan yang pernah dipakai (nama + bank + nomor), untuk saran dua arah seperti Input Kas. */
+    /** Saran rekening (nama pemilik + bank + nomor) dari Daftar Rekening — sama untuk Input Kas & Input UJ. */
     private function daftarRekening(): array
     {
-        return UjTransaksi::whereNotNull('rekening')->where('rekening', '!=', '')
-            ->select('nama', 'rekening', 'bank', DB::raw('COUNT(*) as n'), DB::raw('MAX(tanggal) as terakhir'))
-            ->groupBy('nama', 'rekening', 'bank')->get()
-            ->map(fn ($r) => ['nama' => trim((string) $r->nama), 'bank' => $r->bank, 'no_rek' => preg_replace('/\D/', '', $r->rekening),
-                'kunci' => ltrim(preg_replace('/\D/', '', $r->rekening), '0'), 'dipakai' => (int) $r->n, 'urut' => $r->terakhir,
-                'terakhir' => $r->terakhir ? Carbon::parse($r->terakhir)->translatedFormat('j M Y') : '-'])
-            ->filter(fn ($r) => $r['kunci'] !== '')
-            ->groupBy(fn ($r) => mb_strtolower($r['nama']).'|'.mb_strtolower((string) $r['bank']).'|'.$r['kunci'])
-            ->map(fn ($g) => [...$g->sortByDesc('dipakai')->first(), 'dipakai' => $g->sum('dipakai'), 'urut' => $g->max('urut')])
-            ->sortByDesc('urut')->map(fn ($r) => collect($r)->except('urut')->all())->values()->all();
+        return \App\Support\DaftarRekening::saran();
     }
 
     /**
@@ -576,6 +572,8 @@ class UjController extends Controller
         $jumlahFoto = $this->simpanFoto($request, $hasil['no_uj'], $input['tanggal']);
         $rekapTanah?->update(['status' => 'dibayar', 'no_uj' => $hasil['no_uj'], 'dibayar_pada' => now(), 'dibayar_oleh' => $request->user()->id]);
 
+        // Rekening baru masuk Daftar Rekening (nama penerima Input UJ dicatat "perlu dicek": sering diisi nama sopir).
+        \App\Support\DaftarRekening::catat($input['rekening'] ?? null, $input['bank'] ?? null, $input['nama'] ?? null, $request->user()->id, false);
         KasRiwayat::create([
             'aksi' => 'uj-tambah', 'lembar' => 'Seabank', 'baris_awal' => $hasil['baris_awal'], 'baris_akhir' => $hasil['baris_akhir'],
             'ringkasan' => mb_strimwidth($this->ringkasanInput($input), 0, 490, '…'),
@@ -646,6 +644,8 @@ class UjController extends Controller
             TautanUj::pastikanSegera($hasil['no_uj']); // kolom Bon dikosongkan saat ditulis ulang → chip ditulis lagi
         }
 
+        // Rekening baru masuk Daftar Rekening (nama penerima Input UJ dicatat "perlu dicek": sering diisi nama sopir).
+        \App\Support\DaftarRekening::catat($input['rekening'] ?? null, $input['bank'] ?? null, $input['nama'] ?? null, $request->user()->id, false);
         KasRiwayat::create([
             'aksi' => 'uj-ubah', 'lembar' => 'Seabank', 'baris_awal' => $hasil['baris_awal'], 'baris_akhir' => $hasil['baris_akhir'],
             'ringkasan' => mb_strimwidth("{$ringkasLama} → ".$this->ringkasanInput($input), 0, 490, '…'),

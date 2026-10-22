@@ -68,39 +68,10 @@ class KasInputController extends Controller
         return view('kas.input', compact('kodeGl', 'pic', 'rekening', 'bank', 'modelKode', 'aset', 'kataGl'));
     }
 
-    /**
-     * Semua rekening tujuan yang pernah dipakai (nama + bank + nomor), untuk saran dua arah di form.
-     * Nomor yang sama setelah nol di depan dan tanda baca diabaikan digabung (sheet sering menghapus nol depan),
-     * memakai tulisan yang paling sering dipakai.
-     *
-     * @return array<int, array{nama: string, bank: ?string, no_rek: string, kunci: string, dipakai: int, terakhir: string}>
-     */
+    /** Saran rekening (nama pemilik + bank + nomor) dari Daftar Rekening — sama untuk Input Kas & Input UJ. */
     private function daftarRekening(): array
     {
-        return KasTransfer::whereNotNull('nama_tujuan')->whereNotNull('no_rek_tujuan')
-            ->select('nama_tujuan', 'no_rek_tujuan', 'bank_tujuan', DB::raw('COUNT(*) as n'), DB::raw('MAX(tanggal) as terakhir'))
-            ->groupBy('nama_tujuan', 'no_rek_tujuan', 'bank_tujuan')
-            ->get()
-            ->map(fn ($r) => [...$r->toArray(), 'kunci' => ltrim(preg_replace('/\D/', '', $r->no_rek_tujuan), '0')])
-            ->filter(fn ($r) => $r['kunci'] !== '')
-            ->groupBy(fn ($r) => mb_strtolower(trim($r['nama_tujuan'])).'|'.mb_strtolower(trim((string) $r['bank_tujuan'])).'|'.$r['kunci'])
-            ->map(function ($varian) {
-                $utama = $varian->sortByDesc(fn ($r) => [$r['n'], strlen(preg_replace('/\D/', '', $r['no_rek_tujuan']))])->first();
-
-                return [
-                    'nama' => trim($utama['nama_tujuan']),
-                    'bank' => $utama['bank_tujuan'],
-                    'no_rek' => preg_replace('/[^\d]/', '', $utama['no_rek_tujuan']),
-                    'kunci' => $utama['kunci'],
-                    'dipakai' => (int) $varian->sum('n'),
-                    'terakhir' => Carbon::parse($varian->max('terakhir'))->translatedFormat('j M Y'),
-                    'urut' => $varian->max('terakhir'),
-                ];
-            })
-            ->sortByDesc('urut')
-            ->map(fn ($r) => collect($r)->except('urut')->all())
-            ->values()
-            ->all();
+        return \App\Support\DaftarRekening::saran();
     }
 
     /**
@@ -247,6 +218,10 @@ class KasInputController extends Controller
             'isi' => ['input' => [...$input, 'tanggal' => $tanggal->toDateString()], 'no_id' => $hasil['no_id']],
             'user_id' => $request->user()->id,
         ]);
+        // Rekening tujuan baru masuk Daftar Rekening (nama Kas Harian = nama pemilik rekening).
+        if ($input['arah'] === 'keluar') {
+            \App\Support\DaftarRekening::catat($input['no_rek'], $input['bank'], $input['nama_tujuan'], $request->user()->id, true);
+        }
         // Dicek sebelum impor ulang, karena impor itulah yang membuat akun barunya.
         $akunBaru = collect($input['bon'])->pluck('kode_gl')
             ->map(fn ($k) => UraiKodeGl::urai($k)['akun'])->filter()
@@ -431,6 +406,9 @@ class KasInputController extends Controller
             'isi' => ['sebelum' => $hasil['sebelum'], 'input' => [...$input, 'tanggal' => $input['tanggal']->toDateString()], 'no_id' => $hasil['no_id']],
             'user_id' => $request->user()->id,
         ]);
+        if ($input['arah'] === 'keluar') {
+            \App\Support\DaftarRekening::catat($input['no_rek'], $input['bank'], $input['nama_tujuan'], $request->user()->id, true);
+        }
         $pesanImpor = $this->imporUlang($hasil['lembar']);
         if ($hasil['lembar_lama'] !== $hasil['lembar']) {
             $pesanImpor .= $this->imporUlang($hasil['lembar_lama']);
