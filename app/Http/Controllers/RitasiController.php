@@ -51,9 +51,11 @@ class RitasiController extends Controller
             : ($kata !== '' ? ['label' => "Semua proyek mengandung \"{$kata}\" ({$cocokKata->count()} tahap)", 'isi' => "Semua yang mengandung: {$kata}"] : null);
         // Proyek ASG (owner 22 Okt 2026): truk selain MNP ikut ditampilkan, dikelompokkan per pemilik.
         $mitra = (bool) preg_match('/\bASG\b/i', $tahap['nama'] ?? $kata);
-        $data = PerformaRitasi::data($tahun, null, $tahap ? [$tahap['id']] : ($kata !== '' ? $idKata : null), $mitra);
+        // ...dan bisa dipilih pemilik mana saja yang tampil (?pemilik[]=MNP&pemilik[]=RUDI; kosong = semua).
+        $pemilik = $mitra && is_array($request->query('pemilik')) ? array_values(array_filter(array_map('strval', $request->query('pemilik')))) : null;
+        $data = PerformaRitasi::data($tahun, null, $tahap ? [$tahap['id']] : ($kata !== '' ? $idKata : null), $mitra, $pemilik ?: null);
 
-        return view('ritasi.performa', compact('daftarTahun', 'tahun', 'daftarTahap', 'tahap', 'kata', 'grup', 'pilihan', 'data'));
+        return view('ritasi.performa', compact('daftarTahun', 'tahun', 'daftarTahap', 'tahap', 'kata', 'grup', 'pilihan', 'mitra', 'pemilik', 'data'));
     }
 
     /** Monitor Ritasi: DO yang sudah ada uang jalannya di Kas UJ tetapi belum ada di data Ritasi (belum bongkar). */

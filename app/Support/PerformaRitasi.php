@@ -47,12 +47,15 @@ class PerformaRitasi
      * @param  int[]|null  $tahapIds  hanya rit yang kolom Tahap-nya di Data Ritasi = salah satu tahap Daftar Proyek ini (owner 22 Okt 2026)
      * @param  bool  $termasukMitra  truk selain MNP ikut dihitung (owner 22 Okt 2026: untuk proyek ASG) — dikelompokkan per PEMILIK
      *                               (kunci "~RUDI"), karena hampir semuanya tanpa nomor DT (hanya plat, ±120 plat)
-     * @return array{truk: string[], mitra: string[], label: array<string, string>, bulan: array<int, array>, total: array<string, int>, jumlah: int, terakhir: ?Carbon}
+     * @param  string[]|null  $pemilik  hanya pemilik ini ("MNP" = semua DT MNP; selain itu label pemilik non-MNP, mis. "RUDI"); null = semua
+     * @return array{truk: string[], mitra: string[], label: array<string, string>, pemilik_ada: array<string, int>, bulan: array<int, array>, total: array<string, int>, jumlah: int, terakhir: ?Carbon}
      */
-    public static function data(int $tahun, ?array $hanyaTruk = null, ?array $tahapIds = null, bool $termasukMitra = false): array
+    public static function data(int $tahun, ?array $hanyaTruk = null, ?array $tahapIds = null, bool $termasukMitra = false, ?array $pemilik = null): array
     {
         $aset = AsetTruk::truk()->pluck('no_lambung')->flip();
         $pilih = $tahapIds !== null ? array_flip($tahapIds) : null;
+        $pilihPemilik = $pemilik !== null ? array_flip($pemilik) : null;
+        $pemilikAda = []; // pemilik → jumlah rit (sebelum disaring pemilik), untuk pilihan centang
         $hitung = []; // [Y-m-d][DT] => n
         $terakhir = null;
         $q = Ritasi::whereYear('tanggal', $tahun)->when(! $termasukMitra, fn ($q) => $q->whereNotNull('no_lambung'));
@@ -69,6 +72,11 @@ class PerformaRitasi
                 $p = trim(preg_replace('/\s+/', ' ', (string) $r->pemilik));
                 $dt = '~'.(($p === '' ? '(tanpa pemilik)' : (strcasecmp($p, 'MNP') === 0 ? 'MNP tanpa DT' : $p)));
             } elseif ($hanyaTruk !== null && ! in_array($dt, $hanyaTruk, true)) {
+                continue;
+            }
+            $grupPemilik = str_starts_with($dt, '~') ? substr($dt, 1) : 'MNP';
+            $pemilikAda[$grupPemilik] = ($pemilikAda[$grupPemilik] ?? 0) + 1;
+            if ($pilihPemilik !== null && ! isset($pilihPemilik[$grupPemilik])) {
                 continue;
             }
             $tgl = $r->tanggal->toDateString();
@@ -105,6 +113,9 @@ class PerformaRitasi
             $bulan[$m] = ['awal' => $awal, 'truk' => $perTruk, 'total' => array_sum($perTruk), 'hari' => $hari];
         }
 
-        return ['truk' => $truk, 'mitra' => $mitra, 'label' => $label, 'bulan' => $bulan, 'total' => $total, 'jumlah' => array_sum($total), 'terakhir' => $terakhir];
+        // MNP dulu, lalu pemilik non-MNP urut jumlah rit terbanyak.
+        uksort($pemilikAda, fn ($a, $b) => [$a !== 'MNP', -$pemilikAda[$a], $a] <=> [$b !== 'MNP', -$pemilikAda[$b], $b]);
+
+        return ['truk' => $truk, 'mitra' => $mitra, 'label' => $label, 'pemilik_ada' => $pemilikAda, 'bulan' => $bulan, 'total' => $total, 'jumlah' => array_sum($total), 'terakhir' => $terakhir];
     }
 }

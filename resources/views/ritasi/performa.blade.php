@@ -20,6 +20,8 @@
         table.pivot thead th.mitra { background: #f8cbad; white-space: normal; max-width: 56px; font-size: 11px; line-height: 1.1; }
         .pilih-proyek { display: flex; gap: 6px; align-items: center; }
         .pilih-proyek input { width: 340px; max-width: 70vw; }
+        .pilih-pemilik { gap: 6px 12px; }
+        .pilih-pemilik .centang-pemilik { display: inline-flex; gap: 5px; align-items: center; margin: 0; font-weight: 400; cursor: pointer; white-space: nowrap; }
         table.pivot tr.bln td { background: #00b0f0; font-weight: 700; cursor: pointer; }
         table.pivot tr.bln.kini td { background: #ffff00; }
         table.pivot tr.hari td { background: #fff; font-weight: 400; }
@@ -34,7 +36,7 @@
 
     @php
         $bulanKini = array_key_last($data['bulan']);
-        $judulTujuan = $pilihan['label'] ?? 'Semua proyek';
+        $judulTujuan = ($pilihan['label'] ?? 'Semua proyek').($pemilik ? ' · pemilik: '.implode(', ', $pemilik) : '');
         $namaFile = 'Performa Ritasi '.$tahun.' - '.($tahap['nama'] ?? ($kata !== '' ? 'Semua '.$kata : 'Semua')).' ('.now()->format('Y-m-d').').png';
         // Teks yang ikut dibagikan = rekap bulan terakhir (bukan total setahun).
         $teksBagikan = '';
@@ -83,6 +85,21 @@
         </datalist>
         @if ($pilihan)<a href="{{ route('ritasi.performa', ['tahun' => $tahun]) }}" class="tombol polos" style="padding: 4px 10px;">× Semua proyek</a>@endif
     </div>
+    {{-- Proyek ASG: pilih pemilik truk yang ditampilkan (MNP = semua DT MNP; lainnya kolom oranye per pemilik). --}}
+    @if ($mitra && $data['pemilik_ada'])
+        <form method="GET" action="{{ route('ritasi.performa') }}" class="alat-performa pilih-pemilik" id="form-pemilik">
+            <input type="hidden" name="tahun" value="{{ $tahun }}">
+            @if ($tahap)<input type="hidden" name="tahap" value="{{ $tahap['id'] }}">@else<input type="hidden" name="kata" value="{{ $kata }}">@endif
+            <span class="redup">Pemilik truk:</span>
+            @foreach ($data['pemilik_ada'] as $p => $n)
+                <label class="centang-pemilik"><input type="checkbox" name="pemilik[]" value="{{ $p }}" @checked(! $pemilik || in_array($p, $pemilik, true))>
+                    {{ $p }} <span class="redup">{{ number_format($n, 0, ',', '.') }}</span></label>
+            @endforeach
+            <button type="button" class="tombol polos" data-semua-pemilik="1" style="padding: 3px 10px; font-size: 12px;">Semua</button>
+            <button type="button" class="tombol polos" data-semua-pemilik="0" style="padding: 3px 10px; font-size: 12px;">Kosongkan</button>
+            <button type="submit" class="tombol" style="padding: 4px 14px;">Terapkan</button>
+        </form>
+    @endif
     <div class="alat-performa">
         <button type="button" class="tombol polos" id="buka-semua">Buka semua bulan</button>
         <button type="button" class="tombol polos" id="tutup-semua">Tutup semua</button>
@@ -169,6 +186,14 @@
             cariProyek.addEventListener('input', () => { if (tujuanProyek(false)) keProyek(false); }); // dipilih dari saran
             cariProyek.addEventListener('search', () => keProyek(true)); // Enter atau tombol × di kotak isian
             cariProyek.addEventListener('focus', () => cariProyek.select());
+            // Pilihan pemilik (proyek ASG): tombol Semua / Kosongkan; Terapkan tanpa centang = semua pemilik.
+            document.querySelectorAll('[data-semua-pemilik]').forEach(b => b.addEventListener('click', () =>
+                document.querySelectorAll('#form-pemilik input[name="pemilik[]"]').forEach(c => { c.checked = b.dataset.semuaPemilik === '1'; })));
+            document.getElementById('form-pemilik')?.addEventListener('submit', e => {
+                const c = [...e.target.querySelectorAll('input[name="pemilik[]"]')];
+                if (c.every(x => x.checked)) c.forEach(x => { x.disabled = true; }); // semua dicentang = tanpa saringan (URL pendek)
+                else if (!c.some(x => x.checked)) { e.preventDefault(); alert('Centang minimal satu pemilik truk.'); }
+            });
 
             const rekap = document.getElementById('rekap');
             const atur = (tb, buka) => {
