@@ -117,8 +117,9 @@
     @endif
     <div class="kartu gulir" style="padding: 0;">
         <table class="kas">
-            {{-- Keperluan ditaruh sesudah kolom Diajukan supaya kolom lain tetap sejajar dengan baris detail (saringan kolom). --}}
-            <thead><tr><th>Kode</th><th>Tanggal pengajuan</th><th>Driver</th><th>Kategori</th><th class="angka">Total</th><th>Status</th><th>Transfer (Kas Harian)</th><th>Diajukan</th><th>Keperluan</th><th></th></tr></thead>
+            {{-- Kolom baris detail (tr.b) HARUS sejajar dengan judul ini: saringan kolom grid mencocokkan detail per indeks kolom.
+                 No Mobil / No DO / Driver / Kategori / Status disaring per detail; sel master ber-ringkas-gl hanya ringkasan. --}}
+            <thead><tr><th>Kode</th><th>Tanggal pengajuan</th><th>No Mobil</th><th>Driver</th><th>Kategori</th><th>No DO</th><th class="angka">Total</th><th>Status</th><th>Transfer (Kas Harian)</th><th>Diajukan</th><th>Keperluan / Keterangan</th><th></th></tr></thead>
             @forelse ($pengajuan as $p)
                 @php($real = $p->detail->whereIn('status', ['terealisasi', 'dialihkan']))
                 @php($nBeda = $p->detail->filter(fn ($d) => $d->berbeda())->count())
@@ -126,9 +127,11 @@
                     <tr class="t ada-bon">
                         <td>@if ($bolehRealisasi && $p->detail->where('status', 'menunggu')->isNotEmpty())<input type="checkbox" class="pilih-semua-pj" data-pj="{{ $p->id }}" title="Pilih semua detail {{ $p->kode() }} yang masih menunggu"> @endif<span class="panah">▸</span> <b>{{ $p->kode() }}</b> <span class="jumlah-bon">{{ $p->detail->count() }}</span></td>
                         <td>{{ $p->tanggal->translatedFormat('j M Y') }}</td>
-                        {{-- ringkas-gl: ringkasan sopir detail — saringan kolom Driver dicek per baris detail, bukan ringkasan ini. --}}
+                        {{-- ringkas-gl: ringkasan detail — saringan kolomnya dicek per baris detail, bukan ringkasan ini. --}}
+                        <td class="ringkas-gl redup" style="font-size: 12px; white-space: nowrap;">{{ $p->detail->pluck('no_mobil')->filter()->unique()->count() }} mobil</td>
                         <td class="ringkas-gl"><b>{{ $p->detail->pluck('nama')->filter()->unique()->take(4)->implode(', ') }}</b>@if ($p->detail->pluck('nama')->filter()->unique()->count() > 4) …@endif</td>
                         <td class="ringkas-gl">{{ $p->detail->pluck('kategori')->unique()->take(3)->implode(', ') }}</td>
+                        <td class="ringkas-gl redup" style="font-size: 12px; white-space: nowrap;">{{ $p->detail->pluck('no_do')->filter()->unique()->count() }} DO</td>
                         <td class="angka"><b>{{ rp($p->nominal) }}</b></td>
                         <td><span @class(['label', 'kuning' => $p->status === 'sebagian', 'hijau' => $p->status === 'selesai', 'merah' => $p->status === 'batal'])>{{ \App\Models\UjPengajuan::STATUS[$p->status] }}</span>
                             @if ($nBeda)<span class="label kuning" title="Realisasi tidak sama dengan pengajuan">⚠ {{ $nBeda }} tidak sesuai</span>@endif
@@ -178,7 +181,7 @@
                             @endif
                         </td>
                     </tr>
-                    <tr class="bh"><td>Detail</td><td>No Mobil</td><td>Driver</td><td class="angka">Nominal</td><td>Kategori</td><td>No DO</td><td>Keterangan</td><td>Status</td><td></td><td></td></tr>
+                    <tr class="bh"><td>Detail</td><td></td><td>No Mobil</td><td>Driver</td><td>Kategori</td><td>No DO</td><td class="angka">Nominal</td><td>Status</td><td></td><td></td><td>Keterangan</td><td></td></tr>
                     @foreach ($p->detail as $d)
                         @php($teksStatus = $d->jenis_realisasi === 'penyesuaian' ? 'Terealisasi (berbeda)' : ['menunggu' => 'Menunggu', 'terealisasi' => 'Terealisasi', 'dialihkan' => 'Dialihkan', 'batal' => 'Dibatalkan'][$d->status] ?? $d->status)
                         <tr @class(['b', $d->status, 'berbeda' => $d->jenis_realisasi === 'penyesuaian']) data-detail
@@ -188,17 +191,20 @@
                             title="{{ $teksStatus }}{{ $d->id_uj ? ' · '.$d->id_uj : '' }}{{ $d->realisasi_pada ? ' · '.$d->realisasi_pada->translatedFormat('j M') : '' }} · {{ $d->keterangan }}{{ $d->temuan ? ' · FLAG dikonfirmasi: '.$d->konfirmasi : '' }}">
                             <td>@if ($bolehRealisasi && $d->status === 'menunggu')<input type="checkbox" class="pilih-real" value="{{ $d->id }}" data-pj="{{ $p->id }}" data-nominal="{{ (int) $d->nominal - (int) $d->saldo }}"
                                 data-nama="{{ $d->nama }}" title="Pilih untuk direalisasikan bersama (satu transfer)">@endif</td>
+                            <td></td>
                             <td>{{ $d->no_mobil ?: '–' }}</td>
                             <td>{{ $d->nama }}</td>
-                            <td class="angka">{{ rp($d->nominal) }}@if ($d->saldo)<div style="font-size: 11px; color: #93c5fd;" title="Dibayar dari saldo sopir (UJ yang dialihkan) — tidak ditransfer">💰 saldo {{ rp($d->saldo) }} · transfer {{ rp($d->nominal - $d->saldo) }}</div>@endif</td>
                             <td>{{ $d->kategori }}</td>
                             <td>{{ $d->no_do ?: '–' }}</td>
-                            <td style="font-size: 12px; min-width: 180px;">{{ $d->keterangan }}</td>
-                            <td style="font-size: 12px; white-space: nowrap;" class="redup">{{ $teksStatus }}{{ $d->id_uj ? ' · '.$d->id_uj : '' }}</td><td></td><td></td>
+                            <td class="angka" data-n="{{ (int) $d->nominal }}" data-nilai="{{ rp($d->nominal) }}">{{ rp($d->nominal) }}@if ($d->saldo)<div style="font-size: 11px; color: #93c5fd;" title="Dibayar dari saldo sopir (UJ yang dialihkan) — tidak ditransfer">💰 saldo {{ rp($d->saldo) }} · transfer {{ rp($d->nominal - $d->saldo) }}</div>@endif</td>
+                            <td style="font-size: 12px; white-space: nowrap;" class="redup" data-nilai="{{ $teksStatus }}">{{ $teksStatus }}{{ $d->id_uj ? ' · '.$d->id_uj : '' }}</td>
+                            <td></td><td></td>
+                            <td style="font-size: 12px; min-width: 180px; white-space: normal;">{{ $d->keterangan }}</td>
+                            <td></td>
                         </tr>
                         @if ($d->berbeda() && $d->realisasi)
                             @php($r = $d->realisasi)
-                            <tr class="realisasi"><td></td><td colspan="9">
+                            <tr class="realisasi"><td></td><td colspan="11">
                                 <div @class(['info-beda', 'dialihkan' => $d->jenis_realisasi === 'dialihkan'])>
                                     <span @class(['label', 'ungu' => $d->jenis_realisasi === 'dialihkan', 'kuning' => $d->jenis_realisasi !== 'dialihkan'])>{{ $d->jenis_realisasi === 'dialihkan' ? '↪ Dialihkan' : '≠ Penyesuaian' }}</span>
                                     <b>Realisasi {{ $r['id_uj'] ?? $d->id_uj }}:</b> {{ $r['keterangan'] ?? '' }} · {{ $r['kategori'] ?? '' }}@if (! empty($r['no_mobil'])) · {{ $r['no_mobil'] }}@endif @if (! empty($r['no_do'])) · DO {{ $r['no_do'] }}@endif · <b>{{ rp((int) ($r['nominal'] ?? 0)) }}</b>
@@ -211,7 +217,7 @@
                     @endforeach
                 </tbody>
             @empty
-                <tbody><tr><td colspan="10" class="redup" style="padding: 20px 14px;">{{ $beda ? 'Belum ada realisasi yang tidak sesuai dengan pengajuannya.' : 'Belum ada pengajuan uang jalan.' }}</td></tr></tbody>
+                <tbody><tr><td colspan="12" class="redup" style="padding: 20px 14px;">{{ $beda ? 'Belum ada realisasi yang tidak sesuai dengan pengajuannya.' : 'Belum ada pengajuan uang jalan.' }}</td></tr></tbody>
             @endforelse
         </table>
     </div>
