@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\DB;
  * Sinkron data bongkaran (upload Excel surat jalan di Monitor Ritasi) dengan satu Pengajuan UJ (owner 22 Okt 2026): DO pengajuan yang
  * tidak punya bongkaran dibatalkan. Hanya pengajuan yang belum ada realisasinya (daftarPengajuan / tolak). Dicocokkan per DT: jumlah
  * surat jalan DT itu di Excel = jumlah DO pengajuan yang dipertahankan — DO yang sudah tercatat bongkar di Data Ritasi selalu
- * dipertahankan, sisanya urut nomor DO. Untuk DO yang dibuang, SEMUA baris pengajuannya
+ * dipertahankan; dari DO lainnya yang dibatalkan nomor TERKECIL dulu (nomor terbesar dipertahankan). Untuk DO yang dibuang, SEMUA baris pengajuannya
  * (Uang Jalan, Uang Tanah, dst.) dibatalkan bila masih menunggu; yang sudah ditransfer (terealisasi / dialihkan) hanya dilaporkan.
  */
 class SinkronPengajuan
@@ -86,13 +86,13 @@ class SinkronPengajuan
             $perDo = $baris->filter(fn ($d) => $kunci($d->no_do))->groupBy(fn ($d) => $kunci($d->no_do));
             $urut = $perDo->keys()->sortBy(fn ($do) => [isset($sudahBongkar[$do]) ? 0 : 1, str_pad((string) $do, 12, '0', STR_PAD_LEFT)])->values();
             $n = $rit[$dt] ?? 0;
-            // DO yang sudah tercatat bongkar di Data Ritasi TIDAK PERNAH dibatalkan (walau Excel menyebut lebih sedikit rit);
-            // sisa kuota dipakai DO lain urut nomor.
+            // DO yang sudah tercatat bongkar di Data Ritasi TIDAK PERNAH dibatalkan (walau Excel menyebut lebih sedikit rit).
+            // Dari DO lain (urut nomor naik), yang dibatalkan nomor TERKECIL dulu; nomor terbesar dipertahankan (owner 22 Okt 2026).
             $bongkar = $urut->filter(fn ($do) => isset($sudahBongkar[$do]))->values();
             $lain = $urut->reject(fn ($do) => isset($sudahBongkar[$do]))->values();
-            $sisaKuota = max(0, $n - $bongkar->count());
-            $simpan = $bongkar->concat($lain->take($sisaKuota))->values();
-            $buang = $lain->slice($sisaKuota)->values();
+            $jumlahBuang = max(0, $lain->count() - max(0, $n - $bongkar->count()));
+            $buang = $lain->take($jumlahBuang)->values();
+            $simpan = $bongkar->concat($lain->slice($jumlahBuang))->values();
             foreach ($buang as $do) {
                 foreach ($perDo[$do] as $d) {
                     if ($d->status === 'menunggu') {

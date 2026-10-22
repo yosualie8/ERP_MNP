@@ -14,7 +14,7 @@
     </style>
 
     <p class="redup" style="margin-top: 0;">Bandingkan satu <b>upload Excel surat jalan</b> (Monitor Ritasi) dengan satu <b>Pengajuan UJ</b>. Per DT, jumlah surat jalan di Excel =
-        jumlah DO pengajuan yang dipertahankan (DO yang sudah tercatat bongkar di Data Ritasi <b>selalu</b> dipertahankan, sisanya urut nomor DO). DO sisanya dibatalkan —
+        jumlah DO pengajuan yang dipertahankan (DO yang sudah tercatat bongkar di Data Ritasi <b>selalu</b> dipertahankan; dari DO lainnya yang dibatalkan <b>nomor DO terkecil dulu</b>). DO yang dibatalkan —
         semua barisnya (Uang Jalan, Uang Tanah, dst.). Hanya pengajuan yang <b>belum ada baris terealisasi</b> yang bisa disinkronkan.</p>
 
     <form method="GET" action="{{ route('ritasi.monitor.sinkron') }}" class="kartu pilih-sinkron">
