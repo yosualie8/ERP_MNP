@@ -75,7 +75,7 @@
             <div class="gulir">
             <table class="bon" style="min-width: 1880px;">
                 <thead><tr>
-                    <th style="width: 100px;">Tanggal</th><th style="width: 190px;">Tahap</th><th style="width: 80px;">No Seri</th><th style="width: 62px;">Jam</th>
+                    <th style="width: 100px;" title="Tanggal bongkar menurut surat jalan">Tanggal bongkar</th><th style="width: 190px;">Tahap</th><th style="width: 80px;">No Seri</th><th style="width: 62px;">Jam</th>
                     <th style="width: 84px;">No DO</th><th style="width: 82px;" title="Diambil dari Kas UJ lewat No DO">No Lambung 🔒</th><th style="width: 104px;" title="Diambil dari Kas UJ lewat No DO">Driver 🔒</th>
                     <th style="width: 84px;" title="Diambil dari Kas UJ lewat No DO">Jenis 🔒</th><th style="width: 112px;">Plat</th><th style="width: 92px;">Pemilik</th><th style="width: 130px;">Galian</th>
                     <th style="width: 120px;">Jenis tanah</th><th style="width: 92px;">Jenis buangan</th><th style="width: 108px;" class="angka">Harga jual</th><th style="width: 70px;" class="angka" title="Terisi otomatis dari kubikasi standar jenis kendaraan; boleh diketik sendiri">Kubikasi (m³)</th><th>Keterangan</th><th style="width: 26px;"></th>

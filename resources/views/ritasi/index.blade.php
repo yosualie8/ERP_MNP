@@ -35,7 +35,7 @@
         <div class="kartu gulir" style="padding: 0;">
             <table class="kas" data-saring-kolom>
                 <thead>
-                    <tr><th>Tanggal</th><th>Tahap</th><th>No Seri</th><th>DT · Plat / Driver</th><th>Galian</th><th>Tanah · Buangan</th><th>Kendaraan · Pemilik</th><th>No DO</th><th class="angka">Kubikasi</th><th class="angka">Harga jual</th><th></th></tr>
+                    <tr><th title="Tanggal & jam bongkar menurut surat jalan">Tanggal bongkar</th><th>Tahap</th><th>No Seri</th><th>DT · Plat / Driver</th><th>Galian</th><th>Tanah · Buangan</th><th>Kendaraan · Pemilik</th><th>No DO</th><th class="angka">Kubikasi</th><th class="angka">Harga jual</th><th></th></tr>
                 </thead>
                 <tbody>
                     @forelse ($rit as $r)
