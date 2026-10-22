@@ -37,6 +37,11 @@
         table.grid-beku > thead th { background: var(--kartu, #1e2229); box-shadow: inset 1px 0 0 var(--garis, #333), inset 0 -1px 0 var(--garis-kuat, #4a5160); }
         table.grid-beku > tbody > tr > td + td { border-left: 1px solid var(--garis, #333); }
         .grid-gulir { overflow: auto !important; }
+        /* Urut per kolom: klik judul. */
+        th.bisa-urut { cursor: pointer; user-select: none; }
+        th.bisa-urut:hover { color: var(--aksen, #e5484d); }
+        th .urut-ikon { margin-left: 4px; font-size: 10px; opacity: .35; font-weight: 400; }
+        th .urut-ikon.aktif { opacity: 1; color: var(--aksen, #e5484d); }
         /* Sel yang dipilih untuk navigasi panah. */
         table.grid-beku td.sel-aktif { outline: 2px solid var(--aksen, #e5484d); outline-offset: -2px; background: rgba(229, 72, 77, .10); }`;
     document.head.appendChild(gaya);
@@ -200,6 +205,79 @@
             barisSaring.dispatchEvent(new Event('input', {bubbles: true}));
         };
         isian.forEach(x => x.addEventListener('input', terapkan));
+
+        // ── Urut per kolom: klik judul kolom → naik ▲ → turun ▼ → urutan asli. Angka (rupiah, m³, %) sebagai angka, tanggal
+        // ("21 Okt", "21 Okt 2026", 21/10/2026, data-n yyyy-mm-dd) sebagai tanggal, selain itu teks. Nilai kosong selalu di bawah.
+        // Baris biasa: baris rincian ber-colspan di bawahnya ikut pindah; baris Total/Jumlah tetap di bawah. Grup: tiap tbody.grup
+        // diurutkan menurut baris master-nya. Judul ber-atribut data-tanpa-urut tidak bisa diurutkan.
+        const blokUrut = () => grup
+            ? [{wadah: tabel, isi: [...tabel.tBodies].filter(tb => tb.querySelector('tr.t'))}]
+            : [...tabel.tBodies].map(tb => {
+                const isi = [];
+                [...tb.rows].forEach(tr => {
+                    if (tr.cells.length > 1 || !isi.length) isi.push({baris: [tr]});
+                    else isi[isi.length - 1].baris.push(tr); // rincian ber-colspan ikut baris di atasnya
+                });
+                return {wadah: tb, isi};
+            });
+        const elUrut = b => grup ? b : b.baris[0];
+        const tetap = b => !grup && b.baris[0].cells.length > 1 && /^(total|jumlah|sub ?total|grand total)\b/i.test(nilaiSel(b.baris[0].cells[0]));
+        const BULAN = {jan: 1, feb: 2, mar: 3, apr: 4, mei: 5, may: 5, jun: 6, jul: 7, agu: 8, agt: 8, ags: 8, aug: 8, sep: 9, okt: 10, oct: 10, nov: 11, des: 12, dec: 12};
+        const kunciUrut = td => {
+            if (!td) return null;
+            if (td.dataset.n !== undefined && td.dataset.n !== '') return /^-?\d+(\.\d+)?$/.test(td.dataset.n) ? +td.dataset.n : td.dataset.n;
+            const t = nilaiSel(td);
+            if (t === '' || t === '-' || t === '—') return null;
+            // Tanggal (+ jam bila ada di sel yang sama, mis. "21 Okt 9:14") → "yyyy-mm-dd hh:mm" supaya bisa dibandingkan sebagai teks.
+            const jam = s => { const j = s.match(/\b(\d{1,2})[:.](\d{2})\b/); return j ? ` ${j[1].padStart(2, '0')}:${j[2]}` : ''; };
+            let m = t.match(/^(\d{1,2})\s+([A-Za-z]{3})[a-z]*\.?(?:\s+(\d{4}))?/);
+            if (m && BULAN[m[2].toLowerCase()]) return `${m[3] || new Date().getFullYear()}-${String(BULAN[m[2].toLowerCase()]).padStart(2, '0')}-${m[1].padStart(2, '0')}${jam(t.slice(m[0].length))}`;
+            if ((m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/))) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}${jam(t.slice(m[0].length))}`;
+            if (/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0, 10) + jam(t.slice(10));
+            // Angka: rupiah, satuan, No DO bertanda petik di depan (`0018).
+            if (/^[`']?[-+]?\s*(rp\.?\s*)?[\d.,]+\s*(%|m³|m3|l|liter|jam|rit|kg|hari|x)?$/i.test(t)) { const a = angka(t); if (!isNaN(a)) return a; }
+            return t.toLowerCase();
+        };
+        let urutKolom = null, urutArah = 0; // 1 naik, -1 turun, 0 = urutan asli
+        const ikonUrut = {};
+        const urutkan = k => {
+            urutArah = urutKolom === k ? (urutArah === 1 ? -1 : 0) : 1;
+            urutKolom = urutArah ? k : null;
+            Object.entries(ikonUrut).forEach(([i, s]) => { s.textContent = +i === urutKolom ? (urutArah === 1 ? '▲' : '▼') : '⇅'; s.classList.toggle('aktif', +i === urutKolom); });
+            blokUrut().forEach(({wadah, isi}) => {
+                isi.forEach((b, i) => { elUrut(b).dataset.urutAsal ??= i; }); // urutan asli dicatat sekali
+                const asal = b => +elUrut(b).dataset.urutAsal;
+                const kunci = new Map(isi.map(b => [b, urutKolom === null ? null : kunciUrut((grup ? b.querySelector('tr.t') : b.baris[0]).cells[urutKolom])]));
+                const nilai = [...kunci.values()].filter(v => v !== null);
+                const semuaAngka = nilai.every(v => typeof v === 'number');
+                const banding = (a, b) => {
+                    const x = kunci.get(a), y = kunci.get(b);
+                    if (urutKolom === null || (x === null && y === null)) return asal(a) - asal(b);
+                    if (x === null || y === null) return x === null ? 1 : -1;
+                    const h = semuaAngka ? x - y : String(x).localeCompare(String(y), 'id', {numeric: true});
+                    return h ? h * urutArah : asal(a) - asal(b);
+                };
+                // Baris judul ber-colspan di awal tbody tetap di atas; baris Total/Jumlah tetap di bawah.
+                const atas = isi.filter(b => !grup && b.baris[0].cells.length <= 1);
+                const bawah = isi.filter(tetap);
+                const biasa = isi.filter(b => !atas.includes(b) && !bawah.includes(b)).sort(banding);
+                [...atas, ...biasa, ...bawah].forEach(b => (grup ? [b] : b.baris).forEach(el => wadah.appendChild(el)));
+            });
+        };
+        [...kepala.cells].forEach((th, i) => {
+            if (!th.textContent.trim() || th.hasAttribute('data-tanpa-urut') || (th.colSpan || 1) > 1) return;
+            th.classList.add('bisa-urut');
+            th.title = (th.title ? th.title + ' — ' : '') + 'Klik untuk mengurutkan';
+            const s = document.createElement('span');
+            s.className = 'urut-ikon';
+            s.textContent = '⇅';
+            th.appendChild(s);
+            ikonUrut[i] = s;
+            th.addEventListener('click', e => {
+                if (e.target.closest('a, button, input, select, textarea, label')) return;
+                urutkan(i);
+            });
+        });
 
         const bukaPilihan = (k, tombol, judul) => {
             if (popTerbuka?.dataset.kolom === String(k) && popTerbuka.dataset.tabel === tabel.dataset.idSaring) { tutupPop(); return; }
