@@ -61,7 +61,11 @@ class KasInputController extends Controller
         // No Mobil per detail dipilih dari Data Aset (truk yang belum dijual).
         $aset = AsetTruk::truk()->where('status', '!=', 'dijual')->orderBy('no_lambung')->get(['no_lambung', 'plat', 'jenis']);
 
-        return view('kas.input', compact('kodeGl', 'pic', 'rekening', 'bank', 'modelKode', 'aset'));
+        // Kata kunci Kode GL tiap tahap Daftar Proyek: form memperingatkan Kode GL yang cocok ke lebih dari satu tahap (owner 22 Okt 2026).
+        $namaTahap = \App\Models\ProyekTahap::pluck('nama', 'id');
+        $kataGl = collect(\App\Support\DaftarProyek::kataGl())->map(fn ($x) => [$x[0], $namaTahap[$x[1]] ?? '#'.$x[1]])->values();
+
+        return view('kas.input', compact('kodeGl', 'pic', 'rekening', 'bank', 'modelKode', 'aset', 'kataGl'));
     }
 
     /**

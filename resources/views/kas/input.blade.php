@@ -71,6 +71,7 @@
         /* Kode GL tebakan otomatis (ungu muda) + saran yang bisa diklik. */
         .form-kas input.tebakan { background: var(--otomatis-latar); border-color: var(--otomatis-garis); }
         .saran-kode { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+        .peringatan-gl { margin-top: 4px; font-size: 12px; line-height: 1.35; color: #f5c542; max-width: 360px; white-space: normal; }
         .saran-kode button { border: 1px solid var(--garis-kuat); background: var(--kartu-2); border-radius: 999px; padding: 1px 8px; font-size: 11px; color: var(--redup); cursor: pointer; }
         .saran-kode button:hover { border-color: var(--aksen); color: var(--teks); }
         .saran-kode button.dipilih { background: var(--aksen-muda); border-color: var(--aksen); color: var(--aksen-terang); }
@@ -274,7 +275,7 @@
             <td><input type="hidden" class="uj-kunci"><input type="text" class="angka-input rupiah" data-nama="nominal" inputmode="numeric" autocomplete="off" required></td>
             <td><input type="text" data-nama="pic" list="daftar-pic" autocomplete="off"></td>
             <td><input type="text" data-nama="keterangan" autocomplete="off" required></td>
-            <td><input type="text" data-nama="kode_gl" list="daftar-kode" autocomplete="off" required><div class="saran-kode"></div></td>
+            <td><input type="text" data-nama="kode_gl" list="daftar-kode" autocomplete="off" required><div class="saran-kode"></div><div class="peringatan-gl" hidden></div></td>
             <td><input type="text" data-nama="no_mobil" list="daftar-aset" autocomplete="off" placeholder="DT …"></td>
             <td><button type="button" class="hapus" title="Hapus baris detail">×</button></td>
         </tr>
@@ -383,6 +384,28 @@
                     saran.appendChild(b);
                 });
             };
+            // Kode GL yang cocok ke kata kunci beberapa tahap Daftar Proyek (seri, kata kunci sama panjang) tidak dibagi otomatis —
+            // diperingatkan supaya admin memperjelas Kode GL-nya (owner 22 Okt 2026). Aturan sama dengan DaftarProyek::seriKataGl.
+            const KATA_GL = @json($kataGl);
+            const escGl = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+            const polaGl = KATA_GL.map(([kata, tahap]) => [new RegExp('(?<![\\p{L}\\d])' + kata.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\p{L}\\d])', 'iu'), [...kata].length, tahap]);
+            const cekKodeGl = tr => {
+                const el = tr?.querySelector('.peringatan-gl');
+                if (!el || !polaGl.length) return;
+                const teks = tr.querySelector('[data-nama=kode_gl]').value.trim();
+                const cocok = {};
+                polaGl.forEach(([pola, panjang, tahap]) => { if (teks && pola.test(teks)) cocok[tahap] = Math.max(cocok[tahap] || 0, panjang); });
+                const maks = Math.max(0, ...Object.values(cocok));
+                const seri = Object.keys(cocok).filter(t => cocok[t] === maks);
+                el.hidden = seri.length < 2;
+                el.innerHTML = seri.length < 2 ? '' : `⚠ Kode GL ini cocok ke ${seri.length} tahap: <b>${seri.map(escGl).join('</b>, <b>')}</b> — biayanya tidak dibagi otomatis.
+                    Perjelas Kode GL-nya supaya hanya menyebut satu tahap, atau nanti pilih tahapnya di Pilah Transaksi.`;
+            };
+            // Kode GL berubah karena diketik, dipilih dari saran, atau tebakan otomatis (keterangan / PIC diketik).
+            daftar.addEventListener('input', e => { const tr = e.target.closest('tr'); if (['kode_gl', 'keterangan', 'pic'].includes(e.target.dataset?.nama)) setTimeout(() => cekKodeGl(tr)); });
+            daftar.addEventListener('change', e => { if (e.target.dataset?.nama === 'kode_gl') cekKodeGl(e.target.closest('tr')); });
+            daftar.addEventListener('click', e => { const tr = e.target.closest('tr'); if (e.target.closest('.saran-kode button')) setTimeout(() => cekKodeGl(tr)); });
+            setTimeout(() => daftar.querySelectorAll('tr').forEach(cekKodeGl), 0); // baris yang sudah terisi (Edit / gagal simpan)
             // No Mobil: bila keterangan menyebut tepat satu truk ("Oli DT034", "DT 34") → diisi otomatis (ungu) bila truknya ada di Data Aset.
             const ASET = new Set(@json($aset->pluck('no_lambung')));
             const saranMobil = tr => {

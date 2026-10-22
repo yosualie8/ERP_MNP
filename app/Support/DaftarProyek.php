@@ -101,19 +101,75 @@ class DaftarProyek
         if (array_key_exists($teks, self::$hasilKataGl)) {
             return self::$hasilKataGl[$teks];
         }
+        $menang = self::seriKataGl($teks, true);
+
+        return self::$hasilKataGl[$teks] = ! $menang ? null : (count($menang) === 1 ? $menang[0] : false);
+    }
+
+    /**
+     * Id tahap yang kata kuncinya cocok ke teks Kode GL. $terpanjang = hanya yang kata kuncinya terpanjang (lebih dari satu = seri,
+     * tidak dibagi otomatis). Dipakai juga Pilah Transaksi (tanda "cocok ke beberapa tahap").
+     *
+     * @return int[]
+     */
+    public static function seriKataGl(string $teks, bool $terpanjang = true): array
+    {
         $cocok = [];
         foreach (self::kataGl() as [$kata, $id]) {
-            if (preg_match('/(?<![\pL\d])'.preg_quote($kata, '/').'(?![\pL\d])/iu', $teks)) {
+            if (self::kataCocok($kata, $teks)) {
                 $cocok[$id] = max($cocok[$id] ?? 0, mb_strlen($kata));
             }
         }
-        if (! $cocok) {
-            return self::$hasilKataGl[$teks] = null;
+        if (! $cocok || ! $terpanjang) {
+            return array_keys($cocok);
         }
-        $terpanjang = max($cocok);
-        $menang = array_keys(array_filter($cocok, fn ($n) => $n === $terpanjang));
+        $maks = max($cocok);
 
-        return self::$hasilKataGl[$teks] = count($menang) === 1 ? $menang[0] : false;
+        return array_keys(array_filter($cocok, fn ($n) => $n === $maks));
+    }
+
+    /** Kata kunci ada di teks sebagai kata utuh (huruf besar/kecil diabaikan). */
+    public static function kataCocok(string $kata, string $teks): bool
+    {
+        return (bool) preg_match('/(?<![\pL\d])'.preg_quote($kata, '/').'(?![\pL\d])/iu', $teks);
+    }
+
+    /**
+     * Bentrok kata kunci tahap (owner 22 Okt 2026: dilarang): kata yang sama persis dipakai tahap lain, atau Kode GL Kas Harian
+     * yang SUDAH ADA cocok ke kata kunci tahap ini sekaligus kata kunci tahap lain.
+     *
+     * @param  string[]  $kata
+     * @return string[] pesan
+     */
+    public static function bentrokKataGl(array $kata, ?int $kecualiId): array
+    {
+        if (! $kata) {
+            return [];
+        }
+        $lain = \App\Models\ProyekTahap::where('id', '!=', $kecualiId ?? 0)->whereNotNull('kata_gl')->where('kata_gl', '!=', '')->get(['id', 'nama', 'kata_gl'])
+            ->map(fn ($t) => ['nama' => $t->nama, 'kata' => self::pecahKata($t->kata_gl)]);
+        $pesan = [];
+        $kecil = collect($kata)->map(fn ($k) => mb_strtolower($k));
+        foreach ($lain as $t) {
+            $sama = collect($t['kata'])->filter(fn ($k) => $kecil->contains(mb_strtolower($k)));
+            if ($sama->isNotEmpty()) {
+                $pesan[] = 'Kata kunci "'.$sama->implode('", "').'" sudah dipakai tahap '.$t['nama'].'.';
+            }
+        }
+        // Kode GL yang sudah ada (teks yang dicocokkan = akun + cost center + T-nomor, sama dengan pembagian Kas).
+        $teksGl = \App\Models\KodeGl::with(['akun', 'costCenter'])->get()
+            ->map(fn ($g) => [$g->kode_asli, trim(implode(' ', array_filter([$g->akun?->nama, $g->costCenter?->kode, $g->ref])))])
+            ->filter(fn ($x) => $x[1] !== '');
+        foreach ($lain as $t) {
+            $kena = $teksGl->filter(fn ($x) => collect($kata)->contains(fn ($k) => self::kataCocok($k, $x[1]))
+                && collect($t['kata'])->contains(fn ($k) => self::kataCocok($k, $x[1])))->pluck(0)->unique()->values();
+            if ($kena->isNotEmpty()) {
+                $pesan[] = 'Bentrok dengan kata kunci tahap '.$t['nama'].' ("'.implode('", "', $t['kata']).'"): Kode GL '
+                    .$kena->take(5)->map(fn ($k) => '"'.$k.'"')->implode(', ').($kena->count() > 5 ? ' dan '.($kena->count() - 5).' lainnya' : '').' cocok ke keduanya.';
+            }
+        }
+
+        return $pesan;
     }
 
     /**

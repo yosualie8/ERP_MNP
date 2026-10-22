@@ -150,25 +150,30 @@ class PilahTransaksi
             ->cursor()
             ->filter(function ($r) use ($ids) {
                 $r->tahap_gl = DaftarProyek::tahapKas($r->cc, $r->ref, $r->akun, substr((string) $r->tanggal, 0, 10));
+                // Kode GL yang cocok ke kata kunci beberapa tahap (seri) tidak dibagi otomatis: ikut tampil di lingkup tahap-tahap itu.
+                $r->seri = $r->tahap_gl === null ? DaftarProyek::seriKataGl(trim(implode(' ', array_filter([$r->akun, $r->cc, $r->ref])))) : [];
+                $r->seri = count($r->seri) > 1 ? $r->seri : [];
 
-                return $r->al_sumber === 'pilah' || isset($ids[($r->abaikan ? null : $r->alokasi) ?? $r->tahap_gl]) || isset($ids[$r->tahap_gl]);
+                return $r->al_sumber === 'pilah' || isset($ids[($r->abaikan ? null : $r->alokasi) ?? $r->tahap_gl]) || isset($ids[$r->tahap_gl])
+                    || collect($r->seri)->contains(fn ($id) => isset($ids[$id]));
             })
             ->map(function ($r) use ($semuaTahap, $tag, $boq) {
                 $tgl = substr((string) $r->tanggal, 0, 10);
                 $gl = $r->tahap_gl;
                 $tahap = $r->abaikan ? null : ($r->alokasi ?: $gl);
                 $t = $tahap ? $semuaTahap[$tahap] ?? null : null;
+                $seri = $r->seri && ! $tahap && ! $r->abaikan ? collect($r->seri)->map(fn ($id) => $semuaTahap[$id]->nama ?? "#{$id}")->implode(', ') : null;
                 $hitung = $r->abaikan ? [false, 'bukan biaya (dipilah)']
-                    : (! $tahap ? [false, 'tanpa tahap'] : (Overhead::diabaikan($r->kel, $r->akun, $t?->tipe, $r->keterangan)
+                    : (! $tahap ? [false, $seri ? "⚠ cocok ke ".count($r->seri)." tahap ({$seri}) — pilih tahapnya" : 'tanpa tahap'] : (Overhead::diabaikan($r->kel, $r->akun, $t?->tipe, $r->keterangan)
                         ? [false, 'akun '.$r->akun.' — dari sumber lain'.($t?->tipe === 'infra' ? ' (alat berat / sparepart)' : ' (Ritasi / Data BBM)')]
                         : [true, $t?->pos_overhead ? 'biaya umum (dibagi Alokasi Biaya Umum)' : 'dihitung']));
 
                 return (object) ['sumber' => 'kas', 'kunci' => $r->kunci, 'tanggal' => $tgl, 'nominal' => (float) $r->nominal, 'keterangan' => (string) $r->keterangan,
                     'catatan' => null, 'pic' => $r->pic, 'akun' => $r->akun, 'kel' => $r->kel, 'kode' => $r->kode_asli, 'no_id' => $r->no_id, 'tahap_gl' => $gl, 'tahap_id' => $tahap,
                     'abaikan' => (bool) $r->abaikan, 'manual' => $r->al_sumber === 'pilah', 'dihitung' => $hitung[0], 'status' => $hitung[1],
-                    'tag' => $tag['kas'][(string) $r->no_id] ?? null, 'boq' => $boq['kas|'.$r->kunci]->item ?? null];
+                    'tag' => $tag['kas'][(string) $r->no_id] ?? null, 'boq' => $boq['kas|'.$r->kunci]->item ?? null, 'seri' => $r->seri];
             })
-            ->filter(fn ($x) => $x->manual || isset($ids[$x->tahap_id ?? $x->tahap_gl]))->collect();
+            ->filter(fn ($x) => $x->manual || isset($ids[$x->tahap_id ?? $x->tahap_gl]) || collect($x->seri)->contains(fn ($id) => isset($ids[$id])))->collect();
 
         $bca = TandaMutasiPt::baris()->filter(fn ($b) => $b->m->dbcr === 'DB' && $b->m->tanggal->toDateString() >= $dari
             && (($b->tanda?->proyek_tahap_id && isset($ids[$b->tanda->proyek_tahap_id])) || $b->status === 'belum'))

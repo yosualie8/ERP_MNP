@@ -41,7 +41,8 @@
                 <input id="kata_gl" name="kata_gl" value="{{ $isi('kata_gl') }}" maxlength="500" placeholder="mis. Subang, Ritasi Subang" autocomplete="off">
                 <div class="redup" style="font-size: 12px; margin-top: 4px;">Transaksi Kas Harian yang Kode GL-nya memuat salah satu kata ini (kata utuh, huruf besar/kecil sama) dihitung ke tahap ini.
                     Urutan: Pilah Transaksi manual → nomor tahap di Kode GL (mis. "ASG T113") → kata kunci ini → cost center.
-                    Bila satu Kode GL cocok dengan kata kunci beberapa tahap, yang kata kuncinya paling panjang menang; bila tetap seri, tidak dibagi otomatis (pilih di Pilah Transaksi).</div></div>
+                    Kata kunci yang sama dengan tahap lain, atau yang bentrok di Kode GL yang sudah ada, ditolak saat disimpan.
+                    Kode GL baru yang nanti cocok ke beberapa tahap: yang kata kuncinya paling panjang menang; bila seri, tidak dibagi otomatis (ditandai di Pilah Transaksi, dan diperingatkan saat Input Kas).</div></div>
         </div>
         <div class="baris">
             <div><label for="surveyor">Surveyor</label><input id="surveyor" name="surveyor" value="{{ $isi('surveyor') }}" list="daftar-surveyor" placeholder="mis. Bobby" autocomplete="off">
