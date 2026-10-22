@@ -16,6 +16,8 @@
         table.pivot thead th { background: #d9e1f2; font-weight: 700; color: #111; }
         table.pivot th.kol-label, table.pivot td.kol-label { text-align: left; min-width: 70px; font-weight: 700; padding: 2px 6px; }
         table.pivot .gt { font-weight: 700; padding: 2px 6px; }
+        /* Kolom truk non-MNP (proyek ASG): satu kolom per pemilik. */
+        table.pivot thead th.mitra { background: #f8cbad; white-space: normal; max-width: 56px; font-size: 11px; line-height: 1.1; }
         .pilih-proyek { display: flex; gap: 6px; align-items: center; }
         .pilih-proyek input { width: 340px; max-width: 70vw; }
         table.pivot tr.bln td { background: #00b0f0; font-weight: 700; cursor: pointer; }
@@ -42,17 +44,19 @@
             $akhir = $hariData->last();
             $perTruk = collect($b['truk'])->sortDesc();
             $jalan = $perTruk->filter();
-            $nol = $perTruk->reject(fn ($n) => $n > 0)->keys();
+            $nol = $perTruk->reject(fn ($n) => $n > 0)->keys()->map(fn ($k) => str_starts_with($k, '~') ? substr($k, 1) : $k);
+            $namaKolom = fn ($k) => str_starts_with($k, '~') ? substr($k, 1).' (non-MNP)' : $k;
             $rata = $hariData->count() ? $b['total'] / $hariData->count() : 0;
             $teksBagikan = implode("\n", array_filter([
                 '*Rekap Ritasi '.$b['awal']->translatedFormat('F Y').'*',
                 $judulTujuan.' · data s/d '.$akhir['tanggal']->translatedFormat('j M Y'),
-                'Total: *'.number_format($b['total'], 0, ',', '.').' rit* dari '.$jalan->count().' truk · rata-rata '
+                'Total: *'.number_format($b['total'], 0, ',', '.').' rit* dari '.$jalan->keys()->reject(fn ($k) => str_starts_with($k, '~'))->count().' truk MNP'
+                    .($data['mitra'] ? ' + '.$jalan->keys()->filter(fn ($k) => str_starts_with($k, '~'))->count().' pemilik non-MNP' : '').' · rata-rata '
                     .number_format($rata, 1, ',', '.').' rit/hari ('.$hariData->count().' hari)',
                 $akhir['tanggal']->translatedFormat('j M').': '.$akhir['total'].' rit',
                 '',
                 'Per truk:',
-                $jalan->map(fn ($n, $dt) => "{$dt}: {$n}")->implode("\n"),
+                $jalan->map(fn ($n, $dt) => $namaKolom($dt).": {$n}")->implode("\n"),
                 $nol->isNotEmpty() ? "\nTanpa rit bulan ini: ".$nol->implode(', ') : null,
             ], fn ($x) => $x !== null));
         }
@@ -92,14 +96,18 @@
     <div class="gulir-rekap" id="gulir-rekap">
         <div class="rekap-kertas" id="rekap">
             <div class="judul-rekap">REKAPAN RITASI PER DT THN {{ $tahun }}</div>
-            <div class="sub-rekap">{{ $judulTujuan }} · {{ count($data['truk']) }} truk
+            <div class="sub-rekap">{{ $judulTujuan }} · {{ count($data['truk']) - count($data['mitra']) }} truk MNP
+                @if ($data['mitra']) + {{ count($data['mitra']) }} pemilik non-MNP (kolom oranye, semua truknya digabung per pemilik)@endif
                 @if ($data['terakhir']) · data ritasi s/d {{ $data['terakhir']->translatedFormat('j M Y') }}@endif</div>
             @if (! $data['truk'])
                 <p style="margin: 10px 0;">Belum ada ritasi truk MNP di tahun ini{{ $pilihan ? ' untuk '.$pilihan['label'] : '' }}.</p>
             @else
                 <table class="pivot" data-tanpa-urut data-tanpa-saring-kolom>
                     <thead><tr><th class="kol-label">Bulan / Tanggal</th>
-                        @foreach ($data['truk'] as $dt)<th>{{ str_replace('DT ', '', $dt) }}</th>@endforeach
+                        @foreach ($data['truk'] as $dt)
+                            @if (str_starts_with($dt, '~'))<th class="mitra" title="Truk non-MNP milik {{ $data['label'][$dt] }} (semua plat digabung)">{{ $data['label'][$dt] }}</th>
+                            @else<th>{{ $data['label'][$dt] }}</th>@endif
+                        @endforeach
                         <th class="gt">Grand Total</th></tr></thead>
                     @foreach ($data['bulan'] as $m => $b)
                         @php($kini = $m === $bulanKini)

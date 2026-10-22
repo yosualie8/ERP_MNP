@@ -47,7 +47,9 @@ class RitasiController extends Controller
         $grup = $daftarTahap->groupBy(fn ($t) => strtok($t['nama'], ' '))->filter(fn ($g) => $g->count() > 1)->map->count()->sortDesc();
         $pilihan = $tahap ? ['label' => $tahap['nama'], 'isi' => $tahap['nama']]
             : ($kata !== '' ? ['label' => "Semua proyek mengandung \"{$kata}\" ({$cocokKata->count()} tahap)", 'isi' => "Semua yang mengandung: {$kata}"] : null);
-        $data = PerformaRitasi::data($tahun, null, $tahap ? [$tahap['id']] : ($kata !== '' ? $cocokKata->pluck('id')->all() : null));
+        // Proyek ASG (owner 22 Okt 2026): truk selain MNP ikut ditampilkan, dikelompokkan per pemilik.
+        $mitra = (bool) preg_match('/\bASG\b/i', $tahap['nama'] ?? $kata);
+        $data = PerformaRitasi::data($tahun, null, $tahap ? [$tahap['id']] : ($kata !== '' ? $cocokKata->pluck('id')->all() : null), $mitra);
 
         return view('ritasi.performa', compact('daftarTahun', 'tahun', 'daftarTahap', 'tahap', 'kata', 'grup', 'pilihan', 'data'));
     }
