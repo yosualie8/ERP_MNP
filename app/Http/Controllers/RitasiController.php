@@ -194,6 +194,41 @@ class RitasiController extends Controller
             ->with('unggah_bongkar', ['file' => $nama, 'jumlah' => count($sj), 'per_dt' => $hasil['per_dt'], 'do' => array_map('strval', array_keys($hasil['isian']))]);
     }
 
+    /**
+     * Sinkron bongkaran dengan pengajuan (owner 22 Okt 2026): pilih satu upload surat jalan + satu Pengajuan UJ → pratinjau DO
+     * pengajuan yang tidak bongkar (per DT: jumlah surat jalan Excel vs jumlah DO pengajuan) → batalkan (lihat SinkronPengajuan).
+     */
+    public function sinkronPengajuan(Request $request): View
+    {
+        $daftarUnggah = \App\Support\SinkronPengajuan::daftarUnggah();
+        $daftarPengajuan = \App\Support\SinkronPengajuan::daftarPengajuan();
+        $unggah = $daftarUnggah->firstWhere('id', $request->integer('unggah')) ?? ($request->has('unggah') ? null : $daftarUnggah->first());
+        $pengajuan = $request->integer('pengajuan') ? \App\Models\UjPengajuan::find($request->integer('pengajuan')) : null;
+        $rencana = $unggah && $pengajuan ? \App\Support\SinkronPengajuan::rencana($unggah, $pengajuan) : null;
+
+        return view('ritasi.sinkron', compact('daftarUnggah', 'daftarPengajuan', 'unggah', 'pengajuan', 'rencana'));
+    }
+
+    public function jalankanSinkron(Request $request): RedirectResponse
+    {
+        $d = $request->validate(['unggah' => ['required', 'integer'], 'pengajuan' => ['required', 'integer'], 'batal' => ['required', 'string']]);
+        $unggah = KasRiwayat::where('aksi', 'rit-unggah')->findOrFail($d['unggah']);
+        $pengajuan = \App\Models\UjPengajuan::findOrFail($d['pengajuan']);
+        $rencana = \App\Support\SinkronPengajuan::rencana($unggah, $pengajuan);
+        $kembali = redirect()->route('ritasi.monitor.sinkron', ['unggah' => $unggah->id, 'pengajuan' => $pengajuan->id]);
+        // Pratinjau harus masih sama (mis. ada detail yang baru saja direalisasikan / dibatalkan admin lain).
+        if (implode(',', $rencana['batal']) !== $d['batal']) {
+            return $kembali->with('error', 'Isi pengajuan berubah sejak pratinjau dibuka — periksa lagi daftar di bawah lalu konfirmasi ulang.');
+        }
+        if (! $rencana['batal']) {
+            return $kembali->with('error', 'Tidak ada baris yang perlu dibatalkan.');
+        }
+        $n = \App\Support\SinkronPengajuan::jalankan($unggah, $pengajuan, $rencana['batal'], $request->user()->id);
+
+        return $kembali->with('success', "{$n} baris {$pengajuan->kode()} dibatalkan (DO tidak ada di data bongkar). Pemakaian saldo sopir baris itu dikembalikan ke saldo."
+            .($rencana['lapor'] ? ' '.count($rencana['lapor']).' baris sudah ditransfer — tidak diubah, urus lewat Pengalihan UJ bila perlu.' : ''));
+    }
+
     /** Templat Excel upload surat jalan. */
     public function templatBongkar(): \Symfony\Component\HttpFoundation\StreamedResponse
     {
