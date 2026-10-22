@@ -204,9 +204,11 @@ class RitasiController extends Controller
         $daftarPengajuan = \App\Support\SinkronPengajuan::daftarPengajuan();
         $unggah = $daftarUnggah->firstWhere('id', $request->integer('unggah')) ?? ($request->has('unggah') ? null : $daftarUnggah->first());
         $pengajuan = $request->integer('pengajuan') ? \App\Models\UjPengajuan::find($request->integer('pengajuan')) : null;
-        $rencana = $unggah && $pengajuan ? \App\Support\SinkronPengajuan::rencana($unggah, $pengajuan) : null;
+        // Hanya pengajuan yang belum ada realisasinya (owner 22 Okt 2026).
+        $tolak = $pengajuan ? \App\Support\SinkronPengajuan::tolak($pengajuan) : null;
+        $rencana = $unggah && $pengajuan && ! $tolak ? \App\Support\SinkronPengajuan::rencana($unggah, $pengajuan) : null;
 
-        return view('ritasi.sinkron', compact('daftarUnggah', 'daftarPengajuan', 'unggah', 'pengajuan', 'rencana'));
+        return view('ritasi.sinkron', compact('daftarUnggah', 'daftarPengajuan', 'unggah', 'pengajuan', 'rencana', 'tolak'));
     }
 
     public function jalankanSinkron(Request $request): RedirectResponse
@@ -214,8 +216,11 @@ class RitasiController extends Controller
         $d = $request->validate(['unggah' => ['required', 'integer'], 'pengajuan' => ['required', 'integer'], 'batal' => ['required', 'string']]);
         $unggah = KasRiwayat::where('aksi', 'rit-unggah')->findOrFail($d['unggah']);
         $pengajuan = \App\Models\UjPengajuan::findOrFail($d['pengajuan']);
-        $rencana = \App\Support\SinkronPengajuan::rencana($unggah, $pengajuan);
         $kembali = redirect()->route('ritasi.monitor.sinkron', ['unggah' => $unggah->id, 'pengajuan' => $pengajuan->id]);
+        if ($tolak = \App\Support\SinkronPengajuan::tolak($pengajuan)) {
+            return $kembali->with('error', $tolak);
+        }
+        $rencana = \App\Support\SinkronPengajuan::rencana($unggah, $pengajuan);
         // Pratinjau harus masih sama (mis. ada detail yang baru saja direalisasikan / dibatalkan admin lain).
         if (implode(',', $rencana['batal']) !== $d['batal']) {
             return $kembali->with('error', 'Isi pengajuan berubah sejak pratinjau dibuka — periksa lagi daftar di bawah lalu konfirmasi ulang.');

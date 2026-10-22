@@ -11,8 +11,9 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Sinkron data bongkaran (upload Excel surat jalan di Monitor Ritasi) dengan satu Pengajuan UJ (owner 22 Okt 2026): DO pengajuan yang
- * tidak punya bongkaran dibatalkan. Dicocokkan per DT: jumlah surat jalan DT itu di Excel = jumlah DO pengajuan yang dipertahankan —
- * DO yang sudah tercatat bongkar di Data Ritasi didahulukan, sisanya urut nomor DO. Untuk DO yang dibuang, SEMUA baris pengajuannya
+ * tidak punya bongkaran dibatalkan. Hanya pengajuan yang belum ada realisasinya (daftarPengajuan / tolak). Dicocokkan per DT: jumlah
+ * surat jalan DT itu di Excel = jumlah DO pengajuan yang dipertahankan — DO yang sudah tercatat bongkar di Data Ritasi selalu
+ * dipertahankan, sisanya urut nomor DO. Untuk DO yang dibuang, SEMUA baris pengajuannya
  * (Uang Jalan, Uang Tanah, dst.) dibatalkan bila masih menunggu; yang sudah ditransfer (terealisasi / dialihkan) hanya dilaporkan.
  */
 class SinkronPengajuan
@@ -24,10 +25,26 @@ class SinkronPengajuan
             ->filter(fn ($r) => ! empty($r->isi['per_dt']))->values();
     }
 
-    /** Pengajuan yang masih punya detail menunggu, terbaru dulu. */
+    /**
+     * Pengajuan yang bisa disinkronkan (owner 22 Okt 2026): belum ada satu pun baris yang terealisasi / dialihkan — satu pengajuan
+     * utuh = satu rombongan rit. Pengajuan "sebagian" (mis. UJ sudah ditransfer, uang tanah belum) tidak bisa: DO dari hari lain
+     * bisa ikut terbatalkan.
+     */
     public static function daftarPengajuan(int $batas = 40)
     {
-        return UjPengajuan::whereIn('status', ['diajukan', 'sebagian'])->latest('id')->limit($batas)->get();
+        return UjPengajuan::where('status', 'diajukan')->whereDoesntHave('detail', fn ($q) => $q->whereIn('status', ['terealisasi', 'dialihkan']))
+            ->latest('id')->limit($batas)->get();
+    }
+
+    /** Alasan pengajuan tidak bisa disinkronkan, atau null bila bisa. */
+    public static function tolak(UjPengajuan $p): ?string
+    {
+        $real = $p->detail()->whereIn('status', ['terealisasi', 'dialihkan'])->count();
+        if ($real) {
+            return "{$p->kode()} sudah punya {$real} baris yang terealisasi / dialihkan — hanya pengajuan yang belum ada realisasinya yang bisa disinkronkan. Batalkan baris yang tidak jadi lewat menu Pengajuan UJ.";
+        }
+
+        return $p->status === 'diajukan' ? null : "{$p->kode()} berstatus ".(UjPengajuan::STATUS[$p->status] ?? $p->status).' — tidak ada baris yang bisa disinkronkan.';
     }
 
     /** @return array<string, int> DT → jumlah surat jalan di upload itu */
@@ -69,8 +86,13 @@ class SinkronPengajuan
             $perDo = $baris->filter(fn ($d) => $kunci($d->no_do))->groupBy(fn ($d) => $kunci($d->no_do));
             $urut = $perDo->keys()->sortBy(fn ($do) => [isset($sudahBongkar[$do]) ? 0 : 1, str_pad((string) $do, 12, '0', STR_PAD_LEFT)])->values();
             $n = $rit[$dt] ?? 0;
-            $simpan = $urut->take($n)->values();
-            $buang = $urut->slice($n)->values();
+            // DO yang sudah tercatat bongkar di Data Ritasi TIDAK PERNAH dibatalkan (walau Excel menyebut lebih sedikit rit);
+            // sisa kuota dipakai DO lain urut nomor.
+            $bongkar = $urut->filter(fn ($do) => isset($sudahBongkar[$do]))->values();
+            $lain = $urut->reject(fn ($do) => isset($sudahBongkar[$do]))->values();
+            $sisaKuota = max(0, $n - $bongkar->count());
+            $simpan = $bongkar->concat($lain->take($sisaKuota))->values();
+            $buang = $lain->slice($sisaKuota)->values();
             foreach ($buang as $do) {
                 foreach ($perDo[$do] as $d) {
                     if ($d->status === 'menunggu') {

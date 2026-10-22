@@ -14,8 +14,8 @@
     </style>
 
     <p class="redup" style="margin-top: 0;">Bandingkan satu <b>upload Excel surat jalan</b> (Monitor Ritasi) dengan satu <b>Pengajuan UJ</b>. Per DT, jumlah surat jalan di Excel =
-        jumlah DO pengajuan yang dipertahankan (DO yang sudah tercatat bongkar didahulukan, sisanya urut nomor DO). DO sisanya dibatalkan —
-        semua barisnya (Uang Jalan, Uang Tanah, dst.) yang masih menunggu. Baris yang sudah ditransfer tidak diubah, hanya dilaporkan.</p>
+        jumlah DO pengajuan yang dipertahankan (DO yang sudah tercatat bongkar di Data Ritasi <b>selalu</b> dipertahankan, sisanya urut nomor DO). DO sisanya dibatalkan —
+        semua barisnya (Uang Jalan, Uang Tanah, dst.). Hanya pengajuan yang <b>belum ada baris terealisasi</b> yang bisa disinkronkan.</p>
 
     <form method="GET" action="{{ route('ritasi.monitor.sinkron') }}" class="kartu pilih-sinkron">
         <div><label for="unggah">Upload surat jalan</label>
@@ -28,7 +28,7 @@
             </select></div>
         <div><label for="pengajuan">Pengajuan UJ</label>
             <select id="pengajuan" name="pengajuan" required>
-                <option value="">— pilih pengajuan —</option>
+                <option value="">{{ $daftarPengajuan->isEmpty() ? '— tidak ada pengajuan yang belum terealisasi —' : '— pilih pengajuan (belum ada realisasi) —' }}</option>
                 @foreach ($daftarPengajuan as $p)
                     <option value="{{ $p->id }}" @selected($pengajuan?->id === $p->id)>{{ $p->kode() }} · {{ $p->tanggal->translatedFormat('j M') }} · {{ rp($p->nominal) }}{{ $p->keterangan ? ' · '.mb_strimwidth($p->keterangan, 0, 60, '…') : '' }}</option>
                 @endforeach
@@ -37,6 +37,9 @@
         <div><button type="submit" class="tombol">Pratinjau</button></div>
     </form>
 
+    @if ($tolak)
+        <div class="pesan galat">⛔ {{ $tolak }}</div>
+    @endif
     @if ($rencana)
         @php
             $nBatal = count($rencana['batal']);
