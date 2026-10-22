@@ -44,12 +44,18 @@ class UjPengajuan extends Model
         return 'PUJ-'.str_pad((string) $this->id, 4, '0', STR_PAD_LEFT);
     }
 
-    /** Status dari detailnya: semua menunggu = diajukan, sebagian terealisasi, semua selesai/batal. */
+    /**
+     * Status dari detailnya: semua menunggu = diajukan, sebagian terealisasi, semua selesai/batal. Nominal (yang ditransfer) =
+     * jumlah baris yang TIDAK dibatalkan, dikurangi bagian dari saldo sopir (owner 22 Okt 2026: total harus berkurang saat baris
+     * dibatalkan, mis. lewat sinkron bongkaran). Pengajuan yang batal seluruhnya tetap menyimpan nominal aslinya.
+     */
     public function hitungStatus(): void
     {
         $d = $this->detail()->get();
         $real = $d->whereIn('status', ['terealisasi', 'dialihkan'])->count(); // dialihkan = dana sudah keluar
         $tunggu = $d->where('status', 'menunggu')->count();
-        $this->update(['status' => $tunggu === 0 ? ($real ? 'selesai' : 'batal') : ($real ? 'sebagian' : 'diajukan')]);
+        $aktif = $d->where('status', '!=', 'batal');
+        $this->update(['status' => $tunggu === 0 ? ($real ? 'selesai' : 'batal') : ($real ? 'sebagian' : 'diajukan')]
+            + ($aktif->isNotEmpty() ? ['nominal' => (int) $aktif->sum(fn ($x) => $x->nominal - $x->saldo)] : []));
     }
 }
