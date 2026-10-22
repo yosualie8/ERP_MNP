@@ -57,6 +57,26 @@ class UraiKodeGl
         'Semarang' => 'Lokasi lama Semarang (2024)', 'Sampit' => 'Lokasi lama Sampit (2024)', 'Site 21' => 'Site 21 (2024)', 'KBU' => 'KBU (2024)',
     ];
 
+    private static ?array $calon = null;
+
+    /**
+     * Cost center yang dikenali di akhir Kode GL: daftar tetap di atas, ditambah cost center baru di master (dibuat lewat
+     * Daftar Proyek "+ Cost center baru…", mis. "Subang"), yang terpanjang dulu.
+     *
+     * @return string[]
+     */
+    public static function calonCostCenter(): array
+    {
+        if (self::$calon === null) {
+            $tambahan = rescue(fn () => \App\Models\CostCenter::pluck('kode')->all(), [], false);
+            $tambahan = array_values(array_diff($tambahan, self::COST_CENTER, array_values(self::ALIAS_COST_CENTER)));
+            usort($tambahan, fn ($a, $b) => mb_strlen($b) <=> mb_strlen($a));
+            self::$calon = [...self::COST_CENTER, ...$tambahan];
+        }
+
+        return self::$calon;
+    }
+
     /** @return array{akun: ?string, cost_center: ?string, ref: ?string} */
     public static function urai(?string $kode): array
     {
@@ -72,7 +92,7 @@ class UraiKodeGl
         }
 
         $cc = null;
-        foreach (self::COST_CENTER as $calon) {
+        foreach (self::calonCostCenter() as $calon) {
             if (preg_match('/^(.+?)\s+'.preg_quote($calon, '/').'$/', $kode, $m)) {
                 [$kode, $cc] = [$m[1], self::ALIAS_COST_CENTER[$calon] ?? $calon];
                 break;

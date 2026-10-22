@@ -30,7 +30,10 @@
         <div class="baris">
             <div><label for="tipe">Tipe</label><select id="tipe" name="tipe">@foreach (\App\Models\ProyekTahap::TIPE as $k => $l)<option value="{{ $k }}" @selected($isi('tipe') === $k)>{{ $l }}</option>@endforeach</select></div>
             <div><label for="status">Status</label><select id="status" name="status">@foreach (\App\Models\ProyekTahap::STATUS as $k => $l)<option value="{{ $k }}" @selected($isi('status') === $k)>{{ $l }}</option>@endforeach</select></div>
-            <div><label for="cost_center">Cost center</label><select id="cost_center" name="cost_center"><option value="">— tanpa cost center —</option>@foreach (\App\Models\CostCenter::orderBy('kode')->pluck('kode') as $c)<option @selected($isi('cost_center') === $c)>{{ $c }}</option>@endforeach</select></div>
+            <div><label for="cost_center">Cost center</label><select id="cost_center" name="cost_center"><option value="">— tanpa cost center —</option>@foreach (\App\Models\CostCenter::orderBy('kode')->pluck('kode') as $c)<option @selected($isi('cost_center') === $c)>{{ $c }}</option>@endforeach
+                    <option value="baru" @selected(old('cost_center') === 'baru')>+ Cost center baru…</option></select>
+                {{-- Muncul bila memilih "+ Cost center baru…". Kode GL Kas Harian yang berakhiran nama ini (mis. "Biaya Operasional Subang") ikut masuk ke cost center ini. --}}
+                <input id="cost_center_baru" name="cost_center_baru" value="{{ old('cost_center_baru') }}" placeholder="nama cost center, mis. Subang" maxlength="20" autocomplete="off" style="margin-top: 6px;"></div>
         </div>
         <div class="baris">
             <div><label for="surveyor">Surveyor</label><input id="surveyor" name="surveyor" value="{{ $isi('surveyor') }}" list="daftar-surveyor" placeholder="mis. Bobby" autocomplete="off">
@@ -105,5 +108,13 @@
                 if (pilihBaru && !baru.value) baru.focus();
             };
             induk.addEventListener('change', aturInduk); aturInduk();
+            const cc = document.getElementById('cost_center'), ccBaru = document.getElementById('cost_center_baru');
+            const aturCc = () => {
+                const pilihBaru = cc.value === 'baru';
+                ccBaru.style.display = pilihBaru ? '' : 'none';
+                ccBaru.disabled = !pilihBaru; ccBaru.required = pilihBaru;
+                if (pilihBaru && !ccBaru.value) ccBaru.focus();
+            };
+            cc.addEventListener('change', aturCc); aturCc();
         })();
     </script>

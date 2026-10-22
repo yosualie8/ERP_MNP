@@ -197,6 +197,15 @@ class DaftarProyekController extends Controller
         };
         // Induk: pilih dari daftar, ATAU "+ Proyek induk baru…" lalu isi namanya — tidak bisa keduanya.
         $request->merge($request->input('proyek_id') === 'baru' ? ['proyek_id' => null] : ['proyek_baru' => null]);
+        // "+ Cost center baru…": dibuat di master cost center (owner 22 Okt 2026), lalu dipakai tahap ini.
+        if ($request->input('cost_center') === 'baru') {
+            $ccBaru = trim(preg_replace('/\s+/', ' ', (string) $request->input('cost_center_baru')));
+            $request->merge(['cost_center_baru' => $ccBaru]);
+            $request->validate(['cost_center_baru' => ['required', 'string', 'max:20', 'regex:/^[\pL\d][\pL\d .\-]*$/u']],
+                ['cost_center_baru.required' => 'Isi nama cost center baru.', 'cost_center_baru.regex' => 'Nama cost center hanya huruf, angka, spasi, titik atau tanda hubung.']);
+            $ada = \App\Models\CostCenter::whereRaw('LOWER(kode) = ?', [mb_strtolower($ccBaru)])->first();
+            $request->merge(['cost_center' => ($ada ?? \App\Models\CostCenter::create(['kode' => $ccBaru, 'nama' => null]))->kode]);
+        }
         $request->merge(collect(['volume', 'luas', 'harga_m3', 'omset', 'tarif_bbm', 'tarif_rental', 'komisi_lapangan', 'komisi_yosua', 'komisi_verlix'])
             ->mapWithKeys(fn ($k) => [$k => $angka($request->input($k))])->all()
             + ['nama' => trim(preg_replace('/\s+/', ' ', (string) $request->input('nama')))]

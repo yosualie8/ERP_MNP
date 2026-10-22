@@ -84,7 +84,8 @@ class ImporKas
                 $this->simpanLembar($arsip ? self::pecahGabungan($h) : $h, $arsip);
             }
             // Cost center & akun yang tidak dipakai lagi setelah urai ulang (mis. "PM Infra Marina" digabung ke "Infra PM").
-            CostCenter::whereDoesntHave('kodeGl')->delete();
+            // Cost center yang dipakai tahap Daftar Proyek (mis. dibuat lewat "+ Cost center baru…") tetap ada walau belum ada Kode GL-nya.
+            CostCenter::whereDoesntHave('kodeGl')->whereNotIn('kode', \App\Models\ProyekTahap::whereNotNull('cost_center')->distinct()->pluck('cost_center'))->delete();
             AkunGl::whereDoesntHave('kodeGl')->delete();
         });
     }
