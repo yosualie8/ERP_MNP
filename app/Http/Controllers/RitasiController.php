@@ -43,13 +43,15 @@ class RitasiController extends Controller
         $tahap = $daftarTahap->firstWhere('id', $request->integer('tahap'));
         $kata = $tahap ? '' : trim((string) $request->query('kata'));
         $cocokKata = $kata !== '' ? $daftarTahap->filter(fn ($t) => mb_stripos($t['nama'], $kata) !== false)->values() : collect();
+        // Id semua tahap Daftar Proyek yang namanya mengandung kata itu — termasuk tahap yang hanya dibongkar truk non-MNP.
+        $idKata = $kata !== '' ? \App\Models\ProyekTahap::where('nama', 'like', '%'.addcslashes($kata, '%_\\').'%')->pluck('id')->all() : [];
         // Saran grup: kata depan nama tahap yang dipakai lebih dari satu tahap (ASG, Infra, …).
         $grup = $daftarTahap->groupBy(fn ($t) => strtok($t['nama'], ' '))->filter(fn ($g) => $g->count() > 1)->map->count()->sortDesc();
         $pilihan = $tahap ? ['label' => $tahap['nama'], 'isi' => $tahap['nama']]
             : ($kata !== '' ? ['label' => "Semua proyek mengandung \"{$kata}\" ({$cocokKata->count()} tahap)", 'isi' => "Semua yang mengandung: {$kata}"] : null);
         // Proyek ASG (owner 22 Okt 2026): truk selain MNP ikut ditampilkan, dikelompokkan per pemilik.
         $mitra = (bool) preg_match('/\bASG\b/i', $tahap['nama'] ?? $kata);
-        $data = PerformaRitasi::data($tahun, null, $tahap ? [$tahap['id']] : ($kata !== '' ? $cocokKata->pluck('id')->all() : null), $mitra);
+        $data = PerformaRitasi::data($tahun, null, $tahap ? [$tahap['id']] : ($kata !== '' ? $idKata : null), $mitra);
 
         return view('ritasi.performa', compact('daftarTahun', 'tahun', 'daftarTahap', 'tahap', 'kata', 'grup', 'pilihan', 'data'));
     }
