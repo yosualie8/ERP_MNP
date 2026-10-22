@@ -235,7 +235,8 @@ class DaftarRekening
         return Rekening::get()->map(function ($r) use ($st) {
             $kas = $st['kas'][$r->kunci] ?? null;
             $uj = $st['uj'][$r->kunci] ?? null;
-            $nama = $r->nama ?? ($uj ? self::pilihNama($uj['nama']) : null) ?? '';
+            // Pemilik belum diketahui: nama kosong ("pemilik belum diisi"), sopirnya tetap bisa dicari lewat alias.
+            $nama = $r->nama ?? '';
             $alias = collect(array_keys([...($kas['nama'] ?? []), ...($uj['nama'] ?? [])]))
                 ->reject(fn ($n) => self::baku($n) === self::baku($nama) || self::samar($n))->unique(fn ($n) => self::baku($n))->take(15)->values()->all();
             $akhir = max((string) ($kas['akhir'] ?? ''), (string) ($uj['akhir'] ?? '')) ?: null;
