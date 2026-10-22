@@ -10,11 +10,14 @@
         .rekap-kertas { width: max-content; min-width: 100%; background: #fff; color: #111; padding: 12px; font-family: Calibri, Arial, sans-serif; }
         .rekap-kertas .judul-rekap { font-size: 18px; font-weight: 700; margin: 0 0 2px; }
         .rekap-kertas .sub-rekap { font-size: 13px; color: #444; margin: 0 0 8px; }
-        table.pivot { border-collapse: collapse; font-size: 14px; }
-        table.pivot th, table.pivot td { border: 1px solid #9aa4b5; padding: 3px 8px; text-align: center; min-width: 38px; white-space: nowrap; }
-        table.pivot thead th { background: #d9e1f2; font-weight: 700; }
-        table.pivot th.kol-label, table.pivot td.kol-label { text-align: left; min-width: 96px; font-weight: 700; }
-        table.pivot .gt { min-width: 84px; font-weight: 700; }
+        /* Kolom DT selebar isinya (owner 22 Okt 2026: tanpa geser kiri-kanan). */
+        table.pivot { border-collapse: collapse; font-size: 13px; }
+        table.pivot th, table.pivot td { border: 1px solid #9aa4b5; padding: 2px 3px; text-align: center; min-width: 0; white-space: nowrap; }
+        table.pivot thead th { background: #d9e1f2; font-weight: 700; color: #111; }
+        table.pivot th.kol-label, table.pivot td.kol-label { text-align: left; min-width: 70px; font-weight: 700; padding: 2px 6px; }
+        table.pivot .gt { font-weight: 700; padding: 2px 6px; }
+        .pilih-proyek { display: flex; gap: 6px; align-items: center; }
+        .pilih-proyek input { width: 340px; max-width: 70vw; }
         table.pivot tr.bln td { background: #00b0f0; font-weight: 700; cursor: pointer; }
         table.pivot tr.bln.kini td { background: #ffff00; }
         table.pivot tr.hari td { background: #fff; font-weight: 400; }
@@ -61,13 +64,16 @@
         @endforeach
     </div>
     {{-- Proyek = kolom Tahap di Data Ritasi (dicocokkan ke Daftar Proyek), terbaru dibongkar dulu. --}}
-    <div class="alat-performa">
+    <div class="alat-performa pilih-proyek">
         <span class="redup">Proyek:</span>
-        <a href="{{ route('ritasi.performa', ['tahun' => $tahun]) }}" @class(['chip', 'aktif' => ! $tahap])>Semua (global)</a>
-        @foreach ($daftarTahap as $t)
-            <a href="{{ route('ritasi.performa', ['tahun' => $tahun, 'tahap' => $t['id']]) }}" @class(['chip', 'aktif' => ($tahap['id'] ?? null) === $t['id']])
-                title="{{ $t['status'] }} · bongkar terakhir {{ \Illuminate\Support\Carbon::parse($t['terakhir'])->translatedFormat('j M Y') }}">{{ $t['nama'] }} · {{ number_format($t['rit'], 0, ',', '.') }} rit</a>
-        @endforeach
+        <input type="search" id="cari-proyek" list="daftar-proyek" autocomplete="off" placeholder="Semua proyek — ketik nama proyek / tahap…"
+            value="{{ $tahap['nama'] ?? '' }}" title="Ketik sebagian nama, lalu pilih dari saran">
+        <datalist id="daftar-proyek">
+            @foreach ($daftarTahap as $t)
+                <option value="{{ $t['nama'] }}">{{ number_format($t['rit'], 0, ',', '.') }} rit · bongkar terakhir {{ \Illuminate\Support\Carbon::parse($t['terakhir'])->translatedFormat('j M') }}{{ $t['status'] ? ' · '.$t['status'] : '' }}</option>
+            @endforeach
+        </datalist>
+        @if ($tahap)<a href="{{ route('ritasi.performa', ['tahun' => $tahun]) }}" class="tombol polos" style="padding: 4px 10px;">× Semua proyek</a>@endif
     </div>
     <div class="alat-performa">
         <button type="button" class="tombol polos" id="buka-semua">Buka semua bulan</button>
@@ -87,7 +93,7 @@
             @if (! $data['truk'])
                 <p style="margin: 10px 0;">Belum ada ritasi truk MNP di tahun ini{{ $tahap ? ' untuk proyek ini' : '' }}.</p>
             @else
-                <table class="pivot" data-tanpa-urut>
+                <table class="pivot" data-tanpa-urut data-tanpa-saring-kolom>
                     <thead><tr><th class="kol-label">Bulan / Tanggal</th>
                         @foreach ($data['truk'] as $dt)<th>{{ str_replace('DT ', '', $dt) }}</th>@endforeach
                         <th class="gt">Grand Total</th></tr></thead>
@@ -130,6 +136,20 @@
     <script src="{{ asset('js/html2canvas.min.js') }}"></script>
     <script>
         (() => {
+            // Saringan proyek: pilih dari saran (datalist) → muat ulang dengan ?tahap=; kosongkan → semua proyek.
+            const PROYEK = @json(collect($daftarTahap)->mapWithKeys(fn ($t) => [mb_strtolower($t['nama']) => $t['id']]));
+            const cariProyek = document.getElementById('cari-proyek');
+            const keProyek = () => {
+                const v = cariProyek.value.trim().toLowerCase();
+                const id = v === '' ? '' : PROYEK[v];
+                if (id === undefined || String(id) === @json((string) ($tahap['id'] ?? ''))) return;
+                location.href = @json(route('ritasi.performa', ['tahun' => $tahun])) + (id ? '&tahap=' + id : '');
+            };
+            cariProyek.addEventListener('change', keProyek);
+            cariProyek.addEventListener('input', () => { if (PROYEK[cariProyek.value.trim().toLowerCase()] !== undefined) keProyek(); });
+            cariProyek.addEventListener('search', keProyek); // tombol × di kotak isian
+            cariProyek.addEventListener('focus', () => cariProyek.select());
+
             const rekap = document.getElementById('rekap');
             const atur = (tb, buka) => {
                 tb.querySelectorAll('tr.hari').forEach(tr => tr.hidden = !buka);
