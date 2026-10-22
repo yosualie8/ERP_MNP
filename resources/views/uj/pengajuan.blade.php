@@ -44,16 +44,7 @@
         #dialog-transfer tr.dipilih td { background: rgba(76, 195, 138, .14); }
         #dialog-transfer tr.terpasang td { color: var(--redup); }
         #dialog-transfer .kaki-dt { padding: 10px 16px; border-top: 1px solid var(--garis); display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
-        .saring-pj { padding: 10px 14px; margin-bottom: 12px; }
-        .saring-pj .kolom-saring { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px 12px; }
-        .saring-pj .kolom-saring label { display: flex; flex-direction: column; gap: 3px; margin: 0; min-width: 0; }
-        .saring-pj .kolom-saring label span { font-size: 12px; font-weight: 700; color: var(--teks); }
-        .saring-pj .kolom-saring input { box-sizing: border-box; width: 100%; min-width: 0; padding: 5px 8px; border-radius: 6px; font-size: 13px; border: 2px solid #4a5160; }
-        .saring-pj .kolom-saring input:focus, .saring-pj .kolom-saring input.aktif { border-color: var(--aksen); outline: none; }
-        .saring-pj .kaki-saring { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-top: 8px; font-size: 13px; }
-        .saring-pj .kaki-saring .tombol { padding: 4px 10px; font-size: 12px; margin-left: auto; }
-        .saring-pj .pilih-tampil { display: flex; align-items: center; gap: 6px; margin: 0; cursor: pointer; }
-        table.kas tr.b.tersaring, table.kas tr.realisasi.tersaring, table.kas tbody.grup.tersaring { display: none; }
+        .pilih-tampil { display: inline-flex; align-items: center; gap: 6px; margin: 0 0 8px; cursor: pointer; font-size: 13px; }
     </style>
     <div class="ringkas">
         <div class="kartu"><span class="redup">Menunggu realisasi</span><b>{{ rp((int) $menunggu->s) }}</b></div>
@@ -120,21 +111,9 @@
         </div>
     @endif
 
-    @if ($pengajuan->isNotEmpty())
-        {{-- Saringan per kolom detail transaksi (seperti filter Excel): beberapa kata dalam satu kotak = semuanya harus ada. --}}
-        <div class="kartu saring-pj" id="saring-pj">
-            <div class="kolom-saring">
-                @foreach (['mobil' => 'No Mobil', 'nama' => 'Driver', 'nominal' => 'Nominal', 'kategori' => 'Kategori', 'do' => 'No DO', 'status' => 'Status', 'kode' => 'Kode'] as $k => $l)
-                    <label><span>{{ $l }}</span><input type="search" data-saring="{{ $k }}" autocomplete="off" placeholder="saring…" @if ($k === 'status') list="saran-status-pj" @endif></label>
-                @endforeach
-            </div>
-            <datalist id="saran-status-pj"><option value="Menunggu"><option value="Terealisasi"><option value="Terealisasi (berbeda)"><option value="Dialihkan"><option value="Dibatalkan"></datalist>
-            <div class="kaki-saring">
-                <span id="info-saring" class="redup"></span>
-                @if ($bolehRealisasi)<label class="pilih-tampil"><input type="checkbox" id="pilih-tampil"> Centang semua transaksi menunggu yang tampil</label>@endif
-                <button type="button" class="tombol polos" id="hapus-saring">Hapus saringan</button>
-            </div>
-        </div>
+    {{-- Saringan memakai saringan kolom bawaan grid (owner 22 Okt 2026: kotak saringan terpisah dihapus karena dobel). --}}
+    @if ($pengajuan->isNotEmpty() && $bolehRealisasi)
+        <label class="pilih-tampil"><input type="checkbox" id="pilih-tampil"> Centang semua transaksi menunggu yang tampil (hasil saringan kolom)</label>
     @endif
     <div class="kartu gulir" style="padding: 0;">
         <table class="kas">
@@ -483,47 +462,17 @@
                 if (e.target.closest('button, a, form, input')) return;
                 tr.parentElement.classList.toggle('buka');
             }));
-            // Expand / collapse all: semua pengajuan yang sedang tampil (hasil saringan).
-            const grupTampil = () => [...document.querySelectorAll('tbody.grup')].filter(tb => !tb.classList.contains('tersaring'));
+            // Expand / collapse all: semua pengajuan yang sedang tampil (hasil saringan kolom grid).
+            const grupTampil = () => [...document.querySelectorAll('tbody.grup')].filter(tb => tb.style.display !== 'none');
             document.getElementById('buka-semua-pj')?.addEventListener('click', () => grupTampil().forEach(tb => tb.classList.add('buka')));
             document.getElementById('tutup-semua-pj')?.addEventListener('click', () => grupTampil().forEach(tb => tb.classList.remove('buka')));
             const fmt = n => new Intl.NumberFormat('id-ID').format(n || 0);
 
-            // ===== Saringan per kolom detail (seperti filter Excel) =====
-            const isianSaring = [...document.querySelectorAll('#saring-pj input[data-saring]')];
-            const detailRows = [...document.querySelectorAll('tr[data-detail]')];
-            const tampak = tr => !tr.classList.contains('tersaring');
-            let setelahSaring = () => {};
-            const saring = () => {
-                const aturan = isianSaring.map(i => [i.dataset.saring, i.value.trim().toLowerCase()]).filter(([, v]) => v);
-                isianSaring.forEach(i => i.classList.toggle('aktif', !!i.value.trim()));
-                detailRows.forEach(tr => {
-                    const cocok = aturan.every(([k, v]) => { const isi = (tr.dataset[k] || '').toLowerCase(); return v.split(/\s+/).every(w => isi.includes(w)); });
-                    tr.classList.toggle('tersaring', !cocok);
-                    // Catatan realisasi berbeda (baris tepat di bawahnya) ikut disembunyikan.
-                    const ikut = tr.nextElementSibling;
-                    if (ikut?.classList.contains('realisasi')) ikut.classList.toggle('tersaring', !cocok);
-                });
-                document.querySelectorAll('tbody.grup').forEach(tb => {
-                    const ada = [...tb.querySelectorAll('tr[data-detail]')].some(tampak);
-                    tb.classList.toggle('tersaring', aturan.length > 0 && !ada);
-                    if (aturan.length > 0 && ada) tb.classList.add('buka'); // pengajuan yang cocok dibuka (masih bisa ditutup)
-                });
-                const terlihat = detailRows.filter(tampak);
-                const info = document.getElementById('info-saring');
-                if (info) info.textContent = aturan.length
-                    ? `${terlihat.length} dari ${detailRows.length} detail tampil · Rp ${fmt(terlihat.reduce((s, tr) => s + (parseInt(tr.dataset.nominal, 10) || 0), 0))}`
-                    : `${detailRows.length} detail · ketik di kotak saringan untuk menyaring`;
-                setelahSaring();
-            };
-            isianSaring.forEach(i => i.addEventListener('input', saring));
-            document.getElementById('hapus-saring')?.addEventListener('click', () => { isianSaring.forEach(i => i.value = ''); saring(); });
-            saring();
-
             const bar = document.getElementById('bar-realisasi');
             if (!bar) return;
             const semua = [...document.querySelectorAll('input.pilih-real')];
-            const terlihat = c => !c.closest('tr').classList.contains('tersaring');
+            // Tampil = tidak disembunyikan saringan kolom grid (baris detail & pengajuannya); pengajuan yang tertutup tetap dihitung.
+            const terlihat = c => { const tr = c.closest('tr'); return tr.style.display !== 'none' && tr.closest('tbody')?.style.display !== 'none'; };
             const dasar = @json(route('uj.input'));
             const hitung = () => {
                 const pilih = semua.filter(c => c.checked);
@@ -543,7 +492,8 @@
                 const tampil = semua.filter(terlihat), semuaTampil = document.getElementById('pilih-tampil');
                 if (semuaTampil) { semuaTampil.checked = tampil.length > 0 && tampil.every(c => c.checked); semuaTampil.indeterminate = !semuaTampil.checked && tampil.some(c => c.checked); }
             };
-            setelahSaring = () => hitung();
+            // Saringan kolom grid berubah (saring-kolom.js mengirim event input dari baris saringan) → hitung ulang centang.
+            document.querySelector('table.kas')?.addEventListener('input', e => { if (e.target.closest?.('tr.saring-kolom')) hitung(); });
             // Centang semua transaksi menunggu yang sedang tampil (hasil saringan).
             document.getElementById('pilih-tampil')?.addEventListener('change', e => { semua.filter(terlihat).forEach(c => c.checked = e.target.checked); hitung(); });
             semua.forEach(c => c.addEventListener('change', hitung));
