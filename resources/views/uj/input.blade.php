@@ -218,6 +218,14 @@
                     <label for="tanggal">{{ $ajukan ? 'Tanggal pengajuan' : 'Tanggal' }}</label>
                     <input type="date" name="tanggal" id="tanggal" value="{{ old('tanggal', $edit['tanggal'] ?? now()->toDateString()) }}" required>
                 </div>
+                {{-- Pengajuan UJ: keterangan / keperluan pengajuan (owner 22 Okt 2026), wajib — tampil di grid Pengajuan UJ. --}}
+                @if ($ajukan)
+                    <div style="grid-column: span 2;">
+                        <label for="keterangan_pengajuan">Keterangan pengajuan <span class="redup" style="font-weight: 400;">(keperluannya untuk apa)</span></label>
+                        <input type="text" name="keterangan_pengajuan" id="keterangan_pengajuan" value="{{ old('keterangan_pengajuan', $edit['keterangan_pengajuan'] ?? '') }}"
+                            maxlength="300" required autocomplete="off" placeholder="mis. UJ + uang tanah 6 rit Jogja (RKS) Docin & Evi, 22 Okt">
+                    </div>
+                @endif
                 {{-- Pengajuan = daftar transaksi yang diajukan: belum ada penerima transfer, rekening, maupun nominal master. --}}
                 <div style="grid-column: span 2;{{ $ajukan ? ' display: none;' : '' }}" class="isian-saran">
                     <label for="nama_tujuan">Nama penerima transfer</label>

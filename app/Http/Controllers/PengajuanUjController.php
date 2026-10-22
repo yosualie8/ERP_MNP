@@ -90,8 +90,20 @@ class PengajuanUjController extends UjController
         return $this->create()->with('mode', 'pengajuan');
     }
 
+    /** Keterangan / keperluan pengajuan (wajib, owner 22 Okt 2026). */
+    private function keteranganPengajuan(Request $request): string
+    {
+        $request->merge(['keterangan_pengajuan' => trim(preg_replace('/\s+/', ' ', (string) $request->input('keterangan_pengajuan')))]);
+
+        return $request->validate(['keterangan_pengajuan' => ['required', 'string', 'min:5', 'max:300']], [
+            'keterangan_pengajuan.required' => 'Isi keterangan pengajuan (keperluannya untuk apa).',
+            'keterangan_pengajuan.min' => 'Keterangan pengajuan terlalu pendek — tulis keperluannya (min. 5 huruf).',
+        ])['keterangan_pengajuan'];
+    }
+
     public function simpan(Request $request): RedirectResponse
     {
+        $keterangan = $this->keteranganPengajuan($request);
         $input = $this->bacaInput($request, true);
         if ($input instanceof RedirectResponse) {
             return $input;
@@ -104,9 +116,9 @@ class PengajuanUjController extends UjController
             return $tolak;
         }
         // Rekap bayar tanah (RBT) hanya catatan DO mana saja yang dibayar tanahnya (owner 21 Okt 2026) — tidak ditautkan ke pengajuan.
-        $p = DB::transaction(function () use ($input, $temuan, $request) {
+        $p = DB::transaction(function () use ($input, $temuan, $request, $keterangan) {
             // Pengajuan = daftar transaksi (tanpa penerima/rekening); nominal = jumlah yang DITRANSFER (detail − bagian dari saldo sopir).
-            $p = UjPengajuan::create(['tanggal' => $input['tanggal']->toDateString(), 'nama' => null, 'bank' => null, 'rekening' => null,
+            $p = UjPengajuan::create(['tanggal' => $input['tanggal']->toDateString(), 'keterangan' => $keterangan, 'nama' => null, 'bank' => null, 'rekening' => null,
                 'nominal' => $input['nominal'] - array_sum(array_column($input['detail'], 'saldo')), 'status' => 'diajukan', 'user_id' => $request->user()->id]);
             $this->simpanDetail($p, $input, $temuan);
 
@@ -127,7 +139,7 @@ class PengajuanUjController extends UjController
         // Hanya detail yang MENUNGGU yang bisa diubah; yang sudah terealisasi / dialihkan / dibatalkan tampil terkunci.
         [$tunggu, $kunci] = $pengajuan->detail->sortBy('urut')->partition(fn ($d) => $d->status === 'menunggu');
         $edit = [
-            'pengajuan_id' => $pengajuan->id, 'kode' => $pengajuan->kode(), 'tanggal' => $pengajuan->tanggal->toDateString(),
+            'pengajuan_id' => $pengajuan->id, 'kode' => $pengajuan->kode(), 'tanggal' => $pengajuan->tanggal->toDateString(), 'keterangan_pengajuan' => $pengajuan->keterangan,
             'nominal' => (int) $tunggu->sum('nominal'), 'biaya_transfer' => '0',
             'detail' => $tunggu->map(fn ($d) => $d->only(['nama', 'keterangan', 'nominal', 'saldo', 'kategori', 'jenis_kendaraan', 'no_mobil', 'no_do', 'konfirmasi']))->values()->all(),
             'menunggu' => $tunggu->pluck('id')->sort()->implode(','),
@@ -144,6 +156,7 @@ class PengajuanUjController extends UjController
         if ($tolak = $this->tolakUbah($pengajuan)) {
             return redirect()->route('pengajuan-uj.daftar')->with('error', $tolak);
         }
+        $keterangan = $this->keteranganPengajuan($request);
         $input = $this->bacaInput($request, true);
         if ($input instanceof RedirectResponse) {
             return $input;
@@ -160,11 +173,11 @@ class PengajuanUjController extends UjController
         if ($tolak = $this->periksaSaldo($input, $tunggu->all())) {
             return $tolak;
         }
-        DB::transaction(function () use ($pengajuan, $input, $temuan, $tunggu) {
+        DB::transaction(function () use ($pengajuan, $input, $temuan, $tunggu, $keterangan) {
             // Detail terkunci (terealisasi / dialihkan / dibatalkan) tidak disentuh; hanya yang menunggu diganti isi form.
             // Pemakaian saldo sopir detail yang diganti ikut terhapus (cascade uj_pengalihan.uj_pengajuan_detail_id).
             $tetap = $pengajuan->detail()->whereNotIn('id', $tunggu)->get();
-            $pengajuan->update(['tanggal' => $input['tanggal']->toDateString(),
+            $pengajuan->update(['tanggal' => $input['tanggal']->toDateString(), 'keterangan' => $keterangan,
                 'nominal' => $input['nominal'] - array_sum(array_column($input['detail'], 'saldo')) + (int) $tetap->sum(fn ($d) => $d->nominal - $d->saldo)]);
             \App\Models\UjPengalihan::whereIn('uj_pengajuan_detail_id', $tunggu)->delete();
             $pengajuan->detail()->whereIn('id', $tunggu)->delete();
@@ -507,6 +520,6 @@ class PengajuanUjController extends UjController
     {
         $d = $p->detail()->get();
 
-        return rp($p->nominal).' '.$p->tanggal->translatedFormat('j M Y').' ('.$d->count().' transaksi · '.$d->pluck('nama')->filter()->unique()->implode(', ').')';
+        return rp($p->nominal).' '.$p->tanggal->translatedFormat('j M Y').($p->keterangan ? ' "'.$p->keterangan.'"' : '').' ('.$d->count().' transaksi · '.$d->pluck('nama')->filter()->unique()->implode(', ').')';
     }
 }

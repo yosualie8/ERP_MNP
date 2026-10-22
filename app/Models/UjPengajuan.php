@@ -13,7 +13,7 @@ class UjPengajuan extends Model
 
     public const STATUS = ['diajukan' => 'Diajukan', 'sebagian' => 'Sebagian terealisasi', 'selesai' => 'Selesai', 'batal' => 'Dibatalkan'];
 
-    protected $fillable = ['tanggal', 'nama', 'bank', 'rekening', 'nominal', 'status', 'user_id'];
+    protected $fillable = ['tanggal', 'keterangan', 'nama', 'bank', 'rekening', 'nominal', 'status', 'user_id'];
 
     protected $casts = ['tanggal' => 'date'];
 

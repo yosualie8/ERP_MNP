@@ -532,7 +532,7 @@ class AlatMnp
     private static function satuPengajuan(UjPengajuan $p): array
     {
         return [
-            'kode' => $p->kode(), 'id' => $p->id, 'tanggal' => $p->tanggal->toDateString(), 'nominal' => (int) $p->nominal,
+            'kode' => $p->kode(), 'id' => $p->id, 'tanggal' => $p->tanggal->toDateString(), 'keperluan' => $p->keterangan, 'nominal' => (int) $p->nominal,
             'status' => UjPengajuan::STATUS[$p->status] ?? $p->status, 'diajukan_oleh' => $p->user?->name, 'diajukan_pada' => (string) $p->created_at,
             'detail' => $p->detail->map(fn ($d) => ['driver' => $d->nama, 'keterangan' => $d->keterangan, 'kategori' => $d->kategori, 'no_mobil' => $d->no_mobil,
                 'no_do' => $d->no_do, 'nominal' => (int) $d->nominal, 'status' => $d->status, 'id_uj_realisasi' => $d->id_uj, 'jenis_realisasi' => $d->jenis_realisasi, 'alasan' => $d->alasan]),
