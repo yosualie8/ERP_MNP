@@ -31,33 +31,18 @@ class RitasiController extends Controller
     private const MIN_KONFIRMASI = 10;
 
     /**
-     * Performa Ritasi. Tab "Per tahap" (bawaan, owner 22 Okt 2026): bongkaran rit & m³ truk MNP per tahap Daftar Proyek per bulan
-     * (atau per tanggal satu bulan). Tab "Per truk": jumlah rit per truk per bulan/tanggal, bisa disaring per tujuan buangan.
-     * Keduanya bisa dibagikan sebagai gambar.
+     * Performa Ritasi: jumlah rit per truk per bulan/tanggal (setahun), disaring per PROYEK/TAHAP — kolom Tahap di Data Ritasi,
+     * dicocokkan ke Daftar Proyek (owner 22 Okt 2026; menggantikan saringan tujuan buangan) — dan bisa dibagikan sebagai gambar.
      */
     public function performa(Request $request): View
     {
         $daftarTahun = PerformaRitasi::daftarTahun();
         $tahun = in_array($request->integer('tahun'), $daftarTahun, true) ? $request->integer('tahun') : ($daftarTahun[0] ?? (int) now()->year);
-        if ($request->query('tab') !== 'truk') {
-            $bulan = $request->integer('bulan') ?: null;
-            $bulan = $bulan && $bulan >= 1 && $bulan <= 12 ? $bulan : null;
-            $progress = $request->query('status') === 'progress';
-            $tahap = PerformaRitasi::perTahap($tahun, $bulan, $progress);
-            if ($bulan && ! in_array($bulan, $tahap['bulan_ada'], true)) {
-                $bulan = null;
-                $tahap = PerformaRitasi::perTahap($tahun, null, $progress);
-            }
+        $daftarTahap = collect(PerformaRitasi::daftarTahap($tahun));
+        $tahap = $daftarTahap->firstWhere('id', $request->integer('tahap'));
+        $data = PerformaRitasi::data($tahun, null, $tahap['id'] ?? null);
 
-            return view('ritasi.performa', ['tab' => 'tahap', 'daftarTahun' => $daftarTahun, 'tahun' => $tahun, 'bulan' => $bulan, 'progress' => $progress, 'tahap' => $tahap]);
-        }
-        // Tujuan buangan = catatan menu Buangan Truck (hanya dibaca): truk aktif & berstatus aktif di Data Aset.
-        $tujuanTruk = BuanganTruk::daftar()->filter(fn ($t) => $t['status_aset'] === 'aktif' && $t['tujuan']);
-        $daftarTujuan = $tujuanTruk->countBy('tujuan')->sortDesc();
-        $tujuan = $daftarTujuan->has($request->query('tujuan')) ? (string) $request->query('tujuan') : null;
-        $data = PerformaRitasi::data($tahun, $tujuan ? $tujuanTruk->where('tujuan', $tujuan)->pluck('no_lambung')->all() : null);
-
-        return view('ritasi.performa', ['tab' => 'truk', ...compact('daftarTahun', 'tahun', 'daftarTujuan', 'tujuan', 'data')]);
+        return view('ritasi.performa', compact('daftarTahun', 'tahun', 'daftarTahap', 'tahap', 'data'));
     }
 
     /** Monitor Ritasi: DO yang sudah ada uang jalannya di Kas UJ tetapi belum ada di data Ritasi (belum bongkar). */

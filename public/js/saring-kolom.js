@@ -265,7 +265,7 @@
             });
         };
         [...kepala.cells].forEach((th, i) => {
-            if (!th.textContent.trim() || th.hasAttribute('data-tanpa-urut') || (th.colSpan || 1) > 1) return;
+            if (!th.textContent.trim() || th.hasAttribute('data-tanpa-urut') || tabel.hasAttribute('data-tanpa-urut') || (th.colSpan || 1) > 1) return;
             th.classList.add('bisa-urut');
             th.title = (th.title ? th.title + ' — ' : '') + 'Klik untuk mengurutkan';
             const s = document.createElement('span');
