@@ -83,6 +83,9 @@ class SinkronPengajuan
             $perDt[] = ['dt' => $dt, 'sopir' => $baris->pluck('nama')->filter()->unique()->implode(', '), 'rit_excel' => $n, 'do_pengajuan' => $urut->count(),
                 'simpan' => $simpan->all(), 'buang' => $buang->all(), 'sudah_bongkar' => $urut->filter(fn ($do) => isset($sudahBongkar[$do]))->values()->all(),
                 'baris_batal' => $buang->sum(fn ($do) => $perDo[$do]->where('status', 'menunggu')->count()),
+                // Rincian per kategori (satu DO biasanya 2 baris: Uang Jalan + Uang Tanah).
+                'kategori_batal' => $buang->flatMap(fn ($do) => $perDo[$do]->where('status', 'menunggu'))->groupBy('kategori')
+                    ->map(fn ($g) => ['n' => $g->count(), 'rp' => (int) $g->sum(fn ($d) => $d->nominal - $d->saldo)])->all(),
                 'nominal_batal' => (int) $buang->sum(fn ($do) => $perDo[$do]->where('status', 'menunggu')->sum(fn ($d) => $d->nominal - $d->saldo))];
         }
         $diPengajuan = collect($perDt)->pluck('dt')->flip();
