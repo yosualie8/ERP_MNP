@@ -39,6 +39,22 @@ class UjPengajuan extends Model
         return $this->belongsTo(User::class);
     }
 
+    /**
+     * Owner 23 Okt 2026: pengajuan hanya boleh direalisasikan di Input UJ bila dananya sudah ditransfer (tertaut transaksi Kas Harian)
+     * atau sudah ditandai transfer. Pengajuan tanpa nominal transfer (dibayar penuh dari saldo sopir) selalu boleh.
+     */
+    public function siapRealisasi(): bool
+    {
+        $ada = fn (string $rel) => $this->relationLoaded($rel) ? $this->{$rel}->isNotEmpty() : $this->{$rel}()->exists();
+
+        return (int) $this->nominal <= 0 || $ada('transfer') || $ada('tanda');
+    }
+
+    public function scopeSiapRealisasi($query)
+    {
+        return $query->where(fn ($q) => $q->where('nominal', '<=', 0)->orWhereHas('transfer')->orWhereHas('tanda'));
+    }
+
     public function kode(): string
     {
         return 'PUJ-'.str_pad((string) $this->id, 4, '0', STR_PAD_LEFT);

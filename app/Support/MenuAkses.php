@@ -21,7 +21,10 @@ class MenuAkses
         'dashboard-kas' => ['Dashboard Kas Harian', 'dashboard.kas', ['dashboard.kas'], 'Jumlah belum reimburse, transaksi Kas Harian terakhir & 5 history reimburse terakhir (kapan data terakhir diperbarui)'],
         'input-kas' => ['Input Kas', 'kas.input', ['kas.input', 'kas.input.*', 'kas.edit', 'kas.update', 'kas.hapus', 'kas.bon', 'kas.bon.*'], 'Input, edit & hapus transaksi Kas Harian (Bank Jago), foto bon'],
         'kas-harian' => ['Kas Harian', 'kas.index', ['kas.index'], 'Melihat buku Kas Harian per bulan'],
-        'pengajuan-uj' => ['Pengajuan UJ', 'pengajuan-uj.daftar', ['pengajuan-uj.*'], 'Mengajukan uang jalan (divalidasi seperti Input UJ), lihat & batalkan pengajuan'],
+        // Membuat / mengubah / membatalkan pengajuan dipisah dari melihat Pengajuan UJ (owner 23 Okt 2026: Admin Mobil hanya melihat & merealisasikan).
+        // Harus sebelum 'pengajuan-uj' supaya rute-rute ini tidak tertangkap pola pengajuan-uj.*.
+        'ajukan-uj' => ['Buat Pengajuan UJ', 'pengajuan-uj.buat', ['pengajuan-uj.buat', 'pengajuan-uj.simpan', 'pengajuan-uj.periksa', 'pengajuan-uj.ubah', 'pengajuan-uj.simpan-ubah', 'pengajuan-uj.batal'], 'Membuat, mengubah & membatalkan pengajuan uang jalan (divalidasi seperti Input UJ)'],
+        'pengajuan-uj' => ['Pengajuan UJ', 'pengajuan-uj.daftar', ['pengajuan-uj.*'], 'Melihat pengajuan uang jalan & memilih detail yang sudah ditransfer untuk direalisasikan di Input UJ'],
         'input-uj' => ['Input UJ', 'uj.input', ['uj.input', 'uj.input.bayar-tanah', 'uj.store', 'uj.periksa', 'uj.edit', 'uj.update', 'uj.hapus'], 'Input, edit & hapus transaksi uang jalan (Kas Seabank), termasuk realisasi pengajuan'],
         'kas-uj' => ['Kas UJ', 'uj.index', ['uj.index'], 'Melihat daftar transaksi uang jalan'],
         'reimburse-uj' => ['Reimburse UJ', 'reimburse.index', ['reimburse.*'], 'Memilih & mencatat reimburse uang jalan, unduh Excel'],
@@ -66,7 +69,7 @@ class MenuAkses
         'dashboard' => ['Dashboard', '📊', ['dashboard-proyek', 'dashboard-kas', 'dashboard-uj', 'dashboard-biaya-dt', 'dashboard-bbm', 'dashboard-aktivitas']],
         'proyek' => ['Proyek', '🏗️', ['daftar-proyek', 'anggaran-proyek', 'pilah-transaksi', 'boq-proyek', 'alokasi-overhead', 'komponen-anggaran', 'pengaturan-proyek']],
         'kas' => ['Kas Harian', '🏦', ['input-kas', 'kas-harian', 'validasi-reimburse', 'riwayat-reimburse', 'kas-belum-reimburse', 'rekap', 'mutasi-pt', 'kode-gl', 'daftar-rekening']],
-        'uj' => ['Uang Jalan', '🚚', ['pengajuan-uj', 'input-uj', 'kas-uj', 'reimburse-uj', 'pengalihan-uj', 'rapikan-uj']],
+        'uj' => ['Uang Jalan', '🚚', ['pengajuan-uj', 'ajukan-uj', 'input-uj', 'kas-uj', 'reimburse-uj', 'pengalihan-uj', 'rapikan-uj']],
         'ritasi' => ['Ritasi', '⛰️', ['input-ritasi', 'ritasi', 'buangan-truk', 'monitor-ritasi', 'bayar-tanah', 'performa-ritasi', 'kubikasi-kendaraan']],
         'bbm' => ['BBM & HM', '⛽', ['input-bbm', 'bbm']],
         'karyawan' => ['Karyawan', '👷', ['absen', 'absensi', 'karyawan', 'jabatan', 'lokasi-absen']],

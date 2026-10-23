@@ -77,7 +77,7 @@
         @if ($bolehTautkan)
             <button type="button" class="tombol polos" id="buka-tanda-tf" style="padding: 8px 14px;" title="Tautkan transfer yang sudah ditandai ke transaksi Kas Harian bernominal sama">🔗 Transfer (Kas Harian){{ count($tandaKandidat) ? ' · '.count($tandaKandidat).' ditandai' : '' }}</button>
         @endif
-        <a href="{{ route('pengajuan-uj.buat') }}" class="tombol" style="{{ $pengajuan->isNotEmpty() ? '' : 'margin-left: auto; ' }}padding: 8px 14px;">+ Ajukan uang jalan</a>
+        @if ($bolehAjukan)<a href="{{ route('pengajuan-uj.buat') }}" class="tombol" style="{{ $pengajuan->isNotEmpty() ? '' : 'margin-left: auto; ' }}padding: 8px 14px;">+ Ajukan uang jalan</a>@endif
         @if ($bolehRealisasi)<a href="{{ route('uj.input') }}" class="tombol polos" style="padding: 8px 14px;">Realisasikan di Input UJ →</a>@endif
     </div>
 
@@ -125,7 +125,8 @@
                 @php($nBeda = $p->detail->filter(fn ($d) => $d->berbeda())->count())
                 <tbody class="grup">{{-- bawaan tertutup semua; buka per pengajuan atau ⊞ Buka semua --}}
                     <tr class="t ada-bon">
-                        <td>@if ($bolehRealisasi && $p->detail->where('status', 'menunggu')->isNotEmpty())<input type="checkbox" class="pilih-semua-pj" data-pj="{{ $p->id }}" title="Pilih semua detail {{ $p->kode() }} yang masih menunggu"> @endif<span class="panah">▸</span> <b>{{ $p->kode() }}</b> <span class="jumlah-bon">{{ $p->detail->count() }}</span></td>
+                        @php($siap = $p->siapRealisasi())
+                        <td>@if ($bolehRealisasi && $siap && $p->detail->where('status', 'menunggu')->isNotEmpty())<input type="checkbox" class="pilih-semua-pj" data-pj="{{ $p->id }}" title="Pilih semua detail {{ $p->kode() }} yang masih menunggu"> @endif<span class="panah">▸</span> <b>{{ $p->kode() }}</b> <span class="jumlah-bon">{{ $p->detail->count() }}</span></td>
                         <td>{{ $p->tanggal->translatedFormat('j M Y') }}</td>
                         {{-- ringkas-gl: ringkasan detail — saringan kolomnya dicek per baris detail, bukan ringkasan ini. --}}
                         <td class="ringkas-gl redup" style="font-size: 12px; white-space: nowrap;">{{ $p->detail->pluck('no_mobil')->filter()->unique()->count() }} mobil</td>
@@ -174,8 +175,8 @@
                         <td class="redup" style="font-size: 12px;">{{ $p->user?->name ?? $p->user?->email }} · {{ $p->created_at->translatedFormat('j M H:i') }}</td>
                         <td style="font-size: 13px; min-width: 200px; max-width: 320px; white-space: normal;">{{ $p->keterangan ?: '–' }}</td>
                         <td style="white-space: nowrap;">
-                            @if ($p->detail->contains('status', 'menunggu'))<a href="{{ route('pengajuan-uj.ubah', $p) }}" class="tombol-edit" title="Ubah detail yang belum direalisasi">Edit</a>@endif
-                            @if (in_array($p->status, ['diajukan', 'sebagian'], true))
+                            @if ($bolehAjukan && $p->detail->contains('status', 'menunggu'))<a href="{{ route('pengajuan-uj.ubah', $p) }}" class="tombol-edit" title="Ubah detail yang belum direalisasi">Edit</a>@endif
+                            @if ($bolehAjukan && in_array($p->status, ['diajukan', 'sebagian'], true))
                                 <form method="POST" action="{{ route('pengajuan-uj.batal', $p) }}" style="display: inline;" onsubmit="return confirm('Batalkan detail {{ $p->kode() }} yang masih menunggu? Detail yang sudah terealisasi tidak berubah.')">
                                     @csrf<button class="tombol-hapus" type="submit">Batalkan</button></form>
                             @endif
@@ -189,7 +190,8 @@
                             data-mobil="{{ $d->no_mobil }}" data-do="{{ $d->no_do }}" data-nominal="{{ (int) $d->nominal }} {{ number_format((int) $d->nominal, 0, ',', '.') }}"
                             data-status="{{ $teksStatus }}"
                             title="{{ $teksStatus }}{{ $d->id_uj ? ' · '.$d->id_uj : '' }}{{ $d->realisasi_pada ? ' · '.$d->realisasi_pada->translatedFormat('j M') : '' }} · {{ $d->keterangan }}{{ $d->temuan ? ' · FLAG dikonfirmasi: '.$d->konfirmasi : '' }}">
-                            <td>@if ($bolehRealisasi && $d->status === 'menunggu')<input type="checkbox" class="pilih-real" value="{{ $d->id }}" data-pj="{{ $p->id }}" data-nominal="{{ (int) $d->nominal - (int) $d->saldo }}"
+                            <td>@if ($bolehRealisasi && $d->status === 'menunggu' && ! $siap)<span class="redup" title="Pengajuan belum ditransfer dari Kas Harian / belum ditandai transfer — belum bisa direalisasikan">🔒</span>@endif
+                                @if ($bolehRealisasi && $siap && $d->status === 'menunggu')<input type="checkbox" class="pilih-real" value="{{ $d->id }}" data-pj="{{ $p->id }}" data-nominal="{{ (int) $d->nominal - (int) $d->saldo }}"
                                 data-nama="{{ $d->nama }}" title="Pilih untuk direalisasikan bersama (satu transfer)">@endif</td>
                             <td></td>
                             <td>{{ $d->no_mobil ?: '–' }}</td>

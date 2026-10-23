@@ -61,9 +61,9 @@ class ValidasiUj
         $histori = $histori->concat(\App\Models\UjPengajuanDetail::query()->where('status', 'menunggu')
             ->whereNotIn('id', $kecualiPengajuan ?: [0])
             ->whereHas('pengajuan', fn ($q) => $q->whereBetween('tanggal', $rentang))
-            ->with('pengajuan')->orderBy('id')->get()
+            ->with(['pengajuan.transfer', 'pengajuan.tanda'])->orderBy('id')->get()
             ->map(fn ($d) => [...self::baris($d->pengajuan->kode().' (diajukan)', $d->pengajuan->tanggal, $d->nama ?: $d->pengajuan->nama, $d->keterangan, (int) $d->nominal,
-                $d->kategori, $d->jenis_kendaraan, $d->no_mobil, $d->no_do), 'pengajuan' => $d->id, 'kode' => $d->pengajuan->kode()]));
+                $d->kategori, $d->jenis_kendaraan, $d->no_mobil, $d->no_do), 'pengajuan' => $d->id, 'kode' => $d->pengajuan->kode(), 'siap' => $d->pengajuan->siapRealisasi()]));
         // Pengajuan yang dananya dialihkan: DO-nya tetap dihitung sudah dibiayai sesuai pengajuan aslinya — kecuali baris
         // realisasinya di Kas UJ sudah memuat DO & jenis kategori yang sama (supaya tidak terhitung dua kali).
         $histori = $histori->concat(\App\Models\UjPengajuanDetail::query()->where('status', 'dialihkan')
@@ -102,6 +102,15 @@ class ValidasiUj
                 if ($calon->isNotEmpty()) {
                     $pembanding = $pembanding->reject(fn ($x) => isset($x['pengajuan']) && $calon->contains('pengajuan', $x['pengajuan']));
                     foreach ($calon as $c) {
+                        // Owner 23 Okt 2026: pengajuan yang belum ditransfer / ditandai transfer tidak bisa direalisasikan — tanpa tombol Tautkan.
+                        if (! $c['siap']) {
+                            $tautan[] = ['kode' => 'P', 'prioritas' => 'tinggi',
+                                'pesan' => "DO {$r['doAsli']} sudah diajukan di {$c['kode']} ({$c['tanggal']?->translatedFormat('j M')}, {$c['nama']}, {$c['kategori']} ".rp($c['nominal'])
+                                    .'), tetapi pengajuan itu BELUM ditransfer dari Kas Harian dan belum ditandai transfer, jadi belum bisa direalisasikan.'
+                                    .' Tunggu sampai dananya ditransfer; bila ini memang transaksi terpisah, tulis konfirmasi.'];
+
+                            continue;
+                        }
                         $tautan[] = ['kode' => 'P', 'prioritas' => 'tinggi', 'tautan' => ['id' => $c['pengajuan'], 'kode' => $c['kode']],
                             'pesan' => "DO {$r['doAsli']} sudah diajukan di {$c['kode']} ({$c['tanggal']?->translatedFormat('j M')}, {$c['nama']}, {$c['kategori']} ".rp($c['nominal'])
                                 .', "'.$c['ket'].'") dan belum direalisasikan. Bila baris ini realisasinya, klik "Tautkan" supaya pengajuan itu tercatat terealisasi — bukan dobel.'

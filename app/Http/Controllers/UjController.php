@@ -214,17 +214,28 @@ class UjController extends Controller
         if ($ids->isEmpty()) {
             return ['dariPengajuan' => [], 'pesanPengajuan' => null];
         }
-        $detail = UjPengajuanDetail::with('pengajuan')->whereIn('id', $ids)->where('status', 'menunggu')->orderBy('uj_pengajuan_id')->orderBy('urut')->get();
+        $detail = UjPengajuanDetail::with(['pengajuan.transfer', 'pengajuan.tanda'])->whereIn('id', $ids)->where('status', 'menunggu')->orderBy('uj_pengajuan_id')->orderBy('urut')->get();
+        // Pengajuan yang belum ditransfer / ditandai transfer tidak bisa direalisasikan (owner 23 Okt 2026).
+        $belumTf = $detail->reject(fn ($d) => $d->pengajuan->siapRealisasi());
+        $detail = $detail->diff($belumTf)->values();
         $baris = $detail->map(fn ($d) => [
             // yang direalisasikan (ditransfer) = nominal − bagian yang dibayar dari saldo sopir
             'pengajuan' => $d->id, 'kode' => $d->pengajuan->kode(), 'nama' => $d->nama, 'keterangan' => $d->keterangan, 'nominal' => (int) $d->nominal - (int) $d->saldo,
             'kategori' => $d->kategori, 'jenis_kendaraan' => $d->jenis_kendaraan, 'no_mobil' => $d->no_mobil, 'no_do' => $d->no_do,
         ])->values()->all();
-        $hilang = $ids->count() - $detail->count();
+        // sudah direalisasikan / dibatalkan (bukan yang ditolak karena belum ditransfer)
+        $hilang = $ids->count() - $detail->count() - $belumTf->count();
+        $pesan = [];
+        if ($belumTf->isNotEmpty()) {
+            $pesan[] = $belumTf->count().' detail dari '.$belumTf->map(fn ($d) => $d->pengajuan->kode())->unique()->implode(', ')
+                .' tidak dimasukkan: pengajuan itu belum ditransfer dari Kas Harian dan belum ditandai transfer.';
+        }
+        if ($hilang) {
+            $pesan[] = $detail->isEmpty() && $belumTf->isEmpty() ? 'Detail pengajuan itu sudah direalisasikan atau dibatalkan — tidak ada yang dimasukkan ke form.'
+                : "{$hilang} detail pengajuan sudah direalisasikan/dibatalkan dan tidak dimasukkan.";
+        }
 
-        return ['dariPengajuan' => $baris, 'pesanPengajuan' => $hilang
-            ? ($detail->isEmpty() ? 'Detail pengajuan itu sudah direalisasikan atau dibatalkan — tidak ada yang dimasukkan ke form.' : "{$hilang} detail pengajuan sudah direalisasikan/dibatalkan dan tidak dimasukkan.")
-            : null];
+        return ['dariPengajuan' => $baris, 'pesanPengajuan' => $pesan ? implode(' ', $pesan) : null];
     }
 
     /**
@@ -234,6 +245,7 @@ class UjController extends Controller
     private function pengajuanMenunggu(): array
     {
         return UjPengajuanDetail::with('pengajuan')->where('status', 'menunggu')->whereNotNull('no_do')->where('no_do', '!=', '')
+            ->whereHas('pengajuan', fn ($q) => $q->siapRealisasi()) // hanya yang sudah ditransfer / ditandai transfer
             ->orderBy('uj_pengajuan_id')->orderBy('urut')->get()
             ->map(fn ($d) => ['id' => $d->id, 'kode' => $d->pengajuan->kode(), 'tanggal' => $d->pengajuan->tanggal?->translatedFormat('j M'),
                 'nama' => $d->nama, 'keterangan' => $d->keterangan, 'nominal' => (int) $d->nominal - (int) $d->saldo, 'penuh' => (int) $d->nominal, 'saldo' => (int) $d->saldo,
@@ -525,6 +537,11 @@ class UjController extends Controller
         if ($idPengajuan->count() !== $idPengajuan->unique()->count()
             || UjPengajuanDetail::whereIn('id', $idPengajuan)->where('status', 'menunggu')->count() !== $idPengajuan->count()) {
             return back()->withInput()->with('error', 'Sebagian detail pengajuan yang dipilih sudah direalisasikan atau dibatalkan (mungkin oleh admin lain). Muat ulang, lalu pilih lagi.');
+        }
+        // Owner 23 Okt 2026: hanya pengajuan yang sudah ditransfer dari Kas Harian / sudah ditandai transfer yang boleh direalisasikan.
+        $belumTf = UjPengajuan::with(['transfer', 'tanda'])->whereIn('id', UjPengajuanDetail::whereIn('id', $idPengajuan)->pluck('uj_pengajuan_id'))->get()->reject->siapRealisasi();
+        if ($belumTf->isNotEmpty()) {
+            return back()->withInput()->with('error', 'Ditolak: '.$belumTf->map->kode()->implode(', ').' belum ditransfer dari Kas Harian dan belum ditandai transfer — pengajuan baru bisa direalisasikan sesudah dananya ditransfer.');
         }
         $banding = $this->bandingPengajuan($input);
         if ($banding instanceof RedirectResponse) {

@@ -63,6 +63,8 @@ class PengajuanUjController extends UjController
             'semua' => $semua, 'status' => $status, 'beda' => $beda, 'detailBeda' => $detailBeda, 'kasKini' => $kasKini, 'kelompokTf' => $kelompokTf,
             'menunggu' => UjPengajuanDetail::where('status', 'menunggu')->selectRaw('COUNT(*) n, SUM(nominal) s')->first(),
             'bolehRealisasi' => $request->user()->bolehMenu('input-uj'),
+            // Membuat / mengubah / membatalkan pengajuan: hak Buat Pengajuan UJ (Admin Mobil tidak punya, owner 23 Okt 2026).
+            'bolehAjukan' => $request->user()->bolehMenu('ajukan-uj'),
             // Penanda transfer yang belum ditautkan ke transaksi Kas Harian (owner menandai saat mentransfer, menautkan H+1)
             'tandaTerbuka' => \App\Models\UjTransferTanda::with(['pengajuan.transfer', 'user', 'reimburse'])->whereNull('kas_no_id')->orderBy('waktu')->get(),
             // Batch Reimburse UJ 30 hari terakhir sebagai acuan "Tandai transfer" (+ pengajuan yang sudah ditandai dengan batch itu)
