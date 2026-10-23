@@ -29,7 +29,7 @@
     @endif
 
     <div class="pil-tampil">
-        @foreach (['semua' => 'Semua', 'belum' => '⚠ Belum ada nama pemilik', 'cek' => 'Perlu dicek (nama dari Kas UJ)', 'beda' => 'Tulisan berbeda di Kas Harian'] as $k => $l)
+        @foreach (['semua' => 'Semua', 'belum' => '⚠ Belum ada nama pemilik', 'cek' => 'Perlu dicek (nama dari Kas UJ)', 'beda' => 'Tulisan berbeda di Kas Harian', 'salah' => 'Nomor salah / tidak ada'] as $k => $l)
             <a href="{{ route('rekening.index', $k === 'semua' ? [] : ['tampil' => $k]) }}" @class(['aktif' => $tampil === $k])>{{ $l }} · {{ $jumlah[$k] }}</a>
         @endforeach
     </div>
@@ -54,7 +54,7 @@
                 @forelse ($baris as $b)
                     @php($r = $b->r)
                     <tr>
-                        <td>@if ($b->status === 'belum')<span class="label merah">Belum ada nama</span>@elseif ($b->status === 'cek')<span class="label kuning">Perlu dicek</span>@else<span class="label hijau">OK</span>@endif</td>
+                        <td>@if ($b->status === 'belum')<span class="label merah">Belum ada nama</span>@elseif ($b->status === 'salah')<span class="label" title="Tidak ditawarkan di Input Kas / Input UJ">Nomor salah</span>@elseif ($b->status === 'cek')<span class="label kuning">Perlu dicek</span>@else<span class="label hijau">OK</span>@endif</td>
                         <td style="white-space: nowrap;"><b>{{ $r->no_rekening }}</b></td>
                         <td>{{ $r->bank }}</td>
                         <td><b>{{ $r->nama ?? '—' }}</b></td>
@@ -66,7 +66,7 @@
                         <td class="daftar-nama">{{ $b->karyawan->implode('; ') }}</td>
                         <td class="daftar-nama redup">{{ $r->catatan }}</td>
                         <td><button type="button" class="tombol-edit" data-ubah="{{ route('rekening.ubah', $r) }}" data-no="{{ $r->no_rekening }}" data-nama="{{ $r->nama }}"
-                            data-bank="{{ $r->bank }}" data-catatan="{{ $r->catatan }}"
+                            data-bank="{{ $r->bank }}" data-catatan="{{ $r->catatan }}" data-salah="{{ $r->sumber === 'salah' ? 1 : 0 }}"
                             data-saran="{{ json_encode(array_values(array_unique([...$b->kas_lain->keys()->all(), ...$b->karyawan->map(fn ($k) => explode(' · ', $k)[0])->all(), ...$b->sopir->keys()->take(5)->all()]))) }}">{{ $r->nama ? 'Ubah' : 'Isi nama' }}</button></td>
                     </tr>
                 @empty
@@ -88,6 +88,7 @@
             <div class="isian-saran"><input type="text" name="bank" id="d-bank" autocomplete="off"></div>
             <label for="d-cat">Catatan</label>
             <input type="text" name="catatan" id="d-cat" maxlength="300" autocomplete="off">
+            <label style="display: flex; gap: 8px; align-items: center; font-weight: 400;"><input type="checkbox" name="salah" value="1" id="d-salah" style="width: auto;"> Nomor salah tulis / rekening tidak ada (tidak ditawarkan lagi di Input Kas &amp; Input UJ)</label>
             <p class="redup" style="font-size: 12px; margin: 10px 0 14px;">Nama ini dipakai sebagai saran di Input Kas & Input UJ dan ditampilkan sebagai pemilik rekening di Kas UJ. Data lama di sheet tidak diubah.</p>
             <div style="display: flex; gap: 8px; justify-content: flex-end;">
                 <button type="button" class="tombol polos" onclick="this.closest('dialog').close()">Batal</button>
@@ -107,6 +108,8 @@
                 f.action = b.dataset.ubah;
                 document.getElementById('d-no').textContent = b.dataset.no;
                 nama.value = b.dataset.nama; bankDialog.value = b.dataset.bank; document.getElementById('d-cat').value = b.dataset.catatan;
+                const salah = document.getElementById('d-salah'); salah.checked = b.dataset.salah === '1'; nama.required = !salah.checked;
+                salah.onchange = () => { nama.required = !salah.checked; };
                 const saran = JSON.parse(b.dataset.saran || '[]').filter(s => s && s !== b.dataset.nama);
                 document.getElementById('d-saran').innerHTML = saran.map(s => `<button type="button">${esc(s)}</button>`).join('');
                 document.querySelectorAll('#d-saran button').forEach(x => x.addEventListener('click', () => { nama.value = x.textContent; nama.focus(); }));

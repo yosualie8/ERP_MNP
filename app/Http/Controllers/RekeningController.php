@@ -26,18 +26,18 @@ class RekeningController extends Controller
             $sopir = collect($uj['nama'] ?? [])->sortDesc();
 
             return (object) [
-                'r' => $r, 'status' => ! $r->nama ? 'belum' : ($r->sumber === 'kas_uj' ? 'cek' : 'ok'),
+                'r' => $r, 'status' => $r->sumber === 'salah' ? 'salah' : (! $r->nama ? 'belum' : ($r->sumber === 'kas_uj' ? 'cek' : 'ok')),
                 'kas_n' => (int) ($kas['n'] ?? 0), 'kas_akhir' => $tgl($kas['akhir'] ?? null), 'kas_lain' => $lainKas,
                 'uj_n' => (int) ($uj['n'] ?? 0), 'uj_akhir' => $tgl($uj['akhir'] ?? null), 'sopir' => $sopir,
                 'karyawan' => collect($kar[$r->kunci] ?? [])->map(fn ($k) => $k->nama.' · '.($k->jabatan ?: '-').($k->status !== 'aktif' ? ' · '.$k->status : '')),
                 'akhir' => max((string) ($kas['akhir'] ?? ''), (string) ($uj['akhir'] ?? '')),
             ];
         });
-        $tampil = in_array($request->query('tampil'), ['belum', 'cek', 'beda'], true) ? $request->query('tampil') : 'semua';
-        $jumlah = ['semua' => $baris->count(), 'belum' => $baris->where('status', 'belum')->count(), 'cek' => $baris->where('status', 'cek')->count(),
+        $tampil = in_array($request->query('tampil'), ['belum', 'cek', 'beda', 'salah'], true) ? $request->query('tampil') : 'semua';
+        $jumlah = ['semua' => $baris->count(), 'belum' => $baris->where('status', 'belum')->count(), 'cek' => $baris->where('status', 'cek')->count(), 'salah' => $baris->where('status', 'salah')->count(),
             'beda' => $baris->filter(fn ($b) => $b->kas_lain->isNotEmpty())->count()];
         $baris = match ($tampil) {
-            'belum', 'cek' => $baris->where('status', $tampil),
+            'belum', 'cek', 'salah' => $baris->where('status', $tampil),
             'beda' => $baris->filter(fn ($b) => $b->kas_lain->isNotEmpty()),
             default => $baris,
         };
@@ -63,8 +63,9 @@ class RekeningController extends Controller
     {
         $data = $this->validasi($request, $rekening);
         $sebelum = $rekening->only(['nama', 'bank', 'catatan', 'sumber']);
+        // Dicentang "nomor salah / tidak ada": nama boleh kosong, rekening tidak ditawarkan lagi sebagai saran.
         $rekening->update(['nama' => $data['nama'], 'bank' => DaftarBank::rapikan($data['bank'] ?? null), 'catatan' => $data['catatan'] ?? null,
-            'sumber' => 'admin', 'user_id' => $request->user()->id]);
+            'sumber' => $request->boolean('salah') ? 'salah' : 'admin', 'user_id' => $request->user()->id]);
         DaftarRekening::log("Rekening {$rekening->no_rekening}: ".($sebelum['nama'] ?? '(tanpa nama)')." → {$rekening->nama}",
             ['rekening' => $rekening->id, 'sebelum' => $sebelum, 'sesudah' => $rekening->only(['nama', 'bank', 'catatan', 'sumber'])], $request->user()->id);
 
@@ -76,11 +77,11 @@ class RekeningController extends Controller
     {
         $data = $request->validate([
             'no_rekening' => [$lama ? 'exclude' : 'required', 'string', 'max:40', fn ($a, $v, $gagal) => strlen(Rekening::kunci($v)) >= 5 || $gagal('Nomor rekening minimal 5 angka.')],
-            'nama' => ['required', 'string', 'max:150'],
+            'nama' => [$lama && $request->boolean('salah') ? 'nullable' : 'required', 'string', 'max:150'],
             'bank' => ['nullable', 'string', 'max:60', ...($lama && $request->input('bank') === $lama->bank ? [] : [DaftarBank::aturan()])],
             'catatan' => ['nullable', 'string', 'max:300'],
         ]);
-        $data['nama'] = trim(preg_replace('/\s+/', ' ', $data['nama']));
+        $data['nama'] = trim(preg_replace('/\s+/', ' ', (string) ($data['nama'] ?? ''))) ?: null;
 
         return $data;
     }

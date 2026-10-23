@@ -232,7 +232,8 @@ class DaftarRekening
     {
         $st = self::statistik();
 
-        return Rekening::get()->map(function ($r) use ($st) {
+        // Nomor salah tulis / tidak ada tidak ditawarkan.
+        return Rekening::where('sumber', '!=', 'salah')->get()->map(function ($r) use ($st) {
             $kas = $st['kas'][$r->kunci] ?? null;
             $uj = $st['uj'][$r->kunci] ?? null;
             // Pemilik belum diketahui: nama kosong ("pemilik belum diisi"), sopirnya tetap bisa dicari lewat alias.

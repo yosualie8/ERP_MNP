@@ -10,7 +10,9 @@ class Rekening extends Model
 {
     protected $table = 'rekening';
 
-    public const SUMBER = ['kas_harian' => 'Kas Harian', 'karyawan' => 'Data Karyawan', 'kas_uj' => 'Kas UJ (perlu dicek)', 'admin' => 'Diisi admin', 'input' => 'Input baru'];
+    public const SUMBER = ['kas_harian' => 'Kas Harian', 'karyawan' => 'Data Karyawan', 'kas_uj' => 'Kas UJ (perlu dicek)', 'admin' => 'Diisi admin', 'input' => 'Input baru',
+        // Nomor salah tulis / tidak ada (dicek admin): tetap tercatat, tidak ditawarkan sebagai saran di Input Kas / Input UJ.
+        'salah' => 'Nomor salah / tidak ada'];
 
     protected $fillable = ['kunci', 'no_rekening', 'bank', 'nama', 'sumber', 'catatan', 'user_id'];
 
