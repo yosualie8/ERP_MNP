@@ -130,8 +130,12 @@
                         d.querySelector('.hapus').addEventListener('click', () => { URL.revokeObjectURL(f.url); foto.splice(i, 1); gambar(); });
                         return d;
                     }));
-                    kirim.disabled = !foto.length;
-                    kirim.textContent = foto.length ? `Kirim ${foto.length} foto` : 'Kirim';
+                    aturKirim();
+                };
+                // GPS wajib (owner 23 Okt 2026): Kirim baru aktif bila ada foto DAN lokasi sudah didapat.
+                const aturKirim = () => {
+                    kirim.disabled = !foto.length || !gps;
+                    kirim.textContent = !gps ? '📍 Menunggu GPS…' : (foto.length ? `Kirim ${foto.length} foto` : 'Kirim');
                 };
                 const tambah = (file, sumber, kamera) => {
                     if (foto.length >= MAKS) { alert(`Maksimal ${MAKS} foto sekali kirim — kirim dulu, lalu lanjutkan.`); return; }
@@ -153,7 +157,7 @@
                     galeri.value = '';
                 });
 
-                // GPS: dicatat bersama kiriman; info lokasi proyek (tidak menghalangi kirim).
+                // GPS: wajib & dicatat bersama kiriman; info lokasi proyek (di luar lokasi proyek tetap boleh kirim).
                 let terakhir = null;
                 const cek = async p => {
                     const d = new FormData(); d.append('_token', TOKEN); d.append('lat', p.latitude); d.append('lng', p.longitude); d.append('akurasi', Math.round(p.accuracy));
@@ -163,11 +167,12 @@
                     } catch { lokasi.textContent = `📍 GPS ±${Math.round(p.accuracy)} m`; }
                 };
                 if (navigator.geolocation) navigator.geolocation.watchPosition(p => {
-                    gps = p.coords;
+                    gps = p.coords; aturKirim();
                     const geser = terakhir ? Math.hypot((gps.latitude - terakhir.latitude) * 111320, (gps.longitude - terakhir.longitude) * 111320) : Infinity;
                     if (geser >= 10 || Math.abs(gps.accuracy - terakhir.accuracy) >= 20) { terakhir = gps; cek(gps); }
-                }, () => { lokasi.textContent = '⚠️ Lokasi tidak didapat — nyalakan GPS & izinkan lokasi (tetap bisa kirim).'; }, {enableHighAccuracy: true, maximumAge: 0, timeout: 30000});
-                else lokasi.textContent = '⚠️ HP ini tidak mendukung GPS.';
+                }, () => { if (!gps) lokasi.textContent = '⚠️ Lokasi belum didapat — nyalakan GPS & izinkan akses lokasi untuk browser ini. Laporan tidak bisa dikirim tanpa GPS.'; },
+                    {enableHighAccuracy: true, maximumAge: 0, timeout: 30000});
+                else lokasi.textContent = '⚠️ HP / browser ini tidak mendukung GPS — laporan tidak bisa dikirim. Buka lewat Chrome di HP.';
 
                 // ===== Bagikan ke WhatsApp: foto ber-watermark dari server diunduh dulu, lalu dibagikan lewat menu bagikan HP =====
                 const panel = document.getElementById('panel-bagikan'), tombolBagi = document.getElementById('bagikan'), infoBagi = document.getElementById('info-bagikan');
@@ -202,12 +207,12 @@
                 document.getElementById('selesai').addEventListener('click', () => location.reload());
 
                 kirim.addEventListener('click', () => {
-                    if (!foto.length) return;
+                    if (!foto.length || !gps) return;
                     const d = new FormData();
                     d.append('_token', TOKEN);
                     foto.forEach((f, i) => { d.append('foto[]', f.file, f.file.name || `foto-${i + 1}.jpg`); d.append('sumber[]', f.sumber); d.append('kamera[]', f.kamera || ''); });
                     d.append('keterangan', document.getElementById('keterangan').value);
-                    if (gps) { d.append('lat', gps.latitude); d.append('lng', gps.longitude); d.append('akurasi', Math.round(gps.accuracy)); }
+                    d.append('lat', gps.latitude); d.append('lng', gps.longitude); d.append('akurasi', Math.round(gps.accuracy));
                     const xhr = new XMLHttpRequest(), bar = document.getElementById('kemajuan');
                     kirim.disabled = true; kirim.textContent = 'Mengirim…'; bar.hidden = false; status.textContent = '';
                     xhr.upload.onprogress = e => { if (e.lengthComputable) bar.firstElementChild.style.width = Math.round(e.loaded / e.total * 100) + '%'; };
@@ -227,6 +232,7 @@
                     xhr.onerror = () => { status.style.color = 'var(--merah)'; status.textContent = '⚠️ Koneksi terputus — foto masih di sini, coba kirim lagi.'; kirim.disabled = false; kirim.textContent = `Kirim ${foto.length} foto`; bar.hidden = true; };
                     xhr.open('POST', @json(route('lapor.simpan'))); xhr.setRequestHeader('Accept', 'application/json'); xhr.send(d);
                 });
+                aturKirim();
                 nyalakan();
             })();
         </script>

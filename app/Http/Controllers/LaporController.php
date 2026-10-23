@@ -76,8 +76,11 @@ class LaporController extends Controller
             'foto' => ['required', 'array', 'min:1', 'max:'.FotoLapor::MAKS_FOTO], 'foto.*' => ['image', 'max:15360'],
             'sumber' => ['array'], 'sumber.*' => ['in:kamera,galeri'], 'kamera' => ['array'], 'kamera.*' => ['nullable', 'in:depan,belakang'],
             'keterangan' => ['nullable', 'string', 'max:2000'],
-            'lat' => ['nullable', 'numeric', 'between:-90,90'], 'lng' => ['nullable', 'numeric', 'between:-180,180'], 'akurasi' => ['nullable', 'numeric', 'min:0'],
-        ], ['foto.required' => 'Ambil atau pilih minimal satu foto.', 'foto.max' => 'Maksimal '.FotoLapor::MAKS_FOTO.' foto sekali kirim.', 'foto.*.image' => 'File harus foto.', 'foto.*.max' => 'Foto terlalu besar (maks. 15 MB).']);
+            // GPS wajib (owner 23 Okt 2026): kiriman tanpa lokasi ditolak.
+            'lat' => ['required', 'numeric', 'between:-90,90'], 'lng' => ['required', 'numeric', 'between:-180,180'], 'akurasi' => ['nullable', 'numeric', 'min:0'],
+        ], ['lat.required' => 'Lokasi GPS wajib — nyalakan GPS & izinkan akses lokasi, tunggu sampai lokasi tampil, lalu kirim lagi.',
+            'lng.required' => 'Lokasi GPS wajib — nyalakan GPS & izinkan akses lokasi, tunggu sampai lokasi tampil, lalu kirim lagi.',
+            'foto.required' => 'Ambil atau pilih minimal satu foto.', 'foto.max' => 'Maksimal '.FotoLapor::MAKS_FOTO.' foto sekali kirim.', 'foto.*.image' => 'File harus foto.', 'foto.*.max' => 'Foto terlalu besar (maks. 15 MB).']);
 
         $waktu = now();
         $akurasi = isset($d['akurasi']) ? (int) round($d['akurasi']) : null;
