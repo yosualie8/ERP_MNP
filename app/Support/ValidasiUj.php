@@ -81,6 +81,11 @@ class ValidasiUj
             ->with('pengajuan')->orderBy('id')->get()
             ->map(fn ($d) => self::baris($d->pengajuan->kode().' (dibayar saldo sopir)', $d->pengajuan->tanggal, $d->nama, $d->keterangan, (int) $d->nominal,
                 $d->kategori, $d->jenis_kendaraan, $d->no_mobil, $d->no_do)));
+        // Aturan H (owner 23 Okt 2026): pengajuan cukup sekali sehari per DT — DT yang sudah ada di pengajuan lain bertanggal sama
+        // (jenis kategori sama, belum dibatalkan) diberi peringatan dan wajib beralasan; tidak ditolak. Pengajuan yang sedang diedit dikecualikan.
+        $hariSama = $tanyaDuluan ? \App\Models\UjPengajuanDetail::where('status', '!=', 'batal')->whereNotIn('id', $kecualiPengajuan ?: [0])
+            ->whereHas('pengajuan', fn ($q) => $q->whereDate('tanggal', $tgl->toDateString()))->with('pengajuan')->get()
+            ->groupBy(fn ($d) => NomorMobil::rapikan($d->no_mobil).'|'.self::jenisKategori($d->kategori)) : collect();
 
         // Jenis kendaraan per DT dari seluruh histori (bukan hanya 30 hari).
         $jenisDt = UjDetail::whereNotNull('no_mobil')->whereNotNull('jenis_kendaraan')
@@ -136,6 +141,12 @@ class ValidasiUj
                             .", {$c['kategori']} ".rp($c['nominal']).', "'.$c['ket'].'"). Apakah transaksi ini sudah terjadi duluan sebelum pengajuan?'];
                     }
                 }
+            }
+            if ($tanyaDuluan && $r['mobil'] && ($lain = $hariSama[$r['mobil'].'|'.$r['jenisKat']] ?? null)) {
+                $kode = $lain->map(fn ($x) => $x->pengajuan->kode())->unique()->implode(', ');
+                $tautan[] = ['kode' => 'H', 'prioritas' => 'sedang', 'pesan' => "{$r['mobil']} sudah ada di {$kode} bertanggal sama ({$lain->count()} baris {$r['kategori']}"
+                    .(($do = $lain->pluck('no_do')->filter()->unique())->isNotEmpty() ? ', DO '.$do->implode(', ') : '').'). Pengajuan cukup sekali sehari — tambahkan lewat Edit '
+                    .$kode.'. Bila memang perlu pengajuan terpisah (mis. tujuan buangan lain), tulis alasannya.'];
             }
             $temuan[$i] = [...$tautan, ...self::aturan($r, $pembanding, $jenisDt), ...($tanyaDuluan ? self::ujTerbuka($r) : [])];
             $sebelumnya->push($r);
