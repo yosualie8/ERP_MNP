@@ -224,7 +224,7 @@
                             siapkanBagikan(h.bagikan);
                         } else {
                             status.style.color = 'var(--merah)';
-                            status.textContent = '⚠️ ' + ((h.galat || Object.values(h.errors || {}).flat()).join(' ') || h.message || `Gagal mengirim (kode ${xhr.status}). Coba lagi.`);
+                            status.textContent = '⚠️ ' + ([...new Set(h.galat || Object.values(h.errors || {}).flat())].join(' ') || h.message || `Gagal mengirim (kode ${xhr.status}). Coba lagi.`);
                             kirim.disabled = false; kirim.textContent = `Kirim ${foto.length} foto`;
                         }
                         bar.hidden = true; bar.firstElementChild.style.width = 0;
