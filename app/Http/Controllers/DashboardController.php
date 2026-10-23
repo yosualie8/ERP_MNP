@@ -19,6 +19,8 @@ class DashboardController extends Controller
             'bulanTerakhir' => KasBulan::orderByDesc('bulan')->first(),
             'jumlahBulan' => KasBulan::count(),
             'bulanBercatatan' => KasBulan::where('arsip', false)->get()->reject->cocok()->pluck('lembar'),
+            // Kesehatan server (sisa disk, foto tertahan) hanya untuk Super Admin.
+            'server' => auth()->user()?->isSuperAdmin() ? \App\Support\CekServer::periksa() : null,
         ]);
     }
 }

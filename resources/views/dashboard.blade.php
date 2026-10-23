@@ -1,6 +1,13 @@
 @extends('layouts.app', ['judul' => 'Beranda'])
 
 @section('isi')
+    @if ($server)
+        @foreach ($server['masalah'] as $m)
+            <div class="pesan galat"><b>⚠ Server:</b> {{ $m }}</div>
+        @endforeach
+        <p class="redup" style="margin: 0 0 10px; font-size: 13px;">💾 Disk server: {{ $server['disk']['terpakai'] }} GB dari {{ $server['disk']['total'] }} GB terpakai
+            · sisa {{ $server['disk']['sisa'] }} GB ({{ $server['disk']['persen_sisa'] }}%) — peringatan muncul di sini bila sisa &lt; {{ \App\Support\CekServer::BATAS_PERSEN }}%.</p>
+    @endif
     @if ($bulanTerakhir)
         <div class="kartu">
             <h3 style="margin-top: 0;">Kas Bank Jago · {{ $bulanTerakhir->bulan->translatedFormat('F Y') }}</h3>

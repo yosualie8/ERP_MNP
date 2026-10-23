@@ -33,6 +33,8 @@ class Kernel extends ConsoleKernel
         $schedule->command('mnp:impor-mutasi-pt')->everyThirtyMinutes()->withoutOverlapping();
         // Rekening baru yang diketik langsung di sheet Kas Harian / Kas UJ ikut masuk Daftar Rekening (yang sudah ada tidak diubah).
         $schedule->command('mnp:isi-rekening')->hourlyAt(20)->withoutOverlapping();
+        // Sisa disk & foto yang tertahan (unggahan Drive macet) — peringatan di Beranda Super Admin + riwayat.
+        $schedule->command('mnp:cek-server')->hourlyAt(40)->withoutOverlapping();
     }
 
     /**
