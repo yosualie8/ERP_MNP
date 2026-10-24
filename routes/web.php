@@ -103,6 +103,8 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::post('/lapor/cek', [\App\Http\Controllers\LaporController::class, 'cek'])->name('lapor.cek');
     Route::get('/lapor/foto/{foto}', [\App\Http\Controllers\LaporController::class, 'foto'])->whereNumber('foto')->name('lapor.foto');
     Route::get('/lapor-data', [\App\Http\Controllers\LaporDataController::class, 'index'])->name('lapor-data.index');
+    // Review Absen Harian: lengkap / belum absen masuk-pulang per karyawan, kirim review ke WhatsApp grup / pribadi.
+    Route::get('/review-absen', [\App\Http\Controllers\ReviewAbsenController::class, 'index'])->name('review-absen.index');
     Route::post('/lapor-data/pengaturan', [\App\Http\Controllers\LaporDataController::class, 'pengaturan'])->name('lapor-data.pengaturan');
     Route::post('/lapor-data/{lapor}', [\App\Http\Controllers\LaporDataController::class, 'ubah'])->whereNumber('lapor')->name('lapor-data.ubah');
     Route::get('/absen/foto/{absensi}', [\App\Http\Controllers\AbsenController::class, 'foto'])->whereNumber('absensi')->name('absen.foto');

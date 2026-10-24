@@ -38,6 +38,7 @@
                 <datalist id="saran-bank">@foreach ($saranBank as $s)<option value="{{ $s }}">@endforeach</datalist></div>
             <div><label for="no_rekening">No rekening</label><input id="no_rekening" name="no_rekening" inputmode="numeric" value="{{ old('no_rekening', $karyawan->no_rekening) }}" autocomplete="off"></div>
             <div><label for="nama_rekening">Nama rekening</label><input id="nama_rekening" name="nama_rekening" value="{{ old('nama_rekening', $karyawan->nama_rekening) }}" autocomplete="off"></div>
+            <div><label for="no_hp">No HP / WhatsApp</label><input id="no_hp" name="no_hp" inputmode="tel" value="{{ old('no_hp', $karyawan->no_hp) }}" autocomplete="off" placeholder="mis. 081234567890"></div>
         </div>
         <div style="display: flex; gap: 10px;">
             <button type="submit" class="tombol">Simpan</button>

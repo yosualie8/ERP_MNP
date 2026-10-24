@@ -54,6 +54,7 @@ class MenuAkses
         'absen' => ['Lapor Lapangan', 'lapor.index', ['absen.index', 'lapor.index', 'lapor.simpan', 'lapor.cek'], 'Kirim foto absen, laporan kerja & kejadian lapangan (banyak foto, kamera depan/belakang atau galeri) — sistem yang memilah masuk, pulang, lembur & progres'],
         // Data Absensi & Data Lapor Lapangan disatukan (owner 19 Okt 2026) — kunci 'absensi' dipertahankan supaya hak akses jabatan tetap.
         'absensi' => ['Data Absensi & Lapor', 'lapor-data.index', ['absensi.*', 'lapor-data.*'], 'Rekap absensi per tanggal (masuk/pulang/lembur, yang tidak absen) + semua kiriman Lapor Lapangan: koreksi hasil pilah, kaitkan ke item BOQ, jam kerja standar & per proyek'],
+        'review-absen' => ['Review Absen Harian', 'review-absen.index', ['review-absen.*'], 'Per karyawan wajib absen: absen masuk & pulang lengkap atau belum; kirim review lewat teks grup WhatsApp atau WA pribadi (No HP di Data Karyawan)'],
         'lokasi-absen' => ['Lokasi Absen', 'lokasi-absen.index', ['lokasi-absen.*'], 'Titik GPS + radius per proyek tempat karyawan boleh absen'],
         'karyawan' => ['Data Karyawan', 'karyawan.index', ['karyawan.*'], 'Data induk karyawan (NIK, site, jabatan, rekening) — dasar modul absensi'],
         'jabatan' => ['Master Jabatan', 'jabatan.index', ['jabatan.*'], 'Daftar jabatan karyawan: tambah, ganti nama, hapus (jabatan Data Karyawan dipilih dari sini)'],
@@ -72,7 +73,7 @@ class MenuAkses
         'uj' => ['Uang Jalan', '🚚', ['pengajuan-uj', 'ajukan-uj', 'input-uj', 'kas-uj', 'reimburse-uj', 'pengalihan-uj', 'rapikan-uj']],
         'ritasi' => ['Ritasi', '⛰️', ['input-ritasi', 'ritasi', 'buangan-truk', 'monitor-ritasi', 'bayar-tanah', 'performa-ritasi', 'kubikasi-kendaraan']],
         'bbm' => ['BBM & HM', '⛽', ['input-bbm', 'bbm']],
-        'karyawan' => ['Karyawan', '👷', ['absen', 'absensi', 'karyawan', 'jabatan', 'lokasi-absen']],
+        'karyawan' => ['Karyawan', '👷', ['absen', 'absensi', 'review-absen', 'karyawan', 'jabatan', 'lokasi-absen']],
         'aset' => ['Aset', '🚛', ['aset']],
     ];
 

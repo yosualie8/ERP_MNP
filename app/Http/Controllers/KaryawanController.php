@@ -62,6 +62,7 @@ class KaryawanController extends Controller
             'npwp' => $t($request->input('npwp')), 'site' => Karyawan::rapikanSite($request->input('site')), 'jabatan' => $t($request->input('jabatan')),
             'bank' => $t($request->input('bank')), 'no_rekening' => ($r = preg_replace('/\s+/', '', (string) $request->input('no_rekening'))) === '' ? null : $r,
             'nama_rekening' => $t($request->input('nama_rekening')),
+            'no_hp' => ($h = preg_replace('/[^\d+]/', '', (string) $request->input('no_hp'))) === '' ? null : $h,
             'no_mobil' => \App\Support\NomorMobil::rapikan($request->input('no_mobil')),
         ]);
 
@@ -81,6 +82,7 @@ class KaryawanController extends Controller
             }],
             'bank' => ['nullable', 'string', 'max:40'], 'no_rekening' => ['nullable', 'regex:/^\d{5,30}$/'],
             'nama_rekening' => ['nullable', 'string', 'max:120'],
+            'no_hp' => ['nullable', 'regex:/^\+?\d{9,15}$/'],
             'no_mobil' => ['nullable', 'string', 'max:20'],
         ], [
             'nama.required' => 'Nama belum diisi.',
@@ -88,6 +90,7 @@ class KaryawanController extends Controller
             'nik.unique' => 'NIK ini sudah dipakai karyawan lain — periksa KTP-nya.',
             'email.email' => 'Email tidak valid.', 'email.unique' => 'Email ini sudah dipakai karyawan lain.',
             'no_rekening.regex' => 'No rekening hanya angka (5–30 digit).',
+            'no_hp.regex' => 'No HP / WhatsApp hanya angka (9–15 digit), mis. 081234567890.',
         ]);
     }
 

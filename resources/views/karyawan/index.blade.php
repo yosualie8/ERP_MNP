@@ -18,13 +18,14 @@
     <div class="kartu gulir" style="padding: 0;">
         <table class="kas">
             <thead>
-                <tr><th>Nama</th><th>Email (login absen)</th><th>NIK</th><th>Status</th><th>Site</th><th>Jabatan</th><th>Bank</th><th>No rekening</th><th>Nama rekening</th><th data-tanpa-saring></th></tr>
+                <tr><th>Nama</th><th>Email (login absen)</th><th>No HP</th><th>NIK</th><th>Status</th><th>Site</th><th>Jabatan</th><th>Bank</th><th>No rekening</th><th>Nama rekening</th><th data-tanpa-saring></th></tr>
             </thead>
             <tbody>
                 @forelse ($karyawan as $k)
                     <tr class="t">
                         <td><b>{{ $k->nama }}</b>@if (($lain = $k->alias->reject(fn ($a) => \App\Support\DaftarSopir::kunci($a->nama) === \App\Support\DaftarSopir::kunci($k->nama))->pluck('nama'))->isNotEmpty())<div class="redup" style="font-size: 11px;" title="Nama lain / ejaan di Kas UJ">juga: {{ $lain->implode(', ') }}</div>@endif</td>
                         <td>{{ $k->email }}</td>
+                        <td style="white-space: nowrap;">{{ $k->no_hp }}</td>
                         <td style="white-space: nowrap;">{{ $k->nik }}@if ($k->nik && isset($nikDobel[$k->nik])) <span class="label merah" title="NIK sama dengan karyawan lain">dobel</span>@endif</td>
                         <td><span @class(['label', 'hijau' => $k->status === 'aktif'])>{{ $k->labelStatus() }}</span></td>
                         <td>{{ $k->site }}</td>
@@ -35,7 +36,7 @@
                         <td>@if ($bolehUbah)<a href="{{ route('karyawan.edit', $k) }}" class="tombol-edit">Edit</a>@endif</td>
                     </tr>
                 @empty
-                    <tr><td colspan="10" class="redup" style="padding: 20px 14px;">Belum ada data karyawan.</td></tr>
+                    <tr><td colspan="11" class="redup" style="padding: 20px 14px;">Belum ada data karyawan.</td></tr>
                 @endforelse
             </tbody>
         </table>
