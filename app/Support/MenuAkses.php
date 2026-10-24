@@ -83,6 +83,9 @@ class MenuAkses
     /** Menu yang hanya untuk Super Admin (tidak bisa diberikan ke Admin). */
     public const KHUSUS_SUPER = ['dashboard-aktivitas'];
 
+    /** Hak akses yang diatur per jabatan tetapi tidak tampil di sidebar (dibuka lewat tombol di halaman lain). */
+    public const TANPA_SIDEBAR = ['ajukan-uj']; // tombol "+ Ajukan uang jalan" di Pengajuan UJ
+
     public static function boleh(?User $user, string $menu): bool
     {
         if (! $user) {
@@ -142,6 +145,7 @@ class MenuAkses
         $boleh = self::navigasi($user);
         $hasil = [];
         foreach (self::KATEGORI as $kunci => [$judul, $ikon, $isi]) {
+            $isi = array_values(array_diff($isi, self::TANPA_SIDEBAR));
             $menu = array_filter(array_map(fn ($k) => $boleh[$k] ?? null, array_combine($isi, $isi)));
             if ($menu) {
                 $hasil[$kunci] = ['judul' => $judul, 'ikon' => $ikon, 'menu' => $menu];
