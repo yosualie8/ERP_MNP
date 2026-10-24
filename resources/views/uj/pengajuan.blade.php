@@ -7,7 +7,7 @@
         /* Ringkasan pengajuan (rit & tujuan) — tampil hanya saat pengajuan dibuka */
         table.kas tbody.grup:not(.buka) tr.ringkas-pj { display: none; }
         table.kas tr.ringkas-pj td { background: rgba(255, 255, 255, .03); padding: 8px 12px; }
-        .ringkas-pj table { border-collapse: collapse; font-size: 12.5px; margin-top: 4px; }
+        .ringkas-pj table { border-collapse: collapse; font-size: 12.5px; margin-top: 4px; width: auto; min-width: 0; }
         .ringkas-pj table th, .ringkas-pj table td { padding: 3px 10px; border-bottom: 1px solid var(--garis); text-align: left; white-space: nowrap; background: none; }
         .ringkas-pj table th { color: var(--redup); font-weight: 600; }
         .ringkas-pj .angka { text-align: right; }
