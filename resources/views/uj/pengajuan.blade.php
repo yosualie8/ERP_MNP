@@ -4,6 +4,13 @@
 
 @section('isi')
     <style>
+        /* Ringkasan pengajuan (rit & tujuan) — tampil hanya saat pengajuan dibuka */
+        table.kas tbody.grup:not(.buka) tr.ringkas-pj { display: none; }
+        table.kas tr.ringkas-pj td { background: rgba(255, 255, 255, .03); padding: 8px 12px; }
+        .ringkas-pj table { border-collapse: collapse; font-size: 12.5px; margin-top: 4px; }
+        .ringkas-pj table th, .ringkas-pj table td { padding: 3px 10px; border-bottom: 1px solid var(--garis); text-align: left; white-space: nowrap; background: none; }
+        .ringkas-pj table th { color: var(--redup); font-weight: 600; }
+        .ringkas-pj .angka { text-align: right; }
         table.kas tr.b.terealisasi td { color: var(--sukses); }
         table.kas tr.b.dialihkan td { color: #dcb3ff; }
         table.kas tr.b.batal td { color: var(--redup); text-decoration: line-through; }
@@ -182,6 +189,22 @@
                             @endif
                         </td>
                     </tr>
+                    {{-- Ringkasan (owner 24 Okt 2026): berapa rit & ke mana tujuannya; rit = No DO yang tidak dibatalkan. --}}
+                    @php($ringkas = \App\Support\RingkasPengajuan::dari($p->detail))
+                    <tr class="ringkas-pj"><td></td><td colspan="11">
+                        <b>📋 Ringkasan {{ $p->kode() }}:</b> {{ $ringkas['rit'] }} rit · {{ $ringkas['dt'] }} DT
+                        @if ($ringkas['batal'])<span class="redup"> · {{ $ringkas['batal'] }} DO dibatalkan</span>@endif
+                        <table data-tanpa-saring-kolom>
+                            <thead><tr><th>Galian → Tujuan</th><th class="angka">Rit</th><th class="angka">DT</th><th>Uang jalan</th><th>Uang tanah</th><th>Lainnya</th><th class="angka">Nominal aktif</th></tr></thead>
+                            <tbody>
+                                @foreach ($ringkas['rute'] as $r)
+                                    <tr><td><b>{{ $r['galian'] ? $r['galian'].' → ' : '' }}{{ $r['tujuan'] }}</b></td><td class="angka"><b>{{ $r['rit'] }}</b>@if ($r['batal'])<span class="redup"> (+{{ $r['batal'] }} batal)</span>@endif</td>
+                                        <td class="angka">{{ $r['dt'] }}</td><td>{{ \App\Support\RingkasPengajuan::teksStatus($r['uj']) }}</td><td>{{ \App\Support\RingkasPengajuan::teksStatus($r['ut']) }}</td>
+                                        <td>{{ $r['lain'] ? \App\Support\RingkasPengajuan::teksStatus($r['lain']) : '' }}</td><td class="angka">{{ rp($r['rp']) }}</td></tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </td></tr>
                     <tr class="bh"><td>Detail</td><td></td><td>No Mobil</td><td>Driver</td><td>Kategori</td><td>No DO</td><td class="angka">Nominal</td><td>Status</td><td></td><td></td><td>Keterangan</td><td></td></tr>
                     @foreach ($p->detail as $d)
                         @php($teksStatus = $d->jenis_realisasi === 'penyesuaian' ? 'Terealisasi (berbeda)' : ['menunggu' => 'Menunggu', 'terealisasi' => 'Terealisasi', 'dialihkan' => 'Dialihkan', 'batal' => 'Dibatalkan'][$d->status] ?? $d->status)

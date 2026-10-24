@@ -54,6 +54,12 @@ class TebakGalian
         return $pilih[0] ?? null;
     }
 
+    /** Nama galian yang dipakai di lembar Ritasi setahun terakhir (mis. RKS, Sajira, Sidomuncul). @return string[] */
+    public static function galianDikenal(): array
+    {
+        return array_values(array_filter(self::peta()['galian']));
+    }
+
     /**
      * Peta tempat → galian terbaru (dan tahap|tempat → galian), dari rit yang DO-nya ada di Kas UJ. Disimpan 30 menit.
      *
