@@ -17,6 +17,13 @@
         .batch-baru { border: 1px solid rgba(76, 195, 138, .45); background: var(--sukses-muda); }
         .batch-baru .aksi { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
         @media (max-width: 900px) { .panel-pilih { grid-template-columns: 1fr 1fr; } }
+        .lainnya { margin-top: 10px; padding: 8px 12px; border: 1px dashed var(--garis-kuat); border-radius: 8px; font-size: 13.5px; }
+        .lainnya .baris-lainnya { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+        .lainnya input[type=date] { padding: 4px 8px; font-size: 13px; }
+        .lainnya #total-lainnya { font-size: 17px; font-variant-numeric: tabular-nums; }
+        .lainnya table { margin-top: 8px; font-size: 12.5px; border-collapse: collapse; width: auto; }
+        .lainnya table th, .lainnya table td { padding: 3px 10px; border-bottom: 1px solid var(--garis); text-align: left; }
+        .lainnya .angka { text-align: right; font-variant-numeric: tabular-nums; }
     </style>
 
     @if ($baru)
@@ -58,6 +65,18 @@
                     <button type="button" class="tombol polos" id="kosongkan">Kosongkan</button>
                 </div>
                 <div class="redup" style="font-size: 12px;">Ketik nominal → transfer dipilih <b>berurutan dari yang paling lama</b> sampai totalnya mencapai nominal; bila masih kurang, <b>1 transfer berikutnya tetap diambil</b> (total boleh lebih). Centang ikut urutan: mencentang mengikutkan semua yang lebih lama, melepas centang ikut melepas yang lebih baru.</div>
+            </div>
+            {{-- Owner 25 Okt 2026: jumlah transaksi Kas UJ di luar uang jalan & uang tanah pada satu tanggal (bawaan H-1) sebagai bahan nominal. --}}
+            <div class="lainnya" id="lainnya">
+                <div class="baris-lainnya">
+                    <span>Di luar uang jalan &amp; tanah, tanggal</span>
+                    <input type="date" id="tgl-lainnya" value="{{ today()->subDay()->toDateString() }}">
+                    <b id="total-lainnya">…</b>
+                    <span class="redup" id="info-lainnya"></span>
+                    <button type="button" class="tombol polos" id="pakai-lainnya" style="padding: 3px 10px; font-size: 12px;" hidden>Pakai sebagai nominal</button>
+                    <button type="button" class="tombol polos" id="rinci-lainnya" style="padding: 3px 10px; font-size: 12px;" hidden>▸ Rincian</button>
+                </div>
+                <div id="isi-lainnya" hidden></div>
             </div>
             <div class="hasil-pilih">
                 <span>Terpilih <b id="total-pilih">Rp 0</b></span>
@@ -159,6 +178,31 @@
                 urut.forEach(g => { const ambil = t > 0 && total < t; kotak(g).checked = ambil; if (ambil) total += +g.dataset.total; });
                 hitung();
             };
+            // Transaksi di luar uang jalan & uang tanah pada tanggal pilihan (bawaan kemarin).
+            const tglLain = document.getElementById('tgl-lainnya'), isiLain = document.getElementById('isi-lainnya');
+            const pakaiLain = document.getElementById('pakai-lainnya'), rinciLain = document.getElementById('rinci-lainnya');
+            const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+            let totalLain = 0;
+            const muatLain = async () => {
+                document.getElementById('total-lainnya').textContent = '…';
+                try {
+                    const h = await (await fetch(@json(route('reimburse.lainnya')) + '?tanggal=' + encodeURIComponent(tglLain.value), {headers: {Accept: 'application/json'}})).json();
+                    totalLain = h.total;
+                    document.getElementById('total-lainnya').textContent = fmt(h.total);
+                    document.getElementById('info-lainnya').textContent = `${h.n} transaksi · ${h.label}`;
+                    pakaiLain.hidden = !h.total; rinciLain.hidden = !h.n;
+                    isiLain.innerHTML = h.n ? `<table data-tanpa-saring-kolom><thead><tr><th>Kategori</th><th class="angka">Transaksi</th><th class="angka">Jumlah</th><th class="angka">Belum reimburse</th></tr></thead><tbody>`
+                        + h.kategori.map(k => `<tr><td>${esc(k.kategori)}</td><td class="angka">${k.n}</td><td class="angka"><b>${fmt(k.total)}</b></td><td class="angka">${fmt(k.belum)}</td></tr>`).join('')
+                        + `</tbody></table><table data-tanpa-saring-kolom><thead><tr><th>ID UJ</th><th>Nama</th><th>Kategori</th><th>Mobil</th><th>Keterangan</th><th class="angka">Nominal</th><th></th></tr></thead><tbody>`
+                        + h.baris.map(b => `<tr><td>${esc(b.id_uj)}</td><td>${esc(b.nama)}</td><td>${esc(b.kategori)}</td><td>${esc(b.mobil)}</td><td>${esc(b.ket)}</td><td class="angka">${fmt(b.nominal)}</td><td class="redup">${b.sudah ? 'sudah reimburse' : ''}</td></tr>`).join('')
+                        + '</tbody></table>' : '';
+                } catch { document.getElementById('total-lainnya').textContent = 'gagal dimuat'; }
+            };
+            tglLain.addEventListener('change', muatLain);
+            rinciLain.addEventListener('click', () => { isiLain.hidden = !isiLain.hidden; rinciLain.textContent = (isiLain.hidden ? '▸' : '▾') + ' Rincian'; });
+            pakaiLain.addEventListener('click', () => { target.value = new Intl.NumberFormat('id-ID').format(totalLain); pilihOtomatis(); target.focus(); });
+            muatLain();
+
             target.addEventListener('input', () => {
                 const pos = target.value.length - target.selectionStart;
                 const d = target.value.replace(/\D/g, '').replace(/^0+(?=\d)/, '');

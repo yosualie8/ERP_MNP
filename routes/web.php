@@ -204,6 +204,7 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::delete('/ritasi/{baris}', [RitasiController::class, 'hapus'])->whereNumber('baris')->name('ritasi.hapus');
     Route::get('/uj/reimburse', [ReimburseUjController::class, 'index'])->name('reimburse.index');
     Route::post('/uj/reimburse', [ReimburseUjController::class, 'simpan'])->name('reimburse.simpan');
+    Route::get('/uj/reimburse/lainnya', [ReimburseUjController::class, 'lainnya'])->name('reimburse.lainnya');
     Route::get('/uj/reimburse/{reimburse}/excel', [ReimburseUjController::class, 'unduh'])->name('reimburse.unduh');
     Route::post('/logout', [GoogleController::class, 'logout'])->name('logout');
     // Tanya AI (OpenAI): chat data ERP hanya baca + speech to text; log lengkap per pengguna.
