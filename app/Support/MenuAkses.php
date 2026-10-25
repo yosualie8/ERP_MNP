@@ -85,7 +85,7 @@ class MenuAkses
     public const KHUSUS_SUPER = ['dashboard-aktivitas'];
 
     /** Hak akses yang diatur per jabatan tetapi tidak tampil di sidebar (dibuka lewat tombol di halaman lain). */
-    public const TANPA_SIDEBAR = ['ajukan-uj']; // tombol "+ Ajukan uang jalan" di Pengajuan UJ
+    public const TANPA_SIDEBAR = []; // 'ajukan-uj' tampil lagi di sidebar (owner 25 Okt 2026)
 
     public static function boleh(?User $user, string $menu): bool
     {
