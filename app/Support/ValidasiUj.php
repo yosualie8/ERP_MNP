@@ -56,7 +56,8 @@ class ValidasiUj
         $tertaut = $tanyaDuluan ? \App\Models\UjPengajuanDetail::whereNotNull('id_uj')->pluck('id_uj')->flip()->all() : [];
         $dipakaiDuluan = [];
         // Pengajuan UJ yang masih menunggu realisasi ikut dibandingkan (kecuali detail yang sedang diedit / direalisasikan).
-        $histori = $histori->concat(\App\Models\UjPengajuanDetail::query()->where('status', 'menunggu')
+        // (Fitur Pengajuan UJ nonaktif → pengajuan yang masih menunggu tidak dibandingkan.)
+        $histori = $histori->concat(! Fitur::pengajuanUj() ? collect() : \App\Models\UjPengajuanDetail::query()->where('status', 'menunggu')
             ->whereNotIn('id', $kecualiPengajuan ?: [0])
             ->whereHas('pengajuan', fn ($q) => $q->whereBetween('tanggal', $rentang))
             ->with(['pengajuan.transfer', 'pengajuan.tanda'])->orderBy('id')->get()

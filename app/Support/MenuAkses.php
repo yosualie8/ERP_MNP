@@ -92,6 +92,10 @@ class MenuAkses
         if (! $user) {
             return false;
         }
+        // Fitur yang dinonaktifkan owner (mis. Pengajuan UJ, 25 Okt 2026): tertutup untuk semua, termasuk Super Admin.
+        if (in_array($menu, Fitur::MENU_PENGAJUAN, true) && ! Fitur::pengajuanUj()) {
+            return false;
+        }
         if (in_array($menu, self::KHUSUS_SUPER, true)) {
             return $user->isSuperAdmin();
         }

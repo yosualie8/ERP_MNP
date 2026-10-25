@@ -442,7 +442,7 @@ class UjController extends Controller
     /** Input UJ menawarkan "Tautkan ke pengajuan" untuk baris yang cocok dengan pengajuan menunggu; form Pengajuan UJ tidak. */
     protected function tawarkanTautan(): bool
     {
-        return true;
+        return \App\Support\Fitur::pengajuanUj(); // fitur Pengajuan UJ nonaktif → tanpa isi otomatis / Tautkan
     }
 
     /**
@@ -531,6 +531,10 @@ class UjController extends Controller
         $input = $this->bacaInput($request);
         if ($input instanceof RedirectResponse) {
             return $input;
+        }
+        // Fitur Pengajuan UJ nonaktif: tautan ke pengajuan dari form lama diabaikan.
+        if (! \App\Support\Fitur::pengajuanUj()) {
+            $input['detail'] = array_map(fn ($d) => [...$d, 'pengajuan' => null], $input['detail']);
         }
         // Realisasi pengajuan: detail pengajuan yang dipilih harus masih menunggu (belum direalisasikan/dibatalkan).
         $idPengajuan = collect($input['detail'])->pluck('pengajuan')->filter()->values();

@@ -109,7 +109,7 @@
                 <button class="tombol polos" type="submit" style="padding: 6px 12px;">Upload &amp; isi otomatis</button>
                 <a href="{{ route('ritasi.monitor.templat') }}" class="redup" style="font-size: 13px;">⬇ Templat Excel</a>
                 {{-- Sesudah upload: batalkan baris Pengajuan UJ yang DO-nya tidak ada di data bongkar (owner 22 Okt 2026). --}}
-                <a href="{{ route('ritasi.monitor.sinkron') }}" class="tombol polos" style="padding: 6px 12px; margin-left: auto;" title="Bandingkan upload surat jalan dengan satu Pengajuan UJ, batalkan DO yang tidak bongkar">🔄 Sinkron dengan pengajuan</a>
+                @if (\App\Support\Fitur::pengajuanUj())<a href="{{ route('ritasi.monitor.sinkron') }}" class="tombol polos" style="padding: 6px 12px; margin-left: auto;" title="Bandingkan upload surat jalan dengan satu Pengajuan UJ, batalkan DO yang tidak bongkar">🔄 Sinkron dengan pengajuan</a>@endif
             </form>
             <div class="redup" style="font-size: 12.5px; margin-top: 6px;">Kolom: No Mobil (<b>nomor DT</b>, mis. DT 027 — bukan plat nomor), Tanggal Bongkar, Jam Bongkar, Tujuan Bongkar, Jenis Tanah, No Surat Jalan, Galian (bila kosong ditebak dari keterangan UJ), <b>Kubikasi</b> (m³; bila kosong = kubikasi standar jenis kendaraan) &amp; Keterangan.
                 Surat jalan tiap DT dipasangkan ke DO belum bongkar DT itu sesuai urutan waktu; jumlah surat jalan tidak boleh melebihi jumlah DO belum bongkarnya. Hasilnya hanya mengisi form di bawah — periksa dulu, lalu klik <b>Simpan bongkar</b>.</div>

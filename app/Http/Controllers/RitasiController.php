@@ -200,6 +200,7 @@ class RitasiController extends Controller
      */
     public function sinkronPengajuan(Request $request): View
     {
+        abort_unless(\App\Support\Fitur::pengajuanUj(), 404); // fitur Pengajuan UJ nonaktif
         $daftarUnggah = \App\Support\SinkronPengajuan::daftarUnggah();
         $daftarPengajuan = \App\Support\SinkronPengajuan::daftarPengajuan();
         $unggah = $daftarUnggah->firstWhere('id', $request->integer('unggah')) ?? ($request->has('unggah') ? null : $daftarUnggah->first());
@@ -213,6 +214,7 @@ class RitasiController extends Controller
 
     public function jalankanSinkron(Request $request): RedirectResponse
     {
+        abort_unless(\App\Support\Fitur::pengajuanUj(), 404);
         $d = $request->validate(['unggah' => ['required', 'integer'], 'pengajuan' => ['required', 'integer'], 'batal' => ['required', 'string']]);
         $unggah = KasRiwayat::where('aksi', 'rit-unggah')->findOrFail($d['unggah']);
         $pengajuan = \App\Models\UjPengajuan::findOrFail($d['pengajuan']);
@@ -325,7 +327,7 @@ class RitasiController extends Controller
             'rekapTanah' => $mode === 'tanah' ? \App\Models\BayarTanahRekap::with(['user', 'pengajuan'])->where(fn ($q) => $q->whereIn('status', ['menunggu', 'diajukan'])->orWhere('updated_at', '>=', now()->subDays(14)))->orderByDesc('id')->get() : collect(),
             'doDirekap' => $mode === 'tanah' ? \App\Models\BayarTanahRekap::doMenunggu() : [],
             // DO yang Uang Tanah-nya sudah diajukan (belum ditransfer): tetap tampil, diberi label kode pengajuannya.
-            'doDiajukan' => $mode === 'tanah' ? MonitorRitasi::uangTanahDiajukan() : [],
+            'doDiajukan' => $mode === 'tanah' && \App\Support\Fitur::pengajuanUj() ? MonitorRitasi::uangTanahDiajukan() : [],
             'mode' => $mode, 'rute' => $mode === 'tanah' ? 'ritasi.bayar-tanah' : 'ritasi.monitor', 'saran' => $saran,
             'daftar' => $doUnggah !== null ? $semua->filter(fn ($d) => in_array($d['do'], $doUnggah, true))->values()
                 : $semua->filter($status ? $cocokStatus : $cocokUmur)->filter($cocokCari)->filter($cocokTujuan)->filter($cocokGalian)->values(),
