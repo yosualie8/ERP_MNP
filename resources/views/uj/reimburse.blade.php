@@ -145,7 +145,7 @@
                 document.getElementById('jumlah-pilih').textContent = jumlah;
                 document.getElementById('baris-pilih').textContent = baris;
                 const t = angka(target.value);
-                document.getElementById('selisih').textContent = t ? (total <= t ? `kurang ${fmt(t - total)} dari ${fmt(t)}` : `lebih ${fmt(total - t)} dari ${fmt(t)}`) : '';
+                document.getElementById('selisih').textContent = t ? (total === t ? `pas ${fmt(t)}` : total < t ? `kurang ${fmt(t - total)} dari ${fmt(t)}` : `lebih ${fmt(total - t)} dari ${fmt(t)}`) : '';
                 tombol.disabled = !jumlah;
             };
             // Urutan antrean (paling lama dulu) — tetap walau grid diurutkan ulang lewat judul kolom.
