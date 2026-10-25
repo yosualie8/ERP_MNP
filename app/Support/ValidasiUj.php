@@ -19,8 +19,6 @@ class ValidasiUj
 
     public const MAKS_UJ_PER_DO = 1500000;
 
-    public const BENCHMARK_UANG_TANAH = 500000;
-
     private const BULAN = ['jan' => 1, 'feb' => 2, 'mar' => 3, 'apr' => 4, 'mei' => 5, 'may' => 5, 'jun' => 6, 'jul' => 7, 'agu' => 8, 'agt' => 8, 'aug' => 8,
         'sep' => 9, 'okt' => 10, 'oct' => 10, 'nov' => 11, 'des' => 12, 'dec' => 12];
 
@@ -225,11 +223,8 @@ class ValidasiUj
             }
         }
 
-        // 5 · Nominal Uang Tanah (benchmark)  &  4 · Frekuensi Uang Tanah per DO
+        // 4 · Frekuensi Uang Tanah per DO. (Aturan 5 — batas nominal Uang Tanah — dilepas owner 25 Okt 2026: tarif tanah beragam.)
         if ($kat === 'ut') {
-            if ($r['nominal'] > self::BENCHMARK_UANG_TANAH) {
-                $flag('5', 'rendah', 'Uang Tanah '.rp($r['nominal']).' di atas benchmark '.rp(self::BENCHMARK_UANG_TANAH).' — konfirmasi tarif lokasi/rute.');
-            }
             $ut = $samaDo->where('jenisKat', 'ut');
             if ($r['do'] !== null && $ut->isNotEmpty()) {
                 $flag('4', 'tinggi', 'Uang Tanah ke-'.($ut->count() + 1).' untuk DO '.$r['doAsli'].' (normalnya 1×). Sudah ada: '.$daftar($ut).'.');
