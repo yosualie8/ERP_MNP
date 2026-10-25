@@ -69,7 +69,7 @@
             {{-- Owner 25 Okt 2026: jumlah transaksi Kas UJ di luar uang jalan & uang tanah pada satu tanggal (bawaan H-1) sebagai bahan nominal. --}}
             <div class="lainnya" id="lainnya">
                 <div class="baris-lainnya">
-                    <span>Di luar uang jalan &amp; tanah, tanggal</span>
+                    <span>Di luar uang jalan, tanah &amp; material, tanggal</span>
                     <input type="date" id="tgl-lainnya" value="{{ today()->subDay()->toDateString() }}">
                     <b id="total-lainnya">…</b>
                     <span class="redup" id="info-lainnya"></span>
