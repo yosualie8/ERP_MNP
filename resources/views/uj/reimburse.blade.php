@@ -57,7 +57,7 @@
                     <button type="button" class="tombol polos" id="pilih-semua">Pilih semua</button>
                     <button type="button" class="tombol polos" id="kosongkan">Kosongkan</button>
                 </div>
-                <div class="redup" style="font-size: 12px;">Ketik nominal → dipilih otomatis <b>kombinasi transfer yang paling mendekati</b> nominal tanpa melebihi (bila sama dekat, yang lebih lama didahulukan). Centang/hapus centang untuk menyesuaikan.</div>
+                <div class="redup" style="font-size: 12px;">Ketik nominal → transfer dipilih <b>berurutan dari yang paling lama</b> sampai totalnya mencapai nominal; bila masih kurang, <b>1 transfer berikutnya tetap diambil</b> (total boleh lebih). Centang ikut urutan: mencentang mengikutkan semua yang lebih lama, melepas centang ikut melepas yang lebih baru.</div>
             </div>
             <div class="hasil-pilih">
                 <span>Terpilih <b id="total-pilih">Rp 0</b></span>
@@ -81,7 +81,7 @@
                     </tr>
                 </thead>
                 @forelse ($antrean as $t)
-                    <tbody class="grup" data-id="{{ $t['id'] }}" data-total="{{ $t['total'] }}" data-baris="{{ count($t['detail']) }}">
+                    <tbody class="grup" data-urut="{{ $loop->index }}" data-id="{{ $t['id'] }}" data-total="{{ $t['total'] }}" data-baris="{{ count($t['detail']) }}">
                         <tr class="t ada-bon">
                             <td><input type="checkbox" name="transaksi[]" value="{{ $t['id'] }}" aria-label="Pilih transfer"></td>
                             <td><span class="panah" aria-hidden="true">▸</span> {{ $t['tgl'] }} <span class="jumlah-bon">{{ count($t['detail']) }}</span></td>
@@ -148,30 +148,15 @@
                 document.getElementById('selisih').textContent = t ? (total <= t ? `kurang ${fmt(t - total)} dari ${fmt(t)}` : `lebih ${fmt(total - t)} dari ${fmt(t)}`) : '';
                 tombol.disabled = !jumlah;
             };
-            // Pilih otomatis: kombinasi transfer yang jumlahnya PALING MENDEKATI nominal tanpa melebihi (subset-sum).
-            // Transfer diproses dari yang paling lama, jadi bila beberapa kombinasi sama dekatnya, yang lebih lama didahulukan.
-            const gcd = (a, b) => { while (b) [a, b] = [b, a % b]; return a; };
+            // Urutan antrean (paling lama dulu) — tetap walau grid diurutkan ulang lewat judul kolom.
+            const urut = [...grup].sort((a, b) => a.dataset.urut - b.dataset.urut);
+            const kotak = g => g.querySelector('input[type=checkbox]');
+            // Pilih otomatis (owner 25 Okt 2026): berurutan dari transfer PALING LAMA sampai total >= nominal. Bila sesudah n transfer
+            // total masih kurang (mis. 17.999.999 dari 18 jt), transfer berikutnya tetap diambil walau totalnya jadi melebihi nominal.
             const pilihOtomatis = () => {
                 const t = angka(target.value);
-                const nilai = grup.map(g => +g.dataset.total);
-                const pilih = new Array(grup.length).fill(false);
-                const unit = nilai.reduce((a, b) => gcd(a, b), 0) || 1;
-                const batas = Math.floor(t / unit);
-                if (t > 0 && batas <= 3_000_000) {
-                    const w = nilai.map(v => v / unit);
-                    const capai = new Uint8Array(batas + 1), oleh = new Int32Array(batas + 1).fill(-1);
-                    capai[0] = 1;
-                    w.forEach((wi, i) => {
-                        for (let s = batas; s >= wi; s--) if (!capai[s] && capai[s - wi]) { capai[s] = 1; oleh[s] = i; }
-                    });
-                    let s = batas;
-                    while (s > 0 && !capai[s]) s--;
-                    while (s > 0) { const i = oleh[s]; pilih[i] = true; s -= w[i]; }
-                } else if (t > 0) {
-                    let sisa = t; // terlalu besar untuk dihitung tepat → dari yang paling lama, ambil yang masih muat
-                    nilai.forEach((v, i) => { if (v <= sisa) { pilih[i] = true; sisa -= v; } });
-                }
-                grup.forEach((g, i) => g.querySelector('input[type=checkbox]').checked = pilih[i]);
+                let total = 0;
+                urut.forEach(g => { const ambil = t > 0 && total < t; kotak(g).checked = ambil; if (ambil) total += +g.dataset.total; });
                 hitung();
             };
             target.addEventListener('input', () => {
@@ -181,10 +166,16 @@
                 target.setSelectionRange(target.value.length - pos, target.value.length - pos);
                 pilihOtomatis();
             });
-            document.getElementById('pilih-semua').addEventListener('click', () => { grup.filter(g => g.style.display !== 'none').forEach(g => g.querySelector('input').checked = true); hitung(); });
+            // Semua transaksi (tidak mengikuti saringan kolom) — reimburse tidak boleh melompati transaksi yang lebih lama.
+            document.getElementById('pilih-semua').addEventListener('click', () => { grup.forEach(g => kotak(g).checked = true); hitung(); });
             document.getElementById('kosongkan').addEventListener('click', () => { grup.forEach(g => g.querySelector('input').checked = false); hitung(); });
             grup.forEach(g => {
-                g.querySelector('input[type=checkbox]').addEventListener('change', hitung);
+                // Centang manual tetap berurutan: mencentang → semua yang lebih lama ikut; melepas → semua yang lebih baru ikut lepas.
+                kotak(g).addEventListener('change', () => {
+                    const i = urut.indexOf(g), cek = kotak(g).checked;
+                    urut.forEach((x, j) => { if (cek ? j < i : j > i) kotak(x).checked = cek; });
+                    hitung();
+                });
                 g.querySelector('tr.t').addEventListener('click', e => {
                     if (e.target.closest('input, a, button') || getSelection().toString()) return;
                     g.classList.toggle('buka');

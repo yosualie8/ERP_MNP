@@ -41,6 +41,12 @@ class ReimburseUj
             ])->values();
     }
 
+    /** Urutan antrean (id transfer, paling lama dulu) — dipakai untuk memaksa reimburse berurutan dari yang paling tua. @return int[] */
+    public static function urutan(): array
+    {
+        return UjTransaksi::query()->whereHas('detail', fn ($q) => self::belum($q))->orderBy('tanggal')->orderBy('baris')->pluck('id')->all();
+    }
+
     private static function belum($q)
     {
         return $q->whereNull('tanggal_reimburse')->where('status', 'like', 'Belum%');
