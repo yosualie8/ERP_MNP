@@ -9,7 +9,7 @@ class JabatanMenu extends Model
 {
     protected $table = 'jabatan_menu';
 
-    protected $fillable = ['jabatan', 'menu', 'user_id'];
+    protected $fillable = ['jabatan', 'menu', 'um_harian', 'user_id'];
 
     protected $casts = ['menu' => 'array'];
 

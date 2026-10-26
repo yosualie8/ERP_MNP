@@ -22,7 +22,7 @@ class JabatanController extends Controller
 
         return view('jabatan.index', [
             'jabatan' => JabatanMenu::orderBy('jabatan')->get()->map(fn ($j) => (object) [
-                'id' => $j->id, 'nama' => $j->jabatan, 'menu' => count($j->menu ?? []),
+                'id' => $j->id, 'nama' => $j->jabatan, 'menu' => count($j->menu ?? []), 'um' => $j->um_harian,
                 'aktif' => (int) ($pakai[$j->jabatan]->aktif ?? 0), 'semua' => (int) ($pakai[$j->jabatan]->semua ?? 0),
             ]),
             // Jabatan yang dipakai karyawan tetapi belum ada di master (mis. data lama) — perlu ditambahkan / diganti.
@@ -33,7 +33,8 @@ class JabatanController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $nama = $this->nama($request);
-        $j = JabatanMenu::create(['jabatan' => $nama, 'menu' => JabatanMenu::BAWAAN, 'user_id' => $request->user()->id]);
+        $um = (int) preg_replace('/\D/', '', (string) $request->input('um_harian')) ?: null;
+        $j = JabatanMenu::create(['jabatan' => $nama, 'menu' => JabatanMenu::BAWAAN, 'um_harian' => $um, 'user_id' => $request->user()->id]);
         $this->catat($request, 'jabatan-tambah', "Jabatan baru: {$nama}", $j->toArray());
 
         return back()->with('success', "Jabatan {$nama} ditambahkan (menu awal: Absen — atur di Hak Akses Jabatan).");
@@ -54,6 +55,25 @@ class JabatanController extends Controller
         $this->catat($request, 'jabatan-ubah', "Jabatan {$lama} → {$nama} ({$n} karyawan ikut diubah)", ['lama' => $lama, 'baru' => $nama, 'karyawan' => $n]);
 
         return back()->with('success', "Jabatan {$lama} diganti menjadi {$nama}; {$n} karyawan ikut diperbarui.");
+    }
+
+    /** Tarif dasar UM per hari semua jabatan sekaligus (kosong = tidak dibayar UM harian, mis. gaji bulanan). */
+    public function simpanUm(Request $request): RedirectResponse
+    {
+        $baru = collect((array) $request->input('um', []))->map(fn ($v) => (int) preg_replace('/\D/', '', (string) $v) ?: null);
+        $ubah = [];
+        foreach (JabatanMenu::whereIn('id', $baru->keys())->get() as $j) {
+            $v = $baru[$j->id];
+            if ($v !== $j->um_harian) {
+                $ubah[$j->jabatan] = [$j->um_harian, $v];
+                $j->update(['um_harian' => $v, 'user_id' => $request->user()->id]);
+            }
+        }
+        if ($ubah) {
+            $this->catat($request, 'jabatan-um', 'Tarif UM per hari diubah: '.collect($ubah)->map(fn ($x, $j) => $j.' '.($x[0] ? rp($x[0]) : '–').' → '.($x[1] ? rp($x[1]) : '–'))->implode('; '), $ubah);
+        }
+
+        return back()->with('success', $ubah ? count($ubah).' tarif UM per hari disimpan.' : 'Tidak ada tarif yang berubah.');
     }
 
     public function hapus(Request $request, JabatanMenu $jabatan): RedirectResponse

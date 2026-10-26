@@ -117,6 +117,7 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::put('/lokasi-absen/{lokasi}', [\App\Http\Controllers\LokasiAbsenController::class, 'update'])->whereNumber('lokasi')->name('lokasi-absen.update');
     Route::get('/jabatan', [\App\Http\Controllers\JabatanController::class, 'index'])->name('jabatan.index');
     Route::post('/jabatan', [\App\Http\Controllers\JabatanController::class, 'store'])->name('jabatan.store');
+    Route::post('/jabatan/um', [\App\Http\Controllers\JabatanController::class, 'simpanUm'])->name('jabatan.um');
     Route::patch('/jabatan/{jabatan}', [\App\Http\Controllers\JabatanController::class, 'update'])->whereNumber('jabatan')->name('jabatan.update');
     Route::delete('/jabatan/{jabatan}', [\App\Http\Controllers\JabatanController::class, 'hapus'])->whereNumber('jabatan')->name('jabatan.hapus');
     Route::get('/mutasi-pt', [\App\Http\Controllers\MutasiPtController::class, 'index'])->name('mutasi-pt.index');
