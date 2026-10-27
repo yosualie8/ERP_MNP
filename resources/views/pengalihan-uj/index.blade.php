@@ -129,6 +129,24 @@
                 .arah-utang label:has(input:checked) { border-color: var(--aksen); background: var(--aksen-muda); font-weight: 700; }
                 .arah-utang label.mati { opacity: .5; cursor: not-allowed; }
                 td.nambah { color: var(--sukses); } td.potong { color: var(--merah); }
+                /* Grid isian seperti Input UJ: satu baris = satu transaksi. */
+                .grid-utang { padding: 6px 14px 14px; }
+                .grid-utang .petunjuk { font-size: 12px; color: var(--redup); margin: 0 0 6px; }
+                .grid-utang table { width: 100%; border-collapse: collapse; }
+                .grid-utang th { font-size: 12px; color: var(--redup); text-align: left; padding: 4px; font-weight: 600; white-space: nowrap; }
+                .grid-utang th.angka { text-align: right; }
+                .grid-utang td { padding: 4px; vertical-align: top; border-bottom: 0; }
+                .grid-utang input[type=text], .grid-utang input[type=date], .grid-utang select {
+                    width: 100%; box-sizing: border-box; padding: 7px 8px; border: 1px solid var(--isian-garis, var(--garis)); border-radius: 7px; font-size: 13.5px; background: var(--isian); color: var(--teks); }
+                .grid-utang input:focus, .grid-utang select:focus { outline: none; border-color: var(--aksen); box-shadow: 0 0 0 2px var(--aksen); background: var(--isian-fokus, var(--isian)); }
+                .grid-utang input.angka-input { text-align: right; font-variant-numeric: tabular-nums; }
+                .grid-utang input[readonly] { background: transparent; border-color: transparent; color: var(--redup); }
+                .grid-utang :disabled { opacity: .3; }
+                .grid-utang .hapus { background: none; border: 0; color: var(--merah); cursor: pointer; font-size: 18px; line-height: 1; padding: 8px 6px; }
+                .grid-utang .kaki { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin-top: 8px; }
+                .grid-utang .kaki .jumlah { margin-left: auto; font-size: 14px; }
+                .grid-utang .kaki .jumlah b { font-variant-numeric: tabular-nums; }
+                .grid-utang .minus { color: var(--merah); }
             </style>
             <div class="kartu" id="rinci" style="padding: 0;">
                 <div style="padding: 12px 14px 8px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
@@ -162,41 +180,46 @@
                     <label @class(['mati' => ! $bisaPotong]) @unless ($bisaPotong) title="Belum ada utang untuk dipotong" @endunless><input type="radio" name="arah-utang" value="potong" @checked($bisaPotong && old('arah') !== 'nambah') @disabled(! $bisaPotong)> ➖ Potong utang</label>
                 </div>
 
-                <form method="POST" action="{{ route('pengalihan-uj.kasbon') }}" class="baris-isian" id="form-nambah" style="padding: 8px 14px 12px;">@csrf
+                {{-- ➕ Nambah utang: kasbon dari Kas Harian (satu baris = satu bon). --}}
+                <form method="POST" action="{{ route('pengalihan-uj.kasbon') }}" class="grid-utang" id="form-nambah" data-arah="nambah">@csrf
                     <input type="hidden" name="sopir" value="{{ $s['sopir'] }}"><input type="hidden" name="arah" value="nambah">
-                    <div style="flex: 1; min-width: 360px;"><label>Kasbon dari Kas Harian (bon ber-Kode GL Piutang, sisa yang belum ditautkan)</label>
-                        <select name="kas_no_id" id="bon-kasbon" style="width: 100%;"><option value="">— pilih bon —</option>
-                            @foreach ($bonKasbon ?? [] as $bk)
-                                @php($sebut = str_contains(mb_strtolower($bk->keterangan.' '.$bk->nama_tujuan), mb_strtolower($s['sopir'])))
-                                <option value="{{ $bk->no_id }}" data-sisa="{{ (int) $bk->sisa }}" @selected(old('kas_no_id') === $bk->no_id)>{{ $sebut ? '★ ' : '' }}{{ $tgl($bk->tanggal) }} · {{ rp((int) $bk->nominal) }}@if ($bk->tertaut > 0.5) (sisa {{ rp((int) $bk->sisa) }})@endif · {{ mb_strimwidth($bk->keterangan, 0, 70, '…') }} · NO ID {{ $bk->no_id }}</option>
-                            @endforeach
-                        </select></div>
-                    <div><label>Nominal untuk {{ $s['sopir'] }}</label><input name="nominal" id="nominal-kasbon" value="{{ old('nominal') }}" style="width: 120px; text-align: right;" inputmode="numeric"></div>
-                    <div style="flex: 1; min-width: 200px;"><label>Catatan (opsional)</label><input name="keterangan" value="{{ old('keterangan') }}" style="width: 100%;" placeholder="mis. bagian Endang dari kasbon 4 sopir"></div>
-                    <button class="tombol" type="submit">Catat kasbon</button>
-                    <p class="redup" style="font-size: 12px; margin: 4px 0 0; flex-basis: 100%;">★ = bon yang menyebut nama {{ $s['sopir'] }}. Satu bon boleh dibagi ke beberapa sopir (mis. Rp2.000.000 untuk 4 sopir @ Rp500.000).
-                        UJ yang sudah diberikan tetapi tidak bongkar → <a href="{{ route('pengalihan-uj.index', ['tab' => 'pilih', 'cari' => $s['sopir']]) }}">tab Pilih UJ → jadikan saldo</a>.</p>
+                    <p class="petunjuk">Kasbon keluar dari <b>Kas Harian</b> (Kode GL Piutang Karyawan): pilih bonnya, isi bagian untuk {{ $s['sopir'] }}. ★ = bon yang menyebut nama {{ $s['sopir'] }}.
+                        Satu bon boleh dibagi ke beberapa sopir (mis. Rp2.000.000 untuk 4 sopir @ Rp500.000). UJ yang tidak bongkar → <a href="{{ route('pengalihan-uj.index', ['tab' => 'pilih', 'cari' => $s['sopir']]) }}">tab Pilih UJ → jadikan saldo</a>.</p>
+                    <div class="gulir">
+                        <table style="min-width: 900px;">
+                            <thead><tr><th>Bon kasbon di Kas Harian</th><th class="angka" style="width: 130px;">Sisa bon</th><th class="angka" style="width: 140px;">Nominal</th><th style="width: 260px;">Catatan</th><th style="width: 30px;"></th></tr></thead>
+                            <tbody data-baris></tbody>
+                        </table>
+                    </div>
+                    <div class="kaki">
+                        <button type="button" class="tombol polos" data-tambah>+ Tambah baris</button>
+                        <span class="jumlah">Total kasbon <b data-total>0</b> · sisa utang sesudahnya <b data-sesudah>{{ number_format((int) $s['saldo'], 0, ',', '.') }}</b></span>
+                        <button class="tombol" type="submit">Simpan kasbon</button>
+                    </div>
                 </form>
 
+                {{-- ➖ Potong utang (satu baris = satu potongan). --}}
                 @if ($bisaPotong)
-                    <form method="POST" action="{{ route('pengalihan-uj.pakai') }}" class="baris-isian" id="form-potong" style="padding: 8px 14px 12px;">@csrf
+                    <form method="POST" action="{{ route('pengalihan-uj.pakai') }}" class="grid-utang" id="form-potong" data-arah="potong">@csrf
                         <input type="hidden" name="sopir" value="{{ $s['sopir'] }}"><input type="hidden" name="arah" value="potong">
-                        <div><label>Dipotong untuk</label>
-                            <select name="peruntukan" id="peruntukan">@foreach (\App\Models\UjPengalihan::PERUNTUKAN as $k => $l)<option value="{{ $k }}" @selected(old('peruntukan', 'uj') === $k)>{{ $l }}</option>@endforeach</select></div>
-                        <div><label>Tanggal</label><input type="date" name="tanggal" value="{{ old('tanggal', now()->toDateString()) }}"></div>
-                        <div><label>Nominal (maks. {{ rp((int) $s['saldo']) }})</label><input name="nominal" value="{{ old('nominal', (int) $s['saldo']) }}" style="width: 120px; text-align: right;" inputmode="numeric"></div>
-                        <div class="isian-do"><label>No DO uang jalan</label><input name="no_do" value="{{ old('no_do') }}" style="width: 100px;" inputmode="numeric" autocomplete="off"></div>
-                        <div class="isian-do"><label>No Mobil</label><input name="no_mobil" value="{{ old('no_mobil', $s['mobil'][0] ?? '') }}" style="width: 90px;" autocomplete="off"></div>
-                        <div class="isian-noid"><label>NO ID mutasi masuk (opsional)</label><input name="kas_no_id" value="{{ old('kas_no_id') }}" style="width: 120px;" autocomplete="off"></div>
-                        <div id="isian-proyek"><label id="label-proyek">Ditanggung proyek</label>
-                            <select name="tahap" data-asal="{{ $asalTertua }}"><option value="">— pilih —</option>@foreach ($pilihTahap as $t)<option value="{{ $t->id }}" @selected((int) old('tahap') === $t->id)>{{ $t->nama }}</option>@endforeach</select></div>
-                        <div style="flex: 1; min-width: 220px;"><label>Keterangan / alasan</label><input name="keterangan" value="{{ old('keterangan') }}" style="width: 100%;" placeholder="mis. cicilan kasbon rit ke-4 / Uang MOB Kendal ke Jogja"></div>
-                        <label class="isian-do" style="display: flex; gap: 4px; align-items: center; font-size: 12px;"><input type="checkbox" name="tetap" value="1" @checked(old('tetap'))> Tetap simpan walau DT berbeda</label>
-                        <button class="tombol" type="submit">Catat potongan</button>
-                        <p class="redup isian-do" style="font-size: 12px; margin: 4px 0 0; flex-basis: 100%;">Uang jalan dipotong <b>sebagian</b>? Catat potongannya di sini, lalu transfer sisanya lewat <b>Input UJ</b> dengan No DO yang sama —
-                            keduanya otomatis tersambung lewat No DO (dihitung satu uang jalan di validasi Kas UJ & Monitor Ritasi).</p>
+                        <p class="petunjuk">Uang jalan dipotong <b>sebagian</b>? Catat potongannya di sini, lalu transfer sisanya lewat <b>Input UJ</b> dengan No DO yang sama — keduanya otomatis tersambung lewat No DO.
+                            Kolom yang tidak berlaku untuk jenis potongan otomatis nonaktif.</p>
+                        <div class="gulir">
+                            <table style="min-width: 1150px;">
+                                <thead><tr><th style="width: 185px;">Dipotong untuk</th><th style="width: 135px;">Tanggal</th><th class="angka" style="width: 115px;">Nominal</th><th style="width: 85px;">No DO</th>
+                                    <th style="width: 80px;">No Mobil</th><th style="width: 190px;">Proyek</th><th style="width: 100px;">NO ID mutasi</th><th>Keterangan</th>
+                                    <th style="width: 45px;" title="Tetap simpan walau DO di Kas UJ tercatat untuk DT lain">Tetap</th><th style="width: 30px;"></th></tr></thead>
+                                <tbody data-baris></tbody>
+                            </table>
+                        </div>
+                        <div class="kaki">
+                            <button type="button" class="tombol polos" data-tambah>+ Tambah baris</button>
+                            <span class="jumlah">Total potongan <b data-total>0</b> · sisa utang sesudahnya <b data-sesudah>{{ number_format((int) $s['saldo'], 0, ',', '.') }}</b></span>
+                            <button class="tombol" type="submit">Simpan potongan</button>
+                        </div>
                     </form>
                 @endif
+
                 <form method="POST" action="{{ route('pengalihan-uj.sopir') }}" class="baris-isian" style="padding: 0 14px 14px;">@csrf
                     <input type="hidden" name="lama" value="{{ $s['sopir'] }}">
                     <div><label>Ganti / gabungkan nama sopir (ejaan lain di Kas UJ)</label><input name="baru" value="{{ $s['sopir'] }}" list="daftar-sopir" style="width: 220px;"></div>
@@ -204,31 +227,134 @@
                     <datalist id="daftar-sopir">@foreach ($saldo->keys() as $n)<option value="{{ $n }}">@endforeach</datalist>
                 </form>
             </div>
+            @php
+                // (@json memecah isinya di setiap koma — data disiapkan dulu di sini.)
+                $jsBon = collect($bonKasbon ?? [])->map(fn ($b) => ['no_id' => $b->no_id, 'sisa' => (int) $b->sisa,
+                    'label' => (str_contains(mb_strtolower($b->keterangan.' '.$b->nama_tujuan), mb_strtolower($s['sopir'])) ? '★ ' : '').$tgl($b->tanggal).' · '.rp((int) $b->nominal)
+                        .($b->tertaut > 0.5 ? ' (sisa '.rp((int) $b->sisa).')' : '').' · '.mb_strimwidth($b->keterangan, 0, 70, '…').' · NO ID '.$b->no_id])->values();
+                $jsTahap = $pilihTahap->map(fn ($t) => ['id' => $t->id, 'nama' => $t->nama])->values();
+                $jsLama = ['arah' => old('arah'), 'baris' => array_values(old('baris', []))];
+                $jsMobil = $s['mobil'][0] ?? '';
+            @endphp
             <script>
                 (() => {
-                    const nambah = document.getElementById('form-nambah'), potong = document.getElementById('form-potong');
+                    const BON = @json($jsBon);
+                    const PERUNTUKAN = @json(\App\Models\UjPengalihan::PERUNTUKAN);
+                    const BUKAN_BIAYA = @json(\App\Models\UjPengalihan::BUKAN_BIAYA);
+                    const TAHAP = @json($jsTahap);
+                    const MOBIL = @json($jsMobil);
+                    const ASAL = @json($asalTertua);
+                    const SISA_UTANG = @json((int) $s['saldo']);
+                    const HARI_INI = @json(now()->toDateString());
+                    const SOPIR = @json($s['sopir']);
+                    const LAMA = @json($jsLama);
+
+                    const fmt = n => new Intl.NumberFormat('id-ID').format(n || 0);
+                    const angka = v => parseInt(String(v ?? '').replace(/\D/g, ''), 10) || 0;
+                    const esc = v => String(v ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
+                    const rapikanRupiah = el => {
+                        const digitSebelumKursor = el.value.slice(0, el.selectionStart ?? el.value.length).replace(/\D/g, '').length;
+                        const digit = el.value.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
+                        el.value = digit ? fmt(+digit) : '';
+                        if (document.activeElement === el) {
+                            let pos = 0, hitung = 0;
+                            while (pos < el.value.length && hitung < digitSebelumKursor) { if (/\d/.test(el.value[pos])) hitung++; pos++; }
+                            el.setSelectionRange(pos, pos);
+                        }
+                    };
+                    const opsi = (daftar, pilih, kosong) => (kosong !== undefined ? `<option value="">${esc(kosong)}</option>` : '')
+                        + daftar.map(([v, l]) => `<option value="${esc(v)}" ${String(v) === String(pilih ?? '') ? 'selected' : ''}>${esc(l)}</option>`).join('');
+
+                    const BARIS = {
+                        nambah: (b = {}) => `<td><select data-f="kas_no_id">${opsi(BON.map(x => [x.no_id, x.label]), b.kas_no_id, '— pilih bon —')}</select></td>
+                            <td><input type="text" class="angka-input" data-sisa readonly tabindex="-1"></td>
+                            <td><input type="text" class="angka-input rupiah" data-f="nominal" inputmode="numeric" autocomplete="off" value="${esc(b.nominal)}"></td>
+                            <td><input type="text" data-f="keterangan" autocomplete="off" value="${esc(b.keterangan)}" placeholder="mis. bagian ${esc(SOPIR)} dari kasbon 4 sopir"></td>
+                            <td><button type="button" class="hapus" title="Hapus baris">×</button></td>`,
+                        potong: (b = {}) => `<td><select data-f="peruntukan">${opsi(Object.entries(PERUNTUKAN), b.peruntukan || 'uj')}</select></td>
+                            <td><input type="date" data-f="tanggal" value="${esc(b.tanggal || HARI_INI)}"></td>
+                            <td><input type="text" class="angka-input rupiah" data-f="nominal" inputmode="numeric" autocomplete="off" value="${esc(b.nominal)}"></td>
+                            <td><input type="text" data-f="no_do" inputmode="numeric" autocomplete="off" value="${esc(b.no_do)}"></td>
+                            <td><input type="text" data-f="no_mobil" autocomplete="off" value="${esc(b.no_mobil ?? MOBIL)}"></td>
+                            <td><select data-f="tahap">${opsi(TAHAP.map(t => [t.id, t.nama]), b.tahap, '— pilih proyek —')}</select></td>
+                            <td><input type="text" data-f="kas_no_id" autocomplete="off" value="${esc(b.kas_no_id)}" placeholder="opsional"></td>
+                            <td><input type="text" data-f="keterangan" autocomplete="off" value="${esc(b.keterangan)}" placeholder="mis. cicilan kasbon rit ke-4"></td>
+                            <td style="text-align: center;"><input type="checkbox" data-f="tetap" value="1" ${b.tetap ? 'checked' : ''}></td>
+                            <td><button type="button" class="hapus" title="Hapus baris">×</button></td>`,
+                    };
+
+                    // Kolom yang berlaku per jenis potongan; kasbon: sisa bon terpilih.
+                    const aturBaris = (form, tr) => {
+                        if (form.dataset.arah === 'nambah') {
+                            const bon = BON.find(x => x.no_id === tr.querySelector('[data-f=kas_no_id]').value);
+                            tr.querySelector('[data-sisa]').value = bon ? fmt(bon.sisa) : '';
+                            return;
+                        }
+                        const v = tr.querySelector('[data-f=peruntukan]').value;
+                        const pakai = (f, aktif) => { const el = tr.querySelector(`[data-f=${f}]`); el.disabled = !aktif; };
+                        pakai('no_do', v === 'uj'); pakai('no_mobil', v === 'uj'); pakai('tetap', v === 'uj');
+                        pakai('kas_no_id', v === 'kembali');
+                        const proyek = tr.querySelector('[data-f=tahap]');
+                        proyek.disabled = BUKAN_BIAYA.includes(v);
+                        proyek.options[0].textContent = v === 'uj' ? '— otomatis dari rit DO —' : (v === 'hangus' ? '— dibebankan ke proyek —' : '— pilih proyek —');
+                        if (v === 'hangus' && !proyek.value && ASAL) proyek.value = ASAL;
+                    };
+                    const hitung = form => {
+                        const total = [...form.querySelectorAll('[data-f=nominal]')].reduce((n, el) => n + angka(el.value), 0);
+                        const sesudah = SISA_UTANG + (form.dataset.arah === 'nambah' ? total : -total);
+                        form.querySelector('[data-total]').textContent = fmt(total);
+                        const s = form.querySelector('[data-sesudah]');
+                        s.textContent = (sesudah < 0 ? '−' : '') + fmt(Math.abs(sesudah));
+                        s.classList.toggle('minus', sesudah < 0);
+                    };
+                    const tambah = (form, b) => {
+                        const tr = document.createElement('tr');
+                        tr.innerHTML = BARIS[form.dataset.arah](b);
+                        form.querySelector('[data-baris]').append(tr);
+                        tr.querySelectorAll('input.rupiah').forEach(rapikanRupiah);
+                        aturBaris(form, tr);
+                        hitung(form);
+                        return tr;
+                    };
+                    document.querySelectorAll('form.grid-utang').forEach(form => {
+                        const awal = LAMA.arah === form.dataset.arah && LAMA.baris.length ? LAMA.baris : [{}];
+                        awal.forEach(b => tambah(form, b));
+                        form.querySelector('[data-tambah]').addEventListener('click', () => tambah(form).querySelector('select, input')?.focus());
+                        form.addEventListener('input', e => { if (e.target.classList.contains('rupiah')) rapikanRupiah(e.target); hitung(form); });
+                        form.addEventListener('change', e => {
+                            const tr = e.target.closest('tr');
+                            if (!tr) return;
+                            aturBaris(form, tr);
+                            // Kasbon: nominal awal = sisa bon yang dipilih.
+                            if (e.target.dataset.f === 'kas_no_id' && form.dataset.arah === 'nambah') {
+                                const bon = BON.find(x => x.no_id === e.target.value), nom = tr.querySelector('[data-f=nominal]');
+                                if (bon && !angka(nom.value)) nom.value = fmt(bon.sisa);
+                            }
+                            hitung(form);
+                        });
+                        form.addEventListener('click', e => {
+                            if (!e.target.classList.contains('hapus')) return;
+                            const semua = form.querySelectorAll('[data-baris] tr');
+                            if (semua.length > 1) e.target.closest('tr').remove(); else e.target.closest('tr').querySelectorAll('input[type=text]:not([readonly])').forEach(el => el.value = '');
+                            hitung(form);
+                        });
+                        // Nama isian baris[i][...] diberikan saat simpan (baris kosong dilewati).
+                        form.addEventListener('submit', () => {
+                            let i = 0;
+                            form.querySelectorAll('[data-baris] tr').forEach(tr => {
+                                const isi = angka(tr.querySelector('[data-f=nominal]').value) || (tr.querySelector('[data-f=kas_no_id]')?.value && form.dataset.arah === 'nambah');
+                                tr.querySelectorAll('[data-f]').forEach(el => { el.name = isi ? `baris[${i}][${el.dataset.f}]` : ''; });
+                                if (isi) i++;
+                            });
+                        });
+                    });
+
                     const aturArah = () => {
                         const arah = document.querySelector('input[name=arah-utang]:checked')?.value || 'nambah';
-                        nambah.hidden = arah !== 'nambah';
-                        if (potong) potong.hidden = arah !== 'potong';
+                        document.querySelectorAll('form.grid-utang').forEach(f => { f.style.display = f.dataset.arah === arah ? '' : 'none'; });
                     };
                     document.querySelectorAll('input[name=arah-utang]').forEach(r => r.addEventListener('change', aturArah));
                     aturArah();
-                    // Kasbon: nominal awal = sisa bon yang dipilih.
-                    const bon = document.getElementById('bon-kasbon'), nom = document.getElementById('nominal-kasbon');
-                    bon?.addEventListener('change', () => { const o = bon.selectedOptions[0]; if (o?.dataset.sisa) nom.value = o.dataset.sisa; });
-
-                    const p = document.getElementById('peruntukan'), box = document.getElementById('isian-proyek'), label = document.getElementById('label-proyek'), sel = box?.querySelector('select');
-                    const atur = () => {
-                        if (!p) return;
-                        const v = p.value;
-                        box.style.display = ['kembali', 'gaji', 'sebelum'].includes(v) ? 'none' : '';
-                        label.textContent = v === 'hangus' ? 'Dibebankan ke proyek' : (v === 'uj' ? 'Ditanggung proyek (opsional — otomatis dari rit DO)' : 'Ditanggung proyek');
-                        potong.querySelectorAll('.isian-do').forEach(el => el.style.display = v === 'uj' ? '' : 'none');
-                        potong.querySelectorAll('.isian-noid').forEach(el => el.style.display = v === 'kembali' ? '' : 'none');
-                        if (v === 'hangus' && !sel.value && sel.dataset.asal) sel.value = sel.dataset.asal;
-                    };
-                    p?.addEventListener('change', atur); atur();
                 })();
             </script>
         @endif
