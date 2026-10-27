@@ -198,7 +198,7 @@ class ReimburseUjKeKas
             'judul' => $tgl->translatedFormat('l, j M Y').($r ? ' · '.self::kode($r) : ''),
             'kas' => $kas,
             'master' => [...$b, 'nominal' => (int) $baris->sum('nominal') + array_sum(array_column($potongan, 'nominal'))],
-            'detail' => $baris->map(fn (UjDetail $d) => [
+            'detail' => $baris->toBase()->map(fn (UjDetail $d) => [
                 'uj' => self::kunci($d), 'id_uj' => $d->id_uj, 'tanggal_uj' => $d->tanggal?->translatedFormat('j M'), 'nama' => $d->nama,
                 'kategori' => $d->biaya_transfer ? 'Biaya Transfer' : $d->kategori, 'no_mobil' => $d->no_mobil, 'no_do' => $d->no_do,
                 'galian' => $galian[self::kunci($d)] ?? null,
