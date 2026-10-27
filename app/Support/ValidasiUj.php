@@ -368,6 +368,24 @@ class ValidasiUj
                         'nama' => trim((string) $d->nama), 'doAsli' => trim(str_replace(['`', "'"], '', (string) $d->no_do))];
                 }
             });
+        // Uang jalan yang dibayar dari saldo sopir (Pengalihan UJ "pakai" untuk uang jalan, mis. rit Jogja awal PUJ-0036–0048):
+        // tidak ada baris Uang Jalan baru di Kas UJ, tetapi DO-nya sah sudah ber-uang jalan (owner 27 Okt 2026).
+        \App\Models\UjPengalihan::query()->where('jenis', 'pakai')->where('peruntukan', 'uj')->whereNotNull('no_do')->where('no_do', '!=', '')
+            ->where(function ($q) use ($lanjutan, $tgl) {
+                foreach ($lanjutan->pluck('do')->unique() as $k) {
+                    $q->orWhere('no_do', 'like', '%'.$k);
+                }
+                if ($mobil = $lanjutan->pluck('mobil')->filter()->unique()->values()->all()) {
+                    $q->orWhere(fn ($w) => $w->whereIn('no_mobil', $mobil)->whereBetween('tanggal', [$tgl->copy()->subDays(7)->toDateString(), $tgl->copy()->addDays(7)->toDateString()]));
+                }
+            })
+            ->get(['id', 'tanggal', 'sopir', 'nama', 'no_mobil', 'no_do'])
+            ->each(function ($p) use (&$hasil) {
+                if ($k = self::kunciDo(str_replace(['`', "'"], '', (string) $p->no_do))) {
+                    $hasil[$k][] = ['id' => 'saldo sopir', 'tanggal' => $p->tanggal ? Carbon::parse($p->tanggal) : null, 'mobil' => NomorMobil::rapikan($p->no_mobil),
+                        'nama' => trim((string) ($p->sopir ?: $p->nama)), 'doAsli' => trim(str_replace(['`', "'"], '', (string) $p->no_do))];
+                }
+            });
 
         return $hasil;
     }
