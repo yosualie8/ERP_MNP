@@ -203,7 +203,7 @@ class KasInputController extends Controller
             return back()->withInput()->with('error', 'Gagal menulis ke sheet: '.$e->getMessage());
         }
         // Tautan detail ↔ baris UJ dicatat sebelum Mutasi Reimburse ditulis (kolom Id Transaksi UJ, Jenis Mobil, No DO, Galian, Kategori).
-        $tertaut = $input['reimburse_uj'] ? ReimburseUjKeKas::catat($input['reimburse_uj'], $input['bon'], $hasil['no_id'], $request->user()->id) : 0;
+        $tertaut = $input['reimburse_uj'] ? ReimburseUjKeKas::catat($input['reimburse_uj'], $input['bon'], $hasil['no_id'], $request->user()->id, $tanggal) : 0;
         // Sesudah halaman terkirim, sebelum chip Bon: baris-barisnya ikut ditulis di Mutasi Reimburse.
         CerminReimburse::tambahSegera($hasil['no_id']);
 

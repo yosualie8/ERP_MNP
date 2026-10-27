@@ -238,8 +238,9 @@ class ReimburseUjKeKas
      *
      * @param  array<int, array>  $bon  bon dari form (urutan sama dengan NO ID yang ditulis), masing-masing boleh membawa 'uj'
      * @param  int[]  $noIds  NO ID baris yang ditulis (bon ke-i = NO ID ke-i)
+     * @param  ?\Carbon\CarbonInterface  $tanggalKas  tanggal transfer Kas Harian (untuk ID transaksi detail potongan)
      */
-    public static function catat(string $kunci, array $bon, array $noIds, ?int $userId): int
+    public static function catat(string $kunci, array $bon, array $noIds, ?int $userId, ?\Carbon\CarbonInterface $tanggalKas = null): int
     {
         $r = self::batch($kunci);
         $tanggal = $r ? $r->tanggal->toDateString() : $kunci;
@@ -249,6 +250,11 @@ class ReimburseUjKeKas
         foreach (array_values($bon) as $i => $b) {
             if (($p = PotonganReimburseUj::dariKunci($b['uj'] ?? null)) && isset($noIds[$i])) {
                 PotonganReimburseUj::tandaiDipakai($p['id'], $noIds[$i], $r ? self::kode($r) : $tanggal, $userId);
+                // Kelebihannya dulu sudah ditandai "Sudah reimburse" di Kas Harian tanpa dibayar owner → detail minus ini juga,
+                // supaya tidak terpotong dua kali.
+                if (! empty($p['lunas_kas']) && $tanggalKas) {
+                    StatusReimburse::tandai([$tanggalKas->format('ymd').'-Jago-'.$noIds[$i]], now(), $userId);
+                }
 
                 continue;
             }
