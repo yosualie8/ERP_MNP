@@ -125,8 +125,10 @@ class AlatMnp
             ],
             'cari_ritasi' => [
                 'judul' => 'Ritasi dump truck',
-                'deskripsi' => 'Data ritasi dump truck (tanggal, jam, No Mobil, galian, tujuan buangan, jenis tanah, No DO, pemilik) plus rekap jumlah rit per truk & per galian.',
+                'deskripsi' => 'Data ritasi dump truck — SEMUA kolom tabel ritasi: tanggal, jam, tahap (proyek tujuan), no_seri (No Surat Jalan), plat, no_lambung (No Mobil), no_polisi, '
+                    .'galian, jenis_buangan, jenis_tanah, jenis_kendaraan, pemilik, harga_jual, kubikasi, keterangan, status_bayar, no_do, baris sheet — plus rekap jumlah rit per truk & per galian.',
                 'skema' => $obj(['dari' => $tanggal, 'sampai' => $tanggal, 'no_mobil' => ['type' => 'string'], 'no_do' => ['type' => 'string'],
+                    'no_seri' => ['type' => 'string', 'description' => 'No Seri / No Surat Jalan (sebagian boleh)'], 'tahap' => ['type' => 'string', 'description' => 'Tahap / proyek tujuan (sebagian boleh)'],
                     'galian' => ['type' => 'string'], 'tujuan' => ['type' => 'string'], 'batas' => $batas]),
                 'jalankan' => fn (array $a) => self::ritasi($a),
             ],
@@ -214,8 +216,8 @@ class AlatMnp
             'query_database' => [
                 'judul' => 'Query database ERP (baca saja)',
                 'deskripsi' => 'Jalankan SATU query SQL MySQL BACA SAJA (SELECT / WITH / SHOW / DESCRIBE / EXPLAIN) ke seluruh database ERP MNP (khusus Super Admin), untuk data yang '
-                    .'tidak tercakup tool lain. Lihat nama tabel & kolom dengan daftar_tabel dulu. Hasil maks 500 baris (bawaan 100), batas waktu 15 detik; pakai GROUP BY / '
-                    .'SUM / COUNT untuk rekap. Tabel token & kolom password/token ditolak; tabel users wajib sebut kolomnya. Nominal rupiah bilangan bulat; tanggal YYYY-MM-DD.',
+                    .'tidak tercakup tool lain. Lihat nama tabel & kolom dengan daftar_tabel dulu. Hasil maks 1.000 baris (bawaan 100), batas waktu 15 detik; pakai GROUP BY / '
+                    .'SUM / COUNT untuk rekap. Semua tabel & kolom terbuka (SELECT * boleh); hanya tabel token login & kolom password/token yang disembunyikan. Nominal rupiah bilangan bulat; tanggal YYYY-MM-DD.',
                 'skema' => ['type' => 'object', 'properties' => ['sql' => ['type' => 'string', 'description' => 'Query SQL (satu perintah baca)'], 'batas' => ['type' => 'integer', 'minimum' => 1, 'maximum' => DatabaseBaca::MAKS_BARIS]],
                     'required' => ['sql'], 'additionalProperties' => false],
                 'jalankan' => fn (array $a) => DatabaseBaca::query((string) $a['sql'], (int) ($a['batas'] ?? 100)),
@@ -570,6 +572,8 @@ class AlatMnp
             ->when($a['sampai'] ?? null, fn ($q, $v) => $q->where('tanggal', '<=', self::tgl($v)))
             ->when($a['no_mobil'] ?? null, fn ($q, $v) => $q->where('no_lambung', 'like', '%'.\App\Support\NomorMobil::rapikan($v).'%'))
             ->when($a['no_do'] ?? null, fn ($q, $v) => $q->where('no_do', 'like', "%{$v}%"))
+            ->when($a['no_seri'] ?? null, fn ($q, $v) => $q->where('no_seri', 'like', "%{$v}%"))
+            ->when($a['tahap'] ?? null, fn ($q, $v) => $q->where('tahap', 'like', "%{$v}%"))
             ->when($a['galian'] ?? null, fn ($q, $v) => $q->where('galian', 'like', "%{$v}%"))
             ->when($a['tujuan'] ?? null, fn ($q, $v) => $q->where('jenis_buangan', 'like', "%{$v}%"));
         $perTruk = (clone $q)->selectRaw('no_lambung, COUNT(*) n')->groupBy('no_lambung')->orderByDesc('n')->pluck('n', 'no_lambung');
@@ -577,9 +581,9 @@ class AlatMnp
         $data = $q->orderByDesc('tanggal')->orderByDesc('baris')->limit(self::batas($a))->get();
 
         return ['jumlah_rit' => $perTruk->sum(), 'rit_per_truk' => $perTruk, 'rit_per_galian' => $perGalian, 'ditampilkan' => $data->count(),
-            'ritasi' => $data->map(fn ($r) => ['tanggal' => $r->tanggal?->toDateString(), 'jam' => $r->jam, 'no_mobil' => $r->no_lambung, 'plat' => $r->plat,
-                'jenis_kendaraan' => $r->jenis_kendaraan, 'galian' => $r->galian, 'tujuan_buangan' => $r->jenis_buangan, 'jenis_tanah' => $r->jenis_tanah,
-                'no_do' => $r->no_do, 'pemilik' => $r->pemilik, 'keterangan' => $r->keterangan, 'status_bayar' => $r->status_bayar])];
+            // Semua kolom tabel ritasi (owner 27 Okt 2026), + nama lama no_mobil / tujuan_buangan supaya tetap dikenali.
+            'ritasi' => $data->map(fn ($r) => [...collect($r->getAttributes())->except(['created_at', 'updated_at'])->all(),
+                'tanggal' => $r->tanggal?->toDateString(), 'no_mobil' => $r->no_lambung, 'tujuan_buangan' => $r->jenis_buangan])];
     }
 
     private static function aset(array $a): array

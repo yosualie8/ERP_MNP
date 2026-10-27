@@ -9,17 +9,17 @@ use InvalidArgumentException;
  * Akses BACA SAJA ke seluruh database ERP MNP untuk MCP (owner 27 Okt 2026, khusus Super Admin). Dikunci dua lapis:
  * 1. koneksi 'baca' memakai user MySQL yang hanya punya hak SELECT (tidak bisa mengubah / menghapus apa pun);
  * 2. di aplikasi: hanya satu perintah SELECT / WITH / SHOW / DESCRIBE / EXPLAIN, tabel & kolom rahasia (token, password) ditolak,
- *    batas waktu 15 detik, hasil maksimal 500 baris.
+ *    batas waktu 15 detik, hasil maksimal 1.000 baris.
  */
 class DatabaseBaca
 {
     /** Tabel berisi rahasia (token login / Google, kunci OAuth) — tidak bisa dibaca sama sekali. */
-    public const TABEL_RAHASIA = ['google_integrasi', 'oauth_klien', 'oauth_kode', 'oauth_token', 'personal_access_tokens', 'password_reset_tokens', 'failed_jobs', 'sessions', 'cache', 'cache_locks', 'jobs'];
+    public const TABEL_RAHASIA = ['google_integrasi', 'oauth_klien', 'oauth_kode', 'oauth_token', 'personal_access_tokens', 'password_reset_tokens'];
 
-    /** Kolom rahasia — query yang menyebutnya ditolak, dan tidak ditampilkan di daftar kolom. */
-    public const KOLOM_RAHASIA = ['password', 'remember_token', 'token_hash', 'refresh_token', 'access_token', 'secret_hash', 'google_id'];
+    /** Kolom rahasia (kunci login) — disembunyikan otomatis dari hasil; menyebutnya langsung di query ditolak. */
+    public const KOLOM_RAHASIA = ['password', 'remember_token', 'token_hash', 'refresh_token', 'access_token', 'secret_hash'];
 
-    public const MAKS_BARIS = 500;
+    public const MAKS_BARIS = 1000;
 
     private static function db()
     {
@@ -78,10 +78,7 @@ class DatabaseBaca
                 throw new InvalidArgumentException("\"{$r}\" berisi data rahasia (token / password) dan tidak boleh dibaca.");
             }
         }
-        // users: SELECT * akan ikut mengambil password → wajib sebut kolomnya.
-        if (preg_match('/\busers\b/', $kecil) && preg_match('/(^|[\s,(])(\w+\.)?\*/', $kecil)) {
-            throw new InvalidArgumentException('Tabel users: sebutkan kolomnya (mis. id, name, email, role) — SELECT * tidak diizinkan karena ada kolom rahasia.');
-        }
+        // SELECT * boleh di semua tabel: kolom rahasia (mis. users.password) dibuang otomatis dari hasil (rapi()).
         $isSelect = preg_match('/^\s*(select|with)\b/i', $sql);
         $jalan = $isSelect ? 'SELECT * FROM ('.$sql.') AS hasil_mcp LIMIT '.($batas + 1) : $sql;
         $baris = array_map(fn ($r) => self::rapi((array) $r), self::db()->select($jalan));
