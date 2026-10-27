@@ -12,7 +12,7 @@ use App\Models\KodeGl;
 use App\Models\KasBulan;
 use App\Models\KasFoto;
 use App\Models\KasReimburseUj;
-use AppSupportPotonganReimburseUj;
+use App\Support\PotonganReimburseUj;
 use App\Support\ReimburseUjKeKas;
 use App\Support\StatusReimburse;
 use Illuminate\Http\JsonResponse;
