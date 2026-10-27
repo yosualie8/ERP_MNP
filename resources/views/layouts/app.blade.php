@@ -177,6 +177,9 @@
             </div>
             <form method="POST" action="{{ route('logout') }}">
                 @csrf
+                @if (auth()->user()->isSuperAdmin())
+                    <a class="tombol polos" href="{{ route('login-perangkat.index') }}" title="Masuk di HP lain lewat QR sekali pakai">📱 Login HP lain</a>
+                @endif
                 <span class="redup surel">{{ auth()->user()->email }}</span>
                 <button class="tombol polos" type="submit">Keluar</button>
             </form>

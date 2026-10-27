@@ -37,6 +37,9 @@ Route::middleware('guest')->group(function () {
     Route::get('/login', [GoogleController::class, 'show'])->name('login');
     Route::get('/auth/google/redirect', [GoogleController::class, 'redirect'])->name('auth.google.redirect');
 });
+// Masuk lewat QR sekali pakai dari halaman Login Perangkat Lain (di luar grup guest: HP yang sudah login akun lain pun bisa).
+Route::get('/masuk/{token}', [\App\Http\Controllers\LoginPerangkatController::class, 'konfirmasi'])->where('token', '[A-Za-z0-9]{48}')->middleware('throttle:30,1')->name('login-perangkat.masuk');
+Route::post('/masuk/{token}', [\App\Http\Controllers\LoginPerangkatController::class, 'masuk'])->where('token', '[A-Za-z0-9]{48}')->middleware('throttle:10,1');
 // Di luar grup guest: juga dipakai super admin yang sudah login untuk menghubungkan Google Sheets.
 Route::get('/auth/google/callback', [GoogleController::class, 'callback'])->name('auth.google.callback');
 
@@ -228,6 +231,10 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::middleware('can:super-admin')->group(function () {
         Route::get('/auth/google/hubungkan-sheets', [GoogleController::class, 'hubungkanSheets'])->name('google.hubungkan-sheets');
         Route::get('/auth/google/hubungkan-drive-foto', [GoogleController::class, 'hubungkanDriveFoto'])->name('google.hubungkan-drive-foto');
+        Route::get('/login-perangkat', [\App\Http\Controllers\LoginPerangkatController::class, 'index'])->name('login-perangkat.index');
+        Route::post('/login-perangkat', [\App\Http\Controllers\LoginPerangkatController::class, 'buat'])->name('login-perangkat.buat');
+        Route::get('/login-perangkat/{login}/status', [\App\Http\Controllers\LoginPerangkatController::class, 'status'])->whereNumber('login')->name('login-perangkat.status');
+        Route::post('/login-perangkat/{login}/keluarkan', [\App\Http\Controllers\LoginPerangkatController::class, 'keluarkan'])->whereNumber('login')->name('login-perangkat.keluarkan');
         Route::get('/pengguna', [PenggunaController::class, 'index'])->name('pengguna.index');
         Route::post('/pengguna', [PenggunaController::class, 'store'])->name('pengguna.store');
         Route::patch('/pengguna/{user}', [PenggunaController::class, 'update'])->name('pengguna.update');
