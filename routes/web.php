@@ -140,6 +140,9 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/kas/validasi-reimburse', [ReimburseKasController::class, 'validasi'])->name('kas.validasi-reimburse');
     Route::post('/kas/validasi-reimburse', [ReimburseKasController::class, 'periksaValidasi'])->name('kas.validasi-reimburse.periksa');
     Route::post('/kas/validasi-reimburse/tandai', [ReimburseKasController::class, 'tandaiValidasi'])->name('kas.validasi-reimburse.tandai');
+    // Daftar berisi transaksi yang sudah direimburse / ID dobel: tandai sisanya + Excel revisi tanpa baris-baris itu.
+    Route::post('/kas/validasi-reimburse/bersih', [ReimburseKasController::class, 'simpanBersih'])->name('kas.validasi-reimburse.bersih');
+    Route::get('/kas/validasi-reimburse/revisi/{token}', [ReimburseKasController::class, 'unduhRevisi'])->where('token', '[A-Za-z0-9]{40}')->name('kas.validasi-reimburse.revisi');
     Route::get('/kas/history-reimburse', [RiwayatReimburseController::class, 'index'])->name('kas.riwayat-reimburse');
     Route::get('/kas/belum-reimburse.xlsx', [ReimburseKasController::class, 'unduhBelum'])->name('kas.belum-reimburse');
     Route::get('/kas/kode-gl', [KasController::class, 'kodeGl'])->name('kas.kode-gl');

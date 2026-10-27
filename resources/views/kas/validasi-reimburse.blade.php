@@ -20,6 +20,19 @@
         @media (max-width: 900px) { .panel-unggah { grid-template-columns: 1fr 1fr; } }
     </style>
 
+    @if ($rv = session('revisi'))
+        @php($urlRevisi = route('kas.validasi-reimburse.revisi', ['token' => $rv['token'], 'nama' => $rv['nama']]))
+        <div class="kartu tandai-reimburse">
+            <h4 style="margin: 0 0 4px;">📄 Excel revisi siap · total {{ rp($rv['total']) }}</h4>
+            <p class="redup" style="margin: 0 0 10px; font-size: 14px;">File asli tanpa baris transaksi yang sudah reimburse / dobel. Unduhan mulai otomatis; bila tidak, klik tombol ini (tersedia 3 hari).</p>
+            @foreach ($rv['peringatan'] ?? [] as $p)
+                <p style="margin: 0 0 10px; font-size: 14px; color: #f5c542;">⚠ {{ $p }}</p>
+            @endforeach
+            <a class="tombol" href="{{ $urlRevisi }}">⬇ Unduh Excel revisi</a>
+        </div>
+        <iframe src="{{ $urlRevisi }}" style="display: none;" title="unduh"></iframe>
+    @endif
+
     <form method="POST" action="{{ route('kas.validasi-reimburse.periksa') }}" enctype="multipart/form-data" class="kartu">
         @csrf
         <h3 style="margin: 0 0 4px;">Validasi daftar reimburse</h3>
@@ -59,6 +72,59 @@
             @endif
             <div class="redup">{{ $namaFile }} · sheet "{{ $hasil['lembar'] }}" · {{ count($hasil['baris']) }} transaksi · {{ rp($hasil['total']) }}</div>
         </div>
+
+        @if ($hasil['bisa_bersih'] && ($token ?? null))
+            @php($bs = $hasil['bersih'])
+            @php($nSudah = count($hasil['sudah']))
+            @php($nDobel = $bs['dibuang'] - $nSudah)
+            @php($nTakDikenalB = count(array_filter($bs['baris'], fn ($b) => in_array($b['id'], array_column($hasil['tak_dikenal'], 'id'), true))))
+            <div class="kartu tandai-reimburse">
+                <h4 style="margin: 0 0 4px;">Opsi: reimburse tanpa transaksi yang tidak valid</h4>
+                <p class="redup" style="margin: 0 0 10px; font-size: 14px;">
+                    Total file {{ rp($hasil['total']) }} ({{ count($hasil['baris']) }} transaksi)
+                    @if ($nSudah) − {{ $nSudah }} sudah reimburse ({{ rp(array_sum(array_column($hasil['sudah'], 'nominal'))) }})@endif
+                    @if ($nDobel > 0) − {{ $nDobel }} baris ID dobel (yang pertama tetap dipakai)@endif
+                    = <b style="color: var(--teks);">{{ rp($bs['total']) }} · {{ count($bs['baris']) }} transaksi</b>.<br>
+                    Saat disimpan: {{ count($bs['baris']) - $nTakDikenalB }} transaksi ditandai <b>Sudah Reimburse</b>, lalu Excel revisi (file asli tanpa {{ $bs['dibuang'] }} baris tidak valid) diunduh.
+                    @if ($nTakDikenalB)<br>⚠ {{ $nTakDikenalB }} ID tidak ada di Kas Harian aplikasi: tetap di Excel revisi tapi tidak ikut ditandai.@endif
+                </p>
+                <div class="gulir" style="margin-bottom: 12px;">
+                    <table class="kas">
+                        <thead><tr><th>Kode GL</th><th class="angka">Jumlah transaksi</th><th class="angka">Nominal</th></tr></thead>
+                        <tbody>
+                            @foreach ($bs['rekap'] as $r)
+                                <tr><td>{{ $r['gl'] }}</td><td class="angka">{{ $r['jumlah'] }}</td><td class="angka">{{ rp($r['nominal']) }}</td></tr>
+                            @endforeach
+                            <tr class="total"><td>Total</td><td class="angka">{{ count($bs['baris']) }}</td><td class="angka">{{ rp($bs['total']) }}</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <form method="POST" action="{{ route('kas.validasi-reimburse.bersih') }}" id="form-bersih"
+                    data-pesan="Tandai {{ count($bs['baris']) - $nTakDikenalB }} transaksi ({{ rp($bs['total']) }}) Sudah Reimburse dan buat Excel revisi tanpa {{ $bs['dibuang'] }} baris tidak valid?">
+                    @csrf
+                    <input type="hidden" name="token" value="{{ $token }}">
+                    <input type="hidden" name="lembar" value="{{ $hasil['lembar'] }}">
+                    <input type="hidden" name="kolom_gl" value="{{ $kolom['gl'] }}">
+                    <input type="hidden" name="kolom_nominal" value="{{ $kolom['nominal'] }}">
+                    <input type="hidden" name="nama_file" value="{{ $namaFile }}">
+                    <input type="hidden" name="total" value="{{ $bs['total'] }}">
+                    <div style="display: flex; gap: 12px; align-items: end; flex-wrap: wrap;">
+                        <div>
+                            <label for="tanggal-bersih" style="display: block; font-size: 13px; color: var(--redup); margin-bottom: 4px;">Tanggal reimburse</label>
+                            <input type="date" id="tanggal-bersih" name="tanggal" value="{{ now()->toDateString() }}" max="{{ now()->toDateString() }}" required style="padding: 9px 10px; border-radius: 7px; font-size: 15px;">
+                        </div>
+                        <button class="tombol" type="submit">✓ Simpan · {{ rp($bs['total']) }} & unduh Excel revisi</button>
+                    </div>
+                </form>
+                <script>
+                    document.getElementById('form-bersih').addEventListener('submit', e => {
+                        const f = e.target;
+                        if (!confirm(f.dataset.pesan)) { e.preventDefault(); return; }
+                        const b = f.querySelector('button[type=submit]'); b.disabled = true; b.textContent = 'Menyimpan & membuat Excel revisi…';
+                    });
+                </script>
+            </div>
+        @endif
 
         @if ($hasil['valid'])
             <div class="kartu gulir" style="padding: 0 0 4px;">
