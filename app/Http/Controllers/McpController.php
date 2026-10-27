@@ -64,7 +64,7 @@ class McpController extends Controller
             'initialize' => self::hasil($id, [
                 'protocolVersion' => in_array($param['protocolVersion'] ?? null, self::VERSI, true) ? $param['protocolVersion'] : self::VERSI[0],
                 'capabilities' => ['tools' => ['listChanged' => false]],
-                'serverInfo' => ['name' => 'erp-mnp', 'title' => 'ERP PT Multi Niaga Putra', 'version' => '1.2.0'],
+                'serverInfo' => ['name' => 'erp-mnp', 'title' => 'ERP PT Multi Niaga Putra', 'version' => '1.3.0'],
                 'instructions' => 'Data ERP PT Multi Niaga Putra (MNP) — hanya baca, kecuali update_biaya_report_proyek (mengisi biaya ERP ke file Report Proyek di Drive: '
                     .'selalu pratinjau dulu, tunjukkan ke pengguna, baru tulis=true bila disetujui). Rekening PT = rekening utama perusahaan di BCA (mutasi + penandaan biaya dihitung / tidak per proyek). '
                     .'Kas Harian = rekening Bank Jago PT (transfer + transaksi detail/bon dengan Kode GL; "reimburse" = penggantian dana kas, dari BCA). '

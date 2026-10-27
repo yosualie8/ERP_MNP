@@ -41,10 +41,14 @@ class AlatMnp
         'update_biaya_report_proyek' => 'dashboard-proyek',
     ];
 
+    /** Tool khusus Super Admin (akses baca seluruh database, owner 27 Okt 2026). */
+    private const KHUSUS_SUPER = ['daftar_tabel', 'query_database'];
+
     /** Tool yang boleh dipakai pengguna ini (mengikuti menu yang boleh dibukanya di aplikasi). */
     public static function untuk(\App\Models\User $u): array
     {
-        return array_filter(self::daftar(), fn ($t, $nama) => ! isset(self::MENU[$nama]) || $u->bolehMenu(self::MENU[$nama]), ARRAY_FILTER_USE_BOTH);
+        return array_filter(self::daftar(), fn ($t, $nama) => (! isset(self::MENU[$nama]) || $u->bolehMenu(self::MENU[$nama]))
+            && (! in_array($nama, self::KHUSUS_SUPER, true) || $u->isSuperAdmin()), ARRAY_FILTER_USE_BOTH);
     }
 
     private static function boleh(string $menu): bool
@@ -199,6 +203,22 @@ class AlatMnp
                 ], 'required' => ['link'], 'additionalProperties' => false],
                 'ubah' => true,
                 'jalankan' => fn (array $a) => self::reportProyek($a),
+            ],
+            'daftar_tabel' => [
+                'judul' => 'Daftar tabel database ERP',
+                'deskripsi' => 'Semua tabel database ERP MNP beserta kolom & perkiraan jumlah baris (khusus Super Admin). Isi "tabel" untuk melihat kolom lengkap (tipe, kunci) '
+                    .'+ contoh isi terbaru. Pakai sebelum query_database supaya nama tabel/kolomnya tepat. Tabel & kolom rahasia (token, password) tidak ditampilkan.',
+                'skema' => $obj(['tabel' => ['type' => 'string', 'description' => 'Nama tabel (opsional)'], 'contoh' => ['type' => 'integer', 'minimum' => 0, 'maximum' => 50, 'description' => 'Jumlah contoh baris (bawaan 5)']]),
+                'jalankan' => fn (array $a) => DatabaseBaca::tabel($a['tabel'] ?? null, (int) ($a['contoh'] ?? 5)),
+            ],
+            'query_database' => [
+                'judul' => 'Query database ERP (baca saja)',
+                'deskripsi' => 'Jalankan SATU query SQL MySQL BACA SAJA (SELECT / WITH / SHOW / DESCRIBE / EXPLAIN) ke seluruh database ERP MNP (khusus Super Admin), untuk data yang '
+                    .'tidak tercakup tool lain. Lihat nama tabel & kolom dengan daftar_tabel dulu. Hasil maks 500 baris (bawaan 100), batas waktu 15 detik; pakai GROUP BY / '
+                    .'SUM / COUNT untuk rekap. Tabel token & kolom password/token ditolak; tabel users wajib sebut kolomnya. Nominal rupiah bilangan bulat; tanggal YYYY-MM-DD.',
+                'skema' => ['type' => 'object', 'properties' => ['sql' => ['type' => 'string', 'description' => 'Query SQL (satu perintah baca)'], 'batas' => ['type' => 'integer', 'minimum' => 1, 'maximum' => DatabaseBaca::MAKS_BARIS]],
+                    'required' => ['sql'], 'additionalProperties' => false],
+                'jalankan' => fn (array $a) => DatabaseBaca::query((string) $a['sql'], (int) ($a['batas'] ?? 100)),
             ],
             'search' => [
                 'judul' => 'Cari di ERP MNP',
