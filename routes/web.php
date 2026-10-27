@@ -105,6 +105,9 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/lapor-data', [\App\Http\Controllers\LaporDataController::class, 'index'])->name('lapor-data.index');
     // Review Absen Harian: lengkap / belum absen masuk-pulang per karyawan, kirim review ke WhatsApp grup / pribadi.
     Route::get('/review-absen', [\App\Http\Controllers\ReviewAbsenController::class, 'index'])->name('review-absen.index');
+    // Rekap Gaji Mingguan (versi awal): hari hadir dari absensi × tarif UM per hari jabatan, per minggu Senin–Minggu.
+    Route::get('/gaji-mingguan', [\App\Http\Controllers\GajiMingguanController::class, 'index'])->name('gaji-mingguan.index');
+    Route::get('/gaji-mingguan/unduh', [\App\Http\Controllers\GajiMingguanController::class, 'unduh'])->name('gaji-mingguan.unduh');
     Route::post('/lapor-data/pengaturan', [\App\Http\Controllers\LaporDataController::class, 'pengaturan'])->name('lapor-data.pengaturan');
     Route::post('/lapor-data/{lapor}', [\App\Http\Controllers\LaporDataController::class, 'ubah'])->whereNumber('lapor')->name('lapor-data.ubah');
     Route::get('/absen/foto/{absensi}', [\App\Http\Controllers\AbsenController::class, 'foto'])->whereNumber('absensi')->name('absen.foto');
