@@ -46,7 +46,23 @@ class PengalihanUjController extends Controller
         $saldo = SaldoSopir::perSopir();
         $tab = in_array($request->query('tab'), ['pilih', 'saldo'], true) ? $request->query('tab')
             : ($request->filled('asal') || $request->filled('mobil') || $saldo->where('saldo', '>', 0.5)->isEmpty() ? 'pilih' : 'saldo');
-        $data = ['tab' => $tab, 'saldo' => $saldo, 'tahap' => ProyekTahap::orderBy('nama')->get(['id', 'nama', 'status', 'tipe'])->keyBy('id')];
+        $data = ['tab' => $tab, 'saldo' => $saldo, 'tahap' => ProyekTahap::orderBy('nama')->get(['id', 'nama', 'status', 'tipe'])->keyBy('id'), 'dipilih' => null];
+
+        if ($tab === 'saldo') {
+            // Buku utang per sopir (owner 27 Okt 2026): sopir mana pun bisa dibuka (juga yang belum punya catatan) untuk mencatat kasbon.
+            $data['namaSopir'] = collect(\App\Support\DaftarSopir::untukForm()['aktif'])->map(fn ($x) => SaldoSopir::kunci($x['nama']))->merge($saldo->keys())->filter()->unique()->sort()->values();
+            if ($k = SaldoSopir::kunci($request->query('sopir'))) {
+                $data['dipilih'] = $saldo[$k] ?? ['sopir' => $k, 'mobil' => array_values(array_filter([\App\Support\DaftarSopir::cari($k)['mobil'] ?? null])), 'alih' => 0.0, 'n_alih' => 0,
+                    'kasbon' => 0.0, 'terpakai_do' => 0.0, 'dipakai' => 0.0, 'kembali' => 0.0, 'hangus' => 0.0, 'pakai' => 0.0, 'saldo' => 0.0, 'umur' => null, 'sejak' => null,
+                    'status' => 'habis', 'uj' => collect(), 'kasbon_rows' => collect(), 'pakai_rows' => collect(), 'terakhir' => null];
+                $data['bonKasbon'] = self::bonKasbon()->filter(fn ($b) => $b->sisa > 0.5)->values();
+                // Uang jalan DO dari utang → transfer Kas UJ ber-DO sama (sisa uang jalannya), untuk kolom Status buku utang.
+                $doUtang = $data['dipilih']['pakai_rows']->where('peruntukan', 'uj')->pluck('no_do')->map(fn ($v) => SaldoSopir::kunciDo($v))->filter()->unique();
+                $data['kasUjDo'] = $doUtang->isEmpty() ? collect() : UjDetail::where('biaya_transfer', false)->where('kategori', 'like', '%jalan%')
+                    ->where(fn ($q) => $doUtang->each(fn ($k) => $q->orWhere('no_do', 'like', '%'.$k)))->get(['id_uj', 'nominal', 'no_do'])
+                    ->filter(fn ($u) => $doUtang->contains(SaldoSopir::kunciDo($u->no_do)))->groupBy(fn ($u) => SaldoSopir::kunciDo($u->no_do));
+            }
+        }
 
         if ($tab === 'pilih') {
             // UJ yang SUDAH jadi saldo sopir tetap tampil (owner 20 Okt 2026): kolom Status hanya "Sudah jadi saldo sopir" / "Belum"; tanpa centang,
@@ -136,37 +152,121 @@ class PengalihanUjController extends Controller
             ->with('success', $pilih->count().' UJ (Rp '.number_format($rp, 0, ',', '.').") {$label}.");
     }
 
-    /** Saldo sopir berkurang di luar Pengajuan UJ: Uang MOB / lain (proyek dipilih), dikembalikan sopir, atau tidak kembali (proyek asal). */
+    /**
+     * ➖ Potong utang / saldo sopir (owner 27 Okt 2026): uang jalan DO baru (No DO + DT; boleh sebagian — sisanya ditransfer di Kas UJ dengan DO yang
+     * sama, tersambung otomatis lewat No DO), Uang MOB / lain (proyek dipilih), potong gaji / UM, dikembalikan sopir, sudah dicicil sebelum dicatat,
+     * atau tidak kembali (proyek dipilih).
+     */
     public function pakai(Request $request): RedirectResponse
     {
         $d = $request->validate([
-            'sopir' => ['required', 'string', 'max:100'], 'tanggal' => ['required', 'date'], 'peruntukan' => ['required', 'in:mob,lain,kembali,hangus'],
+            'sopir' => ['required', 'string', 'max:100'], 'tanggal' => ['required', 'date'], 'peruntukan' => ['required', 'in:'.implode(',', array_keys(UjPengalihan::PERUNTUKAN))],
             'nominal' => ['required', 'string', 'max:20'], 'tahap' => ['nullable', 'integer', 'exists:proyek_tahap,id'], 'keterangan' => ['nullable', 'string', 'max:300'],
+            'no_do' => ['nullable', 'string', 'max:20'], 'no_mobil' => ['nullable', 'string', 'max:20'], 'kas_no_id' => ['nullable', 'string', 'max:30'], 'tetap' => ['nullable', 'boolean'],
         ]);
-        $d += ['tahap' => null, 'keterangan' => null];
+        $d += ['tahap' => null, 'keterangan' => null, 'no_do' => null, 'no_mobil' => null, 'kas_no_id' => null, 'tetap' => false];
         $nominal = (float) preg_replace('/\D/', '', $d['nominal']);
         $sopir = SaldoSopir::kunci($d['sopir']);
         $s = SaldoSopir::perSopir()[$sopir] ?? null;
         $sisa = SaldoSopir::sisa($sopir);
+        $per = $d['peruntukan'];
+        $ket = trim((string) $d['keterangan']);
         if (! $s || $nominal <= 0 || $nominal > $sisa + 0.5) {
-            return back()->withInput()->with('error', "Nominal harus 1 s/d saldo {$sopir} (Rp ".number_format($sisa, 0, ',', '.').').');
+            return back()->withInput()->with('error', "Nominal harus 1 s/d sisa utang {$sopir} (Rp ".number_format($sisa, 0, ',', '.').').');
         }
-        if ($d['peruntukan'] !== 'kembali' && empty($d['tahap'])) {
+        if (! in_array($per, ['uj', ...UjPengalihan::BUKAN_BIAYA], true) && empty($d['tahap'])) {
             return back()->withInput()->with('error', 'Pilih proyek yang menanggung biaya ini.');
         }
-        if ($d['peruntukan'] === 'hangus' && mb_strlen(trim((string) $d['keterangan'])) < 10) {
-            return back()->withInput()->with('error', 'Saldo tidak kembali: tulis alasannya (min. 10 karakter), mis. "sopir kabur, tidak bisa dihubungi".');
+        if ($per === 'hangus' && mb_strlen($ket) < 10) {
+            return back()->withInput()->with('error', 'Tidak kembali: tulis alasannya (min. 10 karakter), mis. "sopir kabur, tidak bisa dihubungi".');
         }
-        $p = UjPengalihan::create(['jenis' => 'pakai', 'no_mobil' => $s['mobil'][0] ?? null, 'nama' => $sopir, 'sopir' => $sopir,
-            'dari_tahap_id' => $d['peruntukan'] === 'hangus' ? $d['tahap'] : null, 'ke_tahap_id' => $d['peruntukan'] === 'kembali' ? null : $d['tahap'],
-            'tanggal' => $d['tanggal'], 'nominal' => $nominal, 'peruntukan' => $d['peruntukan'], 'keterangan' => $d['keterangan'] ?: null, 'user_id' => $request->user()->id]);
+        if ($per === 'sebelum' && mb_strlen($ket) < 5) {
+            return back()->withInput()->with('error', 'Tulis kapan / bagaimana sudah dicicil (mis. "dipotong gaji Okt, catatan Bu Valen").');
+        }
+        $do = null;
+        $mobil = $s['mobil'][0] ?? null;
+        $info = '';
+        if ($per === 'uj') {
+            $do = str_replace(['`', "'", ' '], '', trim((string) $d['no_do']));
+            if (! preg_match('/^\d{3,10}$/', $do)) {
+                return back()->withInput()->with('error', 'Isi No DO uang jalannya (angka saja).');
+            }
+            $mobil = NomorMobil::rapikan($d['no_mobil']) ?: $mobil;
+            if (! $mobil) {
+                return back()->withInput()->with('error', 'Isi No Mobil (DT) untuk uang jalan ini.');
+            }
+            // Tersambung lewat No DO: uang jalan DO ini di Kas UJ (transfer) + potongan utang lain → total per DO tetap dijaga.
+            $k = SaldoSopir::kunciDo($do);
+            $kasUj = UjDetail::where('biaya_transfer', false)->where('kategori', 'like', '%jalan%')->where('no_do', 'like', '%'.$k)->get(['id_uj', 'tanggal', 'nominal', 'no_mobil', 'no_do'])
+                ->filter(fn ($u) => SaldoSopir::kunciDo($u->no_do) === $k)->values();
+            $dariUtang = UjPengalihan::where('jenis', 'pakai')->where('peruntukan', 'uj')->where('no_do', 'like', '%'.$k)->get()->filter(fn ($p) => SaldoSopir::kunciDo($p->no_do) === $k)->values();
+            $total = (float) $kasUj->sum('nominal') + (float) $dariUtang->sum('nominal') + $nominal;
+            $sebut = $kasUj->map(fn ($u) => $u->id_uj.' '.rp((int) $u->nominal).' (Kas UJ)')->concat($dariUtang->map(fn ($p) => rp((int) $p->nominal).' utang '.($p->sopir ?: $p->nama)))->implode(', ');
+            if ($total > \App\Support\ValidasiUj::MAKS_UJ_PER_DO) {
+                return back()->withInput()->with('error', "Total uang jalan DO {$do} jadi ".rp((int) $total).' (lebih dari '.rp(\App\Support\ValidasiUj::MAKS_UJ_PER_DO)."). Sudah ada: {$sebut}. Periksa No DO / nominalnya.");
+            }
+            $dtLain = $kasUj->map(fn ($u) => NomorMobil::rapikan($u->no_mobil))->filter()->unique()->reject(fn ($m) => $m === $mobil);
+            if ($dtLain->isNotEmpty() && ! $d['tetap']) {
+                return back()->withInput()->with('error', "DO {$do} di Kas UJ tercatat untuk ".$dtLain->implode(', ').", bukan {$mobil}. Periksa No DO; bila memang benar, centang \"Tetap simpan\".");
+            }
+            $info = $sebut !== '' ? " Tersambung dengan {$sebut} — total uang jalan DO {$do} ".rp((int) $total).'.' : " DO {$do} sekarang tercatat punya uang jalan (dari utang sopir).";
+        }
+        $p = UjPengalihan::create(['jenis' => 'pakai', 'no_do' => $do, 'no_mobil' => $mobil, 'nama' => $sopir, 'sopir' => $sopir,
+            'dari_tahap_id' => $per === 'hangus' ? $d['tahap'] : null, 'ke_tahap_id' => in_array($per, UjPengalihan::BUKAN_BIAYA, true) ? null : $d['tahap'],
+            'tanggal' => $d['tanggal'], 'nominal' => $nominal, 'peruntukan' => $per, 'kas_no_id' => $per === 'kembali' ? (trim((string) $d['kas_no_id']) ?: null) : null,
+            'keterangan' => $ket ?: null, 'user_id' => $request->user()->id]);
         $proyek = $p->ke?->nama;
         KasRiwayat::create(['aksi' => 'uj-alih-pakai', 'lembar' => 'Kas UJ', 'baris_awal' => 0, 'baris_akhir' => 0,
-            'ringkasan' => mb_strimwidth("Saldo sopir {$sopir} berkurang: ".UjPengalihan::PERUNTUKAN[$d['peruntukan']].' Rp '.number_format($nominal, 0, ',', '.')
-                .($proyek ? " ({$proyek})" : '').($d['keterangan'] ? " — {$d['keterangan']}" : ''), 0, 490, '…'),
+            'ringkasan' => mb_strimwidth("Utang sopir {$sopir} berkurang: ".UjPengalihan::PERUNTUKAN[$per].($do ? " DO {$do} ({$mobil})" : '').' Rp '.number_format($nominal, 0, ',', '.')
+                .($proyek ? " ({$proyek})" : '').($ket ? " — {$ket}" : ''), 0, 490, '…'),
             'isi' => $p->toArray(), 'user_id' => $request->user()->id]);
 
-        return redirect()->route('pengalihan-uj.index', ['tab' => 'saldo'])->with('success', "Saldo {$sopir} berkurang Rp ".number_format($nominal, 0, ',', '.').'.');
+        return redirect()->route('pengalihan-uj.index', ['tab' => 'saldo', 'sopir' => $sopir])
+            ->with('success', "Utang {$sopir} berkurang Rp ".number_format($nominal, 0, ',', '.').' ('.UjPengalihan::PERUNTUKAN[$per].').'.$info);
+    }
+
+    /** ➕ Kasbon sopir dari Kas Harian: pilih bon ber-Kode GL Piutang (NO ID); nominal = bagian sopir ini (satu bon boleh untuk beberapa sopir). */
+    public function kasbon(Request $request): RedirectResponse
+    {
+        $d = $request->validate(['sopir' => ['required', 'string', 'max:100'], 'kas_no_id' => ['required', 'string', 'max:30'], 'nominal' => ['required', 'string', 'max:20'],
+            'keterangan' => ['nullable', 'string', 'max:300']], ['kas_no_id.required' => 'Pilih bon kasbon di Kas Harian.']);
+        $sopir = SaldoSopir::kunci($d['sopir']);
+        $bon = self::bonKasbon()->firstWhere('no_id', trim($d['kas_no_id']));
+        if (! $sopir || ! $bon) {
+            return back()->withInput()->with('error', 'Bon itu tidak ditemukan di Kas Harian, atau Kode GL-nya bukan Piutang.');
+        }
+        $nominal = (float) preg_replace('/\D/', '', $d['nominal']);
+        if ($nominal <= 0 || $nominal > $bon->sisa + 0.5) {
+            return back()->withInput()->with('error', 'Nominal harus 1 s/d sisa bon NO ID '.$bon->no_id.' yang belum ditautkan (Rp '.number_format($bon->sisa, 0, ',', '.').').');
+        }
+        $ket = trim((string) ($d['keterangan'] ?? ''));
+        $p = UjPengalihan::create(['jenis' => 'kasbon', 'no_mobil' => \App\Support\DaftarSopir::cari($sopir)['mobil'] ?? (SaldoSopir::perSopir()[$sopir]['mobil'][0] ?? null),
+            'nama' => $sopir, 'sopir' => $sopir, 'tanggal' => $bon->tanggal, 'nominal' => $nominal, 'kas_no_id' => $bon->no_id,
+            'keterangan' => mb_strimwidth(trim($bon->keterangan.($ket ? ' · '.$ket : '')), 0, 300, '…'), 'user_id' => $request->user()->id]);
+        KasRiwayat::create(['aksi' => 'uj-alih-kasbon', 'lembar' => 'Kas UJ', 'baris_awal' => 0, 'baris_akhir' => 0,
+            'ringkasan' => mb_strimwidth("Utang sopir {$sopir} bertambah: kasbon Rp ".number_format($nominal, 0, ',', '.')." dari Kas Harian NO ID {$bon->no_id} ({$bon->keterangan})", 0, 490, '…'),
+            'isi' => $p->toArray(), 'user_id' => $request->user()->id]);
+
+        return redirect()->route('pengalihan-uj.index', ['tab' => 'saldo', 'sopir' => $sopir])
+            ->with('success', "Kasbon Rp ".number_format($nominal, 0, ',', '.')." (NO ID {$bon->no_id}) masuk utang {$sopir}.");
+    }
+
+    /** Bon Kas Harian ber-Kode GL kelompok Piutang (kasbon) sejak Mei 2026, dengan bagian yang sudah ditautkan ke sopir & sisanya. */
+    public static function bonKasbon(): Collection
+    {
+        $tertaut = UjPengalihan::where('jenis', 'kasbon')->whereNotNull('kas_no_id')->selectRaw('kas_no_id, SUM(nominal) n')->groupBy('kas_no_id')->pluck('n', 'kas_no_id');
+
+        return \App\Models\KasBon::query()->join('kode_gl as k', 'k.id', '=', 'kas_bon.kode_gl_id')->join('akun_gl as a', 'a.id', '=', 'k.akun_gl_id')
+            ->join('kas_transfer as t', 't.id', '=', 'kas_bon.kas_transfer_id')
+            ->where('a.kelompok', 'Piutang')->where('t.kredit', '>', 0)->where('kas_bon.tanggal', '>=', '2026-05-01')->whereNotNull('kas_bon.no_id')
+            ->orderByDesc('kas_bon.tanggal')->orderByDesc('kas_bon.no_id')
+            ->get(['kas_bon.no_id', 'kas_bon.tanggal', 'kas_bon.nominal', 'kas_bon.keterangan', 'kas_bon.pic', 'k.kode_asli', 't.nama_tujuan'])
+            ->map(function ($b) use ($tertaut) {
+                $b->tertaut = (float) ($tertaut[$b->no_id] ?? 0);
+                $b->sisa = (float) $b->nominal - $b->tertaut;
+
+                return $b;
+            });
     }
 
     /** Ganti / gabungkan nama sopir (ejaan berbeda di Kas UJ, mis. "Andre" & "ANDRE S"): semua catatan saldo sopir lama pindah ke nama baru. */
@@ -177,7 +277,7 @@ class PengalihanUjController extends Controller
         if ($lama === $baru) {
             return back();
         }
-        $baris = UjPengalihan::whereIn('jenis', ['alih', 'pakai'])->get()->filter(fn ($p) => SaldoSopir::kunci($p->sopir ?: $p->nama) === $lama);
+        $baris = UjPengalihan::whereIn('jenis', ['alih', 'kasbon', 'pakai'])->get()->filter(fn ($p) => SaldoSopir::kunci($p->sopir ?: $p->nama) === $lama);
         UjPengalihan::whereIn('id', $baris->pluck('id'))->update(['sopir' => $baru]);
         KasRiwayat::create(['aksi' => 'uj-alih-sopir', 'lembar' => 'Kas UJ', 'baris_awal' => 0, 'baris_akhir' => 0,
             'ringkasan' => "Saldo sopir {$lama} dipindah ke nama {$baru} ({$baris->count()} catatan)", 'isi' => ['lama' => $lama, 'baru' => $baru, 'id' => $baris->pluck('id')],
@@ -222,11 +322,11 @@ class PengalihanUjController extends Controller
         if ($pengalihan->uj_pengajuan_detail_id) {
             return back()->with('error', 'Potongan ini dari Pengajuan UJ — ubah atau batalkan pengajuannya ('.($pengalihan->keterangan ? mb_strimwidth($pengalihan->keterangan, 0, 40, '…') : 'Pengajuan UJ').').');
         }
-        if ($pengalihan->jenis === 'alih') {
+        if (in_array($pengalihan->jenis, UjPengalihan::NAMBAH, true)) {
             $s = SaldoSopir::perSopir()[SaldoSopir::kunci($pengalihan->sopir ?: $pengalihan->nama)] ?? null;
-            $x = $s ? $s['uj']->first(fn ($x) => $x->p->id === $pengalihan->id) : null;
-            if ($s && $x && ! $x->bongkar && $s['saldo'] - $pengalihan->nominal < -0.5) {
-                return back()->with('error', "Saldo {$s['sopir']} sudah terpakai — tanpa UJ ini saldonya jadi minus. Hapus dulu pemakaiannya.");
+            $x = $s && $pengalihan->jenis === 'alih' ? $s['uj']->first(fn ($x) => $x->p->id === $pengalihan->id) : null;
+            if ($s && ! $x?->bongkar && $s['saldo'] - $pengalihan->nominal < -0.5) {
+                return back()->with('error', "Utang {$s['sopir']} sudah dipotong — tanpa catatan ini sisanya jadi minus. Hapus dulu potongannya.");
             }
         }
         KasRiwayat::create(['aksi' => 'uj-alih-hapus', 'lembar' => 'Kas UJ', 'baris_awal' => 0, 'baris_akhir' => 0,

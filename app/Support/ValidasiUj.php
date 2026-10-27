@@ -99,6 +99,8 @@ class ValidasiUj
                 $d['kategori'], $d['jenis_kendaraan'], $d['no_mobil'], $d['no_do']);
         }
         $pembuka = self::ujPerDo($kecualiTransaksi, collect($barisInput)->filter(fn ($r) => $r['do'] !== null && self::ikutDo($r['kategori'])), $tgl);
+        // Uang jalan yang sebagian / seluruhnya dipotong dari utang sopir (Pengalihan UJ, owner 27 Okt 2026): satu uang jalan dengan baris Kas UJ ber-DO sama.
+        $dariUtang = self::utangPerDo(collect($barisInput)->filter(fn ($r) => $r['do'] !== null && $r['jenisKat'] === 'uj')->pluck('do')->unique());
         foreach ($barisInput as $r) {
             if ($r['jenisKat'] === 'uj' && $r['do'] !== null) {
                 $pembuka[$r['do']][] = ['id' => $r['id'], 'tanggal' => $tgl, 'mobil' => $r['mobil'], 'nama' => $r['nama'], 'doAsli' => $r['doAsli']];
@@ -160,7 +162,7 @@ class ValidasiUj
                     .(($do = $lain->pluck('no_do')->filter()->unique())->isNotEmpty() ? ', DO '.$do->implode(', ') : '').'). Pengajuan cukup sekali sehari — tambahkan lewat Edit '
                     .$kode.'. Bila memang perlu pengajuan terpisah (mis. tujuan buangan lain), tulis alasannya.'];
             }
-            $temuan[$i] = [...$tautan, ...self::aturan($r, $pembanding, $jenisDt, $pembuka), ...($tanyaDuluan ? self::ujTerbuka($r) : [])];
+            $temuan[$i] = [...$tautan, ...self::aturan($r, $pembanding, $jenisDt, $pembuka, $dariUtang), ...($tanyaDuluan ? self::ujTerbuka($r) : [])];
             $sebelumnya->push($r);
         }
 
@@ -189,8 +191,11 @@ class ValidasiUj
         return $aset ??= \App\Models\AsetTruk::truk()->pluck('status', 'no_lambung')->all();
     }
 
-    /** @param  array<string, array<int, array>>  $pembuka  kunci DO → Uang Jalan ber-DO itu (seluruh histori + input ini) */
-    private static function aturan(array $r, Collection $lain, Collection $jenisDt, array $pembuka = []): array
+    /**
+     * @param  array<string, array<int, array>>  $pembuka  kunci DO → Uang Jalan ber-DO itu (seluruh histori + input ini)
+     * @param  array<string, Collection>  $dariUtang  kunci DO → potongan utang sopir untuk uang jalan DO itu (Pengalihan UJ)
+     */
+    private static function aturan(array $r, Collection $lain, Collection $jenisDt, array $pembuka = [], array $dariUtang = []): array
     {
         $t = [];
         $flag = function (string $kode, string $prioritas, string $pesan) use (&$t) {
@@ -233,9 +238,15 @@ class ValidasiUj
         // 3 · Total Uang Jalan per DO  &  2 · Frekuensi Uang Jalan per DO
         if ($kat === 'uj' && $r['do'] !== null) {
             $uj = $samaDo->where('jenisKat', 'uj');
-            $total = $uj->sum('nominal') + $r['nominal'];
+            $utang = $dariUtang[$r['do']] ?? collect();
+            $utangRp = (int) $utang->sum('nominal');
+            $sebutUtang = $utang->map(fn ($p) => rp((int) $p->nominal).' dari utang '.($p->sopir ?: $p->nama).' ('.$p->tanggal?->translatedFormat('j M').')')->implode('; ');
+            $total = $uj->sum('nominal') + $r['nominal'] + $utangRp;
             if ($total > self::MAKS_UJ_PER_DO) {
-                $flag('3', 'tinggi', 'Total Uang Jalan DO '.$r['doAsli'].' menjadi '.rp($total).' (> '.rp(self::MAKS_UJ_PER_DO).').'.($uj->isNotEmpty() ? ' Sudah ada: '.$daftar($uj).'.' : ''));
+                $flag('3', 'tinggi', 'Total Uang Jalan DO '.$r['doAsli'].' menjadi '.rp($total).' (> '.rp(self::MAKS_UJ_PER_DO).').'.($uj->isNotEmpty() ? ' Sudah ada: '.$daftar($uj).'.' : '')
+                    .($sebutUtang !== '' ? " Dipotong dari utang sopir: {$sebutUtang}." : ''));
+            } elseif ($sebutUtang !== '') {
+                $flag('S', 'info', 'DO '.$r['doAsli']." juga dibayar {$sebutUtang} lewat Pengalihan UJ — total uang jalan DO ini ".rp($total).' (tersambung lewat No DO).');
             }
             if ($uj->isNotEmpty()) {
                 $kurang = str_contains(strtolower($r['ket']), 'kekurangan');
@@ -328,6 +339,18 @@ class ValidasiUj
         }
 
         return $t;
+    }
+
+    /** @return array<string, Collection> kunci DO → potongan utang sopir manual untuk uang jalan DO itu (yang lewat Pengajuan UJ sudah ada di histori) */
+    private static function utangPerDo(Collection $kunci): array
+    {
+        if ($kunci->isEmpty()) {
+            return [];
+        }
+
+        return \App\Models\UjPengalihan::query()->where('jenis', 'pakai')->where('peruntukan', 'uj')->whereNull('uj_pengajuan_detail_id')
+            ->where(fn ($q) => $kunci->each(fn ($k) => $q->orWhere('no_do', 'like', '%'.$k)))->orderBy('tanggal')->get()->toBase()
+            ->groupBy(fn ($p) => self::kunciDo(str_replace(['`', "'"], '', (string) $p->no_do)))->only($kunci->all())->all();
     }
 
     /** Kategori yang mengikuti DO uang jalannya (aturan 19). Uang MOB tidak: MOB tidak memakai DO. */

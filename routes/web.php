@@ -165,6 +165,7 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/uj/pengalihan', [\App\Http\Controllers\PengalihanUjController::class, 'index'])->name('pengalihan-uj.index');
     Route::post('/uj/pengalihan', [\App\Http\Controllers\PengalihanUjController::class, 'simpan'])->name('pengalihan-uj.simpan');
     Route::post('/uj/pengalihan/pakai', [\App\Http\Controllers\PengalihanUjController::class, 'pakai'])->name('pengalihan-uj.pakai');
+    Route::post('/uj/pengalihan/kasbon', [\App\Http\Controllers\PengalihanUjController::class, 'kasbon'])->name('pengalihan-uj.kasbon');
     Route::post('/uj/pengalihan/sopir', [\App\Http\Controllers\PengalihanUjController::class, 'sopir'])->name('pengalihan-uj.sopir');
     Route::delete('/uj/pengalihan/{pengalihan}', [\App\Http\Controllers\PengalihanUjController::class, 'hapus'])->whereNumber('pengalihan')->name('pengalihan-uj.hapus');
     Route::get('/uj/pengajuan', [PengajuanUjController::class, 'daftar'])->name('pengajuan-uj.daftar');

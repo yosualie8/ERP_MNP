@@ -405,7 +405,7 @@ class AlatMnp
     {
         $semua = \App\Support\SaldoSopir::perSopir();
         $tahap = \App\Models\ProyekTahap::pluck('nama', 'id');
-        $ringkas = fn ($s) => ['sopir' => $s['sopir'], 'truk' => $s['mobil'], 'dijadikan_saldo' => (int) $s['alih'], 'jumlah_uj' => $s['n_alih'], 'terpakai_do_lama' => (int) $s['terpakai_do'],
+        $ringkas = fn ($s) => ['sopir' => $s['sopir'], 'truk' => $s['mobil'], 'dijadikan_saldo' => (int) $s['alih'], 'jumlah_uj' => $s['n_alih'], 'kasbon' => (int) $s['kasbon'], 'terpakai_do_lama' => (int) $s['terpakai_do'],
             'dipotong_atau_dipakai' => (int) $s['dipakai'], 'dikembalikan' => (int) $s['kembali'], 'tidak_kembali' => (int) $s['hangus'], 'sisa_saldo' => (int) $s['saldo'],
             'umur_hari' => $s['umur'], 'status' => $s['status']];
         if ($n = \App\Support\SaldoSopir::kunci($a['sopir'] ?? null)) {
@@ -417,6 +417,7 @@ class AlatMnp
             return [...$ringkas($s),
                 'uj_dijadikan_saldo' => $s['uj']->map(fn ($x) => ['id_uj' => $x->p->id_uj, 'tanggal' => $x->p->tanggal?->toDateString(), 'no_do' => $x->no_do, 'nominal' => (int) $x->p->nominal,
                     'proyek_asal' => $x->p->dari?->nama, 'do_lama_bongkar' => $x->bongkar ? $x->bongkar->tanggal->toDateString().' di '.($tahap[$x->tahap_bongkar] ?? $x->bongkar->tahap) : null])->values(),
+                'kasbon_rinci' => $s['kasbon_rows']->map(fn ($p) => ['tanggal' => $p->tanggal?->toDateString(), 'nominal' => (int) $p->nominal, 'no_id_kas_harian' => $p->kas_no_id, 'keterangan' => $p->keterangan])->values(),
                 'pemakaian' => $s['pakai_rows']->map(fn ($p) => ['tanggal' => $p->tanggal?->toDateString(), 'cara' => \App\Models\UjPengalihan::PERUNTUKAN[$p->peruntukan] ?? $p->peruntukan,
                     'nominal' => (int) $p->nominal, 'no_do' => $p->no_do, 'keterangan' => $p->keterangan,
                     'proyek' => ($t = \App\Support\SaldoSopir::tahapPakai($p)) ? ($tahap[$t] ?? null) : null])->values()];

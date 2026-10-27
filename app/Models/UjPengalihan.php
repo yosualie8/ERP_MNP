@@ -11,30 +11,38 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *              (masa tunggu) sampai terpakai;
  *  - kembali : UJ dikembalikan sopir → keluar dari biaya proyek asal;
  *  - batal   : UJ ditutup tanpa bongkar dengan alasan → tetap biaya proyek asal, tidak lagi "belum bongkar";
- *  - pakai   : saldo sopir berkurang — dipakai (Uang MOB / UJ lewat Pengajuan UJ / lain: biaya proyek tempat dipakai),
- *              dikembalikan sopir (bukan biaya), atau tidak kembali (dibebankan ke proyek asal).
+ *  - kasbon  : kasbon sopir dari Kas Harian (Kode GL Piutang Karyawan, owner 27 Okt 2026) → utang sopir bertambah; kas_no_id = NO ID bon-nya
+ *              (satu bon boleh dibagi ke beberapa sopir). Bukan biaya proyek (piutang);
+ *  - pakai   : utang / saldo sopir berkurang — uang jalan DO baru (no_do; boleh sebagian, sisanya transfer di Kas UJ ber-DO sama),
+ *              Uang MOB / lain (biaya proyek tempat dipakai), potong gaji / UM, dikembalikan, sudah dicicil sebelum dicatat (bukan biaya),
+ *              atau tidak kembali (dibebankan ke proyek).
  */
 class UjPengalihan extends Model
 {
     protected $table = 'uj_pengalihan';
 
-    protected $fillable = ['jenis', 'id_uj', 'no_do', 'no_mobil', 'nama', 'sopir', 'dari_tahap_id', 'ke_tahap_id', 'tanggal', 'nominal', 'peruntukan', 'uj_pengajuan_detail_id', 'keterangan', 'user_id'];
+    protected $fillable = ['jenis', 'id_uj', 'no_do', 'no_mobil', 'nama', 'sopir', 'dari_tahap_id', 'ke_tahap_id', 'tanggal', 'nominal', 'peruntukan', 'uj_pengajuan_detail_id',
+        'kas_no_id', 'keterangan', 'user_id'];
 
     protected $casts = ['tanggal' => 'date', 'nominal' => 'float'];
 
-    public const JENIS = ['alih' => 'Jadi saldo sopir', 'kembali' => 'Dikembalikan', 'batal' => 'Batal (tidak bongkar)', 'pakai' => 'Saldo berkurang'];
+    public const JENIS = ['alih' => 'Jadi saldo sopir', 'kasbon' => 'Kasbon (Kas Harian)', 'kembali' => 'Dikembalikan', 'batal' => 'Batal (tidak bongkar)', 'pakai' => 'Saldo berkurang'];
 
     /** Jenis yang menutup UJ asalnya (tidak lagi "belum bongkar"). */
     public const MENUTUP = ['alih', 'kembali', 'batal'];
 
-    /** Cara saldo sopir berkurang (jenis "pakai"). */
+    /** Jenis yang menambah utang / saldo sopir. */
+    public const NAMBAH = ['alih', 'kasbon'];
+
+    /** Cara utang / saldo sopir berkurang (jenis "pakai"). */
     public const PERUNTUKAN = [
-        'uj' => 'Dipotong di Pengajuan UJ', 'mob' => 'Uang MOB (pindah lokasi)', 'lain' => 'Dipakai lain-lain',
-        'kembali' => 'Dikembalikan sopir (transfer balik)', 'hangus' => 'Tidak kembali (dibebankan ke proyek asal)',
+        'uj' => 'Uang jalan DO baru', 'mob' => 'Uang MOB (pindah lokasi)', 'gaji' => 'Potong gaji / UM mingguan',
+        'kembali' => 'Dikembalikan sopir (transfer balik)', 'sebelum' => 'Sudah dicicil sebelum dicatat', 'lain' => 'Dipakai lain-lain',
+        'hangus' => 'Tidak kembali (dibebankan ke proyek)',
     ];
 
-    /** Peruntukan yang bukan biaya proyek. */
-    public const BUKAN_BIAYA = ['kembali'];
+    /** Peruntukan yang bukan biaya proyek (uangnya kembali ke PT). */
+    public const BUKAN_BIAYA = ['kembali', 'gaji', 'sebelum'];
 
     public function dari(): BelongsTo
     {

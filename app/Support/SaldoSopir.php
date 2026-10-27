@@ -15,7 +15,8 @@ use Illuminate\Support\Collection;
  *  - dipotong di Pengajuan UJ (jumlah per transaksi ditentukan admin) → biaya proyek UJ itu (DO bongkar di mana / kata kunci keterangan, sama seperti UJ biasa);
  *  - dipakai manual (Uang MOB / lain) → proyek dipilih saat dicatat;
  *  - dikembalikan sopir → bukan biaya; tidak kembali → dibebankan ke proyek asal.
- * Saldo = dijadikan saldo − terpakai lewat DO lama − berkurang (pakai). Umur = hari sejak UJ tertua yang saldonya belum terpakai (FIFO).
+ * Saldo = dijadikan saldo + kasbon (Kas Harian) − terpakai lewat DO lama − berkurang (pakai). Umur = hari sejak UJ tertua yang saldonya belum terpakai (FIFO).
+ * Owner 27 Okt 2026: saldo & kasbon = satu buku UTANG SOPIR (uang PT di tangan sopir) — ➕ nambah utang / ➖ potong utang di menu Pengalihan UJ.
  */
 class SaldoSopir
 {
@@ -76,7 +77,7 @@ class SaldoSopir
         if (self::$cache !== null) {
             return self::$cache;
         }
-        $semua = UjPengalihan::with(['dari', 'ke'])->whereIn('jenis', ['alih', 'pakai'])->orderBy('tanggal')->orderBy('id')->get();
+        $semua = UjPengalihan::with(['dari', 'ke'])->whereIn('jenis', ['alih', 'kasbon', 'pakai'])->orderBy('tanggal')->orderBy('id')->get();
         $uj = UjDetail::whereIn('id_uj', $semua->where('jenis', 'alih')->pluck('id_uj')->filter())->get(['id_uj', 'no_do', 'tanggal', 'keterangan', 'kategori'])->keyBy('id_uj');
         $rit = self::ritDo();
         $hariIni = now()->startOfDay();
@@ -91,34 +92,40 @@ class SaldoSopir
                     'tahap_bongkar' => $bongkar ? DaftarProyek::tahapId('ritasi', $bongkar->tahap) : null];
             })->values();
             $pakai = $g->where('jenis', 'pakai')->values();
+            $kasbon = $g->where('jenis', 'kasbon')->values();
             $alih = (float) $baris->sum(fn ($x) => $x->p->nominal);
+            $kasbonRp = (float) $kasbon->sum('nominal');
             $terpakai = (float) $baris->filter(fn ($x) => $x->bongkar)->sum(fn ($x) => $x->p->nominal);
             $per = fn (array $jenis) => (float) $pakai->whereIn('peruntukan', $jenis)->sum('nominal');
             $pakaiRp = (float) $pakai->sum('nominal');
-            $saldo = round($alih - $terpakai - $pakaiRp, 2);
+            $saldo = round($alih + $kasbonRp - $terpakai - $pakaiRp, 2);
 
-            // Umur (FIFO): pemakaian menghabiskan UJ tertua dulu; UJ tertua yang masih bersisa = awal masa tunggu.
+            // Umur (FIFO): pemakaian menghabiskan utang tertua dulu (UJ jadi saldo & kasbon); yang tertua masih bersisa = awal masa tunggu.
+            // Kasbon memang dicicil lama → bila yang tersisa kasbon, status "kasbon" (tanpa warna umur).
             $sejak = null;
+            $sisaKasbon = false;
             if ($saldo > 0.5) {
                 $sisaPakai = $pakaiRp;
-                foreach ($baris->reject(fn ($x) => $x->bongkar)->sortBy(fn ($x) => $x->p->tanggal->format('Ymd').sprintf('%08d', $x->p->id)) as $x) {
-                    if ($sisaPakai + 0.5 >= $x->p->nominal) {
-                        $sisaPakai -= $x->p->nominal;
+                $antre = $baris->reject(fn ($x) => $x->bongkar)->map(fn ($x) => $x->p)->concat($kasbon)->sortBy(fn ($p) => $p->tanggal->format('Ymd').sprintf('%08d', $p->id));
+                foreach ($antre as $p) {
+                    if ($sisaPakai + 0.5 >= $p->nominal) {
+                        $sisaPakai -= $p->nominal;
 
                         continue;
                     }
-                    $sejak = $x->p->tanggal;
+                    $sisaKasbon = $p->jenis === 'kasbon';
+                    $sejak = $sisaKasbon ? null : $p->tanggal;
                     break;
                 }
             }
             $umur = $sejak ? (int) $sejak->copy()->startOfDay()->diffInDays($hariIni) : null;
 
             return ['sopir' => (string) $sopir, 'mobil' => $g->pluck('no_mobil')->filter(fn ($m) => $m && $m !== '-')->reverse()->unique()->values()->all(),
-                'alih' => $alih, 'n_alih' => $baris->count(), 'terpakai_do' => $terpakai,
-                'dipakai' => $per(['uj', 'mob', 'lain']), 'kembali' => $per(['kembali']), 'hangus' => $per(['hangus']), 'pakai' => $pakaiRp, 'saldo' => $saldo,
+                'alih' => $alih, 'n_alih' => $baris->count(), 'kasbon' => $kasbonRp, 'terpakai_do' => $terpakai,
+                'dipakai' => $per(['uj', 'mob', 'lain']), 'kembali' => $per(['kembali', 'gaji', 'sebelum']), 'hangus' => $per(['hangus']), 'pakai' => $pakaiRp, 'saldo' => $saldo,
                 'umur' => $umur, 'sejak' => $sejak,
-                'status' => $saldo <= 0.5 ? 'habis' : ($umur > self::MERAH ? 'merah' : ($umur > self::KUNING ? 'kuning' : 'baru')),
-                'uj' => $baris, 'pakai_rows' => $pakai, 'terakhir' => $g->max('tanggal')];
+                'status' => $saldo <= 0.5 ? 'habis' : ($sisaKasbon ? 'kasbon' : ($umur > self::MERAH ? 'merah' : ($umur > self::KUNING ? 'kuning' : 'baru'))),
+                'uj' => $baris, 'kasbon_rows' => $kasbon, 'pakai_rows' => $pakai, 'terakhir' => $g->max('tanggal')];
         });
 
         return self::$cache = $hasil;
