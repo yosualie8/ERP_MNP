@@ -29,10 +29,11 @@
         table.bon input[data-nama]:focus { background: var(--isian-fokus); }
         .form-kas input.otomatis { background: var(--otomatis-latar); border-color: var(--otomatis-garis); }
         /* Saran Kategori dari Keterangan (seperti saran Kode GL di Input Kas). */
-        .saran-kode { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
-        .saran-kode button { border: 1px solid var(--garis-kuat); background: var(--kartu-2); border-radius: 999px; padding: 1px 8px; font-size: 11px; color: var(--redup); cursor: pointer; }
-        .saran-kode button:hover { border-color: var(--aksen); color: var(--teks); }
-        .saran-kode button.dipilih { background: var(--aksen-muda); border-color: var(--aksen); color: var(--aksen-terang); }
+        /* Pilihan No DO = DO uang jalan DT itu (aturan 19: transaksi lanjutan memakai DO uang jalannya, tidak diketik ulang). */
+        .saran-kode, .saran-do { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
+        .saran-kode button, .saran-do button { border: 1px solid var(--garis-kuat); background: var(--kartu-2); border-radius: 999px; padding: 1px 8px; font-size: 11px; color: var(--redup); cursor: pointer; }
+        .saran-kode button:hover, .saran-do button:hover { border-color: var(--aksen); color: var(--teks); }
+        .saran-kode button.dipilih, .saran-do button.dipilih { background: var(--aksen-muda); border-color: var(--aksen); color: var(--aksen-terang); }
         .baris2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px; }
         table.bon td { padding: 4px; vertical-align: top; border-bottom: 0; }
         table.bon th { padding: 4px; }
@@ -357,7 +358,7 @@
             <td><input type="text" data-nama="kategori" list="daftar-kategori" autocomplete="off" required><div class="saran-kode"></div></td>
             <td><input type="text" data-nama="no_mobil" list="daftar-mobil" autocomplete="off"></td>
             <td><input type="text" data-nama="jenis_kendaraan" list="daftar-jenis" autocomplete="off"></td>
-            <td><input type="text" data-nama="no_do" autocomplete="off"></td>
+            <td><input type="text" data-nama="no_do" autocomplete="off"><div class="saran-do"></div></td>
             <td><button type="button" class="hapus" title="Hapus baris detail">×</button></td>
         </tr>
     </template>
@@ -1258,7 +1259,8 @@
                     t.innerHTML = `<td colspan="8"><div class="temuan">
                         <div class="judul-temuan">⚠ Baris ${i + 1} kena FLAG validasi (${daftarT.length}) — periksa, perbaiki bila salah, atau tulis konfirmasi bila memang valid</div>
                         <ul>${daftarT.map(x => `<li><span class="prioritas ${x.prioritas}">${x.prioritas}</span> <span class="aturan">${x.tautan ? 'Pengajuan' : 'Aturan ' + esc2(x.kode)}</span> ${esc2(x.pesan)}
-                            ${x.tautan ? `<button type="button" class="tombol tautkan" data-id="${x.tautan.id}" data-kode="${esc2(x.tautan.kode)}" style="padding: 3px 10px; font-size: 12px; margin-left: 6px;">🔗 Tautkan ke ${esc2(x.tautan.kode)}</button>` : ''}</li>`).join('')}</ul>
+                            ${x.tautan ? `<button type="button" class="tombol tautkan" data-id="${x.tautan.id}" data-kode="${esc2(x.tautan.kode)}" style="padding: 3px 10px; font-size: 12px; margin-left: 6px;">🔗 Tautkan ke ${esc2(x.tautan.kode)}</button>` : ''}
+                            ${(x.saran || []).map(s => `<button type="button" class="tombol pakai-do" data-do="${esc2(s.no_do)}" style="padding: 3px 10px; font-size: 12px; margin-left: 6px;">Pakai DO ${esc2(s.no_do)}</button>`).join('')}</li>`).join('')}</ul>
                         <label>Konfirmasi admin <span class="redup">(wajib, min. ${MIN_KONFIRMASI} karakter — mis. "Kekurangan UJ karena rute dialihkan", "Ganti driver, Sule sakit")</span>
                             <input type="text" data-konfirmasi maxlength="1000" autocomplete="off"></label>
                         <div class="status-konf"></div></div></td>`;
@@ -1276,6 +1278,8 @@
                         tr.title = 'Dari pengajuan ' + btn.dataset.kode;
                         urutkanNama(); tampilModePj?.(); evaluasi();
                     }));
+                    // Aturan 19: DO tanpa Uang Jalan → ganti No DO baris ini dengan DO uang jalan yang disarankan.
+                    t.querySelectorAll('button.pakai-do').forEach(btn => btn.addEventListener('click', () => isiDo(tr, btn.dataset.do)));
                     (tr.duluanEl ?? tr.kurangEl ?? tr).after(t);
                     tr.temuan = t;
                     tr.classList.add('ber-flag');
@@ -1446,7 +1450,28 @@
                 const konfOk = (!k || k.value.trim().length >= MIN_KONFIRMASI) && (!a || a.value.trim().length >= MIN_KONFIRMASI);
                 tr.classList.toggle('valid', sudahDiperiksa && !tr.kurang?.length && konfOk);
             });
+            // No DO transaksi lanjutan (bukan Uang Jalan / Uang MOB): pilih dari DO uang jalan DT itu 14 hari terakhir, tidak perlu diketik ulang.
+            const DO_DT = @json($doDt ?? []);
+            const isiDo = (tr, nomor) => {
+                const inp = tr.querySelector('[data-nama=no_do]');
+                inp.value = nomor;
+                inp.dispatchEvent(new Event('input', {bubbles: true}));
+                evaluasi();
+            };
+            const aturSaranDo = tr => {
+                const kotak = tr.querySelector('.saran-do');
+                if (!kotak) return;
+                const kat = tr.querySelector('[data-nama=kategori]').value.toLowerCase();
+                const daftarDo = /jalan|\bmob\b|mobilisasi/.test(kat) || !kat ? [] : (DO_DT[kunciMobil(tr.querySelector('[data-nama=no_mobil]').value)] || []);
+                const kini = kunciDo(tr.querySelector('[data-nama=no_do]').value);
+                const kunciKotak = daftarDo.map(d => d.do).join(',') + '|' + kini;
+                if (kotak.dataset.kunci === kunciKotak) return;
+                kotak.dataset.kunci = kunciKotak;
+                kotak.innerHTML = daftarDo.map(d => `<button type="button" data-do="${esc2(d.do)}" class="${kunciDo(d.do) === kini ? 'dipilih' : ''}" title="Uang Jalan ${esc2(d.id || '')} · ${esc2(d.tgl || '')}">${esc2(d.do)} · ${esc2(d.tgl || '')}</button>`).join('');
+                kotak.querySelectorAll('button').forEach(b => b.addEventListener('click', () => isiDo(tr, b.dataset.do)));
+            };
             const evaluasi = (bolehPeriksa = true) => {
+                barisDetail().forEach(aturSaranDo);
                 const isian = cekIsian();
                 const kunci = kunciIsi();
                 const sudahDiperiksa = diperiksa === kunci;

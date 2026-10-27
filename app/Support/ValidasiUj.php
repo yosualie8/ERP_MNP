@@ -9,7 +9,8 @@ use Illuminate\Support\Collection;
 
 /**
  * Pemeriksaan transaksi uang jalan sesuai "Standar Aturan Validasi Kas Uang Jalan" (Downloads, 7 Okt 2026).
- * Setiap baris detail yang diinput dibandingkan dengan histori Kas Seabank 30 hari dan baris lain di input yang sama.
+ * Setiap baris detail yang diinput dibandingkan dengan histori Kas Seabank 30 hari dan baris lain di input yang sama
+ * (aturan 19 "DO tanpa Uang Jalan": seluruh histori, owner 27 Okt 2026).
  * Hasilnya FLAG = perlu diverifikasi admin (bukan vonis salah); admin wajib menulis konfirmasi untuk baris ber-FLAG.
  * Urutan lapisan: kelengkapan/format → nominal → frekuensi per DO → duplikasi → konsistensi DO/DT/driver/tanggal/keterangan.
  */
@@ -91,12 +92,24 @@ class ValidasiUj
             ->selectRaw('no_mobil, jenis_kendaraan, COUNT(*) as n')->groupBy('no_mobil', 'jenis_kendaraan')->get()
             ->groupBy('no_mobil')->map(fn ($g) => $g->sortByDesc('n')->first()->jenis_kendaraan);
 
+        // Aturan 19: Uang Jalan = transaksi pertama sebuah DO — dicari di SELURUH histori + semua baris input ini (di atas/bawahnya).
+        $barisInput = [];
+        foreach ($input['detail'] as $i => $d) {
+            $barisInput[$i] = self::baris('baris '.($i + 1).' input ini', $tgl, $i === 0 ? ($d['nama'] ?: $input['nama']) : $d['nama'], $d['keterangan'], (int) $d['nominal'],
+                $d['kategori'], $d['jenis_kendaraan'], $d['no_mobil'], $d['no_do']);
+        }
+        $pembuka = self::ujPerDo($kecualiTransaksi, collect($barisInput)->filter(fn ($r) => $r['do'] !== null && self::ikutDo($r['kategori'])), $tgl);
+        foreach ($barisInput as $r) {
+            if ($r['jenisKat'] === 'uj' && $r['do'] !== null) {
+                $pembuka[$r['do']][] = ['id' => $r['id'], 'tanggal' => $tgl, 'mobil' => $r['mobil'], 'nama' => $r['nama'], 'doAsli' => $r['doAsli']];
+            }
+        }
+
         $temuan = [];
         $sebelumnya = collect();
         // Indeks dipertahankan (bisa berlubang bila baris yang belum lengkap tidak ikut diperiksa).
         foreach ($input['detail'] as $i => $d) {
-            $nama = $i === 0 ? ($d['nama'] ?: $input['nama']) : $d['nama'];
-            $r = self::baris('baris '.($i + 1).' input ini', $tgl, $nama, $d['keterangan'], (int) $d['nominal'], $d['kategori'], $d['jenis_kendaraan'], $d['no_mobil'], $d['no_do']);
+            $r = $barisInput[$i];
             $pembanding = $histori->concat($sebelumnya);
             $tautan = [];
             if ($tawarkanTautan && $r['do'] !== null) {
@@ -147,7 +160,7 @@ class ValidasiUj
                     .(($do = $lain->pluck('no_do')->filter()->unique())->isNotEmpty() ? ', DO '.$do->implode(', ') : '').'). Pengajuan cukup sekali sehari — tambahkan lewat Edit '
                     .$kode.'. Bila memang perlu pengajuan terpisah (mis. tujuan buangan lain), tulis alasannya.'];
             }
-            $temuan[$i] = [...$tautan, ...self::aturan($r, $pembanding, $jenisDt), ...($tanyaDuluan ? self::ujTerbuka($r) : [])];
+            $temuan[$i] = [...$tautan, ...self::aturan($r, $pembanding, $jenisDt, $pembuka), ...($tanyaDuluan ? self::ujTerbuka($r) : [])];
             $sebelumnya->push($r);
         }
 
@@ -176,7 +189,8 @@ class ValidasiUj
         return $aset ??= \App\Models\AsetTruk::truk()->pluck('status', 'no_lambung')->all();
     }
 
-    private static function aturan(array $r, Collection $lain, Collection $jenisDt): array
+    /** @param  array<string, array<int, array>>  $pembuka  kunci DO → Uang Jalan ber-DO itu (seluruh histori + input ini) */
+    private static function aturan(array $r, Collection $lain, Collection $jenisDt, array $pembuka = []): array
     {
         $t = [];
         $flag = function (string $kode, string $prioritas, string $pesan) use (&$t) {
@@ -208,6 +222,12 @@ class ValidasiUj
         }
         if ($r['doAsli'] !== '' && ! preg_match('/^\d+$/', $r['doAsli'])) {
             $flag('17', 'rendah', "Format No DO \"{$r['doAsli']}\" tidak normal (seharusnya angka saja).");
+        }
+
+        // 21 · Uang MOB = pergeseran DT tanpa muatan → tidak ada bongkaran, jadi tidak memakai No DO (owner 27 Okt 2026).
+        if ($r['do'] !== null && self::mob($r['kategori'])) {
+            $flag('21', 'sedang', 'Uang MOB adalah pergeseran DT tanpa muatan, jadi tidak memakai No DO. Kosongkan No DO '.$r['doAsli']
+                .' — DO baru dipakai mulai Uang Jalan rit berikutnya.');
         }
 
         // 3 · Total Uang Jalan per DO  &  2 · Frekuensi Uang Jalan per DO
@@ -266,8 +286,8 @@ class ValidasiUj
         // 10, 11, 14, 19, 20 · Konsistensi terhadap UJ utama DO yang sama
         if ($r['do'] !== null) {
             $utama = $samaDo->where('jenisKat', 'uj')->first();
-            if ($kat !== 'uj' && in_array($kat, ['ut', 'um', 'pr', 'sp'], true) && ! $utama) {
-                $flag('19', 'sedang', 'Belum ditemukan Uang Jalan utama untuk DO '.$r['doAsli'].' dalam '.self::HARI.' hari — transaksi tambahan harus terkait ke UJ/DO dasarnya.');
+            if (self::ikutDo($r['kategori']) && ! $utama && empty($pembuka[$r['do']])) {
+                $t[] = self::tanpaUangJalan($r, $lain, $pembuka);
             }
             $acuan = $utama ?? $samaDo->first();
             if ($acuan && $r['namaK'] && $acuan['namaK'] && $acuan['namaK'] !== $r['namaK']) {
@@ -308,6 +328,101 @@ class ValidasiUj
         }
 
         return $t;
+    }
+
+    /** Kategori yang mengikuti DO uang jalannya (aturan 19). Uang MOB tidak: MOB tidak memakai DO. */
+    private static function ikutDo(?string $kategori): bool
+    {
+        return in_array(self::jenisKategori($kategori), ['ut', 'um', 'pr', 'sp'], true) || (bool) preg_match('/material|geser/i', (string) $kategori);
+    }
+
+    private static function mob(?string $kategori): bool
+    {
+        return (bool) preg_match('/\bmob\b|mobilisasi/i', (string) $kategori);
+    }
+
+    /**
+     * Uang Jalan per kunci DO (tanpa transaksi yang sedang diedit), hanya yang perlu: DO baris lanjutan yang diinput (seluruh histori)
+     * dan Uang Jalan DT-nya ±7 hari (calon saran DO).
+     */
+    private static function ujPerDo(?int $kecualiTransaksi, Collection $lanjutan, CarbonInterface $tgl): array
+    {
+        if ($lanjutan->isEmpty()) {
+            return [];
+        }
+        $hasil = [];
+        UjDetail::query()->where('biaya_transfer', false)->where('kategori', 'like', '%jalan%')->whereNotNull('no_do')->where('no_do', '!=', '')
+            ->when($kecualiTransaksi, fn ($q) => $q->where('uj_transaksi_id', '!=', $kecualiTransaksi))
+            ->where(function ($q) use ($lanjutan, $tgl) {
+                foreach ($lanjutan->pluck('do')->unique() as $k) {
+                    $q->orWhere('no_do', 'like', '%'.$k);
+                }
+                if ($mobil = $lanjutan->pluck('mobil')->filter()->unique()->values()->all()) {
+                    $q->orWhere(fn ($w) => $w->whereIn('no_mobil', $mobil)->whereBetween('tanggal', [$tgl->copy()->subDays(7)->toDateString(), $tgl->copy()->addDays(7)->toDateString()]));
+                }
+            })
+            ->get(['id_uj', 'tanggal', 'nama', 'no_mobil', 'no_do'])
+            ->each(function (UjDetail $d) use (&$hasil) {
+                if ($k = self::kunciDo(str_replace(['`', "'"], '', (string) $d->no_do))) {
+                    $hasil[$k][] = ['id' => $d->id_uj, 'tanggal' => $d->tanggal ? Carbon::parse($d->tanggal) : null, 'mobil' => NomorMobil::rapikan($d->no_mobil),
+                        'nama' => trim((string) $d->nama), 'doAsli' => trim(str_replace(['`', "'"], '', (string) $d->no_do))];
+                }
+            });
+
+        return $hasil;
+    }
+
+    /**
+     * Aturan 19: DO transaksi lanjutan belum punya Uang Jalan. Uang Jalan DT yang sama ±7 hari dengan nomor mirip (dua angka bersebelahan
+     * tertukar / beda satu angka) disarankan sebagai DO yang benar (tombol "Pakai DO"), mis. 15139 → 15193, 15742 ↔ 15472.
+     */
+    private static function tanpaUangJalan(array $r, Collection $lain, array $pembuka): array
+    {
+        $kat = strtolower($r['kategori']);
+        // Uang Tanah / Perangsang / Uang Material normalnya sekali per DO: DO yang sudah punya kategori itu tidak disarankan.
+        $sekali = in_array($r['jenisKat'], ['ut', 'pr'], true) || str_contains($kat, 'material');
+        $calon = collect($pembuka)->flatMap(fn ($daftar, $k) => collect($daftar)->map(fn ($x) => [...$x, 'k' => (string) $k]))
+            ->filter(fn ($x) => $r['mobil'] && $x['mobil'] === $r['mobil'] && $x['tanggal'] && $r['tanggal'] && abs($x['tanggal']->diffInDays($r['tanggal'], false)) <= 7)
+            ->reject(fn ($x) => $sekali && $lain->contains(fn ($y) => $y['do'] === $x['k'] && strtolower($y['kategori']) === $kat))
+            ->unique('k')
+            ->map(fn ($x) => [...$x, 'mirip' => self::mirip($r['do'], $x['k']), 'jarak' => abs($x['tanggal']->diffInDays($r['tanggal'], false))]);
+        $mirip = $calon->whereNotNull('mirip')->sortBy([['mirip', 'asc'], ['jarak', 'asc']])->take(3)->values();
+        $sebut = fn ($x) => "DO {$x['doAsli']} ({$x['id']}, ".$x['tanggal']->translatedFormat('j M').($x['nama'] ? ", {$x['nama']}" : '').')';
+        $saran = fn (Collection $c) => $c->map(fn ($x) => ['no_do' => $x['doAsli'], 'id' => $x['id']])->all();
+        if ($mirip->isNotEmpty()) {
+            return ['kode' => '19', 'prioritas' => 'tinggi', 'saran' => $saran($mirip),
+                'pesan' => "DO {$r['doAsli']} belum punya Uang Jalan (dicari di seluruh histori). Kemungkinan salah ketik — Uang Jalan {$r['mobil']} dengan nomor mirip: "
+                    .$mirip->map($sebut)->implode('; ').'. Bila DO yang benar itu, klik "Pakai DO". Bila justru DO di uang jalan itu yang salah ketik, perbaiki uang jalannya.'];
+        }
+        $dekat = $calon->sortBy('jarak')->take(3)->values();
+
+        return ['kode' => '19', 'prioritas' => 'sedang', 'saran' => $saran($dekat),
+            'pesan' => "DO {$r['doAsli']} belum punya Uang Jalan (dicari di seluruh histori) — transaksi lanjutan harus memakai DO uang jalannya."
+                .($dekat->isNotEmpty() ? " Uang Jalan {$r['mobil']} ±7 hari: ".$dekat->map($sebut)->implode('; ').'.' : '')];
+    }
+
+    /** 0 = dua angka bersebelahan tertukar, 1 = beda / kurang / lebih satu angka, null = tidak mirip. Hanya DO ≥ 4 angka. */
+    private static function mirip(string $a, string $b): ?int
+    {
+        if ($a === $b || strlen($a) < 4 || strlen($b) < 4 || ! ctype_digit($a.$b) || abs(strlen($a) - strlen($b)) > 1) {
+            return null;
+        }
+        if (strlen($a) === strlen($b)) {
+            $beda = array_keys(array_diff_assoc(str_split($a), str_split($b)));
+            if (count($beda) === 2 && $beda[1] === $beda[0] + 1 && $a[$beda[0]] === $b[$beda[1]] && $a[$beda[1]] === $b[$beda[0]]) {
+                return 0;
+            }
+
+            return count($beda) === 1 ? 1 : null;
+        }
+        [$pendek, $panjang] = strlen($a) < strlen($b) ? [$a, $b] : [$b, $a];
+        for ($i = 0; $i < strlen($panjang); $i++) {
+            if (substr($panjang, 0, $i).substr($panjang, $i + 1) === $pendek) {
+                return 1;
+            }
+        }
+
+        return null;
     }
 
     public static function jenisKategori(?string $kategori): string

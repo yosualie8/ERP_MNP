@@ -123,6 +123,8 @@ class UjController extends Controller
             // Pengajuan UJ: saldo per SOPIR (UJ yang dijadikan saldo, belum terpakai) dipotong otomatis; DO lama tidak boleh dipotong lagi
             'saldoSopir' => \App\Support\SaldoSopir::perSopir()->map(fn ($s) => (int) round($s['saldo']))->filter(fn ($v) => $v > 0)->all(),
             'doLamaSopir' => \App\Support\SaldoSopir::doLama(),
+            // DO uang jalan per DT 14 hari terakhir: pilihan sekali klik di kolom No DO, supaya DO tidak diketik ulang (owner 27 Okt 2026).
+            'doDt' => $this->doPerDt(),
             // Input UJ: detail pengajuan yang menunggu realisasi — No DO + Kategori diketik/ditempel → kolom lain terisi & tertaut otomatis.
             'pjMenunggu' => $this->tawarkanTautan() ? $this->pengajuanMenunggu() : [],
             ...$this->dariPengajuan(),
@@ -515,6 +517,18 @@ class UjController extends Controller
     }
 
     /** Catat temuan + konfirmasi admin per ID UJ (bahan Review Admin). */
+    /** @return array<string, array<int, array{do: string, tgl: ?string, id: ?string}>> DT → DO uang jalan terbaru (maks. 6) */
+    private function doPerDt(): array
+    {
+        return UjDetail::where('tanggal', '>=', now()->subDays(14)->toDateString())->where('biaya_transfer', false)->where('kategori', 'like', '%jalan%')
+            ->whereNotNull('no_do')->where('no_do', '!=', '')->whereNotNull('no_mobil')
+            ->orderByDesc('tanggal')->orderByDesc('baris')->get(['id_uj', 'tanggal', 'no_mobil', 'no_do'])
+            ->groupBy(fn ($d) => NomorMobil::rapikan($d->no_mobil))
+            ->map(fn ($g) => $g->unique(fn ($d) => trim(str_replace(['`', "'"], '', $d->no_do)))->take(6)
+                ->map(fn ($d) => ['do' => trim(str_replace(['`', "'"], '', $d->no_do)), 'tgl' => $d->tanggal?->translatedFormat('j M'), 'id' => $d->id_uj])->values())
+            ->all();
+    }
+
     private function catatTemuan(array $temuan, array $input, array $ids, int $userId): void
     {
         UjTemuan::whereIn('id_uj', array_map(fn ($n) => 'UJ-'.$n, $ids))->delete();
