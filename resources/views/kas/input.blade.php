@@ -292,11 +292,12 @@
             const templat = document.getElementById('templat-bon');
             const fmt = n => new Intl.NumberFormat('id-ID').format(n || 0);
             // Nominal ditampilkan bertitik ribuan saat diketik (50000 → 50.000); server membuang titiknya lagi.
-            const angka = v => parseInt(String(v ?? '').replace(/\D/g, ''), 10) || 0;
+            // Hanya baris potongan reimburse Kas UJ (data-negatif) yang bernominal minus.
+            const angka = v => (/^\s*-/.test(String(v ?? '')) ? -1 : 1) * (parseInt(String(v ?? '').replace(/\D/g, ''), 10) || 0);
             const rapikanRupiah = el => {
                 const digitSebelumKursor = el.value.slice(0, el.selectionStart ?? el.value.length).replace(/\D/g, '').length;
                 const digit = el.value.replace(/\D/g, '').replace(/^0+(?=\d)/, '');
-                el.value = digit ? fmt(+digit) : '';
+                el.value = digit ? (el.dataset.negatif === '1' ? '-' : '') + fmt(+digit) : '';
                 if (document.activeElement === el) {
                     let pos = 0, hitungDigit = 0;
                     while (pos < el.value.length && hitungDigit < digitSebelumKursor) {
@@ -343,6 +344,10 @@
                 const tr = templat.content.firstElementChild.cloneNode(true);
                 tr.querySelectorAll('[data-nama]').forEach(el => el.value = isi[el.dataset.nama] ?? '');
                 tr.querySelector('.uj-kunci').value = isi.uj ?? '';
+                if (String(isi.uj ?? '').startsWith('potongan:')) {
+                    const n = tr.querySelector('[data-nama=nominal]');
+                    n.dataset.negatif = '1'; n.readOnly = true; n.title = 'Potongan kelebihan reimburse Kas UJ sebelumnya';
+                }
                 tr.querySelectorAll('input.rupiah').forEach(rapikanRupiah);
                 tr.querySelector('.hapus').addEventListener('click', () => {
                     if (daftar.children.length > 1) { tr.remove(); urutkanNama(); hitung(); }
@@ -812,7 +817,7 @@
                 const cacheIsi = {};
                 const ambilIsi = async kunci => cacheIsi[kunci] ??= await (await fetch(@json(url('/kas/input/reimburse-uj')) + '/' + kunci, {headers: {Accept: 'application/json'}})).json();
                 const tabelDetail = d => `<table><thead><tr><th>ID UJ</th><th>Tgl</th><th>Nama</th><th>Keterangan</th><th>Kategori</th><th>DT</th><th>No DO</th><th>Galian</th><th class="angka">Nominal</th></tr></thead><tbody>`
-                    + d.detail.map(x => `<tr><td>${esc(x.id_uj || '—')}</td><td>${esc(x.tanggal_uj)}</td><td>${esc(x.nama)}</td><td>${esc(x.keterangan)}</td><td>${esc(x.kategori)}</td>`
+                    + d.detail.map(x => `<tr><td>${esc(x.id_uj || (x.potongan ? 'Potongan' : '—'))}</td><td>${esc(x.tanggal_uj)}</td><td>${esc(x.nama)}</td><td>${esc(x.keterangan)}</td><td>${esc(x.kategori)}</td>`
                         + `<td>${esc(x.no_mobil)}</td><td>${esc(x.no_do)}</td><td>${esc(x.galian)}</td><td class="angka">${fmt(x.nominal)}</td></tr>`).join('')
                     + `<tr><td colspan="8"><b>Total ${d.detail.length} transaksi</b></td><td class="angka"><b>${fmt(d.master.nominal)}</b></td></tr></tbody></table>`;
 

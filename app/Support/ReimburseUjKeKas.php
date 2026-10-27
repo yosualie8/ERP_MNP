@@ -188,19 +188,22 @@ class ReimburseUjKeKas
         $b = self::bawaan();
         $baris = self::barisKunci($kunci);
         $galian = self::galian($baris);
+        $kas = self::sudahDiKasKunci($kunci);
+        // Kelebihan reimburse sebelumnya (mis. UJ dobel yang sudah ikut ditransfer) dikurangkan dari reimburse yang belum dicatat.
+        $potongan = $kas ? [] : PotonganReimburseUj::untukForm($b['pic'], $b['kode_gl']);
 
         return [
             'kunci' => $kunci, 'kode' => $r ? self::kode($r) : null,
             'tanggal' => $tgl->toDateString(),
             'judul' => $tgl->translatedFormat('l, j M Y').($r ? ' · '.self::kode($r) : ''),
-            'kas' => self::sudahDiKasKunci($kunci),
-            'master' => [...$b, 'nominal' => (int) $baris->sum('nominal')],
+            'kas' => $kas,
+            'master' => [...$b, 'nominal' => (int) $baris->sum('nominal') + array_sum(array_column($potongan, 'nominal'))],
             'detail' => $baris->map(fn (UjDetail $d) => [
                 'uj' => self::kunci($d), 'id_uj' => $d->id_uj, 'tanggal_uj' => $d->tanggal?->translatedFormat('j M'), 'nama' => $d->nama,
                 'kategori' => $d->biaya_transfer ? 'Biaya Transfer' : $d->kategori, 'no_mobil' => $d->no_mobil, 'no_do' => $d->no_do,
                 'galian' => $galian[self::kunci($d)] ?? null,
                 'nominal' => (int) $d->nominal, 'pic' => $b['pic'], 'keterangan' => self::keterangan($d), 'kode_gl' => $b['kode_gl'],
-            ])->values()->all(),
+            ])->values()->merge($potongan)->all(),
         ];
     }
 
@@ -244,6 +247,11 @@ class ReimburseUjKeKas
         $galian = self::galian($baris->values());
         $n = 0;
         foreach (array_values($bon) as $i => $b) {
+            if (($p = PotonganReimburseUj::dariKunci($b['uj'] ?? null)) && isset($noIds[$i])) {
+                PotonganReimburseUj::tandaiDipakai($p['id'], $noIds[$i], $r ? self::kode($r) : $tanggal, $userId);
+
+                continue;
+            }
             $d = $baris[$b['uj'] ?? ''] ?? null;
             if (! $d || ! isset($noIds[$i])) {
                 continue;

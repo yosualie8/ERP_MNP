@@ -12,6 +12,7 @@ use App\Models\KodeGl;
 use App\Models\KasBulan;
 use App\Models\KasFoto;
 use App\Models\KasReimburseUj;
+use AppSupportPotonganReimburseUj;
 use App\Support\ReimburseUjKeKas;
 use App\Support\StatusReimburse;
 use Illuminate\Http\JsonResponse;
@@ -86,7 +87,9 @@ class KasInputController extends Controller
             'nominal_masuk' => $polos($request->input('nominal_masuk')),
             'nominal_transfer' => $polos($request->input('nominal_transfer')),
             'nominal_biaya' => $polos($request->input('nominal_biaya')),
-            'bon' => array_map(fn ($b) => is_array($b) ? [...$b, 'nominal' => $polos($b['nominal'] ?? null)] : $b, (array) $request->input('bon', [])),
+            // Baris potongan reimburse Kas UJ (PotonganReimburseUj) bernominal minus: tanda minusnya dipertahankan.
+            'bon' => array_map(fn ($b) => is_array($b) ? [...$b, 'nominal' => PotonganReimburseUj::dariKunci($b['uj'] ?? null) && preg_match('/^\s*-/', (string) ($b['nominal'] ?? ''))
+                ? '-'.$polos($b['nominal']) : $polos($b['nominal'] ?? null)] : $b, (array) $request->input('bon', [])),
         ]);
 
         $data = $request->validate([
@@ -102,7 +105,13 @@ class KasInputController extends Controller
             'biaya_transfer' => ['nullable', 'boolean'],
             'nominal_biaya' => ['exclude_unless:biaya_transfer,1', 'required', 'integer', 'min:1', 'max:'.TulisKasSheet::BIAYA_TRANSFER_MAKS],
             'bon' => ['required_if:arah,keluar', 'array'],
-            'bon.*.nominal' => ['required', 'integer', 'min:1'],
+            'bon.*.nominal' => ['required', 'integer', function ($atribut, $nilai, $gagal) use ($request) {
+                // Minus hanya untuk baris potongan reimburse Kas UJ, dan harus persis sebesar potongannya.
+                $p = PotonganReimburseUj::dariKunci($request->input(str_replace('.nominal', '.uj', $atribut)));
+                if ((int) $nilai < 1 && ! ($p && (int) $nilai === -$p['nominal'])) {
+                    $gagal('Nominal setiap transaksi detail minimal 1.');
+                }
+            }],
             'bon.*.pic' => ['nullable', 'string', 'max:60'],
             'bon.*.keterangan' => ['required', 'string', 'max:300'],
             'bon.*.kode_gl' => ['required', 'string', 'max:120'],
