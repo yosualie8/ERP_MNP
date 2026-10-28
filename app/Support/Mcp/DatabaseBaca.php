@@ -14,7 +14,8 @@ use InvalidArgumentException;
 class DatabaseBaca
 {
     /** Tabel berisi rahasia (token login / Google, kunci OAuth) — tidak bisa dibaca sama sekali. */
-    public const TABEL_RAHASIA = ['google_integrasi', 'oauth_klien', 'oauth_kode', 'oauth_token', 'personal_access_tokens', 'password_reset_tokens'];
+    // jago_* = mutasi kantong Jago berisi nomor rekening lengkap sopir / penerima (owner 28 Okt 2026).
+    public const TABEL_RAHASIA = ['google_integrasi', 'oauth_klien', 'oauth_kode', 'oauth_token', 'personal_access_tokens', 'password_reset_tokens', 'jago_mutasi', 'jago_unggah'];
 
     /** Kolom rahasia (kunci login) — disembunyikan otomatis dari hasil; menyebutnya langsung di query ditolak. */
     public const KOLOM_RAHASIA = ['password', 'remember_token', 'token_hash', 'refresh_token', 'access_token', 'secret_hash'];

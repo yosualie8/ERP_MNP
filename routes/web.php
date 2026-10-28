@@ -126,6 +126,9 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::post('/jabatan/um', [\App\Http\Controllers\JabatanController::class, 'simpanUm'])->name('jabatan.um');
     Route::patch('/jabatan/{jabatan}', [\App\Http\Controllers\JabatanController::class, 'update'])->whereNumber('jabatan')->name('jabatan.update');
     Route::delete('/jabatan/{jabatan}', [\App\Http\Controllers\JabatanController::class, 'hapus'])->whereNumber('jabatan')->name('jabatan.hapus');
+    Route::get('/mutasi-jago', [\App\Http\Controllers\MutasiJagoController::class, 'index'])->name('mutasi-jago.index');
+    Route::post('/mutasi-jago', [\App\Http\Controllers\MutasiJagoController::class, 'unggah'])->name('mutasi-jago.unggah');
+    Route::get('/mutasi-jago/unggahan/{unggah}/pdf', [\App\Http\Controllers\MutasiJagoController::class, 'pdf'])->whereNumber('unggah')->name('mutasi-jago.pdf');
     Route::get('/mutasi-pt', [\App\Http\Controllers\MutasiPtController::class, 'index'])->name('mutasi-pt.index');
     Route::post('/mutasi-pt/catatan', [\App\Http\Controllers\MutasiPtController::class, 'catatan'])->name('mutasi-pt.catatan');
     Route::post('/mutasi-pt/tandai', [\App\Http\Controllers\MutasiPtController::class, 'tandai'])->name('mutasi-pt.tandai');
