@@ -81,11 +81,12 @@ class BacaMutasiJago
             if ($i === 0) {
                 continue;
             }
-            preg_match('/height="([\d.]+)"/', $bagian, $h);
+            preg_match('/width="([\d.]+)" height="([\d.]+)"/', $bagian, $h);
             preg_match_all('/<word xMin="([\d.]+)" yMin="([\d.]+)" xMax="([\d.]+)" yMax="[\d.]+">(.*?)<\/word>/s', $bagian, $m, PREG_SET_ORDER);
             $kata = array_map(fn ($w) => ['x' => (float) $w[1], 'y' => (float) $w[2], 'x2' => (float) $w[3], 't' => html_entity_decode($w[4], ENT_QUOTES | ENT_XML1, 'UTF-8')], $m);
             if ($kata) {
-                $hasil[] = ['tinggi' => (float) ($h[1] ?? 2610), 'kata' => $kata];
+                // Skala: ukuran halaman berbeda per versi PDF (1850 × 2610 px vs 595 × 842 pt); semua batas posisi relatif ke lebar 1850.
+                $hasil[] = ['tinggi' => (float) ($h[2] ?? 2610), 's' => ((float) ($h[1] ?? 1850)) / 1850, 'kata' => $kata];
             }
         }
 
@@ -95,7 +96,8 @@ class BacaMutasiJago
     /** Nama pemilik, nama + nomor kantong, periode dari halaman pertama. */
     private static function kepala(array $hal): array
     {
-        $baris = self::kelompokBaris(array_filter($hal['kata'], fn ($w) => $w['x'] < 900));
+        $sk = $hal['s'];
+        $baris = self::kelompokBaris(array_filter($hal['kata'], fn ($w) => $w['x'] < 900 * $sk), 8 * $sk);
         $teks = array_map(fn ($b) => implode(' ', array_column($b, 't')), $baris);
         $pemilik = $kantong = $nomor = '';
         $dari = $sampai = null;
@@ -113,7 +115,7 @@ class BacaMutasiJago
             throw new RuntimeException('Nama / nomor kantong tidak ditemukan di halaman pertama — ini bukan file riwayat transaksi kantong Jago.');
         }
         // Kanan atas: "Saldo terbaru 28 Oct 2026 / IDR 46.109.405,50" (Inggris: "Latest Balance per 31 May 2026") = saldo kantong saat PDF diunduh.
-        $kanan = array_map(fn ($b) => implode(' ', array_column($b, 't')), self::kelompokBaris(array_filter($hal['kata'], fn ($w) => $w['x'] >= 900 && $w['y'] < 450)));
+        $kanan = array_map(fn ($b) => implode(' ', array_column($b, 't')), self::kelompokBaris(array_filter($hal['kata'], fn ($w) => $w['x'] >= 900 * $sk && $w['y'] < 450 * $sk), 8 * $sk));
         $tglTerbaru = $saldoTerbaru = null;
         foreach ($kanan as $t) {
             if (preg_match('/(?:terbaru|per)\s+(\d{1,2} \S+ \d{4})$/i', $t, $m)) {
@@ -142,35 +144,36 @@ class BacaMutasiJago
             return [];
         }
         $yJudul = $kolom['sumber']['y'];
-        $batasBawah = $hal['tinggi'] - 230; // kaki halaman (LPS / OJK)
+        $sk = $hal['s'];
+        $batasBawah = $hal['tinggi'] - 230 * $sk; // kaki halaman (LPS / OJK)
         foreach ($kata as $w) {
             // "Info Penting" / "Disclaimer" di halaman terakhir menutup tabel.
             if ($w['x'] < $kolom['sumber']['x'] && $w['y'] > $yJudul && in_array($w['t'], ['Info', 'Disclaimer', 'Important'], true)) {
                 $batasBawah = min($batasBawah, $w['y'] - 5);
             }
         }
-        $isi = array_values(array_filter($kata, fn ($w) => $w['y'] > $yJudul + 10 && $w['y'] < $batasBawah));
-        $kol = function (array $w) use ($kolom): string {
-            if ($w['x'] < $kolom['sumber']['x'] - 5) {
+        $isi = array_values(array_filter($kata, fn ($w) => $w['y'] > $yJudul + 10 * $sk && $w['y'] < $batasBawah));
+        $kol = function (array $w) use ($kolom, $sk): string {
+            if ($w['x'] < $kolom['sumber']['x'] - 5 * $sk) {
                 return 'tanggal';
             }
-            if ($w['x'] < $kolom['rincian']['x'] - 5) {
+            if ($w['x'] < $kolom['rincian']['x'] - 5 * $sk) {
                 return 'sumber';
             }
-            if ($w['x'] < $kolom['catatan']['x'] - 5) {
+            if ($w['x'] < $kolom['catatan']['x'] - 5 * $sk) {
                 return 'rincian';
             }
             if (preg_match('/^[+-][\d.]+(,\d+)?$/', $w['t'])) {
                 return 'jumlah';
             }
-            if ($w['x2'] > $kolom['saldo']['x'] - 40 && preg_match('/^[\d.]+(,\d+)?$/', $w['t'])) {
+            if ($w['x2'] > $kolom['saldo']['x'] - 40 * $sk && preg_match('/^[\d.]+(,\d+)?$/', $w['t'])) {
                 return 'saldo';
             }
 
             return 'catatan';
         };
         // Awal transaksi = baris kolom Tanggal berbentuk "27 Okt 2026" / "29 May 2026" (judul bulan "Oktober 2026" dilewati).
-        $tgl = self::kelompokBaris(array_filter($isi, fn ($w) => $kol($w) === 'tanggal'));
+        $tgl = self::kelompokBaris(array_filter($isi, fn ($w) => $kol($w) === 'tanggal'), 8 * $sk);
         $mulai = [];
         foreach ($tgl as $b) {
             $t = implode(' ', array_column($b, 't'));
@@ -181,12 +184,12 @@ class BacaMutasiJago
         $hasil = [];
         foreach ($mulai as $i => $y0) {
             $y1 = $mulai[$i + 1] ?? $batasBawah;
-            $blok = array_filter($isi, fn ($w) => $w['y'] >= $y0 - 4 && $w['y'] < $y1 - 4);
+            $blok = array_filter($isi, fn ($w) => $w['y'] >= $y0 - 4 * $sk && $w['y'] < $y1 - 4 * $sk);
             $per = ['tanggal' => [], 'sumber' => [], 'rincian' => [], 'catatan' => [], 'jumlah' => [], 'saldo' => []];
             foreach ($blok as $w) {
                 $per[$kol($w)][] = $w;
             }
-            $teksBaris = fn (array $ws) => array_map(fn ($b) => implode(' ', array_column($b, 't')), self::kelompokBaris($ws));
+            $teksBaris = fn (array $ws) => array_map(fn ($b) => implode(' ', array_column($b, 't')), self::kelompokBaris($ws, 8 * $sk));
             $tglBaris = $teksBaris($per['tanggal']);
             $waktu = self::tanggal($tglBaris[0] ?? '', $tglBaris[1] ?? null);
             $sumber = $teksBaris($per['sumber']);
@@ -195,9 +198,21 @@ class BacaMutasiJago
                 [$bank, $rek] = [$m[1], $m[2]];
                 array_pop($sumber);
             }
-            $rincian = implode(' ', $teksBaris($per['rincian']));
-            $idBank = preg_match('/ID#\s*(\S+)/', $rincian, $m) ? $m[1] : null;
-            $jenis = trim(preg_replace('/ID#\s*\S+/', '', $rincian));
+            // ID# bank bisa terpotong ke baris berikutnya ("ID# 261027JAGBIDJA000824" / "32"): baris sesudah ID# tanpa spasi = sambungannya.
+            $rb = $teksBaris($per['rincian']);
+            $idBank = null;
+            $jenisBaris = [];
+            foreach ($rb as $t) {
+                if ($idBank === null && preg_match('/^(.*?)\s*ID#\s*(\S+)$/', $t, $m)) {
+                    $jenisBaris[] = $m[1];
+                    $idBank = $m[2];
+                } elseif ($idBank !== null && preg_match('/^[A-Za-z0-9-]+$/', $t)) {
+                    $idBank .= $t;
+                } else {
+                    $jenisBaris[] = $t;
+                }
+            }
+            $jenis = trim(implode(' ', array_filter($jenisBaris)));
             $jumlah = self::angka($per['jumlah'][0]['t'] ?? null);
             $saldo = self::angka($per['saldo'][0]['t'] ?? null);
             if (! $waktu || $jumlah === null || $saldo === null) {
@@ -211,13 +226,13 @@ class BacaMutasiJago
     }
 
     /** Kata dikelompokkan per baris (y berdekatan), tiap baris urut x. @return array<int, array<int, array>> */
-    private static function kelompokBaris(array $kata): array
+    private static function kelompokBaris(array $kata, float $toleransi = 8): array
     {
         usort($kata, fn ($a, $b) => [$a['y'], $a['x']] <=> [$b['y'], $b['x']]);
         $baris = [];
         foreach ($kata as $w) {
             $n = count($baris);
-            if ($n && abs($baris[$n - 1][0]['y'] - $w['y']) < 8) {
+            if ($n && abs($baris[$n - 1][0]['y'] - $w['y']) < $toleransi) {
                 $baris[$n - 1][] = $w;
             } else {
                 $baris[] = [$w];

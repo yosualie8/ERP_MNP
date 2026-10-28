@@ -159,7 +159,7 @@ class MutasiJago
         return $c['baris']->filter(fn ($r) => $r['status'] === 'belum' && ! $r['m']->dipakai && ($kantong === 'kas' || $r['m']->arah === 'keluar'))
             ->map(fn ($r) => [
                 'id' => $r['m']->id, 'waktu' => $r['m']->waktu->toDateString(), 'jam' => $r['m']->waktu->format('H:i'), 'nama' => (string) $r['m']->nama,
-                'bank' => $r['m']->bank, 'rekening' => $r['m']->rekening, 'arah' => $r['m']->arah, 'nominal' => (int) round(abs($r['m']->jumlah)),
+                'bank' => $r['m']->bank, 'rekening' => $r['m']->rekening, 'arah' => $r['m']->arah, 'nominal' => (int) abs($r['m']->jumlah),
                 'biaya' => self::biayaDari($r['m'], $urut, $posisi), 'catatan' => $r['m']->catatan, 'saran' => $r['saran'],
             ])->values()->all();
     }
@@ -215,12 +215,12 @@ class MutasiJago
         $tanggal = $m->waktu->copy()->startOfDay();
         $bank = DaftarBank::kode($m->bank) ?? $m->bank;
         if ($kantong === 'uj') {
-            $input = [...$input, 'tanggal' => $tanggal, 'bank' => $bank, 'rekening' => $m->rekening, 'nominal' => (int) round(abs($m->jumlah)),
+            $input = [...$input, 'tanggal' => $tanggal, 'bank' => $bank, 'rekening' => $m->rekening, 'nominal' => (int) abs($m->jumlah),
                 'biaya_transfer' => $biaya > 0, 'nominal_biaya' => $biaya ?: (int) $input['nominal_biaya']];
         } else {
             $keluar = $m->arah === 'keluar';
             $input = [...$input, 'tanggal' => $tanggal, 'arah' => $m->arah, 'no_rek' => $m->rekening, 'bank' => $bank,
-                'nominal_transfer' => $keluar ? (int) round(abs($m->jumlah)) : null, 'nominal_masuk' => $keluar ? 0 : (int) round($m->jumlah),
+                'nominal_transfer' => $keluar ? (int) abs($m->jumlah) : null, 'nominal_masuk' => $keluar ? 0 : (int) $m->jumlah,
                 'biaya_transfer' => $keluar && $biaya > 0, 'nominal_biaya' => $biaya ?: (int) $input['nominal_biaya']];
         }
 
@@ -236,7 +236,7 @@ class MutasiJago
     public static function ringkas(JagoMutasi $m): array
     {
         return ['id' => $m->id, 'waktu' => $m->waktu->toDateString(), 'jam' => $m->waktu->format('H:i'), 'nama' => (string) $m->nama, 'bank' => $m->bank, 'rekening' => $m->rekening,
-            'arah' => $m->arah, 'nominal' => (int) round(abs($m->jumlah)), 'biaya' => self::biayaDari($m), 'catatan' => $m->catatan, 'saran' => null];
+            'arah' => $m->arah, 'nominal' => (int) abs($m->jumlah), 'biaya' => self::biayaDari($m), 'catatan' => $m->catatan, 'saran' => null];
     }
 
     public static function pesanPutus(array $p): string
@@ -277,20 +277,20 @@ class MutasiJago
         }
 
         $buku = $kantong === 'uj' ? self::bukuUj($dari, $sampai) : self::bukuKas($dari, $sampai);
-        $perNominal = collect($buku)->groupBy(fn ($b) => (string) round($b['nominal']));
+        $perNominal = collect($buku)->groupBy(fn ($b) => (string) (int) $b['nominal']);
         // Nominal "unik" (tidak ada transfer / buku lain bernominal sama ±3 hari): boleh berpasangan walau rekening di buku salah total
         // (mis. bayar tanah Jogja Rp21.660.000 tercatat ke rekening lain).
-        $unikBank = collect($unit)->groupBy(fn ($u) => (string) round($u['m']->jumlah))->map->count();
+        $unikBank = collect($unit)->groupBy(fn ($u) => (string) (int) $u['m']->jumlah)->map->count();
         foreach ($unit as $i => $u) {
-            $unit[$i]['unik'] = ($unikBank[(string) round($u['m']->jumlah)] ?? 0) === 1;
+            $unit[$i]['unik'] = ($unikBank[(string) (int) $u['m']->jumlah] ?? 0) === 1;
         }
-        $buku = array_map(fn ($b) => [...$b, 'unik' => count($perNominal[(string) round($b['nominal'])] ?? []) === 1], $buku);
-        $perNominal = collect($buku)->groupBy(fn ($b) => (string) round($b['nominal']));
+        $buku = array_map(fn ($b) => [...$b, 'unik' => count($perNominal[(string) (int) $b['nominal']] ?? []) === 1], $buku);
+        $perNominal = collect($buku)->groupBy(fn ($b) => (string) (int) $b['nominal']);
 
         // Pasangan terbaik lebih dulu (greedy): nominal wajib sama, tanggal ±3 hari; rekening / saldo / nama / tanggal sama menambah skor.
         $calon = [];
         foreach ($unit as $i => $u) {
-            foreach ($perNominal[(string) round($u['m']->jumlah)] ?? [] as $b) {
+            foreach ($perNominal[(string) (int) $u['m']->jumlah] ?? [] as $b) {
                 if (($s = self::skor($u, $b, $kantong)) !== null) {
                     $calon[] = [$s, $i, $b['kunci']];
                 }
@@ -328,7 +328,7 @@ class MutasiJago
             }
             foreach ($bebas() as $j) {
                 $n = $unit[$j]['m'];
-                if (! isset($kembali[$j]) && abs($n->jumlah + $m->jumlah) < 0.5 && $n->waktu->gte($m->waktu) && $n->waktu->diffInDays($m->waktu) <= 2
+                if (! isset($kembali[$j]) && abs($n->jumlah + $m->jumlah) < 1 && $n->waktu->gte($m->waktu) && $n->waktu->diffInDays($m->waktu) <= 2
                     && (self::rekMirip($n->rekening, $m->rekening) || mb_strtoupper(trim($n->nama)) === mb_strtoupper(trim($m->nama)))) {
                     $kembali[$i] = $kembali[$j] = true;
                     break;
@@ -443,7 +443,8 @@ class MutasiJago
         if ($m->dipakai && $m->dipakai === ($b['tautan'] ?? null)) {
             return 10000;
         }
-        if (abs($m->jumlah - $b['nominal']) > 0.5) {
+        // Buku dicatat tanpa sen (mis. bunga 7.882,89 → 7.882): selisih < Rp1 dianggap sama.
+        if (abs($m->jumlah - $b['nominal']) >= 1) {
             return null;
         }
         // Kas Harian: baris biaya hanya berpasangan dengan baris "Biaya Transfer" (dan sebaliknya).
@@ -532,7 +533,7 @@ class MutasiJago
                     $jumlah += $nilai($kunci[$k]);
                 }
             }
-            if (count($sub) > 1 && abs($jumlah - $target) < 0.5) {
+            if (count($sub) > 1 && abs($jumlah - $target) < 1) {
                 return $sub;
             }
         }
