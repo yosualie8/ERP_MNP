@@ -1041,10 +1041,13 @@
             const aturBiaya = () => {
                 const b = bank.value.trim().toLowerCase();
                 const sesamaJago = b === 'jago' || b === 'bank jago' || b === '';
-                if (!biayaDiubahManual) biaya.checked = !sesamaJago;
+                // Mutasi Jago (owner 28 Okt 2026): transfer ke GoPay tidak kena biaya (DANA tetap kena).
+                const gopay = b === 'gopay' || b === 'go pay';
+                if (!biayaDiubahManual) biaya.checked = !sesamaJago && !gopay;
                 tandaiBiaya();
-                catatanBiaya.textContent = b === '' ? 'Isi bank tujuan: selain Bank Jago, biaya transfer otomatis dicentang.'
-                    : sesamaJago ? 'Sesama Bank Jago tanpa biaya transfer.' : 'Transfer dari Bank Jago ke ' + bank.value + ' kena biaya transfer.';
+                catatanBiaya.textContent = b === '' ? 'Isi bank tujuan: selain Bank Jago & GoPay, biaya transfer otomatis dicentang.'
+                    : sesamaJago ? 'Sesama Bank Jago tanpa biaya transfer.' : gopay ? 'Ke GoPay tanpa biaya transfer (sesuai mutasi Jago).'
+                    : 'Transfer dari Bank Jago ke ' + bank.value + ' kena biaya transfer.';
             };
             bank.addEventListener('input', aturBiaya);
             aturBiaya();
