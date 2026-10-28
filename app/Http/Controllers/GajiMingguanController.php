@@ -47,7 +47,7 @@ class GajiMingguanController extends Controller
             }
             $w->addRow(\OpenSpout\Common\Entity\Row::fromValues(['TOTAL', '', '', ...array_fill(0, 7, ''), $baris->sum('hadir'), '', $baris->sum('total')], $tebal));
             $w->close();
-        }, 'Rekap Gaji Mingguan '.$senin->translatedFormat('j M').' - '.$minggu->translatedFormat('j M Y').'.xlsx');
+        }, 'Rekap Gaji Mingguan '.$senin->translatedFormat('j M').' - '.$minggu->translatedFormat('j M Y').'.xlsx', ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
     }
 
     /** @return array{senin: Carbon, hari: Collection<int, Carbon>, baris: Collection<int, object>} */

@@ -46,7 +46,7 @@ class AnggaranController extends Controller
         $nama = trim(preg_replace('/[^\pL\pN ._-]+/u', ' ', $tahap->nama.' '.$tahap->proyek?->nama));
 
         return response()->streamDownload(fn () => UnduhAnggaran::tulis($baris, 'php://output'),
-            'Anggaran '.$nama.' '.now()->format('Y-m-d H.i').'.xlsx');
+            'Anggaran '.$nama.' '.now()->format('Y-m-d H.i').'.xlsx', ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
     }
 
     /** Satu baris per tahap: rencana vs realisasi (halaman Anggaran & Excel). */

@@ -164,6 +164,6 @@ class PilahTransaksiController extends Controller
                     $x->rek_boq ? $x->rek_boq[0]->label() : '', $x->rek_boq[1] ?? '', $x->tag[0] ?? '', $x->tag[1] ?? '']));
             }
             $w->close();
-        }, 'Pilah Transaksi Proyek '.now()->format('Y-m-d').'.xlsx');
+        }, 'Pilah Transaksi Proyek '.now()->format('Y-m-d').'.xlsx', ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
     }
 }

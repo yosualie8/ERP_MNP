@@ -244,7 +244,7 @@ class RitasiController extends Controller
             $w->openToFile('php://output');
             $w->addRow(\OpenSpout\Common\Entity\Row::fromValues(UnggahBongkar::JUDUL_TEMPLAT, (new \OpenSpout\Common\Entity\Style\Style)->setFontBold()));
             $w->close();
-        }, 'Templat Surat Jalan Bongkar (dengan Kubikasi).xlsx');
+        }, 'Templat Surat Jalan Bongkar (dengan Kubikasi).xlsx', ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
     }
 
     /** Bayar Tanah: DO yang sudah ada Uang Jalan-nya di Kas UJ tetapi belum ada transaksi Uang Tanah-nya. */
