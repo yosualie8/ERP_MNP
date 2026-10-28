@@ -25,7 +25,8 @@ use InvalidArgumentException;
  */
 class AlatMnp
 {
-    private const MAKS = 200;
+    // owner 28 Okt 2026: dulu 200 baris per tarik
+    private const MAKS = 5000;
 
     /** Pengguna yang sedang memakai MCP (diisi McpController); hasil search ikut disaring menunya. */
     public static ?\App\Models\User $pengguna = null;
@@ -61,7 +62,7 @@ class AlatMnp
     {
         $tanggal = ['type' => 'string', 'description' => 'Tanggal YYYY-MM-DD'];
         $kata = ['type' => 'string', 'description' => 'Kata kunci (boleh beberapa kata; semuanya harus ada)'];
-        $batas = ['type' => 'integer', 'minimum' => 1, 'maximum' => self::MAKS, 'description' => 'Jumlah maksimal hasil (bawaan 50)'];
+        $batas = ['type' => 'integer', 'minimum' => 1, 'maximum' => self::MAKS, 'description' => 'Jumlah maksimal hasil (bawaan 200, maks 5.000)'];
         $status = ['type' => 'string', 'enum' => ['semua', 'sudah', 'belum'], 'description' => 'Status reimburse (bawaan semua)'];
         $obj = fn (array $prop = []) => ['type' => 'object', 'properties' => (object) $prop, 'additionalProperties' => false];
 
@@ -216,11 +217,11 @@ class AlatMnp
             'query_database' => [
                 'judul' => 'Query database ERP (baca saja)',
                 'deskripsi' => 'Jalankan SATU query SQL MySQL BACA SAJA (SELECT / WITH / SHOW / DESCRIBE / EXPLAIN) ke seluruh database ERP MNP (khusus Super Admin), untuk data yang '
-                    .'tidak tercakup tool lain. Lihat nama tabel & kolom dengan daftar_tabel dulu. Hasil maks 1.000 baris (bawaan 100), batas waktu 15 detik; pakai GROUP BY / '
+                    .'tidak tercakup tool lain. Lihat nama tabel & kolom dengan daftar_tabel dulu. Hasil maks 10.000 baris (bawaan 1.000), batas waktu 15 detik; pakai GROUP BY / '
                     .'SUM / COUNT untuk rekap. Semua tabel & kolom terbuka (SELECT * boleh); hanya tabel token login & kolom password/token yang disembunyikan. Nominal rupiah bilangan bulat; tanggal YYYY-MM-DD.',
                 'skema' => ['type' => 'object', 'properties' => ['sql' => ['type' => 'string', 'description' => 'Query SQL (satu perintah baca)'], 'batas' => ['type' => 'integer', 'minimum' => 1, 'maximum' => DatabaseBaca::MAKS_BARIS]],
                     'required' => ['sql'], 'additionalProperties' => false],
-                'jalankan' => fn (array $a) => DatabaseBaca::query((string) $a['sql'], (int) ($a['batas'] ?? 100)),
+                'jalankan' => fn (array $a) => DatabaseBaca::query((string) $a['sql'], (int) ($a['batas'] ?? 1000)),
             ],
             'search' => [
                 'judul' => 'Cari di ERP MNP',
@@ -271,7 +272,7 @@ class AlatMnp
                 ->orWhereHas('bon', fn ($b) => $b->where('keterangan', 'like', "%{$k}%")->orWhere('pic', 'like', "%{$k}%")->orWhere('id_transaksi', 'like', "%{$k}%")
                     ->orWhere('no_mobil', 'like', "%{$k}%")->orWhereHas('kodeGl', fn ($g) => $g->where('kode_asli', 'like', "%{$k}%"))));
         }
-        $data = $q->orderByDesc('tanggal')->orderByDesc('baris')->limit(1000)->get();
+        $data = $q->orderByDesc('tanggal')->orderByDesc('baris')->limit(10000)->get();
         $status = StatusReimburse::untuk($data->flatMap(fn ($t) => $t->bon->map(fn ($b) => StatusReimburse::idBon($b, $t)))->all());
         $hasil = $data->map(fn ($t) => self::transferKas($t, $status));
         $pilih = $a['status_reimburse'] ?? 'semua';
@@ -322,7 +323,7 @@ class AlatMnp
             'tanggal_reimburse' => $g['tanggal']?->toDateString(), 'jumlah_transaksi' => $g['jumlah'], 'total' => $g['total'],
             'penyesuaian_data_lama' => $g['penyesuaian'], 'dicatat_oleh' => $g['oleh'], 'dicatat_pada' => $g['dicatat'] ? (string) $g['dicatat'] : null,
             'sumber' => $g['oleh'] ? $g['catatan'] : 'Data awal lembar Sudah Reimburse', 'per_akun' => $g['per_akun'],
-            ...($rinci ? ['rincian' => collect($g['rinci'])->take(500)->values()] : []),
+            ...($rinci ? ['rincian' => collect($g['rinci'])->take(self::MAKS)->values()] : []),
         ];
     }
 
@@ -381,7 +382,7 @@ class AlatMnp
             ->when($a['sampai'] ?? null, fn ($q, $v) => $q->where('tanggal', '<=', self::tgl($v)))
             ->when(($a['arah'] ?? '') === 'masuk', fn ($q) => $q->where('dbcr', 'CR'))
             ->when(($a['arah'] ?? '') === 'keluar', fn ($q) => $q->where('dbcr', 'DB'))
-            ->orderByDesc('tanggal')->orderByDesc('baris')->limit(5000)->get()
+            ->orderByDesc('tanggal')->orderByDesc('baris')->limit(10000)->get()
             ->filter(fn ($m) => ! $kata || collect($kata)->every(fn ($k) => mb_stripos((string) $m->keterangan, $k) !== false) || isset($kunciCatatan[\App\Support\TandaMutasiPt::kunci($m)]))
             ->map(function ($m) use ($tanda, $tahap) {
                 $t = $tanda[\App\Support\TandaMutasiPt::kunci($m)] ?? null;
@@ -719,7 +720,7 @@ class AlatMnp
 
     private static function batas(array $a): int
     {
-        return max(1, min(self::MAKS, (int) ($a['batas'] ?? 50)));
+        return max(1, min(self::MAKS, (int) ($a['batas'] ?? 200)));
     }
 
     private static function tgl(string $v): string

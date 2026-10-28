@@ -9,18 +9,21 @@ use InvalidArgumentException;
  * Akses BACA SAJA ke seluruh database ERP MNP untuk MCP (owner 27 Okt 2026, khusus Super Admin). Dikunci dua lapis:
  * 1. koneksi 'baca' memakai user MySQL yang hanya punya hak SELECT (tidak bisa mengubah / menghapus apa pun);
  * 2. di aplikasi: hanya satu perintah SELECT / WITH / SHOW / DESCRIBE / EXPLAIN, tabel & kolom rahasia (token, password) ditolak,
- *    batas waktu 15 detik, hasil maksimal 1.000 baris.
+ *    batas waktu 15 detik, hasil maksimal 10.000 baris.
  */
 class DatabaseBaca
 {
-    /** Tabel berisi rahasia (token login / Google, kunci OAuth) — tidak bisa dibaca sama sekali. */
-    // jago_* = mutasi kantong Jago berisi nomor rekening lengkap sopir / penerima (owner 28 Okt 2026).
-    public const TABEL_RAHASIA = ['google_integrasi', 'oauth_klien', 'oauth_kode', 'oauth_token', 'personal_access_tokens', 'password_reset_tokens', 'jago_mutasi', 'jago_unggah'];
+    /**
+     * Tabel berisi kunci login (token login / Google, kunci OAuth) — tidak bisa dibaca sama sekali. Semua tabel data bisnis
+     * terbuka (owner 28 Okt 2026: "lepaskan limit akses table", termasuk mutasi Jago).
+     */
+    public const TABEL_RAHASIA = ['google_integrasi', 'oauth_klien', 'oauth_kode', 'oauth_token', 'personal_access_tokens', 'password_reset_tokens'];
 
     /** Kolom rahasia (kunci login) — disembunyikan otomatis dari hasil; menyebutnya langsung di query ditolak. */
     public const KOLOM_RAHASIA = ['password', 'remember_token', 'token_hash', 'refresh_token', 'access_token', 'secret_hash'];
 
-    public const MAKS_BARIS = 1000;
+    // owner 28 Okt 2026: batas dinaikkan (dulu 1.000); lebih dari ini membebani memori server & jawaban MCP
+    public const MAKS_BARIS = 10000;
 
     private static function db()
     {
