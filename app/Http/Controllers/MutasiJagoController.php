@@ -55,7 +55,7 @@ class MutasiJagoController extends Controller
         }
         $u = $h['unggah'];
         $nama = MutasiJago::KANTONG[$h['kantong']]['nama'];
-        KasRiwayat::create(['aksi' => 'jago-unggah', 'lembar' => 'Mutasi Jago', 'baris_awal' => 0, 'baris_akhir' => 0,
+        KasRiwayat::create(['aksi' => 'jago-unggah', 'lembar' => 'Jago', 'baris_awal' => 0, 'baris_akhir' => 0,
             'ringkasan' => mb_strimwidth("Unggah mutasi Jago {$nama} ".($u->dari?->format('d-m-Y') ?? '?').' s/d '.($u->sampai?->format('d-m-Y') ?? '?').": {$h['baru']} baris baru, {$h['sudah']} sudah ada"
                 .($h['peringatan'] ? ' — '.implode(' ', $h['peringatan']) : ''), 0, 490, '…'),
             'isi' => ['unggah' => $u->id, 'kantong' => $h['kantong'], 'baru' => $h['baru'], 'sudah' => $h['sudah'], 'peringatan' => $h['peringatan']], 'user_id' => $request->user()->id]);
