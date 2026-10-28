@@ -460,6 +460,10 @@ class MutasiJago
         $r2 = self::digit($m->rekening);
         $nama = self::namaSama($b['nama'], $m->nama);
         $saldo = $b['saldo'] !== null && abs($b['saldo'] - $u['saldo']) < 1;
+        // Baris biaya Rp2.500 semuanya serupa (tanpa nama / rekening): hanya berpasangan di hari yang sama (atau saldonya sama).
+        if ($kantong === 'kas' && $m->biaya && $hari > 0 && ! $saldo) {
+            return null;
+        }
         if ($r1 !== '' && $r2 !== '') {
             // Rekening beda jauh & nama beda = transfer lain yang kebetulan nominalnya sama (mis. dua sopir @ Rp1.330.000) — bukan pasangan.
             if (! self::rekMirip($b['rek'], $m->rekening) && ! $nama && ! $saldo && ! ($u['unik'] && $b['unik'] && $hari == 0)) {
