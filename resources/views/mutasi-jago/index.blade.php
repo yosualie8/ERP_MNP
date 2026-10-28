@@ -7,7 +7,7 @@
         $tgl = fn ($d) => $d ? $d->translatedFormat('d-M-y') : '';
         $info = \App\Support\MutasiJago::KANTONG[$kantong];
         $label = ['cocok' => ['✓ cocok', 'hijau'], 'catatan' => ['⚠ ada catatan', 'kuning'], 'belum' => ['❗ belum diinput', 'merah'], 'tidak-di-bank' => ['❗ tidak ada di bank', 'merah'],
-            'menunggu' => ['menunggu mutasi', ''], 'biaya' => ['biaya tanpa transfer', 'kuning']];
+            'menunggu' => ['menunggu mutasi', ''], 'biaya' => ['biaya tanpa transfer', 'kuning'], 'kembali' => ['↩ transfer kembali', '']];
         $n = $hasil['baris']->countBy('status');
         [$awal, $akhir] = $hasil['cakupan'];
         $rupiah = fn ($v) => $v === null ? '' : (($v < 0 ? '−' : '').number_format(abs($v), abs($v - round($v)) >= 0.005 ? 2 : 0, ',', '.'));
@@ -108,6 +108,7 @@
                             @if ($r['status'] === 'belum')Ada di bank, belum ada di {{ $info['buku'] }}.@endif
                             @if ($r['status'] === 'tidak-di-bank')Tidak ada transfer bank yang cocok (nominal & tanggal ±3 hari).@endif
                             @if ($r['status'] === 'biaya')Biaya transfer tanpa transfer di menit yang sama.@endif
+                            @if ($r['status'] === 'kembali')Keluar lalu masuk kembali dengan jumlah & penerima sama — saling meniadakan.@endif
                             @if ($r['saran'])<div class="kecil" style="color: #93c5fd;">{{ $r['saran'] }}</div>@endif
                         </td>
                     </tr>

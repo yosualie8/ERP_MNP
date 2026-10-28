@@ -130,6 +130,14 @@ class MutasiJago
 
         $buku = $kantong === 'uj' ? self::bukuUj($dari, $sampai) : self::bukuKas($dari, $sampai);
         $perNominal = collect($buku)->groupBy(fn ($b) => (string) round($b['nominal']));
+        // Nominal "unik" (tidak ada transfer / buku lain bernominal sama ±3 hari): boleh berpasangan walau rekening di buku salah total
+        // (mis. bayar tanah Jogja Rp21.660.000 tercatat ke rekening lain).
+        $unikBank = collect($unit)->groupBy(fn ($u) => (string) round($u['m']->jumlah))->map->count();
+        foreach ($unit as $i => $u) {
+            $unit[$i]['unik'] = ($unikBank[(string) round($u['m']->jumlah)] ?? 0) === 1;
+        }
+        $buku = array_map(fn ($b) => [...$b, 'unik' => count($perNominal[(string) round($b['nominal'])] ?? []) === 1], $buku);
+        $perNominal = collect($buku)->groupBy(fn ($b) => (string) round($b['nominal']));
 
         // Pasangan terbaik lebih dulu (greedy): nominal wajib sama, tanggal ±3 hari; rekening / saldo / nama / tanggal sama menambah skor.
         $calon = [];
@@ -149,20 +157,69 @@ class MutasiJago
             }
         }
         $bukuKunci = collect($buku)->keyBy('kunci');
+        $bebas = fn () => array_keys(array_filter($unit, fn ($u, $i) => ! isset($pasang[$i]) && ! $u['m']->biaya, ARRAY_FILTER_USE_BOTH));
+
+        // Reimburse UJ yang dibayar dalam beberapa transfer masuk (mis. RUJ-0004 = 3 transfer di hari yang sama): cari gabungan yang jumlahnya pas.
+        $gabung = [];
+        foreach (collect($buku)->filter(fn ($b) => ! isset($dipakai[$b['kunci']]) && $b['nominal'] > 0) as $b) {
+            $masuk = array_values(array_filter($bebas(), fn ($i) => $unit[$i]['m']->jumlah > 0 && abs($unit[$i]['m']->waktu->copy()->startOfDay()->diffInDays($b['tanggal'], false)) <= 2));
+            if (($sub = self::gabunganPas($masuk, fn ($i) => $unit[$i]['m']->jumlah, $b['nominal'])) !== null) {
+                foreach ($sub as $i) {
+                    $pasang[$i] = $b['kunci'];
+                    $gabung[$i] = count($sub);
+                }
+                $dipakai[$b['kunci']] = true;
+            }
+        }
+        // Transfer keluar lalu kembali masuk dengan jumlah & penerima sama (≤ 2 hari) = saling meniadakan.
+        $kembali = [];
+        foreach ($bebas() as $i) {
+            $m = $unit[$i]['m'];
+            if ($m->jumlah >= 0 || isset($kembali[$i])) {
+                continue;
+            }
+            foreach ($bebas() as $j) {
+                $n = $unit[$j]['m'];
+                if (! isset($kembali[$j]) && abs($n->jumlah + $m->jumlah) < 0.5 && $n->waktu->gte($m->waktu) && $n->waktu->diffInDays($m->waktu) <= 2
+                    && (self::rekMirip($n->rekening, $m->rekening) || mb_strtoupper(trim($n->nama)) === mb_strtoupper(trim($m->nama)))) {
+                    $kembali[$i] = $kembali[$j] = true;
+                    break;
+                }
+            }
+        }
 
         $baris = collect();
         foreach ($unit as $i => $u) {
+            $m = $u['m'];
             $b = isset($pasang[$i]) ? $bukuKunci[$pasang[$i]] : null;
             $catatan = $b ? self::catatan($u, $b, $kantong) : [];
-            $saran = null;
-            if (! $b && ! $u['m']->biaya) {
-                // Nominal beda tetapi rekening sama di hari yang sama → kemungkinan salah ketik nominal.
-                $mirip = collect($buku)->first(fn ($x) => ! isset($dipakai[$x['kunci']]) && $x['tanggal']->isSameDay($u['m']->waktu) && self::rekMirip($x['rek'], $u['m']->rekening));
-                $saran = $mirip ? 'Mungkin '.$mirip['id'].' ('.rp((int) abs($mirip['nominal'])).', '.$mirip['nama'].') — nominalnya beda.' : null;
+            if ($b && isset($gabung[$i])) {
+                $catatan = array_values(array_filter($catatan, fn ($c) => ! str_starts_with($c, 'Tanggal')));
             }
-            $baris->push(['jenis' => 'bank', 'waktu' => $u['m']->waktu, 'tanggal' => $u['m']->waktu->copy()->startOfDay(), 'm' => $u['m'], 'fee' => $u['fee'], 'saldo' => $u['saldo'],
-                'b' => $b, 'catatan' => $catatan, 'saran' => $saran,
-                'status' => $b ? ($catatan ? 'catatan' : 'cocok') : ($u['m']->biaya ? 'biaya' : 'belum')]);
+            $saran = null;
+            $status = $b ? ($catatan ? 'catatan' : 'cocok') : ($m->biaya ? 'biaya' : (isset($kembali[$i]) ? 'kembali' : 'belum'));
+            if (! $b && ! $m->biaya && ! isset($kembali[$i])) {
+                // Nominal beda tetapi rekening / nama sama dekat tanggalnya → kemungkinan salah ketik nominal.
+                $mirip = collect($buku)->filter(fn ($x) => ! isset($dipakai[$x['kunci']]) && ($x['nominal'] < 0) === ($m->jumlah < 0)
+                    && abs($x['tanggal']->diffInDays($m->waktu->copy()->startOfDay(), false)) <= 1 && (self::rekMirip($x['rek'], $m->rekening) || self::namaSama($x['nama'], $m->nama)))
+                    ->sortBy(fn ($x) => abs(abs($x['nominal']) - abs($m->jumlah)))->first();
+                $saran = $mirip ? 'Mungkin '.$mirip['id'].' ('.rp((int) abs($mirip['nominal'])).', '.$mirip['nama'].') — selisih '.rp((int) abs(abs($mirip['nominal']) - abs($m->jumlah))).'.' : null;
+                // Kas UJ: transfer masuk dari kantong Kas MNP = reimburse — tanpa catatan Reimburse UJ yang pas cukup diberi catatan, bukan "belum diinput".
+                if ($kantong === 'uj' && $m->jumlah > 0 && self::digit($m->rekening) === self::KANTONG['kas']['nomor']) {
+                    $status = 'catatan';
+                    $catatan = ['Reimburse masuk dari Kas MNP tanpa catatan Reimburse UJ (RUJ) yang jumlahnya pas.'];
+                    $ruj = collect($buku)->filter(fn ($x) => ! isset($dipakai[$x['kunci']]) && str_starts_with($x['id'], 'RUJ-')
+                        && abs($x['tanggal']->diffInDays($m->waktu->copy()->startOfDay(), false)) <= 2)->sortBy(fn ($x) => abs($x['nominal'] - $m->jumlah))->first();
+                    $saran = $ruj ? 'Mungkin '.$ruj['id'].' ('.rp((int) $ruj['nominal']).') — selisih '.rp((int) abs($ruj['nominal'] - $m->jumlah)).'.' : null;
+                }
+            }
+            if ($b && isset($gabung[$i])) {
+                $catatan[] = "Satu dari {$gabung[$i]} transfer untuk {$b['id']} (total ".rp((int) $b['nominal']).').';
+                $status = 'cocok';
+                $catatan = array_values(array_filter($catatan, fn ($c) => str_starts_with($c, 'Satu dari')));
+            }
+            $baris->push(['jenis' => 'bank', 'waktu' => $m->waktu, 'tanggal' => $m->waktu->copy()->startOfDay(), 'm' => $m, 'fee' => $u['fee'], 'saldo' => $u['saldo'],
+                'b' => $b, 'catatan' => $catatan, 'saran' => $saran, 'status' => $status]);
         }
         // Buku tanpa pasangan di rentang ini: "tidak ada di bank" bila tanggalnya sudah tercakup mutasi; sesudah unggahan terakhir = menunggu.
         foreach ($buku as $b) {
@@ -244,14 +301,19 @@ class MutasiJago
         $s = 100 - (int) $hari * 15;
         $r1 = self::digit($b['rek']);
         $r2 = self::digit($m->rekening);
+        $nama = self::namaSama($b['nama'], $m->nama);
+        $saldo = $b['saldo'] !== null && abs($b['saldo'] - $u['saldo']) < 1;
         if ($r1 !== '' && $r2 !== '') {
+            // Rekening beda jauh & nama beda = transfer lain yang kebetulan nominalnya sama (mis. dua sopir @ Rp1.330.000) — bukan pasangan.
+            if (! self::rekMirip($b['rek'], $m->rekening) && ! $nama && ! $saldo && ! ($u['unik'] && $b['unik'] && $hari == 0)) {
+                return null;
+            }
             $s += $r1 === $r2 ? 60 : (self::rekMirip($b['rek'], $m->rekening) ? 35 : -25);
         }
-        if ($b['saldo'] !== null && abs($b['saldo'] - $u['saldo']) < 1) {
+        if ($saldo) {
             $s += 80;
         }
-        $kata = fn ($t) => collect(preg_split('/[^A-Z]+/', mb_strtoupper((string) $t)))->filter(fn ($w) => strlen($w) >= 3);
-        if ($kata($b['nama'])->intersect($kata($m->nama))->isNotEmpty()) {
+        if ($nama) {
             $s += 15;
         }
 
@@ -278,12 +340,48 @@ class MutasiJago
             }
             preg_match_all('/\bDO\s*(?:No\.?\s*)?(\d{3,7})\b/i', (string) $m->catatan, $do);
             $lain = collect($do[1] ?? [])->map(fn ($v) => SaldoSopir::kunciDo($v))->filter()->unique()->reject(fn ($v) => in_array($v, $b['do'], true));
-            if ($lain->isNotEmpty() && $b['do']) {
+            // Infra memakai DO internal "00xx" di Kas UJ, sedangkan catatan bank menyebut nomor DO buku → tidak dibandingkan.
+            $internal = collect($b['do'])->contains(fn ($v) => strlen((string) $v) <= 3);
+            if ($lain->isNotEmpty() && $b['do'] && ! $internal) {
                 $c[] = 'DO di catatan bank '.$lain->implode(', ').' tidak ada di Kas UJ (DO '.implode(', ', $b['do']).').';
             }
         }
 
         return $c;
+    }
+
+    /** Nama penerima & nama di buku punya kata yang sama (≥ 3 huruf), mis. "AIIAS NAWAWI" & "Nawawi". */
+    private static function namaSama(?string $a, ?string $b): bool
+    {
+        $kata = fn ($t) => collect(preg_split('/[^A-Z]+/', mb_strtoupper((string) $t)))->filter(fn ($w) => strlen($w) >= 3);
+
+        return $kata($a)->intersect($kata($b))->isNotEmpty();
+    }
+
+    /**
+     * Gabungan unit (maks. 8 transfer, dicoba semua kombinasi) yang jumlahnya tepat $target. @param  int[]  $kunci
+     *
+     * @return int[]|null
+     */
+    private static function gabunganPas(array $kunci, callable $nilai, float $target): ?array
+    {
+        $kunci = array_slice($kunci, 0, 8);
+        $n = count($kunci);
+        for ($mask = 1; $mask < (1 << $n); $mask++) {
+            $sub = [];
+            $jumlah = 0.0;
+            for ($k = 0; $k < $n; $k++) {
+                if ($mask & (1 << $k)) {
+                    $sub[] = $kunci[$k];
+                    $jumlah += $nilai($kunci[$k]);
+                }
+            }
+            if (count($sub) > 1 && abs($jumlah - $target) < 0.5) {
+                return $sub;
+            }
+        }
+
+        return null;
     }
 
     private static function digit(?string $v): string
