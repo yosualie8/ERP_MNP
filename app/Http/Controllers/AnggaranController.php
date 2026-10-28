@@ -33,25 +33,29 @@ class AnggaranController extends Controller
         return view('anggaran.index', ['baris' => self::ringkasan($semua), 'semua' => $semua]);
     }
 
-    /** Excel Anggaran (owner 28 Okt 2026): sheet Summary (= halaman ini) + daftar pemasukan & pengeluaran per sumber. */
-    public function unduh(Request $request): StreamedResponse
+    /**
+     * Excel Anggaran SATU tahap (owner 28 Okt 2026: pilih tahap dulu, jangan semua sekaligus): sheet Summary (= baris halaman
+     * Anggaran) + daftar pemasukan & pengeluaran per sumber.
+     */
+    public function unduh(ProyekTahap $tahap): StreamedResponse
     {
+        abort_if($tahap->pos_overhead, 404);
         // Data BBM disimpan 30 menit — dibaca ulang supaya Summary sama persis dengan sheet BBM.
         Cache::forget('daftar-proyek-bbm');
-        $semua = $request->boolean('semua');
-        $baris = self::ringkasan($semua);
+        $baris = self::ringkasan(true, $tahap->id);
+        $nama = trim(preg_replace('/[^\pL\pN ._-]+/u', ' ', $tahap->nama.' '.$tahap->proyek?->nama));
 
         return response()->streamDownload(fn () => UnduhAnggaran::tulis($baris, 'php://output'),
-            'Anggaran Proyek '.($semua ? 'semua tahap ' : '').now()->format('Y-m-d H.i').'.xlsx');
+            'Anggaran '.$nama.' '.now()->format('Y-m-d H.i').'.xlsx');
     }
 
     /** Satu baris per tahap: rencana vs realisasi (halaman Anggaran & Excel). */
-    public static function ringkasan(bool $semua): Collection
+    public static function ringkasan(bool $semua, ?int $id = null): Collection
     {
         [$ritasi, $kas, $bbm] = [DaftarProyek::ritasi(), DaftarProyek::kas(), DaftarProyek::bbm()];
         $overhead = Overhead::teralokasi();
 
-        return ProyekTahap::with(['proyek', 'anggaran.komponen'])->whereNull('pos_overhead')
+        return ProyekTahap::with(['proyek', 'anggaran.komponen'])->whereNull('pos_overhead')->when($id, fn ($q) => $q->whereKey($id))
             ->when(! $semua, fn ($q) => $q->where(fn ($w) => $w->whereIn('status', ['belum', 'progress'])->orHas('anggaran')))
             ->get()
             ->map(function ($t) use ($ritasi, $kas, $bbm, $overhead) {

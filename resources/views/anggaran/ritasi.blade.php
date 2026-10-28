@@ -26,6 +26,7 @@
     <div class="kartu">
         <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
             <a href="{{ route('anggaran.index') }}" class="tombol polos" style="padding: 6px 12px;">← Anggaran Proyek</a>
+            <a href="{{ route('anggaran.excel', $tahap) }}" class="tombol polos" style="padding: 6px 12px;" title="Summary + pemasukan & pengeluaran per sumber (Ritasi, BBM, Kas Harian, BCA, Kas UJ, biaya umum, tagihan)">⬇ Download Excel</a>
             <div><h3 style="margin: 0; color: var(--aksen-terang);">{{ $tahap->nama }}</h3>@include('proyek._sub', ['t' => $tahap])</div>
             <span class="redup">{{ $tahap->proyek->nama }} · Ritasi · {{ \App\Models\ProyekTahap::STATUS[$tahap->status] }}@if ($r['mulai']) · bongkar {{ $tgl($r['mulai']) }} – {{ $tgl($r['selesai']) }}@endif</span>
             @if (auth()->user()->bolehMenu('daftar-proyek'))<a href="{{ route('proyek.show', $tahap) }}" style="font-size: 13px;">detail tahap →</a>@endif

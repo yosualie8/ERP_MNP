@@ -9,7 +9,6 @@
         <a href="{{ route('anggaran.index', ['semua' => 1]) }}" @class(['chip', 'aktif' => $semua])>Semua tahap</a>
         <span class="redup" style="font-size: 13px;">Realisasi HPP = biaya langsung (Harga Jual ritasi bongkaran & ngepok, solar & rental dari Data BBM & HM, Kas Harian tanpa akun HPP/BBM/sparepart/DT) + biaya umum yang sudah dialokasikan. Serapan biaya = realisasi ÷ HPP rencana. Progres (cut & fill) = kubikasi bongkaran Ritasi ÷ m³ HPP tanah; tahap Infra ber-BOQ = volume terpasang (opname) / tertagih, dan omset & HPP rencananya sudah termasuk nilai kontrak & modal BOQ; selain itu serapan biaya (ditandai $).</span>
         <span style="margin-left: auto; display: flex; gap: 6px;">
-            <a href="{{ route('anggaran.excel', $semua ? ['semua' => 1] : []) }}" class="tombol polos" style="padding: 6px 12px;" title="Summary + daftar pemasukan & pengeluaran per sumber (Ritasi, BBM, Kas Harian, BCA, Kas UJ, biaya umum, tagihan) untuk tahap yang tampil">⬇ Download Excel</a>
             @if (auth()->user()->bolehMenu('alokasi-overhead'))<a href="{{ route('alokasi-overhead.index') }}" class="tombol polos" style="padding: 6px 12px;">Alokasi Biaya Umum</a>@endif
             @if (auth()->user()->bolehMenu('komponen-anggaran'))<a href="{{ route('komponen-anggaran.index') }}" class="tombol polos" style="padding: 6px 12px;">Master Komponen</a>@endif
         </span>
@@ -33,7 +32,8 @@
                         <td class="angka" data-n="{{ $x->serapan }}" @if ($x->serapan > 100 || $boros) style="color: var(--merah); font-weight: 700;" title="{{ $boros ? 'Biaya terserap jauh di atas progres fisik' : 'Realisasi melebihi HPP rencana' }}" @endif>{{ $persen($x->serapan) }}</td>
                         <td class="angka" data-n="{{ $x->progres }}" title="{{ isset($x->ritasi) ? 'proyek ritasi: '.$x->ritasi['rit'].' rit bongkar, UJ diberi '.$x->ritasi['uj_diberi'].' rit (belum bongkar '.$x->ritasi['uj_belum'].')' : ($x->fisik !== null ? $x->fisikKet : 'serapan biaya (belum ada dasar progres fisik)') }}">@isset($x->ritasi)<span style="font-size: 12px;">{{ $x->ritasi['rit'] }} rit</span>@else{{ $persen($x->progres) }}@if ($x->fisik === null && $x->progres !== null)<span class="redup" style="font-size: 11px;"> ($)</span>@endif @endisset</td>
                         <td>@if ($x->t->anggaran_dikunci_at)<span class="label hijau">{{ $x->t->anggaran_dikunci_at->translatedFormat('j M Y') }}</span>@elseif ($x->ada)<span class="redup">belum dikunci</span>@endif</td>
-                        <td><a href="{{ route('anggaran.edit', $x->t) }}" class="tombol-edit">{{ isset($x->ritasi) ? 'Ritasi' : ($x->ada ? 'Buka' : 'Isi anggaran') }}</a></td>
+                        <td><a href="{{ route('anggaran.edit', $x->t) }}" class="tombol-edit">{{ isset($x->ritasi) ? 'Ritasi' : ($x->ada ? 'Buka' : 'Isi anggaran') }}</a>
+                            <a href="{{ route('anggaran.excel', $x->t) }}" class="tombol-edit" title="Download Excel tahap ini: Summary + pemasukan & pengeluaran per sumber (Ritasi, BBM, Kas Harian, BCA, Kas UJ, biaya umum, tagihan)">⬇ Excel</a></td>
                     </tr>
                 @endforeach
             </tbody>
