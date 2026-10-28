@@ -99,6 +99,7 @@
             </div>
         @endif
 
+        @include('mutasi-jago._pilih', ['kantong' => 'kas'])
         @unless ($edit)
             <div class="kartu kartu-rui" id="panel-rui" hidden>
                 <div style="display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;">

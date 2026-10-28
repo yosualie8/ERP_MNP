@@ -125,6 +125,8 @@ class UjController extends Controller
             'doLamaSopir' => \App\Support\SaldoSopir::doLama(),
             // DO uang jalan per DT 14 hari terakhir: pilihan sekali klik di kolom No DO, supaya DO tidak diketik ulang (owner 27 Okt 2026).
             'doDt' => $this->doPerDt(),
+            // Master dari mutasi Jago (owner 28 Okt 2026): transfer bank kantong Uang Jalan DT yang belum diinput.
+            'calonMutasi' => request()->routeIs('uj.input', 'uj.store') ? \App\Support\MutasiJago::calonMaster('uj') : [],
             // Input UJ: detail pengajuan yang menunggu realisasi — No DO + Kategori diketik/ditempel → kolom lain terisi & tertaut otomatis.
             'pjMenunggu' => $this->tawarkanTautan() ? $this->pengajuanMenunggu() : [],
             ...$this->dariPengajuan(),
@@ -517,6 +519,26 @@ class UjController extends Controller
     }
 
     /** Catat temuan + konfirmasi admin per ID UJ (bahan Review Admin). */
+    /**
+     * Master dari mutasi Jago untuk Input UJ (lihat App\Support\MutasiJago::terapkanMaster) + jumlah detail tetap harus sama dengan nominal bank.
+     *
+     * @return array{input: array, mutasi: ?\App\Models\JagoMutasi, luar_bank: ?string}|RedirectResponse
+     */
+    private function masterMutasi(Request $request, array $input, ?string $tautan = null): array|RedirectResponse
+    {
+        $mj = \App\Support\MutasiJago::terapkanMaster($request, 'uj', $input, $tautan);
+        if ($mj['galat']) {
+            return back()->withInput()->with('error', $mj['galat']);
+        }
+        $jumlah = array_sum(array_column($mj['input']['detail'], 'nominal'));
+        if ($mj['mutasi'] && $jumlah !== (int) $mj['input']['nominal']) {
+            return back()->withInput()->withErrors(['nominal' => 'Ditolak: jumlah detail '.rp($jumlah).' tidak sama dengan nominal transfer bank '.rp((int) $mj['input']['nominal'])
+                .' (mutasi Jago '.$mj['mutasi']->waktu->format('d-m H:i').').']);
+        }
+
+        return $mj;
+    }
+
     /** @return array<string, array<int, array{do: string, tgl: ?string, id: ?string}>> DT → DO uang jalan terbaru (maks. 6) */
     private function doPerDt(): array
     {
@@ -546,6 +568,12 @@ class UjController extends Controller
         if ($input instanceof RedirectResponse) {
             return $input;
         }
+        // Master hanya dari mutasi Jago (owner 28 Okt 2026): tanggal, bank, rekening, nominal & biaya transfer diambil dari transfer bank yang dipilih.
+        $mj = $this->masterMutasi($request, $input);
+        if ($mj instanceof RedirectResponse) {
+            return $mj;
+        }
+        $input = $mj['input'];
         // Fitur Pengajuan UJ nonaktif: tautan ke pengajuan dari form lama diabaikan.
         if (! \App\Support\Fitur::pengajuanUj()) {
             $input['detail'] = array_map(fn ($d) => [...$d, 'pengajuan' => null], $input['detail']);
@@ -609,10 +637,15 @@ class UjController extends Controller
 
         // Rekening baru masuk Daftar Rekening (nama penerima Input UJ dicatat "perlu dicek": sering diisi nama sopir).
         \App\Support\DaftarRekening::catat($input['rekening'] ?? null, $input['bank'] ?? null, $input['nama'] ?? null, $request->user()->id, false);
+        if ($mj['mutasi']) {
+            \App\Support\MutasiJago::tandaiDipakai($mj['mutasi'], 'uj:'.$hasil['no_uj'], $request->user()->id);
+        }
         KasRiwayat::create([
             'aksi' => 'uj-tambah', 'lembar' => 'Seabank', 'baris_awal' => $hasil['baris_awal'], 'baris_akhir' => $hasil['baris_akhir'],
-            'ringkasan' => mb_strimwidth($this->ringkasanInput($input), 0, 490, '…'),
-            'isi' => ['input' => [...$input, 'tanggal' => $input['tanggal']->toDateString()], 'id_uj' => $hasil['ids'], 'id_biaya' => $hasil['id_biaya']], 'user_id' => $request->user()->id,
+            'ringkasan' => mb_strimwidth($this->ringkasanInput($input).($mj['mutasi'] ? ' · dari mutasi Jago '.$mj['mutasi']->waktu->format('d-m H:i') : '')
+                .($mj['luar_bank'] ? ' · DI LUAR BANK: '.$mj['luar_bank'] : ''), 0, 490, '…'),
+            'isi' => ['input' => [...$input, 'tanggal' => $input['tanggal']->toDateString()], 'id_uj' => $hasil['ids'], 'id_biaya' => $hasil['id_biaya'],
+                'jago_mutasi_id' => $mj['mutasi']?->id, 'luar_bank' => $mj['luar_bank']], 'user_id' => $request->user()->id,
         ]);
 
         return redirect()->route('uj.index', ['bulan' => $input['tanggal']->format('Y-m')])->with($pesanImpor ? 'error' : 'success',
@@ -642,7 +675,9 @@ class UjController extends Controller
                 ->map(fn ($f) => ['id' => $f->id, 'penuh' => route('kas.foto', $f), 'kecil' => route('kas.foto', ['foto' => $f, 'ukuran' => 'kecil']), 'hapus' => route('kas.foto.destroy', $f)])->all(),
         ];
 
-        return $this->create()->with('edit', $edit);
+        $tertaut = \App\Models\JagoMutasi::where('kantong', 'uj')->where('dipakai', 'uj:'.$noUj)->first();
+
+        return $this->create()->with('edit', $edit)->with('mutasiTertaut', $tertaut ? \App\Support\MutasiJago::ringkas($tertaut) : null);
     }
 
     public function update(Request $request, int $noUj): RedirectResponse
@@ -659,6 +694,12 @@ class UjController extends Controller
         if ($input instanceof RedirectResponse) {
             return $input;
         }
+        // Transaksi yang master-nya dari mutasi Jago: tanggal, bank, rekening, nominal & biaya tetap mengikuti transfer bank.
+        $mj = $this->masterMutasi($request, $input, 'uj:'.$noUj);
+        if ($mj instanceof RedirectResponse) {
+            return $mj;
+        }
+        $input = $mj['input'];
         $temuan = $this->wajibKonfirmasi($input, $t->id);
         if ($temuan instanceof RedirectResponse) {
             return $temuan;

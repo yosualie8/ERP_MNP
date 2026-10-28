@@ -66,7 +66,36 @@ class KasInputController extends Controller
         $namaTahap = \App\Models\ProyekTahap::pluck('nama', 'id');
         $kataGl = collect(\App\Support\DaftarProyek::kataGl())->map(fn ($x) => [$x[0], $namaTahap[$x[1]] ?? '#'.$x[1]])->values();
 
-        return view('kas.input', compact('kodeGl', 'pic', 'rekening', 'bank', 'modelKode', 'aset', 'kataGl'));
+        // Master dari mutasi Jago (owner 28 Okt 2026): transfer bank kantong Kas MNP yang belum diinput.
+        $calonMutasi = request()->routeIs('kas.input', 'kas.input.store') ? \App\Support\MutasiJago::calonMaster('kas') : [];
+
+        return view('kas.input', compact('kodeGl', 'pic', 'rekening', 'bank', 'modelKode', 'aset', 'kataGl', 'calonMutasi'));
+    }
+
+    /**
+     * Master dari mutasi Jago untuk Input Kas (App\Support\MutasiJago::terapkanMaster); transfer keluar: jumlah detail tetap harus sama dengan nominal bank.
+     *
+     * @return array{input: array, mutasi: ?\App\Models\JagoMutasi, luar_bank: ?string}|RedirectResponse
+     */
+    private function masterMutasi(Request $request, array $input, ?string $tautan = null): array|RedirectResponse
+    {
+        $mj = \App\Support\MutasiJago::terapkanMaster($request, 'kas', $input, $tautan);
+        if ($mj['galat']) {
+            return back()->withInput()->with('error', $mj['galat']);
+        }
+        $i = $mj['input'];
+        if ($mj['mutasi'] && $i['arah'] === 'keluar') {
+            $jumlah = array_sum(array_map(fn ($b) => (int) $b['nominal'], $i['bon']));
+            if ($jumlah !== (int) $i['nominal_transfer']) {
+                return back()->withInput()->withErrors(['nominal_transfer' => 'Ditolak: jumlah transaksi detail '.rp($jumlah).' tidak sama dengan nominal transfer bank '.rp((int) $i['nominal_transfer'])
+                    .' (mutasi Jago '.$mj['mutasi']->waktu->format('d-m H:i').').']);
+            }
+        }
+        if ($mj['mutasi'] && $i['arah'] === 'masuk') {
+            $mj['input']['bon'] = [];
+        }
+
+        return $mj;
     }
 
     /** Saran rekening (nama pemilik + bank + nomor) dari Daftar Rekening — sama untuk Input Kas & Input UJ. */
@@ -188,6 +217,12 @@ class KasInputController extends Controller
         if ($input instanceof RedirectResponse) {
             return $input;
         }
+        // Master hanya dari mutasi Jago (owner 28 Okt 2026): tanggal, arah, bank, rekening, nominal & biaya transfer dari transfer bank yang dipilih.
+        $mj = $this->masterMutasi($request, $input);
+        if ($mj instanceof RedirectResponse) {
+            return $mj;
+        }
+        $input = $mj['input'];
         $tanggal = $input['tanggal'];
         // Reimburse Kas UJ: satu reimburse (batch RUJ / tanggal tanpa batch) hanya boleh dicatat sekali.
         $labelRui = $input['reimburse_uj'] ? $this->labelReimburseUj($input['reimburse_uj']) : null;
@@ -219,12 +254,16 @@ class KasInputController extends Controller
             FotoBon::unggahSegera();
         }
 
+        if ($mj['mutasi']) {
+            \App\Support\MutasiJago::tandaiDipakai($mj['mutasi'], 'kas:'.$hasil['no_id'][0], $request->user()->id);
+        }
         $nilai = $input['arah'] === 'masuk' ? $input['nominal_masuk'] : array_sum(array_column($input['bon'], 'nominal'));
         KasRiwayat::create([
             'aksi' => 'tambah', 'lembar' => $hasil['lembar'], 'baris_awal' => $hasil['baris_awal'], 'baris_akhir' => $hasil['baris_akhir'],
-            'ringkasan' => ($input['arah'] === 'masuk' ? 'Uang masuk ' : 'Transfer ').rp($nilai).' '.$tanggal->translatedFormat('j M Y').' '
-                .trim($input['nama_tujuan'].' — '.$input['keterangan'], ' —').' ('.count($input['bon']).' detail)',
-            'isi' => ['input' => [...$input, 'tanggal' => $tanggal->toDateString()], 'no_id' => $hasil['no_id']],
+            'ringkasan' => mb_strimwidth(($input['arah'] === 'masuk' ? 'Uang masuk ' : 'Transfer ').rp($nilai).' '.$tanggal->translatedFormat('j M Y').' '
+                .trim($input['nama_tujuan'].' — '.$input['keterangan'], ' —').' ('.count($input['bon']).' detail)'
+                .($mj['mutasi'] ? ' · dari mutasi Jago '.$mj['mutasi']->waktu->format('d-m H:i') : '').($mj['luar_bank'] ? ' · DI LUAR BANK: '.$mj['luar_bank'] : ''), 0, 490, '…'),
+            'isi' => ['input' => [...$input, 'tanggal' => $tanggal->toDateString()], 'no_id' => $hasil['no_id'], 'jago_mutasi_id' => $mj['mutasi']?->id, 'luar_bank' => $mj['luar_bank']],
             'user_id' => $request->user()->id,
         ]);
         // Rekening tujuan baru masuk Daftar Rekening (nama Kas Harian = nama pemilik rekening).
@@ -355,7 +394,9 @@ class KasInputController extends Controller
                 ->map(fn ($f) => ['penuh' => route('kas.foto', $f), 'kecil' => route('kas.foto', ['foto' => $f, 'ukuran' => 'kecil'])])->all(),
         ];
 
-        return $this->create()->with('edit', $edit);
+        $tertaut = \App\Models\JagoMutasi::where('kantong', 'kas')->where('dipakai', 'kas:'.$noId)->first();
+
+        return $this->create()->with('edit', $edit)->with('mutasiTertaut', $tertaut ? \App\Support\MutasiJago::ringkas($tertaut) : null);
     }
 
     public function update(Request $request, int $noId): RedirectResponse
@@ -368,6 +409,12 @@ class KasInputController extends Controller
         if ($input instanceof RedirectResponse) {
             return $input;
         }
+        // Transaksi yang master-nya dari mutasi Jago: tanggal, arah, bank, rekening, nominal & biaya tetap mengikuti transfer bank.
+        $mj = $this->masterMutasi($request, $input, 'kas:'.$noId);
+        if ($mj instanceof RedirectResponse) {
+            return $mj;
+        }
+        $input = $mj['input'];
         $ringkasLama = $this->ringkasan($t);
         // Sudah direimburse → tidak boleh diubah (Mutasi Reimburse ikut berubah).
         $biayaLama = HapusKasSheet::biayaTransferMilik($t);

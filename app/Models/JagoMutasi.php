@@ -10,9 +10,9 @@ class JagoMutasi extends Model
 {
     protected $table = 'jago_mutasi';
 
-    protected $fillable = ['kantong', 'id_bank', 'waktu', 'nama', 'bank', 'rekening', 'jenis', 'arah', 'biaya', 'catatan', 'jumlah', 'saldo', 'jago_unggah_id'];
+    protected $fillable = ['kantong', 'id_bank', 'waktu', 'nama', 'bank', 'rekening', 'jenis', 'arah', 'biaya', 'catatan', 'jumlah', 'saldo', 'jago_unggah_id', 'dipakai', 'dipakai_pada', 'dipakai_oleh'];
 
-    protected $casts = ['waktu' => 'datetime', 'biaya' => 'boolean', 'jumlah' => 'float', 'saldo' => 'float'];
+    protected $casts = ['waktu' => 'datetime', 'biaya' => 'boolean', 'jumlah' => 'float', 'saldo' => 'float', 'dipakai_pada' => 'datetime'];
 
     public function unggah(): BelongsTo
     {

@@ -168,6 +168,9 @@
             </div>
         @endif
 
+        @unless ($ajukan)
+            @include('mutasi-jago._pilih', ['kantong' => 'uj'])
+        @endunless
         @if ($pesanPengajuan ?? null)
             <div class="pesan galat">{{ $pesanPengajuan }}</div>
         @endif

@@ -144,6 +144,101 @@ class MutasiJago
             'valid_sampai' => $putus ? $putus[0]['setelah']->waktu : $akhir, 'valid' => ! $putus];
     }
 
+    /**
+     * Calon master Input UJ / Input Kas: transfer bank yang VALID (sebelum titik putus) dan belum punya pasangan di buku, 14 hari terakhir.
+     * Kas UJ hanya transfer keluar; Kas Harian keluar & masuk. Baris biaya ikut sebagai "biaya" transfernya (menit sama, sesudahnya).
+     *
+     * @return array<int, array{id: int, waktu: string, jam: string, nama: string, bank: ?string, rekening: ?string, arah: string, nominal: int, biaya: int, catatan: ?string, saran: ?string}>
+     */
+    public static function calonMaster(string $kantong): array
+    {
+        $c = self::cocokkan($kantong, today()->subDays(14), today());
+        $urut = collect($c['validitas']['urut'])->values();
+        $posisi = $urut->pluck('id')->flip();
+
+        return $c['baris']->filter(fn ($r) => $r['status'] === 'belum' && ! $r['m']->dipakai && ($kantong === 'kas' || $r['m']->arah === 'keluar'))
+            ->map(fn ($r) => [
+                'id' => $r['m']->id, 'waktu' => $r['m']->waktu->toDateString(), 'jam' => $r['m']->waktu->format('H:i'), 'nama' => (string) $r['m']->nama,
+                'bank' => $r['m']->bank, 'rekening' => $r['m']->rekening, 'arah' => $r['m']->arah, 'nominal' => (int) round(abs($r['m']->jumlah)),
+                'biaya' => self::biayaDari($r['m'], $urut, $posisi), 'catatan' => $r['m']->catatan, 'saran' => $r['saran'],
+            ])->values()->all();
+    }
+
+    /** Biaya transfer bank untuk satu transfer keluar = baris biaya tepat sesudahnya di menit yang sama (Rp0 bila tidak ada). */
+    public static function biayaDari(JagoMutasi $m, ?Collection $urut = null, ?Collection $posisi = null): int
+    {
+        if ($m->arah !== 'keluar') {
+            return 0;
+        }
+        $urut ??= collect(self::validitas($m->kantong)['urut'])->values();
+        $posisi ??= $urut->pluck('id')->flip();
+        $n = $urut[($posisi[$m->id] ?? -2) + 1] ?? null;
+
+        return $n && $n->biaya && $n->waktu->format('YmdHi') === $m->waktu->format('YmdHi') ? (int) round(abs($n->jumlah)) : 0;
+    }
+
+    /**
+     * Master dari mutasi (owner 28 Okt 2026): isian master (tanggal, bank, rekening, nominal, biaya transfer; Kas Harian juga arah) DIGANTI data bank.
+     * - Edit transaksi yang tertaut ke mutasi → tetap terkunci ke mutasinya;
+     * - Input baru → wajib memilih mutasi yang masih calon (valid, belum diinput, belum dipakai);
+     * - Super Admin boleh tanpa mutasi untuk transaksi di luar bank (tunai), wajib alasan ≥ 10 karakter.
+     *
+     * @return array{input: array, mutasi: ?JagoMutasi, galat: ?string, luar_bank: ?string}
+     */
+    public static function terapkanMaster(\Illuminate\Http\Request $request, string $kantong, array $input, ?string $tautan = null): array
+    {
+        $hasil = ['input' => $input, 'mutasi' => null, 'galat' => null, 'luar_bank' => null];
+        $m = $tautan ? JagoMutasi::where('kantong', $kantong)->where('dipakai', $tautan)->first() : null;
+        if ($tautan && ! $m) {
+            return $hasil; // transaksi lama (sebelum master dari mutasi) — diedit seperti biasa
+        }
+        if (! $m) {
+            $id = $request->integer('jago_mutasi_id');
+            if (! $id) {
+                $alasan = trim((string) $request->input('luar_bank_alasan'));
+                if (! $request->user()->isSuperAdmin()) {
+                    return [...$hasil, 'galat' => 'Pilih transfernya dari daftar mutasi Jago di atas form (master transaksi diambil dari mutasi bank). Bila belum ada, unggah mutasi terbaru di menu Mutasi Jago.'];
+                }
+                if (! $request->boolean('luar_bank') || mb_strlen($alasan) < 10) {
+                    return [...$hasil, 'galat' => 'Pilih transfer dari daftar mutasi Jago — atau centang "Transaksi di luar bank" dan tulis alasannya (min. 10 karakter).'];
+                }
+
+                return [...$hasil, 'luar_bank' => $alasan];
+            }
+            $m = JagoMutasi::where('kantong', $kantong)->find($id);
+            $calon = collect(self::calonMaster($kantong))->pluck('id')->flip();
+            if (! $m || $m->dipakai || ! isset($calon[$m->id])) {
+                return [...$hasil, 'galat' => 'Transfer mutasi yang dipilih sudah dipakai / sudah tercatat (mungkin oleh admin lain) atau belum valid. Muat ulang, lalu pilih lagi.'];
+            }
+        }
+        $biaya = self::biayaDari($m);
+        $tanggal = $m->waktu->copy()->startOfDay();
+        $bank = DaftarBank::kode($m->bank) ?? $m->bank;
+        if ($kantong === 'uj') {
+            $input = [...$input, 'tanggal' => $tanggal, 'bank' => $bank, 'rekening' => $m->rekening, 'nominal' => (int) round(abs($m->jumlah)),
+                'biaya_transfer' => $biaya > 0, 'nominal_biaya' => $biaya ?: (int) $input['nominal_biaya']];
+        } else {
+            $keluar = $m->arah === 'keluar';
+            $input = [...$input, 'tanggal' => $tanggal, 'arah' => $m->arah, 'no_rek' => $m->rekening, 'bank' => $bank,
+                'nominal_transfer' => $keluar ? (int) round(abs($m->jumlah)) : null, 'nominal_masuk' => $keluar ? 0 : (int) round($m->jumlah),
+                'biaya_transfer' => $keluar && $biaya > 0, 'nominal_biaya' => $biaya ?: (int) $input['nominal_biaya']];
+        }
+
+        return [...$hasil, 'input' => $input, 'mutasi' => $m];
+    }
+
+    public static function tandaiDipakai(JagoMutasi $m, string $tautan, int $userId): void
+    {
+        JagoMutasi::whereKey($m->id)->whereNull('dipakai')->update(['dipakai' => $tautan, 'dipakai_pada' => now(), 'dipakai_oleh' => $userId]);
+    }
+
+    /** Ringkasan satu mutasi untuk form (banner "Master dari mutasi"). */
+    public static function ringkas(JagoMutasi $m): array
+    {
+        return ['id' => $m->id, 'waktu' => $m->waktu->toDateString(), 'jam' => $m->waktu->format('H:i'), 'nama' => (string) $m->nama, 'bank' => $m->bank, 'rekening' => $m->rekening,
+            'arah' => $m->arah, 'nominal' => (int) round(abs($m->jumlah)), 'biaya' => self::biayaDari($m), 'catatan' => $m->catatan, 'saran' => null];
+    }
+
     public static function pesanPutus(array $p): string
     {
         return 'Mutasi tidak valid: ada transaksi yang hilang antara '.$p['setelah']->waktu->format('d-m-Y H:i').' ('.$p['setelah']->nama.', saldo '.rp((int) $p['setelah']->saldo).') dan '
@@ -315,14 +410,14 @@ class MutasiJago
                 continue;
             }
             $d = $detail[$t->id] ?? collect();
-            $hasil[] = ['kunci' => 'uj'.$t->id, 'id' => 'UJ-'.$t->no_uj, 'tanggal' => Carbon::parse($t->tanggal)->startOfDay(), 'nominal' => -(float) $t->nominal,
+            $hasil[] = ['kunci' => 'uj'.$t->id, 'tautan' => 'uj:'.$t->no_uj, 'id' => 'UJ-'.$t->no_uj, 'tanggal' => Carbon::parse($t->tanggal)->startOfDay(), 'nominal' => -(float) $t->nominal,
                 'rek' => $t->rekening, 'bank' => $t->bank, 'nama' => (string) $t->nama, 'biaya' => (float) $d->where('biaya_transfer', true)->sum('nominal'),
                 'do' => $d->where('biaya_transfer', false)->pluck('no_do')->map(fn ($v) => SaldoSopir::kunciDo($v))->filter()->unique()->values()->all(),
                 'ket' => (string) ($d->firstWhere('biaya_transfer', false)->keterangan ?? ''), 'n' => $d->where('biaya_transfer', false)->count(), 'saldo' => null, 'fee' => false,
                 'url' => route('uj.edit', $t->no_uj)];
         }
         foreach (DB::table('uj_reimburse')->whereBetween('tanggal', $rentang)->get(['id', 'tanggal', 'total']) as $r) {
-            $hasil[] = ['kunci' => 'ruj'.$r->id, 'id' => sprintf('RUJ-%04d', $r->id), 'tanggal' => Carbon::parse($r->tanggal)->startOfDay(), 'nominal' => (float) $r->total,
+            $hasil[] = ['kunci' => 'ruj'.$r->id, 'tautan' => null, 'id' => sprintf('RUJ-%04d', $r->id), 'tanggal' => Carbon::parse($r->tanggal)->startOfDay(), 'nominal' => (float) $r->total,
                 'rek' => null, 'bank' => null, 'nama' => 'Reimburse UJ', 'biaya' => 0.0, 'do' => [], 'ket' => 'Reimburse UJ', 'n' => 0, 'saldo' => null, 'fee' => false, 'url' => null];
         }
 
@@ -335,7 +430,7 @@ class MutasiJago
         $rentang = [$dari->copy()->subDays(3)->toDateString(), $sampai->copy()->addDays(3)->toDateString()];
 
         return DB::table('kas_transfer')->whereBetween('tanggal', $rentang)->orderBy('tanggal')->orderBy('baris')->get()->map(fn ($t) => [
-            'kunci' => 'kas'.$t->id, 'id' => $t->no_id ? 'NO ID '.$t->no_id : 'baris '.$t->baris, 'tanggal' => Carbon::parse($t->tanggal)->startOfDay(),
+            'kunci' => 'kas'.$t->id, 'tautan' => $t->no_id ? 'kas:'.$t->no_id : null, 'id' => $t->no_id ? 'NO ID '.$t->no_id : 'baris '.$t->baris, 'tanggal' => Carbon::parse($t->tanggal)->startOfDay(),
             'nominal' => (float) $t->debet - (float) $t->kredit, 'rek' => $t->no_rek_tujuan, 'bank' => $t->bank_tujuan, 'nama' => (string) $t->nama_tujuan, 'biaya' => 0.0,
             'do' => [], 'ket' => (string) $t->keterangan, 'n' => 0, 'saldo' => (float) $t->saldo, 'fee' => (bool) preg_match('/^biaya transfer/i', trim((string) $t->keterangan)), 'url' => null,
         ])->reject(fn ($b) => abs($b['nominal']) < 0.5)->values()->all();
@@ -344,6 +439,10 @@ class MutasiJago
     private static function skor(array $u, array $b, string $kantong): ?int
     {
         $m = $u['m'];
+        // Master dibuat dari mutasi ini (Input UJ / Input Kas): pasangan pasti.
+        if ($m->dipakai && $m->dipakai === ($b['tautan'] ?? null)) {
+            return 10000;
+        }
         if (abs($m->jumlah - $b['nominal']) > 0.5) {
             return null;
         }
