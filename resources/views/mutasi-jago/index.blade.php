@@ -51,9 +51,22 @@
         </form>
     </div>
 
-    <p class="redup" style="font-size: 13px; margin: 0 0 10px;">Kantong <b>{{ $info['nama'] }} {{ $info['nomor'] }}</b> dicocokkan dengan <b>{{ $info['buku'] }}</b> (input admin tidak diubah).
-        Mutasi tersimpan: {{ $awal ? $tgl($awal).' '.$awal->format('H:i') : '—' }} s/d {{ $akhir ? $tgl($akhir).' '.$akhir->format('H:i') : '—' }}.
-        Transaksi {{ $info['buku'] }} sesudah mutasi terakhir ditandai <i>menunggu mutasi</i>.</p>
+    @php($v = $hasil['validitas'])
+    {{-- Validitas dulu: pengecekan hanya untuk mutasi yang saldonya bersambung (owner 28 Okt 2026). --}}
+    @if (! $v['urut'])
+        <div class="pesan">Belum ada mutasi kantong {{ $info['nama'] }} sejak {{ \Illuminate\Support\Carbon::parse(\App\Support\MutasiJago::MULAI)->translatedFormat('j M Y') }}. Unggah PDF riwayat transaksinya.</div>
+    @elseif ($v['valid'])
+        <div class="pesan sukses">✓ <b>Mutasi valid</b> — saldo bersambung dari {{ $tgl($v['awal']) }} {{ $v['awal']->format('H:i') }} s/d {{ $tgl($v['akhir']) }} {{ $v['akhir']->format('H:i') }}
+            ({{ count($v['urut']) }} transaksi, saldo akhir {{ $rupiah(end($v['urut'])->saldo) }}). Pengecekan ke {{ $info['buku'] }} dijalankan.</div>
+    @else
+        <div class="pesan galat">✗ <b>Mutasi belum valid — saldo tidak balance.</b> Pengecekan hanya sampai <b>{{ $tgl($v['valid_sampai']) }} {{ $v['valid_sampai']->format('H:i') }}</b>;
+            {{ $hasil['belum_dicek'] }} transaksi bank sesudahnya di rentang ini belum dicek.
+            <ul style="margin: 6px 0 0; padding-left: 18px;">@foreach ($v['putus'] as $p)<li>{{ \App\Support\MutasiJago::pesanPutus($p) }}</li>@endforeach</ul></div>
+    @endif
+
+    <p class="redup" style="font-size: 13px; margin: 0 0 10px;">Kantong <b>{{ $info['nama'] }} {{ $info['nomor'] }}</b> dicocokkan dengan <b>{{ $info['buku'] }}</b> (input admin tidak diubah), mulai
+        {{ \Illuminate\Support\Carbon::parse(\App\Support\MutasiJago::MULAI)->translatedFormat('j M Y') }}.
+        Hari terakhir yang tercakup mutasi masih <i>menunggu</i> (transaksi sore / malam mungkin belum ada di PDF) — baru dinilai sesudah unggahan berikutnya.</p>
 
     <div class="ringkas-jago">
         <div class="kartu"><small>Transaksi bank</small><b>{{ $hasil['baris']->where('jenis', 'bank')->count() }}</b></div>
@@ -73,7 +86,7 @@
                     <tr class="t"><td data-n="{{ $h['tanggal']->toDateString() }}">{{ $h['tanggal']->translatedFormat('D, d-M-y') }}</td><td class="angka">{{ $h['bank'] }}</td>
                         <td class="angka">{{ $h['n']['cocok'] ?? 0 }}</td><td class="angka">{{ $h['n']['catatan'] ?? '' }}</td><td class="angka">{{ $h['n']['belum'] ?? '' }}</td><td class="angka">{{ $h['n']['tidak-di-bank'] ?? '' }}</td>
                         <td class="angka">{{ $rupiah($h['saldo_bank']) }}</td>@if ($kantong === 'kas')<td class="angka">{{ $rupiah($h['saldo_buku']) }}</td>@endif
-                        <td>@if ($h['cocok100'])<span class="label hijau">Cocok 100%</span>@elseif ($h['bank'])<span class="label kuning">perlu dicek</span>@else<span class="label">menunggu mutasi</span>@endif</td></tr>
+                        <td>@if ($h['cocok100'])<span class="label hijau">Cocok 100%</span>@elseif (! $h['penuh'])<span class="label">menunggu mutasi berikutnya</span>@elseif ($h['bank'])<span class="label kuning">perlu dicek</span>@else<span class="label">tidak ada mutasi</span>@endif</td></tr>
                 @empty
                     <tr><td colspan="9" class="redup" style="padding: 16px;">Belum ada mutasi untuk rentang ini. Unggah PDF riwayat transaksi kantong {{ $info['nama'] }}.</td></tr>
                 @endforelse

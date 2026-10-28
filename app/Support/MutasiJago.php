@@ -15,7 +15,9 @@ use RuntimeException;
  * disimpan sekali per ID# bank, lalu dicocokkan dengan buku aplikasi — input admin TIDAK diubah:
  *  - kantong Uang Jalan DT ↔ Kas UJ (master transfer = satu transfer bank; biaya Rp2.500 = baris bank sesudahnya; transfer masuk = Reimburse UJ);
  *  - kantong Kas MNP ↔ Kas Harian (satu baris bank = satu baris transfer, termasuk "Biaya Transfer Keluar"; saldo per baris sama).
- * Dicocokkan mulai 1 Okt 2026. Hasil per baris: cocok / ada catatan (tanggal, rekening, biaya, DO beda) / ada di bank belum diinput / diinput tidak ada di bank.
+ * Dicocokkan mulai 27 Okt 2026. Hasil per baris: cocok / ada catatan (tanggal, rekening, biaya, DO beda) / ada di bank belum diinput / diinput tidak ada di bank.
+ * VALIDITAS DULU (owner 28 Okt 2026): saldo seluruh mutasi tersimpan harus bersambung baris demi baris; bila ada transaksi hilang (saldo tidak balance)
+ * pengecekan hanya berjalan sampai transaksi terakhir sebelum putus — sesudahnya "menunggu" sampai rentang yang hilang diunggah.
  */
 class MutasiJago
 {
@@ -24,7 +26,7 @@ class MutasiJago
         'kas' => ['nama' => 'Kas MNP', 'nomor' => '102466547411', 'buku' => 'Kas Harian', 'menu' => ['input-kas', 'kas-harian']],
     ];
 
-    public const MULAI = '2026-10-01';
+    public const MULAI = '2026-10-27';
 
     public const FOLDER = 'mutasi-jago';
 
@@ -79,17 +81,16 @@ class MutasiJago
         });
         [$u, $baru] = $hasil;
 
-        // Sambungan dengan unggahan lain: saldo baris pertama file harus = saldo transaksi tersimpan sebelumnya + jumlahnya (begitu pula baris sesudah file).
-        $pertama = $baris[0];
+        // Rentang PDF sampai hari unduh: saldo baris terakhir harus = "Saldo terbaru" di kepala PDF (transaksi akhir tidak tercantum / masih diproses).
         $akhir = $baris[count($baris) - 1];
-        $sebelum = JagoMutasi::where('kantong', $kantong)->where('waktu', '<', $pertama['waktu'])->orderByDesc('waktu')->orderByDesc('id')->first();
-        if ($sebelum && abs($sebelum->saldo + $pertama['jumlah'] - $pertama['saldo']) >= 1) {
-            $peringatan[] = 'Ada transaksi yang belum diunggah antara '.$sebelum->waktu->format('d-m-Y H:i').' dan '.$pertama['waktu']->format('d-m-Y H:i')
-                .' (saldo tidak bersambung). Unggah riwayat untuk rentang itu.';
+        if ($h['tgl_terbaru'] && $h['saldo_terbaru'] !== null && $h['sampai'] && $h['sampai'] >= $h['tgl_terbaru'] && abs($akhir['saldo'] - $h['saldo_terbaru']) >= 1) {
+            $peringatan[] = 'Saldo transaksi terakhir di PDF ('.rp((int) $akhir['saldo']).') tidak sama dengan "Saldo terbaru" kantong ('.rp((int) $h['saldo_terbaru'])
+                .') — ada transaksi di akhir rentang yang belum tercantum; unggah lagi nanti.';
         }
-        $sesudah = JagoMutasi::where('kantong', $kantong)->where('waktu', '>', $akhir['waktu'])->orderBy('waktu')->orderBy('id')->first();
-        if ($sesudah && abs($akhir['saldo'] + $sesudah->jumlah - $sesudah->saldo) >= 1) {
-            $peringatan[] = 'Ada transaksi yang belum diunggah antara '.$akhir['waktu']->format('d-m-Y H:i').' dan '.$sesudah->waktu->format('d-m-Y H:i').' (saldo tidak bersambung).';
+        // Validitas seluruh mutasi tersimpan (bukan hanya file ini): saldo baris demi baris harus bersambung sejak MULAI.
+        $v = self::validitas($kantong);
+        foreach ($v['putus'] as $p) {
+            $peringatan[] = self::pesanPutus($p);
         }
         $u->update(['peringatan' => $peringatan ? implode("\n", $peringatan) : null]);
 
@@ -99,21 +100,73 @@ class MutasiJago
             copy($path, $file);
         }
 
-        return ['unggah' => $u, 'kantong' => $kantong, 'baru' => $baru, 'sudah' => count($baris) - $baru, 'peringatan' => $peringatan];
+        return ['unggah' => $u, 'kantong' => $kantong, 'baru' => $baru, 'sudah' => count($baris) - $baru, 'peringatan' => $peringatan, 'validitas' => $v];
+    }
+
+    /**
+     * Validitas mutasi tersimpan satu kantong sejak MULAI: urutan baris (waktu; dalam menit yang sama disusun menurut sambungan saldo karena
+     * baris bisa datang dari unggahan berbeda) dan titik putus (saldo sebelumnya + jumlah ≠ saldo = ada transaksi hilang di antaranya).
+     *
+     * @return array{urut: array<int, JagoMutasi>, putus: array<int, array>, awal: ?Carbon, akhir: ?Carbon, valid_sampai: ?Carbon, valid: bool}
+     */
+    public static function validitas(string $kantong): array
+    {
+        $urut = [];
+        $saldo = null;
+        foreach (JagoMutasi::where('kantong', $kantong)->where('waktu', '>=', self::MULAI)->orderBy('waktu')->orderBy('id')->get()->groupBy(fn ($r) => $r->waktu->format('YmdHi')) as $grup) {
+            $sisa = $grup->values()->all();
+            while ($sisa) {
+                $pilih = null;
+                foreach ($sisa as $k => $r) {
+                    if ($saldo !== null && abs($saldo + $r->jumlah - $r->saldo) < 1) {
+                        $pilih = $k;
+                        break;
+                    }
+                }
+                // Tidak ada yang menyambung: ambil baris yang bukan lanjutan baris lain di menit itu (awal rantai menit ini).
+                $pilih ??= collect($sisa)->keys()->first(fn ($k) => ! collect($sisa)->contains(fn ($x) => $x !== $sisa[$k] && abs($x->saldo - ($sisa[$k]->saldo - $sisa[$k]->jumlah)) < 1))
+                    ?? array_key_first($sisa);
+                $urut[] = $sisa[$pilih];
+                $saldo = $sisa[$pilih]->saldo;
+                unset($sisa[$pilih]);
+            }
+        }
+        $putus = [];
+        for ($i = 1; $i < count($urut); $i++) {
+            [$a, $b] = [$urut[$i - 1], $urut[$i]];
+            if (abs($a->saldo + $b->jumlah - $b->saldo) >= 1) {
+                $putus[] = ['setelah' => $a, 'sebelum' => $b, 'kurang' => round($b->saldo - $b->jumlah - $a->saldo, 2)];
+            }
+        }
+        $akhir = $urut ? end($urut)->waktu : null;
+
+        return ['urut' => $urut, 'putus' => $putus, 'awal' => $urut ? $urut[0]->waktu : null, 'akhir' => $akhir,
+            'valid_sampai' => $putus ? $putus[0]['setelah']->waktu : $akhir, 'valid' => ! $putus];
+    }
+
+    public static function pesanPutus(array $p): string
+    {
+        return 'Mutasi tidak valid: ada transaksi yang hilang antara '.$p['setelah']->waktu->format('d-m-Y H:i').' ('.$p['setelah']->nama.', saldo '.rp((int) $p['setelah']->saldo).') dan '
+            .$p['sebelum']->waktu->format('d-m-Y H:i').' ('.$p['sebelum']->nama.') — saldo tidak balance, selisih '.($p['kurang'] < 0 ? '−' : '+').rp((int) abs($p['kurang']))
+            .'. Unduh & unggah riwayat untuk rentang itu.';
     }
 
     /**
      * Pencocokan satu kantong untuk rentang tanggal.
      *
-     * @return array{baris: Collection, hari: Collection, cakupan: array{0: ?Carbon, 1: ?Carbon}, buku: string}
+     * Hanya mutasi yang VALID (sebelum titik putus pertama) yang dicek; transaksi buku sesudah hari terakhir yang tercakup penuh = "menunggu".
+     *
+     * @return array{baris: Collection, hari: Collection, cakupan: array{0: ?Carbon, 1: ?Carbon}, buku: string, validitas: array, belum_dicek: int}
      */
     public static function cocokkan(string $kantong, Carbon $dari, Carbon $sampai): array
     {
-        $dari = $dari->copy()->startOfDay();
+        $dari = $dari->copy()->startOfDay()->max(Carbon::parse(self::MULAI));
         $sampai = $sampai->copy()->endOfDay();
-        $cakupan = [JagoMutasi::where('kantong', $kantong)->min('waktu'), JagoMutasi::where('kantong', $kantong)->max('waktu')];
-        $cakupan = array_map(fn ($w) => $w ? Carbon::parse($w) : null, $cakupan);
-        $bank = JagoMutasi::where('kantong', $kantong)->whereBetween('waktu', [$dari, $sampai])->orderBy('waktu')->orderBy('id')->get();
+        $v = self::validitas($kantong);
+        $cakupan = [$v['awal'], $v['valid_sampai']];
+        $semuaBank = collect($v['urut'])->filter(fn ($m) => $m->waktu->between($dari, $sampai))->values();
+        $bank = $cakupan[1] ? $semuaBank->filter(fn ($m) => $m->waktu->lte($cakupan[1]))->values() : collect();
+        $belumDicek = $semuaBank->count() - $bank->count();
 
         // Unit bank: Kas UJ — transfer + baris biaya sesudahnya (menit sama) = satu unit; Kas Harian — tiap baris berdiri sendiri.
         $unit = [];
@@ -221,29 +274,33 @@ class MutasiJago
             $baris->push(['jenis' => 'bank', 'waktu' => $m->waktu, 'tanggal' => $m->waktu->copy()->startOfDay(), 'm' => $m, 'fee' => $u['fee'], 'saldo' => $u['saldo'],
                 'b' => $b, 'catatan' => $catatan, 'saran' => $saran, 'status' => $status]);
         }
-        // Buku tanpa pasangan di rentang ini: "tidak ada di bank" bila tanggalnya sudah tercakup mutasi; sesudah unggahan terakhir = menunggu.
+        // Buku tanpa pasangan: "tidak ada di bank" hanya bila harinya TERCAKUP PENUH mutasi valid (ada mutasi valid sesudah hari itu); hari terakhir
+        // yang tercakup / sesudah titik putus = "menunggu" (transaksi sore / malam mungkin belum ada di PDF yang diunduh).
+        $penuhSampai = $cakupan[1]?->copy()->startOfDay();
         foreach ($buku as $b) {
             if (isset($dipakai[$b['kunci']]) || $b['tanggal']->lt($dari) || $b['tanggal']->gt($sampai)) {
                 continue;
             }
-            $tercakup = $cakupan[0] && $b['tanggal']->gte($cakupan[0]->copy()->startOfDay()) && $b['tanggal']->lte($cakupan[1]->copy()->startOfDay());
+            $tercakup = $cakupan[0] && $b['tanggal']->gte($cakupan[0]->copy()->startOfDay()) && $b['tanggal']->lt($penuhSampai);
             $baris->push(['jenis' => 'buku', 'waktu' => $b['tanggal']->copy()->endOfDay(), 'tanggal' => $b['tanggal'], 'm' => null, 'fee' => null, 'saldo' => null, 'b' => $b,
                 'catatan' => [], 'saran' => null, 'status' => $tercakup ? 'tidak-di-bank' : 'menunggu']);
         }
-        $baris = $baris->sortBy(fn ($r) => $r['waktu']->format('YmdHis').($r['m']?->id ? sprintf('%010d', $r['m']->id) : '9'))->values();
+        $posisi = collect($v['urut'])->pluck('id')->flip();
+        $baris = $baris->sortBy(fn ($r) => $r['waktu']->format('YmdHi').($r['m'] ? sprintf('%08d', $posisi[$r['m']->id] ?? 0) : '99999999'))->values();
 
-        $hari = $baris->groupBy(fn ($r) => $r['tanggal']->toDateString())->map(function (Collection $g, $tgl) use ($kantong) {
+        $hari = $baris->groupBy(fn ($r) => $r['tanggal']->toDateString())->map(function (Collection $g, $tgl) use ($kantong, $penuhSampai, $cakupan) {
             $bankHari = $g->where('jenis', 'bank');
             $saldoBank = $bankHari->last()['saldo'] ?? null;
             $saldoBuku = $kantong === 'kas' ? DB::table('kas_transfer')->whereDate('tanggal', $tgl)->orderByDesc('baris')->value('saldo') : null;
             $n = $g->countBy('status');
             $masalah = ($n['catatan'] ?? 0) + ($n['belum'] ?? 0) + ($n['tidak-di-bank'] ?? 0) + ($n['biaya'] ?? 0);
+            $penuh = $penuhSampai && $cakupan[0] && Carbon::parse($tgl)->gte($cakupan[0]->copy()->startOfDay()) && Carbon::parse($tgl)->lt($penuhSampai);
 
-            return ['tanggal' => Carbon::parse($tgl), 'bank' => $bankHari->count(), 'n' => $n, 'saldo_bank' => $saldoBank, 'saldo_buku' => $saldoBuku,
-                'cocok100' => $bankHari->isNotEmpty() && $masalah === 0 && ($saldoBuku === null || $saldoBank === null || abs($saldoBank - $saldoBuku) < 1)];
+            return ['tanggal' => Carbon::parse($tgl), 'bank' => $bankHari->count(), 'n' => $n, 'saldo_bank' => $saldoBank, 'saldo_buku' => $saldoBuku, 'penuh' => $penuh,
+                'cocok100' => $penuh && $bankHari->isNotEmpty() && $masalah === 0 && ($saldoBuku === null || $saldoBank === null || abs($saldoBank - $saldoBuku) < 1)];
         })->sortKeys();
 
-        return ['baris' => $baris, 'hari' => $hari, 'cakupan' => $cakupan, 'buku' => self::KANTONG[$kantong]['buku']];
+        return ['baris' => $baris, 'hari' => $hari, 'cakupan' => $cakupan, 'buku' => self::KANTONG[$kantong]['buku'], 'validitas' => $v, 'belum_dicek' => $belumDicek];
     }
 
     /** Kas UJ: master transfer (nominal keluar, biaya dari detail Biaya Transfer, DO detail) + Reimburse UJ (transfer masuk). */

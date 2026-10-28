@@ -65,8 +65,15 @@ class MutasiJagoController extends Controller
             ? route('mutasi-jago.index', ['kantong' => $h['kantong'], 'dari' => ($u->dari ?? today())->max(Carbon::parse(MutasiJago::MULAI))->toDateString(), 'sampai' => ($u->sampai ?? today())->toDateString()])
             : route('mutasi-jago.index');
 
-        return redirect($tujuan)->with($h['peringatan'] ? 'error' : 'success', "Mutasi {$nama} ".($u->dari?->translatedFormat('j M') ?? '').' – '.($u->sampai?->translatedFormat('j M Y') ?? '')
-            .": {$h['baru']} transaksi baru tersimpan, {$h['sudah']} sudah ada sebelumnya.".($h['peringatan'] ? ' '.implode(' ', $h['peringatan']) : ''));
+        // Validitas dulu (owner 28 Okt 2026): pengecekan ke Kas UJ / Kas Harian hanya berjalan bila saldo seluruh mutasi bersambung.
+        $v = $h['validitas'];
+        $isi = "Mutasi {$nama} ".($u->dari?->translatedFormat('j M') ?? '').' – '.($u->sampai?->translatedFormat('j M Y') ?? '').": {$h['baru']} transaksi baru tersimpan, {$h['sudah']} sudah ada sebelumnya. ";
+        $isi .= $v['valid']
+            ? '✓ Mutasi VALID — saldo bersambung dari '.$v['awal']?->format('d-m-Y H:i').' s/d '.$v['akhir']?->format('d-m-Y H:i').' ('.count($v['urut']).' transaksi); pengecekan dijalankan.'
+            : '✗ Mutasi BELUM VALID — pengecekan hanya sampai '.$v['valid_sampai']?->format('d-m-Y H:i').'.';
+        $lain = array_values(array_filter($h['peringatan'], fn ($p) => ! str_starts_with($p, 'Mutasi tidak valid')));
+
+        return redirect($tujuan)->with($v['valid'] && ! $lain ? 'success' : 'error', $isi.($h['peringatan'] ? ' '.implode(' ', $h['peringatan']) : ''));
     }
 
     /** PDF asli yang diunggah. */

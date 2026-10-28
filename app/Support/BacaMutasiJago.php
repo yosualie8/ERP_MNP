@@ -112,8 +112,19 @@ class BacaMutasiJago
         if ($nomor === '') {
             throw new RuntimeException('Nama / nomor kantong tidak ditemukan di halaman pertama — ini bukan file riwayat transaksi kantong Jago.');
         }
+        // Kanan atas: "Saldo terbaru 28 Oct 2026 / IDR 46.109.405,50" (Inggris: "Latest Balance per 31 May 2026") = saldo kantong saat PDF diunduh.
+        $kanan = array_map(fn ($b) => implode(' ', array_column($b, 't')), self::kelompokBaris(array_filter($hal['kata'], fn ($w) => $w['x'] >= 900 && $w['y'] < 450)));
+        $tglTerbaru = $saldoTerbaru = null;
+        foreach ($kanan as $t) {
+            if (preg_match('/(?:terbaru|per)\s+(\d{1,2} \S+ \d{4})$/i', $t, $m)) {
+                $tglTerbaru = self::tanggal($m[1])?->toDateString();
+            }
+            if (preg_match('/^IDR\s+([\d.]+(?:,\d+)?)$/', $t, $m)) {
+                $saldoTerbaru = self::angka($m[1]);
+            }
+        }
 
-        return ['pemilik' => $pemilik, 'kantong' => $kantong, 'nomor' => $nomor, 'dari' => $dari, 'sampai' => $sampai];
+        return ['pemilik' => $pemilik, 'kantong' => $kantong, 'nomor' => $nomor, 'dari' => $dari, 'sampai' => $sampai, 'tgl_terbaru' => $tglTerbaru, 'saldo_terbaru' => $saldoTerbaru];
     }
 
     /** Transaksi di satu halaman. */
