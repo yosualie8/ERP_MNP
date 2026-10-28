@@ -250,9 +250,14 @@ class MutasiJago
     {
         return \Illuminate\Support\Facades\Cache::lock('bunga-otomatis', 120)->block(60, function () use ($userId) {
             $hasil = [];
+            $urut = collect(self::validitas('kas')['urut'])->values();
+            $posisi = $urut->pluck('id')->flip();
             foreach (collect(self::calonMaster('kas'))->filter(fn ($c) => $c['nama_buku']) as $c) {
                 $m = JagoMutasi::find($c['id']);
-                $nominal = $m ? (int) abs($m->jumlah) : 0;
+                // Kas Harian tanpa sen: nominal = selisih saldo bank yang dibulatkan ke bawah (sesudah − sebelum), supaya saldo Kas Harian
+                // selalu = saldo bank tanpa sen (sen bunga menumpuk di bank; bila tiap bunga dipotong sennya, selisihnya lama-lama ≥ Rp1).
+                $prev = $m ? ($urut[($posisi[$m->id] ?? 0) - 1] ?? null) : null;
+                $nominal = $m ? ($prev ? (int) abs(floor($m->saldo + 0.000001) - floor($prev->saldo + 0.000001)) : (int) abs($m->jumlah)) : 0;
                 if (! $m || $m->dipakai || $nominal < 1) {
                     continue;
                 }
