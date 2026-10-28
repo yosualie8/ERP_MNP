@@ -72,6 +72,18 @@ class MutasiJagoController extends Controller
             ? '✓ Mutasi VALID — saldo bersambung dari '.$v['awal']?->format('d-m-Y H:i').' s/d '.$v['akhir']?->format('d-m-Y H:i').' ('.count($v['urut']).' transaksi); pengecekan dijalankan.'
             : '✗ Mutasi BELUM VALID — pengecekan hanya sampai '.$v['valid_sampai']?->format('d-m-Y H:i').'.';
         $lain = array_values(array_filter($h['peringatan'], fn ($p) => ! str_starts_with($p, 'Mutasi tidak valid')));
+        // Bunga & pajak bunga kantong Kas MNP langsung dicatat di Kas Harian (owner 28 Okt 2026) — hanya yang valid & belum ada.
+        if ($h['kantong'] === 'kas') {
+            try {
+                if ($bunga = MutasiJago::catatBungaOtomatis($request->user()->id)) {
+                    $isi .= ' Otomatis dicatat di Kas Harian: '.implode(', ', $bunga).'.';
+                }
+            } catch (\Throwable $e) {
+                report($e);
+                $lain[] = $e->getMessage();
+                $isi .= ' Bunga / pajak bunga GAGAL dicatat otomatis ('.$e->getMessage().') — input manual di Input Kas.';
+            }
+        }
 
         return redirect($tujuan)->with($v['valid'] && ! $lain ? 'success' : 'error', $isi.($h['peringatan'] ? ' '.implode(' ', $h['peringatan']) : ''));
     }

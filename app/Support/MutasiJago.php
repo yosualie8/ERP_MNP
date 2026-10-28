@@ -239,6 +239,48 @@ class MutasiJago
         return self::bunga($m) ? ($m->arah === 'masuk' ? 'Bunga' : 'Pajak Bunga') : null;
     }
 
+    /**
+     * Bunga & pajak bunga kantong Kas MNP dicatat OTOMATIS di Kas Harian sesudah unggah mutasi yang valid (owner 28 Okt 2026), sama seperti
+     * pencatatan selama ini: "Bunga" = uang masuk tanpa rekening; "Pajak Bunga" = keluar, satu detail Kode GL "Pajak Bunga", tanpa biaya transfer.
+     * Hanya baris yang masih calon (valid & belum ada di Kas Harian) — yang sudah diinput admin tidak dicatat lagi.
+     *
+     * @return string[] ringkasan yang tercatat
+     */
+    public static function catatBungaOtomatis(int $userId): array
+    {
+        return \Illuminate\Support\Facades\Cache::lock('bunga-otomatis', 120)->block(60, function () use ($userId) {
+            $hasil = [];
+            foreach (collect(self::calonMaster('kas'))->filter(fn ($c) => $c['nama_buku']) as $c) {
+                $m = JagoMutasi::find($c['id']);
+                $nominal = $m ? (int) abs($m->jumlah) : 0;
+                if (! $m || $m->dipakai || $nominal < 1) {
+                    continue;
+                }
+                $nama = self::namaBunga($m);
+                $masuk = $m->arah === 'masuk';
+                $input = ['tanggal' => $m->waktu->copy()->startOfDay(), 'arah' => $m->arah, 'nama_tujuan' => $nama, 'no_rek' => null, 'bank' => null, 'keterangan' => $nama,
+                    'nominal_masuk' => $masuk ? $nominal : 0, 'kode_gl_masuk' => null, 'nominal_transfer' => $masuk ? null : $nominal,
+                    'bon' => $masuk ? [] : [['nominal' => $nominal, 'pic' => null, 'keterangan' => 'Pajak Bunga', 'kode_gl' => 'Pajak Bunga', 'uj' => null, 'no_mobil' => null]],
+                    'biaya_transfer' => false, 'nominal_biaya' => TulisKasSheet::BIAYA_TRANSFER, 'reimburse_uj' => null, 'tanggal_reimburse' => null];
+                $tulis = (new TulisKasSheet(GoogleSheets::wajib()))->tulis($input);
+                self::tandaiDipakai($m, 'kas:'.$tulis['no_id'][0], $userId);
+                CerminReimburse::tambahSegera($tulis['no_id']);
+                \App\Models\KasRiwayat::create([
+                    'aksi' => 'tambah', 'lembar' => $tulis['lembar'], 'baris_awal' => $tulis['baris_awal'], 'baris_akhir' => $tulis['baris_akhir'],
+                    'ringkasan' => ($masuk ? 'Uang masuk ' : 'Transfer ').rp($nominal).' '.$m->waktu->translatedFormat('j M Y')." {$nama} (otomatis dari mutasi Jago ".$m->waktu->format('d-m H:i').')',
+                    'isi' => ['input' => [...$input, 'tanggal' => $input['tanggal']->toDateString()], 'no_id' => $tulis['no_id'], 'jago_mutasi_id' => $m->id, 'otomatis' => true],
+                    'user_id' => $userId,
+                ]);
+                $hasil[] = ['lembar' => $tulis['lembar'], 'teks' => "{$nama} ".rp($nominal).' ('.$m->waktu->translatedFormat('j M').", NO ID {$tulis['no_id'][0]})"];
+            }
+            foreach (collect($hasil)->pluck('lembar')->unique() as $lembar) {
+                ImporKas::imporUlang([$lembar]);
+            }
+
+            return array_column($hasil, 'teks');
+        });
+    }
+
     public static function tandaiDipakai(JagoMutasi $m, string $tautan, int $userId): void
     {
         JagoMutasi::whereKey($m->id)->whereNull('dipakai')->update(['dipakai' => $tautan, 'dipakai_pada' => now(), 'dipakai_oleh' => $userId]);
