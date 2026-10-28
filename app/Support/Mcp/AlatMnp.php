@@ -272,9 +272,18 @@ class AlatMnp
                 ->orWhereHas('bon', fn ($b) => $b->where('keterangan', 'like', "%{$k}%")->orWhere('pic', 'like', "%{$k}%")->orWhere('id_transaksi', 'like', "%{$k}%")
                     ->orWhere('no_mobil', 'like', "%{$k}%")->orWhereHas('kodeGl', fn ($g) => $g->where('kode_asli', 'like', "%{$k}%"))));
         }
-        $data = $q->orderByDesc('tanggal')->orderByDesc('baris')->limit(10000)->get();
-        $status = StatusReimburse::untuk($data->flatMap(fn ($t) => $t->bon->map(fn ($b) => StatusReimburse::idBon($b, $t)))->all());
-        $hasil = $data->map(fn ($t) => self::transferKas($t, $status));
+        // dibaca per 500 transfer (model + detail dibuang tiap putaran) supaya 5.000 baris muat di memori PHP-FPM 128 MB
+        $hasil = collect();
+        $q->orderByDesc('tanggal')->orderByDesc('baris')->orderByDesc('id');
+        for ($dari = 0, $maks = max(1000, $batas); $dari < $maks; $dari += 500) {
+            $data = (clone $q)->offset($dari)->limit(min(500, $maks - $dari))->get();
+            $status = StatusReimburse::untuk($data->flatMap(fn ($t) => $t->bon->map(fn ($b) => StatusReimburse::idBon($b, $t)))->all());
+            $hasil = $hasil->concat($data->map(fn ($t) => self::transferKas($t, $status)));
+            if ($data->count() < 500) {
+                break;
+            }
+        }
+        unset($data);
         $pilih = $a['status_reimburse'] ?? 'semua';
         if ($pilih !== 'semua') {
             $hasil = $hasil->filter(fn ($t) => $t['keluar'] > 0 && ($pilih === 'sudah' ? $t['status_reimburse'] === 'sudah' : $t['status_reimburse'] !== 'sudah'));
