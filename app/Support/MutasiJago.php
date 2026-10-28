@@ -160,7 +160,7 @@ class MutasiJago
             ->map(fn ($r) => [
                 'id' => $r['m']->id, 'waktu' => $r['m']->waktu->toDateString(), 'jam' => $r['m']->waktu->format('H:i'), 'nama' => (string) $r['m']->nama,
                 'bank' => $r['m']->bank, 'rekening' => $r['m']->rekening, 'arah' => $r['m']->arah, 'nominal' => (int) abs($r['m']->jumlah),
-                'biaya' => self::biayaDari($r['m'], $urut, $posisi), 'catatan' => $r['m']->catatan, 'saran' => $r['saran'],
+                'biaya' => self::biayaDari($r['m'], $urut, $posisi), 'catatan' => $r['m']->catatan, 'saran' => $r['saran'], 'nama_buku' => self::namaBunga($r['m']),
             ])->values()->all();
     }
 
@@ -227,6 +227,18 @@ class MutasiJago
         return [...$hasil, 'input' => $input, 'mutasi' => $m];
     }
 
+    /** Bunga / pajak bunga dari bank (tanpa rekening): "Interest", "Tax on Interest" (Inggris) / "Bunga", "Pajak Bunga" (Indonesia). */
+    public static function bunga(JagoMutasi $m): bool
+    {
+        return (bool) preg_match('/^(interest|tax on interest|bunga|pajak( atas)? bunga)\b/i', trim((string) $m->jenis));
+    }
+
+    /** Nama & keterangan baku di Kas Harian untuk baris bunga (sama seperti pencatatan selama ini): "Bunga" / "Pajak Bunga". */
+    public static function namaBunga(JagoMutasi $m): ?string
+    {
+        return self::bunga($m) ? ($m->arah === 'masuk' ? 'Bunga' : 'Pajak Bunga') : null;
+    }
+
     public static function tandaiDipakai(JagoMutasi $m, string $tautan, int $userId): void
     {
         JagoMutasi::whereKey($m->id)->whereNull('dipakai')->update(['dipakai' => $tautan, 'dipakai_pada' => now(), 'dipakai_oleh' => $userId]);
@@ -236,7 +248,7 @@ class MutasiJago
     public static function ringkas(JagoMutasi $m): array
     {
         return ['id' => $m->id, 'waktu' => $m->waktu->toDateString(), 'jam' => $m->waktu->format('H:i'), 'nama' => (string) $m->nama, 'bank' => $m->bank, 'rekening' => $m->rekening,
-            'arah' => $m->arah, 'nominal' => (int) abs($m->jumlah), 'biaya' => self::biayaDari($m), 'catatan' => $m->catatan, 'saran' => null];
+            'arah' => $m->arah, 'nominal' => (int) abs($m->jumlah), 'biaya' => self::biayaDari($m), 'catatan' => $m->catatan, 'saran' => null, 'nama_buku' => self::namaBunga($m)];
     }
 
     public static function pesanPutus(array $p): string
@@ -290,6 +302,10 @@ class MutasiJago
         // Pasangan terbaik lebih dulu (greedy): nominal wajib sama, tanggal ±3 hari; rekening / saldo / nama / tanggal sama menambah skor.
         $calon = [];
         foreach ($unit as $i => $u) {
+            // Bunga & pajak bunga kantong Uang Jalan DT tidak dicatat di Kas UJ (owner 28 Okt 2026) — tidak dicari pasangannya.
+            if ($kantong === 'uj' && self::bunga($u['m'])) {
+                continue;
+            }
             foreach ($perNominal[(string) (int) $u['m']->jumlah] ?? [] as $b) {
                 if (($s = self::skor($u, $b, $kantong)) !== null) {
                     $calon[] = [$s, $i, $b['kunci']];
@@ -345,7 +361,7 @@ class MutasiJago
                 $catatan = array_values(array_filter($catatan, fn ($c) => ! str_starts_with($c, 'Tanggal')));
             }
             $saran = null;
-            $status = $b ? ($catatan ? 'catatan' : 'cocok') : ($m->biaya ? 'biaya' : (isset($kembali[$i]) ? 'kembali' : 'belum'));
+            $status = $b ? ($catatan ? 'catatan' : 'cocok') : ($m->biaya ? 'biaya' : (isset($kembali[$i]) ? 'kembali' : ($kantong === 'uj' && self::bunga($m) ? 'bunga' : 'belum')));
             if (! $b && ! $m->biaya && ! isset($kembali[$i])) {
                 // Nominal beda tetapi rekening / nama sama dekat tanggalnya → kemungkinan salah ketik nominal.
                 $mirip = collect($buku)->filter(fn ($x) => ! isset($dipakai[$x['kunci']]) && ($x['nominal'] < 0) === ($m->jumlah < 0)

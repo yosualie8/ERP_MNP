@@ -101,6 +101,8 @@
                 const r = $(m.arah === 'masuk' ? 'arah-masuk' : 'arah-keluar');
                 if (r) { r.checked = true; r.dispatchEvent(new Event('change', {bubbles: true})); }
                 document.querySelectorAll('input[name=arah]').forEach(x => { if (x !== r) x.disabled = true; });
+                // Bunga / pajak bunga: nama & keterangan baku "Bunga" / "Pajak Bunga" (tanpa rekening & bank — memang dari bank langsung).
+                if (m.nama_buku) { isi('nama_tujuan', m.nama_buku, false); isi('keterangan', m.nama_buku, false); }
                 if ($('nama_tujuan') && !$('nama_tujuan').value) isi('nama_tujuan', m.nama, false);
                 if ($('keterangan') && !$('keterangan').value && m.catatan) isi('keterangan', m.catatan, false);
                 isi(m.arah === 'masuk' ? 'nominal_masuk' : 'nominal_transfer', fmt(m.nominal));
