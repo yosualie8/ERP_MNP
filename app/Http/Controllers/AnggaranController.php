@@ -9,11 +9,15 @@ use App\Models\ProyekTahap;
 use App\Support\Anggaran;
 use App\Support\DaftarProyek;
 use App\Support\Overhead;
+use App\Support\UnduhAnggaran;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
  * Anggaran Proyek: rencana omset & HPP per tahap dari baris komponen (template per tipe tahap), baseline yang bisa dikunci,
@@ -24,10 +28,30 @@ class AnggaranController extends Controller
     /** Ringkasan semua tahap yang berjalan / sudah punya anggaran: rencana vs realisasi. */
     public function index(Request $request): View
     {
+        $semua = $request->boolean('semua');
+
+        return view('anggaran.index', ['baris' => self::ringkasan($semua), 'semua' => $semua]);
+    }
+
+    /** Excel Anggaran (owner 28 Okt 2026): sheet Summary (= halaman ini) + daftar pemasukan & pengeluaran per sumber. */
+    public function unduh(Request $request): StreamedResponse
+    {
+        // Data BBM disimpan 30 menit — dibaca ulang supaya Summary sama persis dengan sheet BBM.
+        Cache::forget('daftar-proyek-bbm');
+        $semua = $request->boolean('semua');
+        $baris = self::ringkasan($semua);
+
+        return response()->streamDownload(fn () => UnduhAnggaran::tulis($baris, 'php://output'),
+            'Anggaran Proyek '.($semua ? 'semua tahap ' : '').now()->format('Y-m-d H.i').'.xlsx');
+    }
+
+    /** Satu baris per tahap: rencana vs realisasi (halaman Anggaran & Excel). */
+    public static function ringkasan(bool $semua): Collection
+    {
         [$ritasi, $kas, $bbm] = [DaftarProyek::ritasi(), DaftarProyek::kas(), DaftarProyek::bbm()];
         $overhead = Overhead::teralokasi();
-        $semua = $request->boolean('semua');
-        $tahap = ProyekTahap::with(['proyek', 'anggaran.komponen'])->whereNull('pos_overhead')
+
+        return ProyekTahap::with(['proyek', 'anggaran.komponen'])->whereNull('pos_overhead')
             ->when(! $semua, fn ($q) => $q->where(fn ($w) => $w->whereIn('status', ['belum', 'progress'])->orHas('anggaran')))
             ->get()
             ->map(function ($t) use ($ritasi, $kas, $bbm, $overhead) {
@@ -41,7 +65,8 @@ class AnggaranController extends Controller
                         'progres' => null, 'ritasi' => $rp];
                 }
                 $h = Anggaran::hitung($t->anggaran, $t);
-                $langsung = array_sum(array_column(Anggaran::rincianRealisasi($t, $ritasi, $kas, $bbm), 1));
+                $rincian = Anggaran::rincianRealisasi($t, $ritasi, $kas, $bbm);
+                $langsung = array_sum(array_column($rincian, 1));
                 $oh = $overhead[$t->id] ?? 0;
 
                 // Progres fisik: cut & fill = kubikasi bongkaran ÷ m³ HPP tanah; tahap ber-BOQ = terpasang (opname) / tertagih;
@@ -49,13 +74,11 @@ class AnggaranController extends Controller
                 $pf = Anggaran::progresFisik($t, $t->anggaran, $ritasi);
                 $serapan = $h['hpp'] > 0 ? ($langsung + $oh) / $h['hpp'] * 100 : null;
 
-                return (object) ['t' => $t, 'h' => $h, 'ada' => $t->anggaran->isNotEmpty() || $h['boq'], 'langsung' => $langsung, 'overhead' => $oh,
+                return (object) ['t' => $t, 'h' => $h, 'ada' => $t->anggaran->isNotEmpty() || $h['boq'], 'langsung' => $langsung, 'overhead' => $oh, 'rincian' => $rincian,
                     'realisasi' => $langsung + $oh, 'serapan' => $serapan, 'fisik' => $pf['persen'] ?? null, 'fisikKet' => $pf['ket'] ?? null,
                     'progres' => $pf['persen'] ?? $serapan];
             })
             ->sortBy(fn ($x) => [$x->ada ? 0 : 1, $x->t->proyek->urutan, (int) preg_replace('/\D/', '', $x->t->nama) ?: 99999, $x->t->nama])->values();
-
-        return view('anggaran.index', ['baris' => $tahap, 'semua' => $semua]);
     }
 
     public function edit(Request $request, ProyekTahap $tahap): View

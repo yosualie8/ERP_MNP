@@ -87,6 +87,7 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::delete('/boq/tagihan/{tagihan}', [\App\Http\Controllers\BoqController::class, 'hapusTagihan'])->whereNumber('tagihan')->name('boq.tagihan.hapus');
     Route::post('/boq/item/{item}/opname', [\App\Http\Controllers\BoqController::class, 'opname'])->whereNumber('item')->name('boq.opname');
     Route::get('/anggaran', [\App\Http\Controllers\AnggaranController::class, 'index'])->name('anggaran.index');
+    Route::get('/anggaran/excel', [\App\Http\Controllers\AnggaranController::class, 'unduh'])->name('anggaran.excel');
     Route::get('/anggaran/tahap/{tahap}', [\App\Http\Controllers\AnggaranController::class, 'edit'])->whereNumber('tahap')->name('anggaran.edit');
     Route::post('/anggaran/tahap/{tahap}', [\App\Http\Controllers\AnggaranController::class, 'simpan'])->whereNumber('tahap')->name('anggaran.simpan');
     Route::post('/anggaran/tahap/{tahap}/ritasi', [\App\Http\Controllers\AnggaranController::class, 'simpanRitasi'])->whereNumber('tahap')->name('anggaran.ritasi');

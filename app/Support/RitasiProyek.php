@@ -186,6 +186,8 @@ class RitasiProyek
                 'pakai' => (float) $pakai->sum('nominal'),
                 'saldo' => 0.0, // saldo sopir tidak lagi milik proyek mana pun (lihat menu Pengalihan UJ)
                 'mobil' => $alih->pluck('no_mobil')->unique()->count()],
+            // daftar transaksi Kas UJ di balik biaya (Excel Anggaran)
+            'rincian' => ['uj' => $jalan->values(), 'tanah' => $tanah->values(), 'uj_lain' => $lain->values(), 'uj_alih' => $pakai],
             'hari' => $hari, 'mulai' => $rit->min('tanggal')?->toDateString(), 'selesai' => $rit->max('tanggal')?->toDateString(),
         ];
     }

@@ -9,6 +9,7 @@
         <a href="{{ route('anggaran.index', ['semua' => 1]) }}" @class(['chip', 'aktif' => $semua])>Semua tahap</a>
         <span class="redup" style="font-size: 13px;">Realisasi HPP = biaya langsung (Harga Jual ritasi bongkaran & ngepok, solar & rental dari Data BBM & HM, Kas Harian tanpa akun HPP/BBM/sparepart/DT) + biaya umum yang sudah dialokasikan. Serapan biaya = realisasi ÷ HPP rencana. Progres (cut & fill) = kubikasi bongkaran Ritasi ÷ m³ HPP tanah; tahap Infra ber-BOQ = volume terpasang (opname) / tertagih, dan omset & HPP rencananya sudah termasuk nilai kontrak & modal BOQ; selain itu serapan biaya (ditandai $).</span>
         <span style="margin-left: auto; display: flex; gap: 6px;">
+            <a href="{{ route('anggaran.excel', $semua ? ['semua' => 1] : []) }}" class="tombol polos" style="padding: 6px 12px;" title="Summary + daftar pemasukan & pengeluaran per sumber (Ritasi, BBM, Kas Harian, BCA, Kas UJ, biaya umum, tagihan) untuk tahap yang tampil">⬇ Download Excel</a>
             @if (auth()->user()->bolehMenu('alokasi-overhead'))<a href="{{ route('alokasi-overhead.index') }}" class="tombol polos" style="padding: 6px 12px;">Alokasi Biaya Umum</a>@endif
             @if (auth()->user()->bolehMenu('komponen-anggaran'))<a href="{{ route('komponen-anggaran.index') }}" class="tombol polos" style="padding: 6px 12px;">Master Komponen</a>@endif
         </span>
