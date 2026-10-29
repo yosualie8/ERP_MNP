@@ -76,13 +76,13 @@
         <div class="kartu"><small>Di {{ $info['buku'] }}, tidak ada di bank</small><b style="color: var(--merah);">{{ $n['tidak-di-bank'] ?? 0 }}</b><small>menunggu mutasi {{ $n['menunggu'] ?? 0 }}</small></div>
     </div>
 
-    <h3 style="margin: 4px 0 8px;">Per hari</h3>
+    <h3 style="margin: 4px 0 8px;">Per hari <span style="font-size: 12px; font-weight: 400; color: var(--redup);">terbaru di atas</span></h3>
     <div class="kartu gulir" style="padding: 0;">
         <table class="kas">
             <thead><tr><th>Tanggal</th><th class="angka">Transaksi bank</th><th class="angka">Cocok</th><th class="angka">Ada catatan</th><th class="angka">Belum diinput</th><th class="angka">Tidak di bank</th>
                 <th class="angka">Saldo bank akhir</th>@if ($kantong === 'kas')<th class="angka">Saldo Kas Harian</th>@endif<th>Status</th></tr></thead>
             <tbody>
-                @forelse ($hasil['hari'] as $h)
+                @forelse ($hasil['hari']->reverse() as $h)
                     <tr class="t"><td data-n="{{ $h['tanggal']->toDateString() }}">{{ $h['tanggal']->translatedFormat('D, d-M-y') }}</td><td class="angka">{{ $h['bank'] }}</td>
                         <td class="angka">{{ $h['n']['cocok'] ?? 0 }}</td><td class="angka">{{ $h['n']['catatan'] ?? '' }}</td><td class="angka">{{ $h['n']['belum'] ?? '' }}</td><td class="angka">{{ $h['n']['tidak-di-bank'] ?? '' }}</td>
                         <td class="angka">{{ $rupiah($h['saldo_bank']) }}</td>@if ($kantong === 'kas')<td class="angka">{{ $rupiah($h['saldo_buku']) }}</td>@endif
@@ -94,13 +94,13 @@
         </table>
     </div>
 
-    <h3 style="margin: 14px 0 8px;">Rincian</h3>
+    <h3 style="margin: 14px 0 8px;">Rincian <span style="font-size: 12px; font-weight: 400; color: var(--redup);">waktu bank terbaru di atas</span></h3>
     <div class="kartu gulir" style="padding: 0;">
         <table class="kas">
             <thead><tr><th>Waktu bank</th><th>Sumber / tujuan (bank)</th><th>Catatan bank</th><th class="angka">Jumlah</th>@if ($kantong === 'uj')<th class="angka">Biaya</th>@endif<th class="angka">Saldo</th>
                 <th>Status</th><th>{{ $info['buku'] }}</th><th>Keterangan</th></tr></thead>
             <tbody>
-                @forelse ($hasil['baris'] as $r)
+                @forelse ($hasil['baris']->reverse() as $r)
                     @php($m = $r['m'])
                     @php($b = $r['b'])
                     <tr class="t st-{{ $r['status'] }}">
