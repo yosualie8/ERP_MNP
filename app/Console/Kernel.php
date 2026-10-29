@@ -25,6 +25,8 @@ class Kernel extends ConsoleKernel
         $schedule->command('mnp:status-reimburse')->everyFiveMinutes()->withoutOverlapping();
         // Ketikan/penghapusan admin langsung di lembar Kas Seabank (uang jalan) ikut ke aplikasi.
         $schedule->command('mnp:impor-uj')->everyFiveMinutes()->withoutOverlapping();
+        // Lembar Kas Seabank & lembar bulanan Kas Harian dikunci (hanya akun aplikasi menulis); lembar bulan baru ikut dikunci.
+        $schedule->command('mnp:kunci-sheet')->everyTenMinutes()->withoutOverlapping();
         // Lembar Ritasi (Proyek ASG - Gsheet) ikut ke aplikasi.
         $schedule->command('mnp:impor-ritasi')->everyFiveMinutes()->withoutOverlapping();
         // Lembar Penggunaan BBM ikut ke aplikasi.
