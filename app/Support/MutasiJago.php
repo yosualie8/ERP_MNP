@@ -521,6 +521,11 @@ class MutasiJago
         if ($kantong === 'kas' && $m->biaya !== $b['fee']) {
             return null;
         }
+        // Master bertanggal sebelum MULAI dibayar dengan transfer di luar mutasi yang dicek — tidak boleh "menarik" transfer baru
+        // (mis. 4 transfer 28 Okt "UJ 2 rit sidomuncul KIK" Rp540.000 sempat tertempel ke UJ RKS 26 Okt bernominal sama; owner 29 Okt 2026).
+        if (self::master($b) && $b['tanggal']->lt(Carbon::parse(self::MULAI))) {
+            return null;
+        }
         // Sejak KETAT: master hanya lewat tautan; transfer bank yang sudah jadi master lain tidak ditebakkan ke buku lain.
         if (self::ketat($m->waktu, $b) && (self::master($b) || $m->dipakai)) {
             return null;
