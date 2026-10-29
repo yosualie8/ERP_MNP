@@ -33,9 +33,9 @@ class ReimburseUj
             ->map(fn (UjTransaksi $t) => [
                 'id' => $t->id, 'no_uj' => $t->no_uj, 'tanggal' => $t->tanggal?->toDateString(), 'tgl' => $t->tanggal?->translatedFormat('j M Y'),
                 'nama' => $t->nama, 'bank' => $t->bank, 'rekening' => $t->rekening, 'baris' => $t->baris,
-                'total' => (int) $t->detail->sum('nominal'),
+                'total' => (int) $t->detail->sum('nominal'), 'cicil' => self::bolehCicil($t->detail),
                 'detail' => $t->detail->map(fn (UjDetail $d) => [
-                    'id_uj' => $d->id_uj, 'nama' => $d->nama, 'ket' => $d->keterangan, 'kategori' => $d->kategori,
+                    'id' => $d->id, 'id_uj' => $d->id_uj, 'nama' => $d->nama, 'ket' => $d->keterangan, 'kategori' => $d->kategori,
                     'mobil' => $d->no_mobil, 'do' => $d->no_do, 'nominal' => (int) $d->nominal, 'fee' => $d->biaya_transfer,
                 ])->values()->all(),
             ])->values();
@@ -47,22 +47,78 @@ class ReimburseUj
         return UjTransaksi::query()->whereHas('detail', fn ($q) => self::belum($q))->orderBy('tanggal')->orderBy('baris')->pluck('id')->all();
     }
 
-    private static function belum($q)
+    public static function belum($q)
     {
         return $q->whereNull('tanggal_reimburse')->where('status', 'like', 'Belum%');
     }
 
     /**
-     * Tandai transfer-transfer ini sudah reimburse pada $tanggal: isi kolom N di sheet, perbarui aplikasi, catat batch.
-     *
-     * @param  int[]  $transaksiIds
+     * Owner 29 Okt 2026: transfer bayar tanah (semua baris Uang Tanah; biaya transfer boleh ikut) boleh direimburse dicicil per baris —
+     * satu transfer bisa berisi puluhan DO senilai belasan juta, jadi tidak harus diambil utuh untuk mencapai nominal.
      */
-    public static function tandai(array $transaksiIds, CarbonInterface $tanggal, ?int $target, ?int $userId): UjReimburse
+    public static function bolehCicil(Collection $detail): bool
     {
-        return Cache::lock('tulis-uj-sheet', 120)->block(60, function () use ($transaksiIds, $tanggal, $target, $userId) {
-            $transaksi = UjTransaksi::whereIn('id', $transaksiIds)->with(['detail' => fn ($q) => self::belum($q)->orderBy('baris')])->orderBy('tanggal')->orderBy('baris')->get();
+        $isi = $detail->reject(fn (UjDetail $d) => $d->biaya_transfer);
+
+        return $isi->count() > 1 && $isi->every(fn (UjDetail $d) => ValidasiUj::jenisKategori($d->kategori) === 'ut');
+    }
+
+    /**
+     * Periksa pilihan baris: transfer harus berurutan dari yang paling lama, dan hanya transfer terakhir yang boleh diambil sebagian
+     * (transfer bayar tanah, baris teratas dulu). Mengembalikan pesan salah, atau null bila pilihan sah.
+     *
+     * @param  int[]  $detailIds
+     */
+    public static function periksaPilihan(array $detailIds): ?string
+    {
+        $pilih = array_flip($detailIds);
+        $transaksi = UjTransaksi::whereIn('id', UjDetail::whereIn('id', $detailIds)->pluck('uj_transaksi_id')->unique())
+            ->with(['detail' => fn ($q) => self::belum($q)->orderBy('baris')])->get()->keyBy('id');
+        $semua = self::urutan();
+        $urut = array_values(array_filter($semua, fn ($id) => $transaksi->has($id)));
+        $lewat = array_values(array_filter(array_slice($semua, 0, count($urut)), fn ($id) => ! $transaksi->has($id)));
+        if ($lewat) {
+            $t = UjTransaksi::find($lewat[0]);
+
+            return 'Reimburse harus berurutan dari transaksi paling lama: '.count($lewat).' transaksi yang lebih lama belum dipilih (mis. '
+                .($t?->no_uj ? 'UJ-'.$t->no_uj.' ' : '').$t?->tanggal?->translatedFormat('j M Y').'). Muat ulang halaman lalu pilih lagi.';
+        }
+        foreach ($urut as $i => $id) {
+            $t = $transaksi[$id];
+            $ambil = $t->detail->filter(fn (UjDetail $d) => isset($pilih[$d->id]))->count();
+            $awalan = $t->detail->take($ambil)->every(fn (UjDetail $d) => isset($pilih[$d->id]));
+            $nama = ($t->no_uj ? 'UJ-'.$t->no_uj.' ' : '').$t->nama;
+            if ($ambil === $t->detail->count()) {
+                continue;
+            }
+            if ($i !== count($urut) - 1) {
+                return "Transfer {$nama} hanya dipilih sebagian, padahal ada transfer yang lebih baru ikut dipilih. Hanya transfer terakhir yang boleh dicicil.";
+            }
+            if (! self::bolehCicil($t->detail)) {
+                return "Transfer {$nama} tidak bisa dicicil (hanya transfer bayar tanah). Pilih semua barisnya atau lepas transfer itu.";
+            }
+            if (! $awalan) {
+                return "Cicilan transfer {$nama} harus berurutan dari baris paling atas. Muat ulang halaman lalu pilih lagi.";
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Tandai baris-baris ini sudah reimburse pada $tanggal: isi kolom N di sheet, perbarui aplikasi, catat batch. Biasanya semua baris
+     * satu transfer; transfer bayar tanah boleh sebagian (dicicil, lihat bolehCicil()).
+     *
+     * @param  int[]  $detailIds
+     */
+    public static function tandai(array $detailIds, CarbonInterface $tanggal, ?int $target, ?int $userId): UjReimburse
+    {
+        return Cache::lock('tulis-uj-sheet', 120)->block(60, function () use ($detailIds, $tanggal, $target, $userId) {
+            $detailIds = array_values(array_unique($detailIds));
+            $transaksi = UjTransaksi::whereHas('detail', fn ($q) => $q->whereIn('id', $detailIds))
+                ->with(['detail' => fn ($q) => self::belum($q)->whereIn('id', $detailIds)->orderBy('baris')])->orderBy('tanggal')->orderBy('baris')->get();
             $baris = $transaksi->flatMap->detail;
-            if ($transaksi->count() !== count(array_unique($transaksiIds)) || $baris->isEmpty()) {
+            if ($baris->count() !== count($detailIds) || $baris->isEmpty()) {
                 throw new RuntimeException('Sebagian transaksi yang dipilih sudah tidak berstatus belum reimburse (mungkin baru diubah/disinkron). Muat ulang halaman lalu pilih lagi.');
             }
 

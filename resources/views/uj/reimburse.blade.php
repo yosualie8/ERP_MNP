@@ -13,7 +13,9 @@
         .hasil-pilih .selisih { color: var(--redup); }
         table.kas tr.t.dipilih { background: rgba(76, 195, 138, .16); }
         table.kas tr.t.dipilih td:first-child { box-shadow: inset 4px 0 0 var(--sukses); }
-        table.kas tr.t input[type=checkbox] { width: 17px; height: 17px; vertical-align: middle; cursor: pointer; }
+        table.kas tr.t input[type=checkbox], table.kas tr.b input[type=checkbox] { width: 17px; height: 17px; vertical-align: middle; cursor: pointer; }
+        table.kas tr.b.dipilih td { background: rgba(76, 195, 138, .10); }
+        .cicil { font-size: 11px; padding: 1px 6px; border-radius: 9px; background: rgba(240, 173, 78, .18); color: inherit; white-space: nowrap; }
         .batch-baru { border: 1px solid rgba(76, 195, 138, .45); background: var(--sukses-muda); }
         .batch-baru .aksi { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
         @media (max-width: 900px) { .panel-pilih { grid-template-columns: 1fr 1fr; } }
@@ -64,7 +66,7 @@
                     <button type="button" class="tombol polos" id="pilih-semua">Pilih semua</button>
                     <button type="button" class="tombol polos" id="kosongkan">Kosongkan</button>
                 </div>
-                <div class="redup" style="font-size: 12px;">Ketik nominal → transfer dipilih <b>berurutan dari yang paling lama</b> sampai totalnya mencapai nominal; bila masih kurang, <b>1 transfer berikutnya tetap diambil</b> (total boleh lebih). Centang ikut urutan: mencentang mengikutkan semua yang lebih lama, melepas centang ikut melepas yang lebih baru.</div>
+                <div class="redup" style="font-size: 12px;">Ketik nominal → transfer dipilih <b>berurutan dari yang paling lama</b> sampai totalnya mencapai nominal; bila masih kurang, <b>1 transfer berikutnya tetap diambil</b> (total boleh lebih). Transfer <b>bayar tanah</b> (<span class="cicil">bisa dicicil</span>) diambil <b>per baris</b> dari atas, jadi tidak harus utuh. Centang ikut urutan: mencentang mengikutkan semua yang lebih lama, melepas centang ikut melepas yang lebih baru.</div>
             </div>
             {{-- Owner 25 Okt 2026: jumlah transaksi Kas UJ di luar uang jalan & uang tanah pada satu tanggal (bawaan H-1) sebagai bahan nominal. --}}
             <div class="lainnya" id="lainnya">
@@ -100,19 +102,20 @@
                     </tr>
                 </thead>
                 @forelse ($antrean as $t)
-                    <tbody class="grup" data-urut="{{ $loop->index }}" data-id="{{ $t['id'] }}" data-total="{{ $t['total'] }}" data-baris="{{ count($t['detail']) }}">
+                    <tbody class="grup" data-urut="{{ $loop->index }}" data-id="{{ $t['id'] }}" data-total="{{ $t['total'] }}" data-baris="{{ count($t['detail']) }}" @if ($t['cicil']) data-cicil @endif>
                         <tr class="t ada-bon">
-                            <td><input type="checkbox" name="transaksi[]" value="{{ $t['id'] }}" aria-label="Pilih transfer"></td>
+                            <td><input type="checkbox" class="pilih-transfer" aria-label="Pilih transfer"></td>
                             <td><span class="panah" aria-hidden="true">▸</span> {{ $t['tgl'] }} <span class="jumlah-bon">{{ count($t['detail']) }}</span></td>
                             <td><b>{{ $t['nama'] ?? '—' }}</b> <span class="redup">{{ $t['bank'] }} {{ $t['rekening'] }}</span></td>
                             <td>{{ $t['detail'][0]['ket'] ?? '' }}</td>
                             <td class="ringkas-gl">{{ collect($t['detail'])->reject(fn ($d) => $d['fee'])->pluck('kategori')->unique()->take(3)->implode(', ') }}</td>
-                            <td class="i">@if ($t['no_uj'])UJ-{{ $t['no_uj'] }}@endif</td>
-                            <td class="angka"><b>{{ rp($t['total']) }}</b></td>
+                            <td class="i">@if ($t['no_uj'])UJ-{{ $t['no_uj'] }}@endif @if ($t['cicil'])<span class="cicil">bisa dicicil</span>@endif</td>
+                            <td class="angka"><b>{{ rp($t['total']) }}</b> <span class="redup sebagian" hidden></span></td>
                         </tr>
                         <tr class="bh"><td></td><td>Transaksi detail</td><td>Nama</td><td>Keterangan</td><td>Kategori · Mobil · DO</td><td>ID UJ</td><td class="angka">Nominal</td></tr>
+                        {{-- Yang dikirim = baris (ID UJ); baris transfer biasa ikut kotak transfer (kotaknya tersembunyi), baris bayar tanah bisa dicentang sendiri. --}}
                         @foreach ($t['detail'] as $d)
-                            <tr class="b"><td></td><td></td><td class="p">{{ $d['nama'] }}</td><td>{{ $d['ket'] }}</td>
+                            <tr class="b"><td><input type="checkbox" name="detail[]" value="{{ $d['id'] }}" data-nominal="{{ $d['nominal'] }}" aria-label="Pilih baris" @unless ($t['cicil']) hidden @endunless></td><td></td><td class="p">{{ $d['nama'] }}</td><td>{{ $d['ket'] }}</td>
                                 <td>{{ $d['kategori'] }} @if ($d['mobil'])<i>{{ $d['mobil'] }}</i>@endif @if ($d['do'])<span class="redup">DO {{ $d['do'] }}</span>@endif</td>
                                 <td class="i">{{ $d['id_uj'] }}</td><td class="angka">{{ rp($d['nominal']) }}</td></tr>
                         @endforeach
@@ -153,29 +156,50 @@
             const target = document.getElementById('target');
             const tombol = document.getElementById('setuju');
 
+            const kotak = g => g.querySelector('input.pilih-transfer');
+            const baris = g => [...g.querySelectorAll('input[name="detail[]"]')];
             const hitung = () => {
-                let total = 0, jumlah = 0, baris = 0;
+                let total = 0, jumlah = 0, nBaris = 0, cicil = 0;
                 grup.forEach(g => {
-                    const pilih = g.querySelector('input[type=checkbox]').checked;
-                    g.querySelector('tr.t').classList.toggle('dipilih', pilih);
-                    if (pilih) { total += +g.dataset.total; jumlah++; baris += +g.dataset.baris; }
+                    const b = baris(g), pilih = b.filter(x => x.checked), k = kotak(g);
+                    k.checked = pilih.length === b.length;
+                    k.indeterminate = pilih.length > 0 && pilih.length < b.length;
+                    g.querySelector('tr.t').classList.toggle('dipilih', pilih.length > 0);
+                    b.forEach(x => x.closest('tr').classList.toggle('dipilih', x.checked && g.hasAttribute('data-cicil')));
+                    const sub = pilih.reduce((n, x) => n + +x.dataset.nominal, 0);
+                    const label = g.querySelector('.sebagian');
+                    label.hidden = !k.indeterminate;
+                    label.textContent = k.indeterminate ? `· dicicil ${pilih.length}/${b.length} baris = ${fmt(sub)}` : '';
+                    if (pilih.length) { total += sub; jumlah++; nBaris += pilih.length; }
+                    if (k.indeterminate) cicil++;
                 });
                 document.getElementById('total-pilih').textContent = fmt(total);
-                document.getElementById('jumlah-pilih').textContent = jumlah;
-                document.getElementById('baris-pilih').textContent = baris;
+                document.getElementById('jumlah-pilih').textContent = jumlah + (cicil ? ' (1 dicicil)' : '');
+                document.getElementById('baris-pilih').textContent = nBaris;
                 const t = angka(target.value);
                 document.getElementById('selisih').textContent = t ? (total === t ? `pas ${fmt(t)}` : total < t ? `kurang ${fmt(t - total)} dari ${fmt(t)}` : `lebih ${fmt(total - t)} dari ${fmt(t)}`) : '';
                 tombol.disabled = !jumlah;
             };
             // Urutan antrean (paling lama dulu) — tetap walau grid diurutkan ulang lewat judul kolom.
             const urut = [...grup].sort((a, b) => a.dataset.urut - b.dataset.urut);
-            const kotak = g => g.querySelector('input[type=checkbox]');
+            const setel = (g, cek) => baris(g).forEach(x => x.checked = cek);
             // Pilih otomatis (owner 25 Okt 2026): berurutan dari transfer PALING LAMA sampai total >= nominal. Bila sesudah n transfer
             // total masih kurang (mis. 17.999.999 dari 18 jt), transfer berikutnya tetap diambil walau totalnya jadi melebihi nominal.
+            // Owner 29 Okt 2026: transfer bayar tanah diambil per baris (dicicil) — berhenti di baris yang membuat total >= nominal.
             const pilihOtomatis = () => {
                 const t = angka(target.value);
                 let total = 0;
-                urut.forEach(g => { const ambil = t > 0 && total < t; kotak(g).checked = ambil; if (ambil) total += +g.dataset.total; });
+                urut.forEach(g => {
+                    if (g.hasAttribute('data-cicil')) {
+                        baris(g).forEach(x => { const ambil = t > 0 && total < t; x.checked = ambil; if (ambil) total += +x.dataset.nominal; });
+                        const n = baris(g).filter(x => x.checked).length;
+                        if (n && n < baris(g).length) g.classList.add('buka');
+                    } else {
+                        const ambil = t > 0 && total < t;
+                        setel(g, ambil);
+                        if (ambil) total += +g.dataset.total;
+                    }
+                });
                 hitung();
             };
             // Transaksi di luar uang jalan & uang tanah pada tanggal pilihan (bawaan kemarin).
@@ -211,15 +235,23 @@
                 pilihOtomatis();
             });
             // Semua transaksi (tidak mengikuti saringan kolom) — reimburse tidak boleh melompati transaksi yang lebih lama.
-            document.getElementById('pilih-semua').addEventListener('click', () => { grup.forEach(g => kotak(g).checked = true); hitung(); });
-            document.getElementById('kosongkan').addEventListener('click', () => { grup.forEach(g => g.querySelector('input').checked = false); hitung(); });
+            document.getElementById('pilih-semua').addEventListener('click', () => { grup.forEach(g => setel(g, true)); hitung(); });
+            document.getElementById('kosongkan').addEventListener('click', () => { grup.forEach(g => setel(g, false)); hitung(); });
             grup.forEach(g => {
                 // Centang manual tetap berurutan: mencentang → semua yang lebih lama ikut; melepas → semua yang lebih baru ikut lepas.
                 kotak(g).addEventListener('change', () => {
                     const i = urut.indexOf(g), cek = kotak(g).checked;
-                    urut.forEach((x, j) => { if (cek ? j < i : j > i) kotak(x).checked = cek; });
+                    setel(g, cek);
+                    urut.forEach((x, j) => { if (cek ? j < i : j > i) setel(x, cek); });
                     hitung();
                 });
+                // Baris bayar tanah (dicicil): mencentang → baris di atasnya & transfer yang lebih lama ikut; melepas → baris di bawahnya & transfer yang lebih baru ikut lepas.
+                baris(g).forEach((b, k) => b.addEventListener('change', () => {
+                    const i = urut.indexOf(g), cek = b.checked;
+                    baris(g).forEach((x, m) => { if (cek ? m < k : m > k) x.checked = cek; });
+                    urut.forEach((x, j) => { if (cek ? j < i : j > i) setel(x, cek); });
+                    hitung();
+                }));
                 g.querySelector('tr.t').addEventListener('click', e => {
                     if (e.target.closest('input, a, button') || getSelection().toString()) return;
                     g.classList.toggle('buka');

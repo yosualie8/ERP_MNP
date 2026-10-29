@@ -46,25 +46,20 @@ class ReimburseUjController extends Controller
     public function simpan(Request $request): RedirectResponse
     {
         $data = $request->validate([
-            'transaksi' => ['required', 'array', 'min:1'],
-            'transaksi.*' => ['integer'],
+            'detail' => ['required', 'array', 'min:1'],
+            'detail.*' => ['integer'],
             'tanggal' => ['required', 'date'],
             'target' => ['nullable', 'string'],
-        ], ['transaksi.required' => 'Pilih minimal satu transaksi untuk direimburse.']);
+        ], ['detail.required' => 'Pilih minimal satu transaksi untuk direimburse.']);
         $target = (int) preg_replace('/\D/', '', (string) ($data['target'] ?? '')) ?: null;
-        // Owner 25 Okt 2026: reimburse wajib berurutan dari transaksi paling tua — tidak boleh melompati transaksi yang lebih lama.
-        $urut = ReimburseUj::urutan();
-        $pilih = array_flip(array_map('intval', $data['transaksi']));
-        $n = count(array_intersect($urut, array_keys($pilih)));
-        $lewat = array_values(array_filter(array_slice($urut, 0, $n), fn ($id) => ! isset($pilih[$id])));
-        if ($lewat) {
-            $t = \App\Models\UjTransaksi::find($lewat[0]);
-            return back()->with('error', 'Reimburse harus berurutan dari transaksi paling lama: '.count($lewat).' transaksi yang lebih lama belum dipilih (mis. '
-                .($t?->no_uj ? 'UJ-'.$t->no_uj.' ' : '').$t?->tanggal?->translatedFormat('j M Y').'). Muat ulang halaman lalu pilih lagi.');
+        $ids = array_values(array_unique(array_map('intval', $data['detail'])));
+        // Owner 25 Okt 2026: reimburse wajib berurutan dari transaksi paling tua; 29 Okt 2026: transfer bayar tanah terakhir boleh dicicil per baris.
+        if ($salah = ReimburseUj::periksaPilihan($ids)) {
+            return back()->with('error', $salah);
         }
 
         try {
-            $batch = ReimburseUj::tandai(array_map('intval', $data['transaksi']), Carbon::parse($data['tanggal']), $target, $request->user()->id);
+            $batch = ReimburseUj::tandai($ids, Carbon::parse($data['tanggal']), $target, $request->user()->id);
         } catch (\Throwable $e) {
             report($e);
 
