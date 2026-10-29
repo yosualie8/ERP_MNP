@@ -518,6 +518,11 @@ class MutasiJago
         if ($hari > 3) {
             return null;
         }
+        // Kas UJ: DO di catatan bank lain dari DO di Kas UJ & tanggal beda > 1 hari = transfer lain yang belum diinput
+        // (mis. uang jalan harian sopir yang sama, nominal & rekening sama) — bukan pasangan (owner 29 Okt 2026).
+        if ($hari > 1 && self::doBeda($u, $b)->isNotEmpty()) {
+            return null;
+        }
         $s = 100 - (int) $hari * 15;
         $r1 = self::digit($b['rek']);
         $r2 = self::digit($m->rekening);
@@ -562,16 +567,28 @@ class MutasiJago
             if (abs($feeBank - $b['biaya']) >= 0.5) {
                 $c[] = 'Biaya transfer: bank '.rp((int) $feeBank).', Kas UJ '.rp((int) $b['biaya']).'.';
             }
-            preg_match_all('/\bDO\s*(?:No\.?\s*)?(\d{3,7})\b/i', (string) $m->catatan, $do);
-            $lain = collect($do[1] ?? [])->map(fn ($v) => SaldoSopir::kunciDo($v))->filter()->unique()->reject(fn ($v) => in_array($v, $b['do'], true));
-            // Infra memakai DO internal "00xx" di Kas UJ, sedangkan catatan bank menyebut nomor DO buku → tidak dibandingkan.
-            $internal = collect($b['do'])->contains(fn ($v) => strlen((string) $v) <= 3);
-            if ($lain->isNotEmpty() && $b['do'] && ! $internal) {
+            if (($lain = self::doBeda($u, $b))->isNotEmpty()) {
                 $c[] = 'DO di catatan bank '.$lain->implode(', ').' tidak ada di Kas UJ (DO '.implode(', ', $b['do']).').';
             }
         }
 
         return $c;
+    }
+
+    /** Kas UJ, transfer keluar: DO yang disebut di catatan bank tetapi tidak ada di DO baris Kas UJ. */
+    private static function doBeda(array $u, array $b): Collection
+    {
+        $m = $u['m'];
+        if (! isset($b['do']) || ! $b['do'] || $m->arah !== 'keluar') {
+            return collect();
+        }
+        // Infra memakai DO internal "00xx" di Kas UJ, sedangkan catatan bank menyebut nomor DO buku → tidak dibandingkan.
+        if (collect($b['do'])->contains(fn ($v) => strlen((string) $v) <= 3)) {
+            return collect();
+        }
+        preg_match_all('/\bDO\s*(?:No\.?\s*)?(\d{3,7})\b/i', (string) $m->catatan, $do);
+
+        return collect($do[1] ?? [])->map(fn ($v) => SaldoSopir::kunciDo($v))->filter()->unique()->reject(fn ($v) => in_array($v, $b['do'], true))->values();
     }
 
     /** Nama penerima & nama di buku punya kata yang sama (≥ 3 huruf), mis. "AIIAS NAWAWI" & "Nawawi". */
