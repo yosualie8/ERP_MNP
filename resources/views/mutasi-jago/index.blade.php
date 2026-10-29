@@ -7,7 +7,8 @@
         $tgl = fn ($d) => $d ? $d->translatedFormat('d-M-y') : '';
         $info = \App\Support\MutasiJago::KANTONG[$kantong];
         $label = ['cocok' => ['✓ cocok', 'hijau'], 'catatan' => ['⚠ ada catatan', 'kuning'], 'belum' => ['❗ belum diinput', 'merah'], 'tidak-di-bank' => ['❗ tidak ada di bank', 'merah'],
-            'menunggu' => ['menunggu mutasi', ''], 'biaya' => ['biaya tanpa transfer', 'kuning'], 'kembali' => ['↩ transfer kembali', ''], 'bunga' => ['bunga kantong', '']];
+            'menunggu' => ['menunggu mutasi', ''], 'biaya' => ['biaya tanpa transfer', 'kuning'], 'kembali' => ['↩ transfer kembali', ''], 'bunga' => ['bunga kantong', ''],
+            'bukan-mutasi' => ['❗ bukan dari mutasi', 'merah']];
         $n = $hasil['baris']->countBy('status');
         [$awal, $akhir] = $hasil['cakupan'];
         $rupiah = fn ($v) => $v === null ? '' : (($v < 0 ? '−' : '').number_format(abs($v), abs($v - round($v)) >= 0.005 ? 2 : 0, ',', '.'));
@@ -22,7 +23,7 @@
         table.kas td.angka, table.kas th.angka { white-space: nowrap; }
         table.kas .kecil { font-size: 11.5px; color: var(--redup); }
         table.kas ul.selisih { margin: 3px 0 0; padding-left: 16px; font-size: 12px; color: #f0c05a; }
-        table.kas tr.st-belum td, table.kas tr.st-tidak-di-bank td { background: rgba(255, 92, 97, .08); }
+        table.kas tr.st-belum td, table.kas tr.st-tidak-di-bank td, table.kas tr.st-bukan-mutasi td { background: rgba(255, 92, 97, .08); }
         table.kas tr.st-catatan td { background: rgba(224, 165, 38, .07); }
         .label.kuning { background: rgba(224, 165, 38, .16); color: #f0c05a; }
     </style>
@@ -74,6 +75,7 @@
         <div class="kartu"><small>Cocok, ada catatan</small><b style="color: #f0c05a;">{{ $n['catatan'] ?? 0 }}</b><small>tanggal / rekening / biaya / DO beda</small></div>
         <div class="kartu"><small>Di bank, belum diinput</small><b style="color: var(--merah);">{{ $n['belum'] ?? 0 }}</b></div>
         <div class="kartu"><small>Di {{ $info['buku'] }}, tidak ada di bank</small><b style="color: var(--merah);">{{ $n['tidak-di-bank'] ?? 0 }}</b><small>menunggu mutasi {{ $n['menunggu'] ?? 0 }}</small></div>
+        <div class="kartu"><small>Di {{ $info['buku'] }}, bukan dari mutasi</small><b style="color: var(--merah);">{{ $n['bukan-mutasi'] ?? 0 }}</b><small>sejak {{ \Illuminate\Support\Carbon::parse(\App\Support\MutasiJago::KETAT)->translatedFormat('j M') }}: diketik langsung di sheet?</small></div>
     </div>
 
     <h3 style="margin: 4px 0 8px;">Per hari <span style="font-size: 12px; font-weight: 400; color: var(--redup);">terbaru di atas</span></h3>
@@ -84,7 +86,7 @@
             <tbody>
                 @forelse ($hasil['hari']->reverse() as $h)
                     <tr class="t"><td data-n="{{ $h['tanggal']->toDateString() }}">{{ $h['tanggal']->translatedFormat('D, d-M-y') }}</td><td class="angka">{{ $h['bank'] }}</td>
-                        <td class="angka">{{ $h['n']['cocok'] ?? 0 }}</td><td class="angka">{{ $h['n']['catatan'] ?? '' }}</td><td class="angka">{{ $h['n']['belum'] ?? '' }}</td><td class="angka">{{ $h['n']['tidak-di-bank'] ?? '' }}</td>
+                        <td class="angka">{{ $h['n']['cocok'] ?? 0 }}</td><td class="angka">{{ $h['n']['catatan'] ?? '' }}</td><td class="angka">{{ $h['n']['belum'] ?? '' }}</td><td class="angka">{{ (($h['n']['tidak-di-bank'] ?? 0) + ($h['n']['bukan-mutasi'] ?? 0)) ?: '' }}</td>
                         <td class="angka">{{ $rupiah($h['saldo_bank']) }}</td>@if ($kantong === 'kas')<td class="angka">{{ $rupiah($h['saldo_buku']) }}</td>@endif
                         <td>@if ($h['cocok100'])<span class="label hijau">Cocok 100%</span>@elseif (! $h['penuh'])<span class="label">menunggu mutasi berikutnya</span>@elseif ($h['bank'])<span class="label kuning">perlu dicek</span>@else<span class="label">tidak ada mutasi</span>@endif</td></tr>
                 @empty
@@ -120,6 +122,7 @@
                             @if ($r['catatan'])<ul class="selisih">@foreach ($r['catatan'] as $c)<li>{{ $c }}</li>@endforeach</ul>@endif
                             @if ($r['status'] === 'belum')Ada di bank, belum ada di {{ $info['buku'] }}.@endif
                             @if ($r['status'] === 'tidak-di-bank')Tidak ada transfer bank yang cocok (nominal & tanggal ±3 hari).@endif
+                            @if ($r['status'] === 'bukan-mutasi')Tidak dibuat dari mutasi Jago (diketik langsung di sheet?). Sejak {{ \Illuminate\Support\Carbon::parse(\App\Support\MutasiJago::KETAT)->translatedFormat('j M Y') }} master hanya dari Input {{ $kantong === 'uj' ? 'UJ' : 'Kas' }} dengan memilih transfer bank — hapus baris ini lalu input ulang dari mutasinya.@endif
                             @if ($r['status'] === 'biaya')Biaya transfer tanpa transfer di menit yang sama.@endif
                             @if ($r['status'] === 'bunga')Bunga / pajak bunga kantong — tidak dicatat di Kas UJ.@endif
                             @if ($r['status'] === 'kembali')Keluar lalu masuk kembali dengan jumlah & penerima sama — saling meniadakan.@endif

@@ -18,6 +18,9 @@ use RuntimeException;
  * Dicocokkan mulai 27 Okt 2026. Hasil per baris: cocok / ada catatan (tanggal, rekening, biaya, DO beda) / ada di bank belum diinput / diinput tidak ada di bank.
  * VALIDITAS DULU (owner 28 Okt 2026): saldo seluruh mutasi tersimpan harus bersambung baris demi baris; bila ada transaksi hilang (saldo tidak balance)
  * pengecekan hanya berjalan sampai transaksi terakhir sebelum putus — sesudahnya "menunggu" sampai rentang yang hilang diunggah.
+ * KETAT (owner 29 Okt 2026): sejak tanggal KETAT master Kas UJ / Kas Harian hanya berpasangan lewat tautan mutasi (Input UJ / Input Kas memilih
+ * transfer bank) — tanpa menebak dari nominal / rekening / tanggal. Transfer bank tanpa master = "belum diinput"; master tanpa mutasi
+ * (mis. diketik langsung di sheet) = "bukan dari mutasi". Reimburse UJ (transfer masuk) & baris Biaya Transfer Kas Harian tetap dicocokkan biasa.
  */
 class MutasiJago
 {
@@ -27,6 +30,8 @@ class MutasiJago
     ];
 
     public const MULAI = '2026-10-27';
+
+    public const KETAT = '2026-10-29';
 
     public const FOLDER = 'mutasi-jago';
 
@@ -435,13 +440,15 @@ class MutasiJago
         // Buku tanpa pasangan: "tidak ada di bank" hanya bila harinya TERCAKUP PENUH mutasi valid (ada mutasi valid sesudah hari itu); hari terakhir
         // yang tercakup / sesudah titik putus = "menunggu" (transaksi sore / malam mungkin belum ada di PDF yang diunduh).
         $penuhSampai = $cakupan[1]?->copy()->startOfDay();
+        $tertaut = JagoMutasi::where('kantong', $kantong)->whereNotNull('dipakai')->pluck('dipakai')->flip();
         foreach ($buku as $b) {
             if (isset($dipakai[$b['kunci']]) || $b['tanggal']->lt($dari) || $b['tanggal']->gt($sampai)) {
                 continue;
             }
             $tercakup = $cakupan[0] && $b['tanggal']->gte($cakupan[0]->copy()->startOfDay()) && $b['tanggal']->lt($penuhSampai);
+            $bukan = self::ketat($b['tanggal'], $b) && self::master($b) && ! isset($tertaut[$b['tautan']]);
             $baris->push(['jenis' => 'buku', 'waktu' => $b['tanggal']->copy()->endOfDay(), 'tanggal' => $b['tanggal'], 'm' => null, 'fee' => null, 'saldo' => null, 'b' => $b,
-                'catatan' => [], 'saran' => null, 'status' => $tercakup ? 'tidak-di-bank' : 'menunggu']);
+                'catatan' => [], 'saran' => null, 'status' => $bukan ? 'bukan-mutasi' : ($tercakup ? 'tidak-di-bank' : 'menunggu')]);
         }
         $posisi = collect($v['urut'])->pluck('id')->flip();
         $baris = $baris->sortBy(fn ($r) => $r['waktu']->format('YmdHi').($r['m'] ? sprintf('%08d', $posisi[$r['m']->id] ?? 0) : '99999999'))->values();
@@ -451,7 +458,7 @@ class MutasiJago
             $saldoBank = $bankHari->last()['saldo'] ?? null;
             $saldoBuku = $kantong === 'kas' ? DB::table('kas_transfer')->whereDate('tanggal', $tgl)->orderByDesc('baris')->value('saldo') : null;
             $n = $g->countBy('status');
-            $masalah = ($n['catatan'] ?? 0) + ($n['belum'] ?? 0) + ($n['tidak-di-bank'] ?? 0) + ($n['biaya'] ?? 0);
+            $masalah = ($n['catatan'] ?? 0) + ($n['belum'] ?? 0) + ($n['tidak-di-bank'] ?? 0) + ($n['biaya'] ?? 0) + ($n['bukan-mutasi'] ?? 0);
             $penuh = $penuhSampai && $cakupan[0] && Carbon::parse($tgl)->gte($cakupan[0]->copy()->startOfDay()) && Carbon::parse($tgl)->lt($penuhSampai);
 
             return ['tanggal' => Carbon::parse($tgl), 'bank' => $bankHari->count(), 'n' => $n, 'saldo_bank' => $saldoBank, 'saldo_buku' => $saldoBuku, 'penuh' => $penuh,
@@ -514,6 +521,10 @@ class MutasiJago
         if ($kantong === 'kas' && $m->biaya !== $b['fee']) {
             return null;
         }
+        // Sejak KETAT: master hanya lewat tautan; transfer bank yang sudah jadi master lain tidak ditebakkan ke buku lain.
+        if (self::ketat($m->waktu, $b) && (self::master($b) || $m->dipakai)) {
+            return null;
+        }
         $hari = abs($m->waktu->copy()->startOfDay()->diffInDays($b['tanggal'], false));
         if ($hari > 3) {
             return null;
@@ -547,6 +558,20 @@ class MutasiJago
         }
 
         return $s;
+    }
+
+    /** Pasangan bank ↔ buku ini jatuh di masa KETAT (salah satu tanggalnya ≥ KETAT). */
+    private static function ketat(Carbon $waktu, array $b): bool
+    {
+        $k = Carbon::parse(self::KETAT);
+
+        return $waktu->gte($k) || $b['tanggal']->gte($k);
+    }
+
+    /** Baris master yang wajib dibuat dari mutasi: transfer Kas UJ / baris Kas Harian ber-NO ID, selain baris Biaya Transfer & Reimburse UJ. */
+    private static function master(array $b): bool
+    {
+        return ($b['tautan'] ?? null) !== null && ! $b['fee'];
     }
 
     /** Selisih kecil pada pasangan yang cocok nominalnya. @return string[] */
