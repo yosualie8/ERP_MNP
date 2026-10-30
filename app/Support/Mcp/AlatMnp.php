@@ -433,7 +433,7 @@ class AlatMnp
                 'uj_belum_bongkar_rinci' => $hutang[$s['sopir']]['belum']->map(fn ($u) => ['id_uj' => $u->id_uj, 'tanggal' => $u->tgl?->toDateString(), 'no_do' => $u->do, 'dt' => $u->mobil,
                     'nominal' => (int) $u->rp, 'umur_hari' => $u->umur, 'keterangan' => $u->ket])->values(),
                 'riwayat_sejak_settle' => ['tanggal_settle' => \App\Support\SaldoSopir::SETTLE, 'saldo_awal' => (int) $riwayat['awal'],
-                    'mutasi' => $riwayat['baris']->map(fn ($b) => ['tanggal' => $b['tgl']->toDateString(), 'jenis' => $b['jenis'], 'id' => $b['id'], 'no_do' => $b['do'],
+                    'mutasi' => $riwayat['baris']->map(fn ($b) => ['tanggal' => $b['tgl']->toDateString(), 'jenis' => $b['jenis'], 'id' => $b['id'], 'no_do' => $b['do'], 'galian_ke_buangan' => $b['rute'] ?? null,
                         'nambah' => (int) ($b['masuk'] ?? 0), 'potong' => (int) ($b['keluar'] ?? 0), 'sisa' => (int) $b['sisa']])->values()],
                 'uj_dijadikan_saldo' => $s['uj']->map(fn ($x) => ['id_uj' => $x->p->id_uj, 'tanggal' => $x->p->tanggal?->toDateString(), 'no_do' => $x->no_do, 'nominal' => (int) $x->p->nominal,
                     'proyek_asal' => $x->p->dari?->nama, 'do_lama_bongkar' => $x->bongkar ? $x->bongkar->tanggal->toDateString().' di '.($tahap[$x->tahap_bongkar] ?? $x->bongkar->tahap) : null])->values(),

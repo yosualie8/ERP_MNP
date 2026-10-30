@@ -58,12 +58,12 @@ class SaldoSopir
         self::$tahapPakai = [];
     }
 
-    /** Rit per kunci DO (urut tanggal): [kunci => [Ritasi...]] — hanya kolom no_do, tanggal, tahap. */
+    /** Rit per kunci DO (urut tanggal): [kunci => [Ritasi...]] — hanya kolom no_do, tanggal, tahap, galian. */
     private static function ritDo(): array
     {
         if (self::$ritDo === null) {
             self::$ritDo = [];
-            foreach (Ritasi::whereNotNull('no_do')->orderBy('tanggal')->get(['no_do', 'tanggal', 'tahap']) as $r) {
+            foreach (Ritasi::whereNotNull('no_do')->orderBy('tanggal')->get(['no_do', 'tanggal', 'tahap', 'galian']) as $r) {
                 if (($k = self::kunciDo($r->no_do)) !== null) {
                     self::$ritDo[$k][] = $r;
                 }
@@ -195,9 +195,10 @@ class SaldoSopir
      *  ➕ uang jalan diberikan (Kas UJ), kasbon, penyesuaian;  ➖ rit bongkar (senilai uang jalan DO itu: Kas UJ + potongan utang ber-DO sama),
      *  potongan utang (MOB, gaji, dikembalikan, tidak kembali …), UJ dikembalikan / ditutup tanpa bongkar.
      * Uang jalan DO yang dipotong dari utang dan UJ yang dijadikan saldo hanya berpindah (saldo ↔ DO), tidak mengubah utang.
-     * Saldo awal = utang sekarang − semua mutasi sesudah SETTLE.
+     * Saldo awal = utang sekarang − semua mutasi sesudah SETTLE. Rute (owner 30 Okt 2026) = galian → tempat bongkar: dari rit DO itu bila sudah
+     * bongkar, selain itu ditebak dari keterangan Kas UJ-nya (TebakGalian; proyek dari kata kunci UJ).
      *
-     * @return array{awal: float, akhir: float, baris: Collection<int, array{tgl, jenis, id, do, ket, masuk: ?float, keluar: ?float, sisa: float}>}
+     * @return array{awal: float, akhir: float, baris: Collection<int, array{tgl, jenis, id, do, rute: ?string, ket, masuk: ?float, keluar: ?float, sisa: float}>}
      */
     public static function riwayat(string $sopir): array
     {
@@ -213,8 +214,31 @@ class SaldoSopir
         $tutup = $buku->whereIn('jenis', ['kembali', 'batal'])->whereNotNull('id_uj')->keyBy('id_uj');
         $do = fn ($v) => ltrim(trim((string) $v), "`'");
 
+        $rit = self::ritDo();
+        $kata = KontrolUj::tahapKata();
+        $ketDo = $kas->groupBy(fn ($u) => (string) self::kunciDo($u->no_do))->map(fn ($g) => $g->pluck('keterangan')->filter()->all());
+        $ritPertama = function (?string $k, $tgl) use ($rit) {
+            $daftar = collect($k !== null ? $rit[$k] ?? [] : []);
+
+            return $tgl ? ($daftar->first(fn ($r) => $r->tanggal->gte($tgl->copy()->startOfDay())) ?? $daftar->first()) : $daftar->first();
+        };
+        $rute = function (?string $no, $tgl = null) use ($ketDo, $ritPertama, $kata) {
+            if (($k = self::kunciDo($no)) === null) {
+                return null;
+            }
+            $r = $ritPertama($k, $tgl);
+            $ket = $ketDo[$k] ?? [];
+            $tempat = $r?->galian ? null : TebakGalian::tempat($ket);
+            $galian = $r?->galian ?: ($tempat ? (TebakGalian::galian($tempat, null) ?? ucwords($tempat)) : null);
+            $teks = implode(' | ', $ket);
+            $buang = $r?->tahap ?: ($kata->first(fn ($x) => preg_match("/\\b({$x['pola']})\\b/i", $teks))['t']->nama ?? null);
+
+            return $galian && $buang ? "{$galian} → {$buang}" : ($galian ? "dari {$galian}" : ($buang ? "ke {$buang}" : null));
+        };
+
         foreach ($kas->filter(fn ($u) => $u->tanggal && $u->tanggal->gt($batas)) as $u) {
-            $baris[] = ['tgl' => $u->tanggal, 'jenis' => 'Uang jalan diberikan', 'id' => $u->id_uj, 'do' => $do($u->no_do), 'ket' => $u->keterangan, 'masuk' => (float) $u->nominal, 'keluar' => null];
+            $baris[] = ['tgl' => $u->tanggal, 'jenis' => 'Uang jalan diberikan', 'id' => $u->id_uj, 'do' => $do($u->no_do), 'rute' => $rute($u->no_do, $u->tanggal),
+                'ket' => $u->keterangan, 'masuk' => (float) $u->nominal, 'keluar' => null];
         }
         // Rit bongkar sesudah settle = nilai uang jalan DO itu (UJ yang dikembalikan / ditutup tanpa bongkar tidak dihitung).
         $perDo = [];
@@ -232,23 +256,22 @@ class SaldoSopir
         foreach ($dariUtang as $p) {
             $tambah($p->no_do, $p->tanggal, (float) $p->nominal);
         }
-        $rit = self::ritDo();
         foreach ($perDo as $k => $d) {
-            $daftar = collect($rit[$k] ?? []);
-            $r = $daftar->first(fn ($r) => $r->tanggal->gte($d['tgl']->copy()->startOfDay())) ?? $daftar->first();
+            $r = $ritPertama((string) $k, $d['tgl']);
             if ($r && $r->tanggal->gt($batas)) {
-                $baris[] = ['tgl' => $r->tanggal, 'jenis' => 'Rit bongkar', 'id' => null, 'do' => $d['do'], 'ket' => $r->tahap, 'masuk' => null, 'keluar' => $d['rp']];
+                $baris[] = ['tgl' => $r->tanggal, 'jenis' => 'Rit bongkar', 'id' => null, 'do' => $d['do'], 'rute' => $rute($d['do'], $d['tgl']), 'ket' => $r->tahap, 'masuk' => null, 'keluar' => $d['rp']];
             }
         }
         foreach ($buku->filter(fn ($p) => $p->tanggal->gt($batas)) as $p) {
             if (in_array($p->jenis, ['kasbon', 'settle'], true)) {
-                $baris[] = ['tgl' => $p->tanggal, 'jenis' => UjPengalihan::JENIS[$p->jenis], 'id' => $p->kas_no_id ? 'NO ID '.$p->kas_no_id : null, 'do' => null, 'ket' => $p->keterangan,
+                $baris[] = ['tgl' => $p->tanggal, 'jenis' => UjPengalihan::JENIS[$p->jenis], 'id' => $p->kas_no_id ? 'NO ID '.$p->kas_no_id : null, 'do' => null, 'rute' => null, 'ket' => $p->keterangan,
                     'masuk' => $p->nominal > 0 ? (float) $p->nominal : null, 'keluar' => $p->nominal < 0 ? -(float) $p->nominal : null];
             } elseif ($p->jenis === 'pakai' && $p->peruntukan !== 'uj') {
                 $baris[] = ['tgl' => $p->tanggal, 'jenis' => UjPengalihan::PERUNTUKAN[$p->peruntukan] ?? 'Dipakai', 'id' => $p->kas_no_id ? 'NO ID '.$p->kas_no_id : null,
-                    'do' => $p->no_do, 'ket' => $p->keterangan, 'masuk' => null, 'keluar' => (float) $p->nominal];
+                    'do' => $p->no_do, 'rute' => $rute($p->no_do), 'ket' => $p->keterangan, 'masuk' => null, 'keluar' => (float) $p->nominal];
             } elseif (in_array($p->jenis, ['kembali', 'batal'], true)) {
-                $baris[] = ['tgl' => $p->tanggal, 'jenis' => UjPengalihan::JENIS[$p->jenis], 'id' => $p->id_uj, 'do' => $p->no_do, 'ket' => $p->keterangan, 'masuk' => null, 'keluar' => (float) $p->nominal];
+                $baris[] = ['tgl' => $p->tanggal, 'jenis' => UjPengalihan::JENIS[$p->jenis], 'id' => $p->id_uj, 'do' => $p->no_do, 'rute' => $rute($p->no_do), 'ket' => $p->keterangan,
+                    'masuk' => null, 'keluar' => (float) $p->nominal];
             }
         }
         $akhir = (float) (self::hutang()[$sopir]['total'] ?? 0);

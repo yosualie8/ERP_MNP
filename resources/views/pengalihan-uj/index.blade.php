@@ -135,7 +135,8 @@
                 </div>
                 @php
                     // Buku sederhana (owner 30 Okt 2026): hanya Tanggal, Keterangan, Debit (utang bertambah), Kredit (utang berkurang), Saldo.
-                    $doTeks = fn ($b) => $b['do'] ? ' DO '.$b['do'] : '';
+                    // Owner 30 Okt 2026: sebut juga galian → tempat buangnya.
+                    $doTeks = fn ($b) => ($b['do'] ? ' DO '.$b['do'] : '').(! empty($b['rute']) ? ' · '.$b['rute'] : '');
                     $ketBuku = fn ($b) => match ($b['jenis']) {
                         'Uang jalan diberikan' => 'Uang jalan'.$doTeks($b),
                         'Rit bongkar' => 'Bongkar'.$doTeks($b),
