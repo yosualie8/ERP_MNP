@@ -1,4 +1,4 @@
-@extends('layouts.app', ['judul' => 'Performa DT (Laba Rugi)'])
+@extends('layouts.app', ['judul' => 'Dashboard Laba Rugi DT'])
 
 @section('lebar', '1600px')
 
@@ -23,7 +23,7 @@
     @include('partials.periode', ['rute' => 'dashboard.performa-dt'])
 
     <p class="redup" style="font-size: 13px; margin: -4px 0 12px;">
-        <b>Pendapatan</b> = kolom Harga Jual lembar Ritasi (per rit, menurut No Lambung). <b>Biaya</b> = biaya langsung truk dari Monitoring Biaya DT
+        <b>Pendapatan</b> = kolom Harga Jual lembar Ritasi (per rit, menurut No Lambung). <b>Biaya</b> = biaya langsung truk dari Dashboard Biaya DT
         (Kas UJ + Kas Harian yang ber-No Mobil) ditambah transfer BCA berstatus Dihitung yang menyebut nomor DT. Biaya bersama yang tidak ber-No Mobil — gaji, solar tangki, sparepart tanpa No Mobil, sewa, overhead — belum dibagi ke truk.
         Hanya dump truck di Data Aset · {{ $periode->label() }}.
     </p>

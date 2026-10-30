@@ -1,4 +1,4 @@
-@extends('layouts.app', ['judul' => 'Performa '.$t['mobil']])
+@extends('layouts.app', ['judul' => 'Laba Rugi '.$t['mobil']])
 
 @section('lebar', '1600px')
 
@@ -13,7 +13,7 @@
     @include('dashboard.performa-dt-gaya')
 
     <div style="display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; margin-bottom: 8px;">
-        <a href="{{ route('dashboard.performa-dt', $pp) }}" class="redup">← Performa DT semua truk</a>
+        <a href="{{ route('dashboard.performa-dt', $pp) }}" class="redup">← Dashboard Laba Rugi DT semua truk</a>
         <span class="redup" style="font-size: 13px;">{{ collect([$a?->jenis, $a ? (\App\Models\AsetTruk::STATUS[$a->status] ?? $a->status) : null,
             $a?->kepemilikan === 'rental' ? 'rental' : null, $a?->driver_tetap ? 'driver '.$a->driver_tetap : null])->filter()->implode(' · ') }} · {{ $periode->label() }}</span>
     </div>

@@ -1,4 +1,4 @@
-@extends('layouts.app', ['judul' => 'Monitoring Biaya DT'])
+@extends('layouts.app', ['judul' => 'Dashboard Biaya DT'])
 
 @section('lebar', '1600px')
 
