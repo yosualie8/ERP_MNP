@@ -35,6 +35,9 @@ class SaldoSopir
 
     private static ?array $ritDo = null;
 
+    /** @var ?array{kas: Collection, buku: Collection} baris Kas UJ uang jalan & catatan buku per sopir (untuk riwayat). */
+    private static ?array $perNama = null;
+
     private static array $tahapPakai = [];
 
     public static function kunciDo(?string $do): ?string
@@ -55,6 +58,7 @@ class SaldoSopir
         DaftarSopir::lupakan();
         self::$cache = null;
         self::$ritDo = null;
+        self::$perNama = null;
         self::$tahapPakai = [];
     }
 
@@ -203,13 +207,16 @@ class SaldoSopir
     public static function riwayat(string $sopir): array
     {
         $batas = Carbon::parse(self::SETTLE)->endOfDay();
-        $milik = fn ($nama) => self::kunci($nama) === $sopir;
         $baris = collect();
 
         // DO milik sopir: uang jalan Kas UJ atas namanya + potongan utang ber-DO (uang jalan DO baru dari utang).
-        $kas = UjDetail::where('kategori', 'Uang Jalan')->where('biaya_transfer', false)->where('tanggal', '>=', KontrolUj::SEJAK)
-            ->get(['id_uj', 'tanggal', 'nama', 'nominal', 'no_do', 'keterangan'])->filter(fn ($u) => $milik($u->nama))->values();
-        $buku = UjPengalihan::whereIn('jenis', [...UjPengalihan::BUKU, 'kembali', 'batal'])->get()->filter(fn ($p) => $milik($p->sopir ?: $p->nama))->values();
+        self::$perNama ??= [
+            'kas' => UjDetail::where('kategori', 'Uang Jalan')->where('biaya_transfer', false)->where('tanggal', '>=', KontrolUj::SEJAK)
+                ->get(['id_uj', 'tanggal', 'nama', 'nominal', 'no_do', 'keterangan'])->groupBy(fn ($u) => (string) self::kunci($u->nama)),
+            'buku' => UjPengalihan::whereIn('jenis', [...UjPengalihan::BUKU, 'kembali', 'batal'])->get()->groupBy(fn ($p) => (string) self::kunci($p->sopir ?: $p->nama)),
+        ];
+        $kas = (self::$perNama['kas'][$sopir] ?? collect())->values();
+        $buku = (self::$perNama['buku'][$sopir] ?? collect())->values();
         $dariUtang = $buku->where('jenis', 'pakai')->where('peruntukan', 'uj')->filter(fn ($p) => self::kunciDo($p->no_do) !== null);
         $tutup = $buku->whereIn('jenis', ['kembali', 'batal'])->whereNotNull('id_uj')->keyBy('id_uj');
         $do = fn ($v) => ltrim(trim((string) $v), "`'");
@@ -282,6 +289,19 @@ class SaldoSopir
         });
 
         return ['awal' => $awal, 'akhir' => $akhir, 'baris' => $baris];
+    }
+
+    /** Keterangan satu baris buku utang (owner 30 Okt 2026): jenis singkat + No DO + galian → tempat buang. */
+    public static function ketBuku(array $b): string
+    {
+        $tambahan = ($b['do'] ? ' DO '.$b['do'] : '').(! empty($b['rute']) ? ' · '.$b['rute'] : '');
+
+        return match ($b['jenis']) {
+            'Uang jalan diberikan' => 'Uang jalan',
+            'Rit bongkar' => 'Bongkar',
+            'Penyesuaian settle' => 'Penyesuaian',
+            default => $b['jenis'],
+        }.$tambahan;
     }
 
     /** Saldo satu sopir; $kecualiDetail = detail pengajuan yang sedang diubah (pemakaiannya dihitung kembali tersedia). */

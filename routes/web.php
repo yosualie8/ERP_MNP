@@ -168,6 +168,7 @@ Route::middleware(['auth', 'menu'])->group(function () {
     // Pengajuan uang jalan (disimpan di aplikasi, direalisasikan lewat Input UJ).
     // Hutang Supir (dulu Pengalihan UJ; alamat diganti owner 30 Okt 2026 — nama route tetap pengalihan-uj.*). Alamat lama dialihkan.
     Route::get('/hutang-supir', [\App\Http\Controllers\PengalihanUjController::class, 'index'])->name('pengalihan-uj.index');
+    Route::get('/hutang-supir/unduh', [\App\Http\Controllers\PengalihanUjController::class, 'unduh'])->name('pengalihan-uj.unduh');
     Route::post('/hutang-supir', [\App\Http\Controllers\PengalihanUjController::class, 'simpan'])->name('pengalihan-uj.simpan');
     Route::post('/hutang-supir/pakai', [\App\Http\Controllers\PengalihanUjController::class, 'pakai'])->name('pengalihan-uj.pakai');
     Route::post('/hutang-supir/kasbon', [\App\Http\Controllers\PengalihanUjController::class, 'kasbon'])->name('pengalihan-uj.kasbon');

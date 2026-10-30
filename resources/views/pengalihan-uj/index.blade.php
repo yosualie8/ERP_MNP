@@ -47,7 +47,8 @@
                 <input name="sopir" list="daftar-sopir-buka" value="{{ $dipilih['sopir'] ?? '' }}" placeholder="ketik nama sopir" style="width: 260px;" autocomplete="off"></div>
             <button class="tombol" type="submit">Buka</button>
             <datalist id="daftar-sopir-buka">@foreach ($namaSopir ?? [] as $n)<option value="{{ $n }}">@endforeach</datalist>
-            <a href="{{ route('pengalihan-uj.index', ['tab' => 'saldo', 'tampil' => $semua ? null : 'semua']) }}" class="chip" style="margin: 0 0 0 auto;">{{ $semua ? 'Hanya yang masih berhutang' : 'Tampilkan juga yang lunas' }}</a>
+            <a href="{{ route('pengalihan-uj.unduh') }}" class="tombol polos" style="margin-left: auto;">⬇ Download Excel</a>
+            <a href="{{ route('pengalihan-uj.index', ['tab' => 'saldo', 'tampil' => $semua ? null : 'semua']) }}" class="chip" style="margin: 0;">{{ $semua ? 'Hanya yang masih berhutang' : 'Tampilkan juga yang lunas' }}</a>
         </form>
 
         <div class="kartu gulir" style="padding: 0; max-width: 640px;">
@@ -134,17 +135,6 @@
                     <a href="{{ route('pengalihan-uj.index', ['tab' => 'saldo']) }}" class="redup" style="margin-left: auto; font-size: 13px;">Tutup ✕</a>
                 </div>
                 @php
-                    // Buku sederhana (owner 30 Okt 2026): hanya Tanggal, Keterangan, Debit (utang bertambah), Kredit (utang berkurang), Saldo.
-                    // Owner 30 Okt 2026: sebut juga galian → tempat buangnya.
-                    $doTeks = fn ($b) => ($b['do'] ? ' DO '.$b['do'] : '').(! empty($b['rute']) ? ' · '.$b['rute'] : '');
-                    $ketBuku = fn ($b) => match ($b['jenis']) {
-                        'Uang jalan diberikan' => 'Uang jalan'.$doTeks($b),
-                        'Rit bongkar' => 'Bongkar'.$doTeks($b),
-                        'Penyesuaian settle' => 'Penyesuaian',
-                        default => $b['jenis'].$doTeks($b),
-                    };
-                @endphp
-                @php
                     // Owner 30 Okt 2026: tanggal terbaru di atas, hanya 20 transaksi terakhir.
                     $bukuTampil = $riwayat['baris']->reverse()->take(20);
                 @endphp
@@ -153,7 +143,7 @@
                         <thead><tr><th>Tanggal</th><th>Keterangan</th><th class="angka">Debit</th><th class="angka">Kredit</th><th class="angka">Saldo</th></tr></thead>
                         <tbody>
                             @foreach ($bukuTampil as $b)
-                                <tr class="t"><td data-n="{{ $b['tgl']->toDateString() }}">{{ $tgl($b['tgl']) }}</td><td>{{ $ketBuku($b) }}</td>
+                                <tr class="t"><td data-n="{{ $b['tgl']->toDateString() }}">{{ $tgl($b['tgl']) }}</td><td>{{ \App\Support\SaldoSopir::ketBuku($b) }}</td>
                                     <td class="angka">{{ $b['masuk'] ? rp((int) $b['masuk']) : '' }}</td><td class="angka">{{ $b['keluar'] ? rp((int) $b['keluar']) : '' }}</td>
                                     <td class="angka" data-n="{{ (int) $b['sisa'] }}"><b>{{ rp((int) $b['sisa']) }}</b></td></tr>
                             @endforeach

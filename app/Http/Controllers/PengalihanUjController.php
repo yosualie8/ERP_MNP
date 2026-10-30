@@ -121,6 +121,13 @@ class PengalihanUjController extends Controller
         return view('pengalihan-uj.index', $data);
     }
 
+    /** Excel Hutang Supir (owner 30 Okt 2026): ringkasan semua sopir, buku utang per sopir (sheet sendiri), UJ belum bongkar. */
+    public function unduh(): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        return response()->streamDownload(fn () => \App\Support\UnduhHutangSopir::tulis('php://output'),
+            'Hutang Supir '.now()->format('Y-m-d H.i').'.xlsx', ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
+    }
+
     /** Pilih UJ → jadikan saldo sopir (atau catat dikembalikan sopir). Tanpa proyek tujuan. */
     public function simpan(Request $request): RedirectResponse
     {
