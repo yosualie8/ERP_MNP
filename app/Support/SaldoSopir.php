@@ -215,25 +215,23 @@ class SaldoSopir
         $do = fn ($v) => ltrim(trim((string) $v), "`'");
 
         $rit = self::ritDo();
-        $kata = KontrolUj::tahapKata();
         $ketDo = $kas->groupBy(fn ($u) => (string) self::kunciDo($u->no_do))->map(fn ($g) => $g->pluck('keterangan')->filter()->all());
         $ritPertama = function (?string $k, $tgl) use ($rit) {
             $daftar = collect($k !== null ? $rit[$k] ?? [] : []);
 
             return $tgl ? ($daftar->first(fn ($r) => $r->tanggal->gte($tgl->copy()->startOfDay())) ?? $daftar->first()) : $daftar->first();
         };
-        $rute = function (?string $no, $tgl = null) use ($ketDo, $ritPertama, $kata) {
+        // Sudah bongkar → galian & tahap rit itu; belum → rute seperti tertulis di Kas UJ ("Uang jalan sajira PIK" → "sajira PIK"), tidak ditebak.
+        $rute = function (?string $no, $tgl = null) use ($ketDo, $ritPertama) {
             if (($k = self::kunciDo($no)) === null) {
                 return null;
             }
-            $r = $ritPertama($k, $tgl);
-            $ket = $ketDo[$k] ?? [];
-            $tempat = $r?->galian ? null : TebakGalian::tempat($ket);
-            $galian = $r?->galian ?: ($tempat ? (TebakGalian::galian($tempat, null) ?? ucwords($tempat)) : null);
-            $teks = implode(' | ', $ket);
-            $buang = $r?->tahap ?: ($kata->first(fn ($x) => preg_match("/\\b({$x['pola']})\\b/i", $teks))['t']->nama ?? null);
+            if (($r = $ritPertama($k, $tgl)) && ($r->galian || $r->tahap)) {
+                return $r->galian && $r->tahap ? "{$r->galian} → {$r->tahap}" : ($r->galian ? "dari {$r->galian}" : "ke {$r->tahap}");
+            }
+            $ket = trim(preg_replace('/^\s*(uang\s+jalan|uj)\s*(\d+\s*rit\s*)?/i', '', explode(',', (string) ($ketDo[$k][0] ?? ''))[0]));
 
-            return $galian && $buang ? "{$galian} → {$buang}" : ($galian ? "dari {$galian}" : ($buang ? "ke {$buang}" : null));
+            return $ket !== '' ? $ket : null;
         };
 
         foreach ($kas->filter(fn ($u) => $u->tanggal && $u->tanggal->gt($batas)) as $u) {
