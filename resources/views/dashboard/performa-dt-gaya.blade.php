@@ -13,18 +13,20 @@
     /* Rincian satu DT: detail 1 di atas, detail 2 di bawahnya. Di dalam grid master: width 0 + min-width 100% → tidak melebarkan grid. */
     .rinci-dt { display: flex; flex-direction: column; gap: 18px; }
     tr.d .rinci-dt { width: 0; min-width: 100%; }
-    .rinci-dt > .detail-1 { max-width: 900px; }
-    .rinci-dt h5 { margin: 0 0 6px; font-size: 12px; color: var(--aksen-terang); text-transform: uppercase; letter-spacing: .04em; }
+    /* Owner 30 Okt 2026: detail 1 & 2 juga rata tengah (blok, judul, baris buka-tutup, isi grid). */
+    .rinci-dt > div { width: 100%; }
+    .rinci-dt > .detail-1 { max-width: 900px; margin: 0 auto; }
+    .rinci-dt h5 { text-align: center; margin: 0 0 6px; font-size: 12px; color: var(--aksen-terang); text-transform: uppercase; letter-spacing: .04em; }
     .rinci-dt table { width: 100%; }
-    .rinci-dt .buka-tutup { display: flex; gap: 14px; align-items: baseline; padding: 8px 12px; margin-top: 6px; border-radius: 6px; background: var(--kartu-2);
+    .rinci-dt .buka-tutup { display: flex; justify-content: center; flex-wrap: wrap; gap: 14px; align-items: baseline; padding: 8px 12px; margin-top: 6px; border-radius: 6px; background: var(--kartu-2);
         border: 1px solid var(--garis); cursor: pointer; font-weight: 700; user-select: none; }
     .rinci-dt .buka-tutup:hover { border-color: var(--aksen); }
     .rinci-dt .buka-tutup::before { content: '▸'; color: var(--aksen-terang); }
     .rinci-dt .buka-tutup.buka::before { content: '▾'; }
     .rinci-dt .buka-tutup .ket { font-weight: 400; font-size: 12px; color: var(--redup); }
-    .rinci-dt .buka-tutup .nilai { margin-left: auto; font-variant-numeric: tabular-nums; }
-    .rinci-dt .laba-dt { display: flex; padding: 8px 12px; margin-top: 6px; font-weight: 700; border-top: 2px solid var(--garis-kuat); }
-    .rinci-dt .laba-dt .nilai { margin-left: auto; }
+    .rinci-dt .buka-tutup .nilai { font-variant-numeric: tabular-nums; }
+    .rinci-dt .laba-dt { display: flex; justify-content: center; gap: 14px; align-items: baseline; padding: 8px 12px; margin-top: 6px; font-weight: 700; border-top: 2px solid var(--garis-kuat); }
+    .rinci-dt table.kas th, .rinci-dt table.kas td { text-align: center; }
     .rinci-dt .anak { margin-top: 4px; overflow: auto; max-height: 520px; }
     .rinci-dt .anak[hidden] { display: none; }
 </style>

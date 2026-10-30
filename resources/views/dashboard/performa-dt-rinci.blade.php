@@ -68,7 +68,7 @@
             </table>
         </div>
 
-        <div class="laba-dt">Laba / rugi <span class="redup" style="font-weight: 400; font-size: 12px; margin-left: 10px;">margin {{ $persen($t['laba'], $t['pendapatan']) }}</span>
+        <div class="laba-dt">Laba / rugi <span class="redup" style="font-weight: 400; font-size: 12px;">margin {{ $persen($t['laba'], $t['pendapatan']) }}</span>
             <span class="nilai">{!! $lr($t['laba']) !!}</span></div>
     </div>
 
