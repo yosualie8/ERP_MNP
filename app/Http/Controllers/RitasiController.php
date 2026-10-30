@@ -500,6 +500,8 @@ class RitasiController extends Controller
         $peta = \App\Models\KubikasiKendaraan::peta();
         foreach ($rit as $i => $r) {
             $rit[$i]['kubikasi'] ??= \App\Models\KubikasiKendaraan::untuk($r['jenis_kendaraan'], $peta);
+            // Kendal & Jogja: Harga Jual = kubikasi × tarif per m³ (menimpa isian / saran harga riwayat).
+            $rit[$i]['harga_jual'] = LembarRitasi::hargaPerM3($r['tahap'], $rit[$i]['kubikasi']) ?? $rit[$i]['harga_jual'];
         }
 
         return [$rit, $uj];

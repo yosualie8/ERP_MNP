@@ -20,6 +20,17 @@ class LembarRitasi
     /** Indeks kolom X (Kubikasi) di lembar Ritasi. */
     public const KOLOM_KUBIKASI = 23;
 
+    /** Tahap yang Harga Jual-nya per m³ (owner 30 Okt 2026: Kendal & Jogja = kubikasi × Rp41.000), huruf kecil. */
+    public const HARGA_PER_M3 = ['proyek industri kendal' => 41000, 'kik' => 41000, 'jogja' => 41000];
+
+    /** Harga Jual rit untuk tahap ber-harga per m³; null bila tahapnya per rit atau kubikasi belum ada. */
+    public static function hargaPerM3(?string $tahap, ?float $kubikasi): ?int
+    {
+        $tarif = self::HARGA_PER_M3[mb_strtolower(trim((string) $tahap))] ?? null;
+
+        return $tarif && $kubikasi > 0 ? (int) round($kubikasi * $tarif) : null;
+    }
+
     public static function id(): string
     {
         return config('mnp.sheet_ritasi');
