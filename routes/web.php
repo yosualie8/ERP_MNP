@@ -6,8 +6,6 @@ use App\Http\Controllers\Auth\GoogleController;
 use App\Http\Controllers\BuanganTrukController;
 use App\Http\Controllers\DaftarProyekController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\DashboardKasController;
-use App\Http\Controllers\DashboardUjController;
 use App\Http\Controllers\KasController;
 use App\Http\Controllers\KasFotoController;
 use App\Http\Controllers\KasInputController;
@@ -46,8 +44,6 @@ Route::get('/auth/google/callback', [GoogleController::class, 'callback'])->name
 // "menu": tiap halaman/aksi hanya untuk akun yang diberi menunya (App\Support\MenuAkses, diatur di halaman Pengguna).
 Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/beranda', DashboardController::class)->name('dashboard');
-    Route::get('/dashboard/kas', DashboardKasController::class)->name('dashboard.kas');
-    Route::get('/dashboard/uj', DashboardUjController::class)->name('dashboard.uj');
     Route::get('/dashboard/proyek', \App\Http\Controllers\DashboardProyekController::class)->name('dashboard.proyek');
     Route::get('/dashboard/biaya-dt', \App\Http\Controllers\DashboardBiayaDtController::class)->name('dashboard.biaya-dt');
     Route::get('/dashboard/performa-dt', \App\Http\Controllers\DashboardPerformaDtController::class)->name('dashboard.performa-dt');

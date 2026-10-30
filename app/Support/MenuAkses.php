@@ -13,13 +13,11 @@ class MenuAkses
 {
     /** kunci => [label di navigasi, rute tujuan, pola nama rute yang termasuk menu ini, keterangan] */
     public const DAFTAR = [
-        'dashboard-uj' => ['Dashboard UJ', 'dashboard.uj', ['dashboard.uj'], 'Jumlah UJ belum reimburse, transaksi UJ terakhir & 5 reimburse UJ terakhir (kapan data terakhir diperbarui)'],
         'dashboard-proyek' => ['Dashboard Progres Proyek', 'dashboard.proyek', ['dashboard.proyek'], 'Tahap berstatus progress: persen progres, biaya yang sudah keluar & rinciannya per komponen, tombol ke Anggaran'],
         'dashboard-biaya-dt' => ['Dashboard Biaya DT', 'dashboard.biaya-dt', ['dashboard.biaya-dt'], 'Biaya dump truck per bulan & per kategori (Kas UJ + Kas Harian ber-No Mobil), per DT, jumlah rit & biaya per rit, rincian transaksi per truk'],
         'dashboard-performa-dt' => ['Dashboard Laba Rugi DT', 'dashboard.performa-dt', ['dashboard.performa-dt', 'dashboard.performa-dt.*'], 'Laba rugi per dump truck: harga jual rit (lembar Ritasi) dikurangi biaya langsung truk (Kas UJ, Kas Harian, BCA ber-DT); buka DT → pendapatan per proyek, biaya per kategori & semua transaksinya'],
         'dashboard-aktivitas' => ['Dashboard Aktivitas Admin', 'dashboard.aktivitas', ['dashboard.aktivitas'], 'Log kegiatan semua pengguna (khusus Super Admin)'],
         'tanya-ai' => ['Tanya AI', 'tanya-ai', ['tanya-ai', 'tanya-ai.*'], 'Chat tanya data ERP (hanya baca, sesuai menu akun) + 🎤 speech to text; pertanyaan & jawaban dicatat'],
-        'dashboard-kas' => ['Dashboard Kas Harian', 'dashboard.kas', ['dashboard.kas'], 'Jumlah belum reimburse, transaksi Kas Harian terakhir & 5 history reimburse terakhir (kapan data terakhir diperbarui)'],
         'input-kas' => ['Input Kas', 'kas.input', ['kas.input', 'kas.input.*', 'kas.edit', 'kas.update', 'kas.hapus', 'kas.bon', 'kas.bon.*'], 'Input, edit & hapus transaksi Kas Harian (Bank Jago), foto bon'],
         'kas-harian' => ['Kas Harian', 'kas.index', ['kas.index'], 'Melihat buku Kas Harian per bulan'],
         // Membuat / mengubah / membatalkan pengajuan dipisah dari melihat Pengajuan UJ (owner 23 Okt 2026: Admin Mobil hanya melihat & merealisasikan).
@@ -70,7 +68,7 @@ class MenuAkses
     /** Kelompok menu di sidebar: kunci => [judul, ikon, menu di dalamnya]. */
     public const KATEGORI = [
         'asisten' => ['Asisten AI', '🤖', ['tanya-ai']],
-        'dashboard' => ['Dashboard', '📊', ['dashboard-proyek', 'dashboard-kas', 'dashboard-uj', 'dashboard-biaya-dt', 'dashboard-performa-dt', 'dashboard-bbm', 'dashboard-aktivitas']],
+        'dashboard' => ['Dashboard', '📊', ['dashboard-proyek', 'dashboard-biaya-dt', 'dashboard-performa-dt', 'dashboard-bbm', 'dashboard-aktivitas']],
         'proyek' => ['Proyek', '🏗️', ['daftar-proyek', 'anggaran-proyek', 'pilah-transaksi', 'boq-proyek', 'alokasi-overhead', 'komponen-anggaran', 'pengaturan-proyek']],
         'kas' => ['Kas Harian', '🏦', ['input-kas', 'kas-harian', 'validasi-reimburse', 'riwayat-reimburse', 'kas-belum-reimburse', 'rekap', 'mutasi-jago', 'mutasi-pt', 'kode-gl', 'daftar-rekening']],
         'uj' => ['Uang Jalan', '🚚', ['pengajuan-uj', 'ajukan-uj', 'input-uj', 'kas-uj', 'reimburse-uj', 'pengalihan-uj', 'rapikan-uj']],

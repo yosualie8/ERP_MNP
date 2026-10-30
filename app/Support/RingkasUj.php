@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Support;
 
 use App\Models\KasRiwayat;
 use App\Models\UjDetail;
@@ -8,18 +8,16 @@ use App\Models\UjPengajuanDetail;
 use App\Models\UjReimburse;
 use App\Models\UjTransaksi;
 use App\Models\User;
-use App\Support\ReimburseUj;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\View\View;
 
 /**
- * Dashboard UJ: kapan Kas UJ (lembar Kas Seabank) & reimburse UJ terakhir diperbarui — jumlah yang belum reimburse,
- * transaksi UJ terakhir (urut No UJ: diketik di sheet maupun lewat aplikasi), dan 5 reimburse UJ terakhir.
+ * Ringkasan Kas UJ untuk tool MCP ringkasan_uj (dulu data halaman Dashboard UJ, dihapus owner 30 Okt 2026): jumlah belum reimburse,
+ * kapan terakhir diperbarui, pengajuan menunggu realisasi, dan 5 tanggal reimburse UJ terakhir.
  */
-class DashboardUjController extends Controller
+class RingkasUj
 {
-    public function __invoke(): View
+    public static function data(): array
     {
         $nama = User::pluck('name', 'id');
 
@@ -33,15 +31,6 @@ class DashboardUjController extends Controller
             'per_bulan' => $antrean->groupBy(fn ($t) => substr((string) $t['tanggal'], 0, 7))->sortKeysDesc()
                 ->map(fn ($g) => ['detail' => $g->sum(fn ($t) => count($t['detail'])), 'total' => (int) $g->sum('total')]),
         ];
-
-        // Transaksi UJ terakhir menurut No UJ (nomor urut transfer di lembar Kas Seabank).
-        $terakhir = UjTransaksi::whereNotNull('no_uj')->orderByDesc('no_uj')->with('detail')->limit(15)->get();
-        $lewatAplikasi = [];
-        foreach (KasRiwayat::whereIn('aksi', ['uj-tambah', 'uj-ubah'])->where('created_at', '>=', now()->subDays(60))->orderBy('id')->get(['aksi', 'isi', 'user_id', 'created_at']) as $r) {
-            foreach ((array) ($r->isi['id_uj'] ?? []) as $id) {
-                $lewatAplikasi[$id] = ['aksi' => $r->aksi, 'oleh' => $nama[$r->user_id] ?? '?', 'waktu' => $r->created_at];
-            }
-        }
 
         $inputTerakhir = KasRiwayat::whereIn('aksi', ['uj-tambah', 'uj-ubah', 'uj-hapus'])->latest('id')->first();
 
@@ -59,18 +48,14 @@ class DashboardUjController extends Controller
             ])->all(),
         ]);
 
-        return view('dashboard.uj', [
-            // Kontrol UJ: UJ yang belum bongkar melewati batas wajar / lebih dari 7 hari (sejak 1 Mei 2026)
-            'kontrol' => \App\Support\KontrolUj::ringkas(),
+        return [
             'belum' => $belum,
-            'terakhir' => $terakhir,
-            'lewatAplikasi' => $lewatAplikasi,
             'inputTerakhir' => $inputTerakhir ? ['waktu' => $inputTerakhir->created_at, 'oleh' => $nama[$inputTerakhir->user_id] ?? '?', 'ringkasan' => $inputTerakhir->ringkasan, 'aksi' => $inputTerakhir->aksi] : null,
             // Waktu impor terakhir (cache; hilang saat deploy → waktu baris Kas Seabank terakhir ditulis ulang).
             'sinkronTerakhir' => ($w = Cache::get('uj-diimpor-pada') ?? UjTransaksi::max('created_at')) ? Carbon::parse($w) : null,
             'transaksiTerbaru' => UjTransaksi::max('tanggal'),
             'pengajuanMenunggu' => UjPengajuanDetail::where('status', 'menunggu')->selectRaw('COUNT(*) n, COALESCE(SUM(nominal), 0) s')->first(),
             'riwayat' => $riwayat,
-        ]);
+        ];
     }
 }

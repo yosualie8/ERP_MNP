@@ -2,8 +2,6 @@
 
 namespace App\Support\Mcp;
 
-use App\Http\Controllers\DashboardKasController;
-use App\Http\Controllers\DashboardUjController;
 use App\Models\AsetTruk;
 use App\Models\KasRiwayat;
 use App\Models\KasTransfer;
@@ -242,7 +240,7 @@ class AlatMnp
 
     private static function ringkasanKas(): array
     {
-        $d = app(DashboardKasController::class)()->getData();
+        $d = \App\Support\RingkasKas::data();
         $saldo = \App\Models\KasBulan::orderByDesc('bulan')->limit(3)->get()
             ->map(fn ($b) => ['lembar' => $b->lembar, 'bulan' => $b->bulan->format('Y-m'), 'saldo_awal' => (int) $b->saldo_awal, 'masuk' => (int) $b->total_debet,
                 'keluar' => (int) $b->total_kredit, 'saldo_akhir' => (int) $b->saldo_akhir]);
@@ -518,7 +516,7 @@ class AlatMnp
 
     private static function ringkasanUj(): array
     {
-        $d = app(DashboardUjController::class)()->getData();
+        $d = \App\Support\RingkasUj::data();
 
         return [
             'belum_reimburse' => [...collect($d['belum'])->except('per_bulan')->all(), 'per_bulan' => $d['belum']['per_bulan']],
