@@ -69,7 +69,7 @@ class RekapAbsenMingguan
             foreach ($hari as $h) {
                 $d = $h->toDateString();
                 $a = ($absen[$k->id][$d] ?? collect())->keyBy('jenis');
-                $r = $rekap[$k->id][$d] ?? null;
+                $r = ($rekap[$k->id][$d] ?? null)?->first(); // unik per karyawan + tanggal
                 [$m, $p, $lm, $ls] = [$a->get('masuk'), $a->get('pulang'), $a->get('lembur_mulai'), $a->get('lembur_selesai')];
                 $absenHadir = $m && $p ? 'lengkap' : ($m || $p ? 'kurang' : null);
                 $absenLembur = $lm && $ls ? 'lengkap' : ($lm || $ls ? 'kurang' : null);
