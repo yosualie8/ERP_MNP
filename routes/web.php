@@ -111,6 +111,12 @@ Route::middleware(['auth', 'menu'])->group(function () {
     // Rekap Gaji Mingguan (versi awal): hari hadir dari absensi × tarif UM per hari jabatan, per minggu Senin–Minggu.
     Route::get('/gaji-mingguan', [\App\Http\Controllers\GajiMingguanController::class, 'index'])->name('gaji-mingguan.index');
     Route::get('/gaji-mingguan/unduh', [\App\Http\Controllers\GajiMingguanController::class, 'unduh'])->name('gaji-mingguan.unduh');
+    Route::post('/gaji-mingguan/hari', [\App\Http\Controllers\GajiMingguanController::class, 'hari'])->name('gaji-mingguan.hari');
+    Route::post('/gaji-mingguan/um', [\App\Http\Controllers\GajiMingguanController::class, 'um'])->name('gaji-mingguan.um');
+    Route::post('/gaji-mingguan/setujui', [\App\Http\Controllers\GajiMingguanController::class, 'setujuiSemua'])->name('gaji-mingguan.setujui');
+    Route::get('/absen-mandor', [\App\Http\Controllers\AbsenMandorController::class, 'index'])->name('absen-mandor.index');
+    Route::post('/absen-mandor', [\App\Http\Controllers\AbsenMandorController::class, 'simpan'])->name('absen-mandor.simpan');
+    Route::post('/absen-mandor/tambah', [\App\Http\Controllers\AbsenMandorController::class, 'tambah'])->name('absen-mandor.tambah');
     Route::post('/lapor-data/pengaturan', [\App\Http\Controllers\LaporDataController::class, 'pengaturan'])->name('lapor-data.pengaturan');
     Route::post('/lapor-data/{lapor}', [\App\Http\Controllers\LaporDataController::class, 'ubah'])->whereNumber('lapor')->name('lapor-data.ubah');
     Route::get('/absen/foto/{absensi}', [\App\Http\Controllers\AbsenController::class, 'foto'])->whereNumber('absensi')->name('absen.foto');

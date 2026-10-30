@@ -2,98 +2,204 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Absensi;
-use App\Models\JabatanMenu;
 use App\Models\Karyawan;
-use App\Support\DaftarSopir;
-use Carbon\Carbon;
+use App\Models\RekapAbsen;
+use App\Support\RekapAbsenMingguan;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Collection;
 use Illuminate\View\View;
+use OpenSpout\Common\Entity\Cell;
+use OpenSpout\Common\Entity\Row;
+use OpenSpout\Common\Entity\Style\Style;
+use OpenSpout\Writer\XLSX\Entity\SheetView;
+use OpenSpout\Writer\XLSX\Writer;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * Rekap Gaji Mingguan (owner 27 Okt 2026, versi awal "seadanya"): per karyawan per minggu Senin–Minggu, hari hadir dari absensi
- * (hari yang ada absen masuk atau pulang) × tarif UM per hari dari Master Jabatan. Lembur & hari yang absennya belum lengkap
- * hanya ditampilkan sebagai catatan — belum mengubah hitungan.
+ * Rekap Absen & Gaji Mingguan (owner 30 Okt 2026, menggantikan versi awal 27 Okt): grid karyawan × hari Senin–Minggu dari absensi,
+ * admin menyetujui absen belum lengkap, mengisi tahap kerja, mengubah UM per orang; lembur ½ UM; rekap per tahap; Excel seperti
+ * file UM admin. Hitungan di App\Support\RekapAbsenMingguan.
  */
 class GajiMingguanController extends Controller
 {
     public function index(Request $request): View
     {
-        $d = $this->data($request);
+        return view('karyawan.gaji-mingguan', RekapAbsenMingguan::data(RekapAbsenMingguan::senin($request->query('minggu'))));
+    }
 
-        return view('karyawan.gaji-mingguan', $d + [
-            'jumlah' => ['hadir' => $d['baris']->where('hadir', '>', 0)->count(), 'hari' => $d['baris']->sum('hadir'),
-                'total' => $d['baris']->sum('total'), 'tanpa_tarif' => $d['baris']->where('hadir', '>', 0)->whereNull('tarif')->count()],
+    /** Simpan keputusan satu karyawan satu hari (bayar / tidak / ikut absen, lembur, tahap). */
+    public function hari(Request $request): JsonResponse
+    {
+        $v = $request->validate([
+            'karyawan_id' => ['required', 'integer', 'exists:karyawan,id'], 'tanggal' => ['required', 'date'],
+            'hadir' => ['required', 'in:auto,1,0'], 'lembur' => ['required', 'in:auto,1,0'],
+            'tahap' => ['nullable', 'integer', 'exists:proyek_tahap,id'], 'semua_minggu' => ['nullable', 'boolean'], 'catatan' => ['nullable', 'string', 'max:300'],
         ]);
+        $tanggal = \Carbon\Carbon::parse($v['tanggal'])->toDateString();
+        $this->simpan((int) $v['karyawan_id'], $tanggal, [
+            'hadir' => $v['hadir'] === 'auto' ? null : (bool) $v['hadir'], 'lembur' => $v['lembur'] === 'auto' ? null : (bool) $v['lembur'],
+            'proyek_tahap_id' => $v['tahap'] ?? null, 'catatan' => trim((string) ($v['catatan'] ?? '')) ?: null,
+        ], $request->user()->id);
+
+        // Tahap yang sama untuk semua hari kerja orang itu minggu ini.
+        if (! empty($v['semua_minggu']) && ! empty($v['tahap'])) {
+            $b = RekapAbsenMingguan::data(RekapAbsenMingguan::senin($tanggal))['baris']->first(fn ($b) => $b->k->id === (int) $v['karyawan_id']);
+            foreach ($b?->hari ?? [] as $d => $h) {
+                if ($d !== $tanggal && ($h->hadir || $h->tunggu)) {
+                    $this->simpan((int) $v['karyawan_id'], $d, ['proyek_tahap_id' => (int) $v['tahap']], $request->user()->id, true);
+                }
+            }
+        }
+
+        return response()->json(['ok' => true]);
+    }
+
+    /** UM per hari satu orang (kosong = ikut tarif jabatan). */
+    public function um(Request $request): JsonResponse
+    {
+        $v = $request->validate(['karyawan_id' => ['required', 'integer', 'exists:karyawan,id'], 'um' => ['nullable', 'integer', 'min:0', 'max:5000000']]);
+        Karyawan::whereKey($v['karyawan_id'])->update(['um_harian' => $v['um'] ?: null]);
+
+        return response()->json(['ok' => true]);
+    }
+
+    /** Setujui semua absen / lembur yang belum lengkap minggu itu (setelah admin memeriksa). */
+    public function setujuiSemua(Request $request): RedirectResponse
+    {
+        $n = 0;
+        foreach (RekapAbsenMingguan::data(RekapAbsenMingguan::senin($request->input('minggu')))['baris'] as $b) {
+            foreach ($b->hari as $d => $h) {
+                $ubah = array_filter(['hadir' => $h->tunggu ? true : null, 'lembur' => $h->tunggu_lembur ? true : null], fn ($x) => $x !== null);
+                if ($ubah) {
+                    $this->simpan($b->k->id, $d, $ubah, $request->user()->id, true);
+                    $n++;
+                }
+            }
+        }
+
+        return back()->with('success', "{$n} hari absen / lembur yang belum lengkap disetujui (dibayar).");
+    }
+
+    /**
+     * Simpan rekap satu hari. $sebagian = hanya kolom yang diberikan yang diubah; selain itu semua kolom diganti.
+     * Baris yang kembali "ikut absen" seluruhnya (tanpa tahap/catatan) dihapus.
+     */
+    private function simpan(int $karyawan, string $tanggal, array $isi, int $user, bool $sebagian = false): void
+    {
+        $r = RekapAbsen::firstOrNew(['karyawan_id' => $karyawan, 'tanggal' => $tanggal]);
+        $r->fill($sebagian ? $isi : $isi + ['hadir' => null, 'lembur' => null, 'proyek_tahap_id' => null, 'catatan' => null]);
+        // Mandor tetap tercatat sebagai pengisi bila admin hanya mengubah tahap / catatan.
+        if (! $r->exists || $r->isDirty(['hadir', 'lembur'])) {
+            $r->sumber = 'admin';
+        }
+        $r->user_id = $user;
+        if ($r->hadir === null && $r->lembur === null && ! $r->proyek_tahap_id && ! $r->catatan) {
+            if ($r->exists) {
+                $r->delete();
+            }
+
+            return;
+        }
+        $r->save();
     }
 
     public function unduh(Request $request): StreamedResponse
     {
-        ['senin' => $senin, 'hari' => $hari, 'baris' => $baris] = $this->data($request);
+        $d = RekapAbsenMingguan::data(RekapAbsenMingguan::senin($request->query('minggu')));
+        $senin = $d['senin'];
         $minggu = $senin->copy()->addDays(6);
 
-        return response()->streamDownload(function () use ($hari, $baris) {
-            $w = new \OpenSpout\Writer\XLSX\Writer;
+        return response()->streamDownload(function () use ($d, $senin, $minggu) {
+            $tebal = (new Style)->setFontBold();
+            $kepala = (new Style)->setFontBold()->setBackgroundColor('DDE7F0');
+            $rp = (new Style)->setFormat('#,##0');
+            $rpTebal = (new Style)->setFontBold()->setFormat('#,##0');
+            $teks = fn ($v, ?Style $g = null) => new Cell\StringCell((string) $v, $g);
+            $angka = fn ($v, ?Style $g = null) => $v === null || $v === '' ? new Cell\StringCell('') : new Cell\NumericCell($v, $g);
+            $dibayar = $d['baris']->filter(fn ($b) => $b->total > 0)->values();
+
+            $w = new Writer;
             $w->openToFile('php://output');
-            $tebal = (new \OpenSpout\Common\Entity\Style\Style)->setFontBold();
-            $w->addRow(\OpenSpout\Common\Entity\Row::fromValues(['Nama', 'Jabatan', 'Site', ...$hari->map(fn ($h) => $h->translatedFormat('D j/n'))->all(),
-                'Hari hadir', 'Tarif UM / hari', 'Total UM', 'Lembur (jam)', 'Catatan'], $tebal));
-            foreach ($baris as $b) {
-                $w->addRow(\OpenSpout\Common\Entity\Row::fromValues([$b->k->nama, $b->k->jabatan, $b->k->site,
-                    ...array_map(fn ($x) => $x ? ($x['masuk'] ?? '?').'–'.($x['pulang'] ?? '?') : '', $b->hari),
-                    $b->hadir, $b->tarif, $b->total, $b->lembur ? round($b->lembur / 60, 1) : null, implode('; ', $b->catatan)]));
+
+            // 1. Harian (seperti file UM admin): per hari yang dibayar + baris lembur, subtotal per hari.
+            $s = $w->getCurrentSheet();
+            $s->setName('Harian');
+            foreach ([5, 26, 26, 22, 12, 18, 26] as $i => $l) {
+                $s->setColumnWidth($l, $i + 1);
             }
-            $w->addRow(\OpenSpout\Common\Entity\Row::fromValues(['TOTAL', '', '', ...array_fill(0, 7, ''), $baris->sum('hadir'), '', $baris->sum('total')], $tebal));
+            $w->addRow(Row::fromValues(['UANG MAKAN KARYAWAN'], $tebal));
+            $w->addRow(Row::fromValues(['Periode '.$senin->translatedFormat('j M').' – '.$minggu->translatedFormat('j M Y')]));
+            $w->addRow(Row::fromValues([]));
+            $w->addRow(Row::fromValues(['No', 'Hari, Tanggal', 'Nama Karyawan', 'Jabatan', 'UM', 'Keterangan', 'Proyek'], $kepala));
+            $no = 0;
+            foreach ($d['hari'] as $h) {
+                $tgl = $h->toDateString();
+                $hariIni = $dibayar->map(fn ($b) => [$b, $b->hari[$tgl]])->filter(fn ($x) => $x[1]->bayar > 0)->values();
+                if ($hariIni->isEmpty()) {
+                    continue;
+                }
+                $label = $h->translatedFormat('l, j F Y');
+                foreach ($hariIni as [$b, $x]) {
+                    $ket = $x->masuk || $x->pulang ? ($x->masuk ?? '?').' - '.($x->pulang ?? '?').($x->tunggu === false && $x->absen === 'kurang' ? ' (disetujui)' : '')
+                        : ($x->sumber === 'mandor' ? 'diisi mandor' : 'disetujui admin');
+                    $w->addRow(new Row([$angka(++$no), $teks($label), $teks($b->k->nama), $teks($b->k->jabatan), $angka($x->bayar, $rp), $teks($ket),
+                        $teks($x->tahap ?? RekapAbsenMingguan::BELUM_TAHAP)]));
+                }
+                foreach ($hariIni->filter(fn ($x) => $x[1]->bayar_lembur > 0) as [$b, $x]) {
+                    $jam = $x->lembur_mulai || $x->lembur_selesai ? ($x->lembur_mulai ?? '?').' - '.($x->lembur_selesai ?? '?') : '';
+                    $w->addRow(new Row([$teks(''), $teks($label), $teks($b->k->nama), $teks('Lembur (½ UM)'), $angka($x->bayar_lembur, $rp), $teks($jam),
+                        $teks($x->tahap ?? RekapAbsenMingguan::BELUM_TAHAP)]));
+                }
+                $w->addRow(new Row([$teks(''), $teks(''), $teks(''), $teks('Subtotal '.$h->translatedFormat('D j/n'), $tebal),
+                    $angka($hariIni->sum(fn ($x) => $x[1]->bayar + $x[1]->bayar_lembur), $rpTebal)]));
+            }
+
+            // 2. Rekap per orang.
+            $s = $w->addNewSheetAndMakeItCurrent();
+            $s->setName('Rekap per orang');
+            $s->setSheetView((new SheetView)->setFreezeRow(2));
+            foreach ([5, 26, 22, 10, 12, 8, 8, 14, 14, 14, 36] as $i => $l) {
+                $s->setColumnWidth($l, $i + 1);
+            }
+            $w->addRow(Row::fromValues(['No', 'Nama Karyawan', 'Jabatan', 'Site', 'UM / hari', 'Hari', 'Lembur', 'Total UM', 'Total lembur', 'Total', 'Rekening'], $kepala));
+            foreach ($dibayar as $i => $b) {
+                $n = $i + 2;
+                $w->addRow(new Row([$angka($i + 1), $teks($b->k->nama), $teks($b->k->jabatan), $teks($b->k->site), $angka($b->um, $rp), $angka($b->hadir), $angka($b->lembur),
+                    $angka($b->total_um, $rp), $angka($b->total_lembur, $rp), new Cell\FormulaCell("=H{$n}+I{$n}", $rpTebal, $b->total),
+                    $teks(trim(implode(' ', array_filter([$b->k->bank, $b->k->no_rekening, $b->k->nama_rekening ? 'a.n. '.$b->k->nama_rekening : null]))))]));
+            }
+            $akhir = max($dibayar->count() + 1, 2);
+            $w->addRow(new Row([$teks(''), $teks('TOTAL', $tebal), $teks(''), $teks(''), $teks(''),
+                new Cell\FormulaCell("=SUM(F2:F{$akhir})", $tebal, $d['ringkas']['hari']), new Cell\FormulaCell("=SUM(G2:G{$akhir})", $tebal, $d['ringkas']['lembur']),
+                new Cell\FormulaCell("=SUM(H2:H{$akhir})", $rpTebal, $d['ringkas']['total_um']), new Cell\FormulaCell("=SUM(I2:I{$akhir})", $rpTebal, $d['ringkas']['total_lembur']),
+                new Cell\FormulaCell("=SUM(J2:J{$akhir})", $rpTebal, $d['ringkas']['total'])]));
+
+            // 3. Rekap per tahap (biaya UM per proyek).
+            $s = $w->addNewSheetAndMakeItCurrent();
+            $s->setName('Rekap per tahap');
+            $s->setColumnWidth(36, 1);
+            $s->setColumnWidth(16, 2);
+            $w->addRow(Row::fromValues(['Tahap / Proyek', 'Total'], $kepala));
+            foreach ($d['perTahap'] as $t => $v) {
+                $w->addRow(new Row([$teks($t), $angka($v, $rp)]));
+            }
+            $w->addRow(new Row([$teks('TOTAL', $tebal), new Cell\FormulaCell('=SUM(B2:B'.max($d['perTahap']->count() + 1, 2).')', $rpTebal, $d['perTahap']->sum())]));
+
+            // 4. Belum disetujui (belum ikut dibayar sampai admin menyetujui).
+            $tunggu = $d['baris']->flatMap(fn ($b) => collect($b->hari)->filter(fn ($x) => $x->tunggu || $x->tunggu_lembur)->map(fn ($x) => [$b, $x])->values());
+            if ($tunggu->isNotEmpty()) {
+                $s = $w->addNewSheetAndMakeItCurrent();
+                $s->setName('Belum disetujui');
+                foreach ([26, 22, 16, 10, 10, 13, 13] as $i => $l) {
+                    $s->setColumnWidth($l, $i + 1);
+                }
+                $w->addRow(Row::fromValues(['Nama', 'Jabatan', 'Tanggal', 'Masuk', 'Pulang', 'Mulai lembur', 'Selesai lembur'], $kepala));
+                foreach ($tunggu as [$b, $x]) {
+                    $w->addRow(Row::fromValues([$b->k->nama, $b->k->jabatan, $x->tanggal->translatedFormat('D j M'), $x->masuk ?? '–', $x->pulang ?? '–', $x->lembur_mulai ?? '–', $x->lembur_selesai ?? '–']));
+                }
+            }
             $w->close();
-        }, 'Rekap Gaji Mingguan '.$senin->translatedFormat('j M').' - '.$minggu->translatedFormat('j M Y').'.xlsx', ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
-    }
-
-    /** @return array{senin: Carbon, hari: Collection<int, Carbon>, baris: Collection<int, object>} */
-    private function data(Request $request): array
-    {
-        // Bawaan: minggu lalu (minggu ini masih berjalan).
-        $senin = (RitasiController::tanggal($request->query('minggu')) ?? today()->subWeek())->copy()->startOfWeek(Carbon::MONDAY)->startOfDay();
-        $hari = collect(range(0, 6))->map(fn ($i) => $senin->copy()->addDays($i));
-        $absen = Absensi::whereBetween('tanggal', [$senin->toDateString(), $hari->last()->toDateString()])->orderBy('waktu')->get()
-            ->groupBy(['karyawan_id', fn ($a) => $a->tanggal->toDateString()]);
-        // Sama dengan Review Absen Harian: karyawan aktif kecuali sopir DT + siapa pun yang absen minggu itu.
-        $karyawan = Karyawan::where(fn ($q) => $q->where('status', 'aktif')->where(fn ($w) => $w->whereNull('jabatan')->orWhere('jabatan', '!=', DaftarSopir::JABATAN)->orWhereNull('no_mobil')))
-            ->orWhereIn('id', $absen->keys())->orderBy('nama')->get();
-        $tarif = JabatanMenu::pluck('um_harian', 'jabatan');
-
-        $baris = $karyawan->map(function ($k) use ($absen, $hari, $tarif) {
-            $milik = $absen[$k->id] ?? collect();
-            $lembur = 0;
-            $kurang = [];
-            $perHari = $hari->map(function ($h) use ($milik, &$lembur, &$kurang) {
-                $a = ($milik[$h->toDateString()] ?? collect())->keyBy('jenis');
-                if ($a->isEmpty()) {
-                    return null;
-                }
-                if (isset($a['lembur_mulai'], $a['lembur_selesai'])) {
-                    $lembur += $a['lembur_mulai']->waktu->diffInMinutes($a['lembur_selesai']->waktu);
-                }
-                if (! isset($a['masuk']) || ! isset($a['pulang'])) {
-                    $kurang[] = $h->translatedFormat('D j/n').(isset($a['masuk']) ? ' tanpa pulang' : ' tanpa masuk');
-                }
-
-                return ['masuk' => $a->get('masuk')?->waktu->format('H:i'), 'pulang' => $a->get('pulang')?->waktu->format('H:i'), 'lembur' => isset($a['lembur_mulai'])];
-            })->all();
-            $hadir = count(array_filter($perHari));
-            $t = $tarif[$k->jabatan] ?? null;
-            $catatan = [];
-            if ($hadir && ! $t) {
-                $catatan[] = $k->jabatan ? "tarif UM jabatan {$k->jabatan} belum diisi" : 'jabatan belum diisi';
-            }
-            if ($kurang) {
-                $catatan[] = 'absen belum lengkap: '.implode(', ', $kurang);
-            }
-
-            return (object) ['k' => $k, 'hari' => $perHari, 'hadir' => $hadir, 'tarif' => $t, 'total' => $hadir * (int) $t, 'lembur' => $lembur, 'catatan' => $catatan];
-        })->sortBy(fn ($b) => [$b->hadir ? 0 : 1, $b->k->jabatan ?? 'zzz', $b->k->nama])->values();
-
-        return ['senin' => $senin, 'hari' => $hari, 'baris' => $baris];
+        }, 'Rekap Absen & UM '.$senin->translatedFormat('j M').' - '.$minggu->translatedFormat('j M Y').'.xlsx', ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
     }
 }
