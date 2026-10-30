@@ -77,7 +77,7 @@
                     <th class="angka">Dikembalikan / dicicil</th><th class="angka">Tidak kembali</th><th class="angka">Saldo di luar DO</th><th class="angka">Total utang</th><th>Umur saldo</th><th>Terakhir</th></tr></thead>
                 <tbody>
                     @forelse ($daftar as $h)
-                        @php($s = $h['saldo'])
+                        @php $s = $h['saldo']; @endphp
                         <tr @class(['t', 'pilih' => $dipilih && $dipilih['sopir'] === $s['sopir']])>
                             <td><a href="{{ route('pengalihan-uj.index', ['tab' => 'saldo', 'tampil' => $saring !== 'ada' ? $saring : null, 'sopir' => $s['sopir']]) }}#rinci"><b>{{ $s['sopir'] }}</b></a></td>
                             <td>{{ implode(', ', $s['mobil'] ?: $h['belum']->pluck('mobil')->filter()->unique()->all()) }}</td>
