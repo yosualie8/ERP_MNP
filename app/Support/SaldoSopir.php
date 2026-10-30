@@ -196,7 +196,7 @@ class SaldoSopir
      *  potongan utang (MOB, gaji, dikembalikan, tidak kembali …), UJ dikembalikan / ditutup tanpa bongkar.
      * Uang jalan DO yang dipotong dari utang dan UJ yang dijadikan saldo hanya berpindah (saldo ↔ DO), tidak mengubah utang.
      * Saldo awal = utang sekarang − semua mutasi sesudah SETTLE. Rute (owner 30 Okt 2026) = galian → tempat bongkar: dari rit DO itu bila sudah
-     * bongkar, selain itu ditebak dari keterangan Kas UJ-nya (TebakGalian; proyek dari kata kunci UJ).
+     * bongkar, selain itu rute seperti tertulis di keterangan Kas UJ-nya (tidak ditebak).
      *
      * @return array{awal: float, akhir: float, baris: Collection<int, array{tgl, jenis, id, do, rute: ?string, ket, masuk: ?float, keluar: ?float, sisa: float}>}
      */
