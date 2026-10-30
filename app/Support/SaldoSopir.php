@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\Ritasi;
 use App\Models\UjDetail;
 use App\Models\UjPengalihan;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 /**
@@ -17,6 +18,8 @@ use Illuminate\Support\Collection;
  *  - dikembalikan sopir → bukan biaya; tidak kembali → dibebankan ke proyek asal.
  * Saldo = dijadikan saldo + kasbon (Kas Harian) − terpakai lewat DO lama − berkurang (pakai). Umur = hari sejak UJ tertua yang saldonya belum terpakai (FIFO).
  * Owner 27 Okt 2026: saldo & kasbon = satu buku UTANG SOPIR (uang PT di tangan sopir) — ➕ nambah utang / ➖ potong utang di menu Pengalihan UJ.
+ * Owner 30 Okt 2026 (menu Hutang Supir): utang sopir = saldo di luar DO (buku ini) + UJ belum bongkar — setiap uang jalan yang diberikan = utang,
+ * ritnya bongkar = pengurang. Buku di-settle per akhir SETTLE ke rekap admin (Eddy); riwayat() mulai dari saldo awal itu.
  */
 class SaldoSopir
 {
@@ -24,6 +27,9 @@ class SaldoSopir
     public const KUNING = 7;
 
     public const MERAH = 14;
+
+    /** Akhir hari settle buku Hutang Supir (owner 30 Okt 2026: saldo per 29 Okt 24.00 = rekap Excel Eddy "JOGJA KENDAL"). */
+    public const SETTLE = '2026-10-29';
 
     private static ?Collection $cache = null;
 
@@ -77,7 +83,7 @@ class SaldoSopir
         if (self::$cache !== null) {
             return self::$cache;
         }
-        $semua = UjPengalihan::with(['dari', 'ke'])->whereIn('jenis', ['alih', 'kasbon', 'pakai'])->orderBy('tanggal')->orderBy('id')->get();
+        $semua = UjPengalihan::with(['dari', 'ke'])->whereIn('jenis', UjPengalihan::BUKU)->orderBy('tanggal')->orderBy('id')->get();
         $uj = UjDetail::whereIn('id_uj', $semua->where('jenis', 'alih')->pluck('id_uj')->filter())->get(['id_uj', 'no_do', 'tanggal', 'keterangan', 'kategori'])->keyBy('id_uj');
         $rit = self::ritDo();
         $hariIni = now()->startOfDay();
@@ -93,20 +99,23 @@ class SaldoSopir
             })->values();
             $pakai = $g->where('jenis', 'pakai')->values();
             $kasbon = $g->where('jenis', 'kasbon')->values();
+            $settle = $g->where('jenis', 'settle')->values();
             $alih = (float) $baris->sum(fn ($x) => $x->p->nominal);
             $kasbonRp = (float) $kasbon->sum('nominal');
+            $settleRp = (float) $settle->sum('nominal');
             $terpakai = (float) $baris->filter(fn ($x) => $x->bongkar)->sum(fn ($x) => $x->p->nominal);
             $per = fn (array $jenis) => (float) $pakai->whereIn('peruntukan', $jenis)->sum('nominal');
             $pakaiRp = (float) $pakai->sum('nominal');
-            $saldo = round($alih + $kasbonRp - $terpakai - $pakaiRp, 2);
+            $saldo = round($alih + $kasbonRp + $settleRp - $terpakai - $pakaiRp, 2);
 
             // Umur (FIFO): pemakaian menghabiskan utang tertua dulu (UJ jadi saldo & kasbon); yang tertua masih bersisa = awal masa tunggu.
             // Kasbon memang dicicil lama → bila yang tersisa kasbon, status "kasbon" (tanpa warna umur).
             $sejak = null;
             $sisaKasbon = false;
             if ($saldo > 0.5) {
-                $sisaPakai = $pakaiRp;
-                $antre = $baris->reject(fn ($x) => $x->bongkar)->map(fn ($x) => $x->p)->concat($kasbon)->sortBy(fn ($p) => $p->tanggal->format('Ymd').sprintf('%08d', $p->id));
+                $sisaPakai = $pakaiRp - (float) $settle->where('nominal', '<', 0)->sum('nominal');
+                $antre = $baris->reject(fn ($x) => $x->bongkar)->map(fn ($x) => $x->p)->concat($kasbon)->concat($settle->where('nominal', '>', 0))
+                    ->sortBy(fn ($p) => $p->tanggal->format('Ymd').sprintf('%08d', $p->id));
                 foreach ($antre as $p) {
                     if ($sisaPakai + 0.5 >= $p->nominal) {
                         $sisaPakai -= $p->nominal;
@@ -121,14 +130,137 @@ class SaldoSopir
             $umur = $sejak ? (int) $sejak->copy()->startOfDay()->diffInDays($hariIni) : null;
 
             return ['sopir' => (string) $sopir, 'mobil' => $g->pluck('no_mobil')->filter(fn ($m) => $m && $m !== '-')->reverse()->unique()->values()->all(),
-                'alih' => $alih, 'n_alih' => $baris->count(), 'kasbon' => $kasbonRp, 'terpakai_do' => $terpakai,
+                'alih' => $alih, 'n_alih' => $baris->count(), 'kasbon' => $kasbonRp, 'settle' => $settleRp, 'terpakai_do' => $terpakai,
                 'dipakai' => $per(['uj', 'mob', 'lain']), 'kembali' => $per(['kembali', 'gaji', 'sebelum']), 'hangus' => $per(['hangus']), 'pakai' => $pakaiRp, 'saldo' => $saldo,
                 'umur' => $umur, 'sejak' => $sejak,
                 'status' => $saldo <= 0.5 ? 'habis' : ($sisaKasbon ? 'kasbon' : ($umur > self::MERAH ? 'merah' : ($umur > self::KUNING ? 'kuning' : 'baru'))),
-                'uj' => $baris, 'kasbon_rows' => $kasbon, 'pakai_rows' => $pakai, 'terakhir' => $g->max('tanggal')];
+                'uj' => $baris, 'kasbon_rows' => $kasbon, 'settle_rows' => $settle, 'pakai_rows' => $pakai, 'terakhir' => $g->max('tanggal')];
         });
 
         return self::$cache = $hasil;
+    }
+
+    /** Isi kosong perSopir() untuk sopir yang belum punya catatan di buku. */
+    public static function kosong(string $sopir): array
+    {
+        return ['sopir' => $sopir, 'mobil' => array_values(array_filter([DaftarSopir::cari($sopir)['mobil'] ?? null])), 'alih' => 0.0, 'n_alih' => 0, 'kasbon' => 0.0,
+            'settle' => 0.0, 'terpakai_do' => 0.0, 'dipakai' => 0.0, 'kembali' => 0.0, 'hangus' => 0.0, 'pakai' => 0.0, 'saldo' => 0.0, 'umur' => null, 'sejak' => null,
+            'status' => 'habis', 'uj' => collect(), 'kasbon_rows' => collect(), 'settle_rows' => collect(), 'pakai_rows' => collect(), 'terakhir' => null];
+    }
+
+    /**
+     * UJ belum bongkar per sopir (owner 30 Okt 2026: uang jalan yang sudah diberikan = utang sopir sampai ritnya bongkar): baris Uang Jalan DO
+     * yang belum ada di Ritasi — termasuk uang jalan DO yang dipotong dari utang sopir — di luar data sebelum KontrolUj::SEJAK.
+     *
+     * @return Collection<string, Collection<int, object>> [SOPIR => baris {do, tgl, id_uj, nama, mobil, ket, rp, umur, status, tahap}]
+     */
+    public static function ujBelum(): Collection
+    {
+        $hasil = [];
+        foreach (KontrolUj::terbuka() as $d) {
+            if ($d['lama']) {
+                continue;
+            }
+            foreach ($d['detail'] as $u) {
+                if (in_array($u->kategori, KontrolUj::KATEGORI, true)) {
+                    $hasil[self::kunci($u->nama) ?? '(TANPA NAMA)'][] = (object) ['do' => $d['do'], 'tgl' => $u->tanggal, 'id_uj' => $u->id_uj, 'nama' => $u->nama,
+                        'mobil' => $u->no_mobil, 'ket' => $u->keterangan, 'rp' => (float) $u->nominal, 'umur' => $d['umur'], 'status' => $d['status'], 'tahap' => $d['tahap']];
+                }
+            }
+        }
+
+        return collect($hasil)->map(fn ($b) => collect($b)->sortBy(fn ($x) => ($x->tgl?->format('Ymd') ?? '').$x->do)->values());
+    }
+
+    /**
+     * Utang per sopir (owner 30 Okt 2026) = saldo di luar DO (perSopir) + UJ belum bongkar.
+     *
+     * @return Collection<string, array{sopir: string, saldo: array, belum: Collection, belum_rp: float, total: float}>
+     */
+    public static function hutang(): Collection
+    {
+        $saldo = self::perSopir();
+        $belum = self::ujBelum();
+
+        return $saldo->keys()->merge($belum->keys())->unique()->values()->mapWithKeys(function ($k) use ($saldo, $belum) {
+            $b = $belum[$k] ?? collect();
+            $s = $saldo[$k] ?? self::kosong($k);
+
+            return [$k => ['sopir' => $k, 'saldo' => $s, 'belum' => $b, 'belum_rp' => (float) $b->sum('rp'), 'total' => round($s['saldo'] + (float) $b->sum('rp'), 2)]];
+        });
+    }
+
+    /**
+     * Riwayat utang satu sopir sejak settle (owner 30 Okt 2026), urut tanggal dengan sisa berjalan:
+     *  ➕ uang jalan diberikan (Kas UJ), kasbon, penyesuaian;  ➖ rit bongkar (senilai uang jalan DO itu: Kas UJ + potongan utang ber-DO sama),
+     *  potongan utang (MOB, gaji, dikembalikan, tidak kembali …), UJ dikembalikan / ditutup tanpa bongkar.
+     * Uang jalan DO yang dipotong dari utang dan UJ yang dijadikan saldo hanya berpindah (saldo ↔ DO), tidak mengubah utang.
+     * Saldo awal = utang sekarang − semua mutasi sesudah SETTLE.
+     *
+     * @return array{awal: float, akhir: float, baris: Collection<int, array{tgl, jenis, id, do, ket, masuk: ?float, keluar: ?float, sisa: float}>}
+     */
+    public static function riwayat(string $sopir): array
+    {
+        $batas = Carbon::parse(self::SETTLE)->endOfDay();
+        $milik = fn ($nama) => self::kunci($nama) === $sopir;
+        $baris = collect();
+
+        // DO milik sopir: uang jalan Kas UJ atas namanya + potongan utang ber-DO (uang jalan DO baru dari utang).
+        $kas = UjDetail::where('kategori', 'Uang Jalan')->where('biaya_transfer', false)->where('tanggal', '>=', KontrolUj::SEJAK)
+            ->get(['id_uj', 'tanggal', 'nama', 'nominal', 'no_do', 'keterangan'])->filter(fn ($u) => $milik($u->nama))->values();
+        $buku = UjPengalihan::whereIn('jenis', [...UjPengalihan::BUKU, 'kembali', 'batal'])->get()->filter(fn ($p) => $milik($p->sopir ?: $p->nama))->values();
+        $dariUtang = $buku->where('jenis', 'pakai')->where('peruntukan', 'uj')->filter(fn ($p) => self::kunciDo($p->no_do) !== null);
+        $tutup = $buku->whereIn('jenis', ['kembali', 'batal'])->whereNotNull('id_uj')->keyBy('id_uj');
+        $do = fn ($v) => ltrim(trim((string) $v), "`'");
+
+        foreach ($kas->filter(fn ($u) => $u->tanggal && $u->tanggal->gt($batas)) as $u) {
+            $baris[] = ['tgl' => $u->tanggal, 'jenis' => 'Uang jalan diberikan', 'id' => $u->id_uj, 'do' => $do($u->no_do), 'ket' => $u->keterangan, 'masuk' => (float) $u->nominal, 'keluar' => null];
+        }
+        // Rit bongkar sesudah settle = nilai uang jalan DO itu (UJ yang dikembalikan / ditutup tanpa bongkar tidak dihitung).
+        $perDo = [];
+        $tambah = function (?string $no, $tgl, float $rp) use (&$perDo, $do) {
+            if (($k = self::kunciDo($no)) === null || ! $tgl) {
+                return;
+            }
+            $perDo[$k] = ['rp' => ($perDo[$k]['rp'] ?? 0) + $rp, 'tgl' => isset($perDo[$k]) ? min($perDo[$k]['tgl'], $tgl) : $tgl, 'do' => $do($no)];
+        };
+        foreach ($kas as $u) {
+            if (! isset($tutup[$u->id_uj])) {
+                $tambah($u->no_do, $u->tanggal, (float) $u->nominal);
+            }
+        }
+        foreach ($dariUtang as $p) {
+            $tambah($p->no_do, $p->tanggal, (float) $p->nominal);
+        }
+        $rit = self::ritDo();
+        foreach ($perDo as $k => $d) {
+            $daftar = collect($rit[$k] ?? []);
+            $r = $daftar->first(fn ($r) => $r->tanggal->gte($d['tgl']->copy()->startOfDay())) ?? $daftar->first();
+            if ($r && $r->tanggal->gt($batas)) {
+                $baris[] = ['tgl' => $r->tanggal, 'jenis' => 'Rit bongkar', 'id' => null, 'do' => $d['do'], 'ket' => $r->tahap, 'masuk' => null, 'keluar' => $d['rp']];
+            }
+        }
+        foreach ($buku->filter(fn ($p) => $p->tanggal->gt($batas)) as $p) {
+            if (in_array($p->jenis, ['kasbon', 'settle'], true)) {
+                $baris[] = ['tgl' => $p->tanggal, 'jenis' => UjPengalihan::JENIS[$p->jenis], 'id' => $p->kas_no_id ? 'NO ID '.$p->kas_no_id : null, 'do' => null, 'ket' => $p->keterangan,
+                    'masuk' => $p->nominal > 0 ? (float) $p->nominal : null, 'keluar' => $p->nominal < 0 ? -(float) $p->nominal : null];
+            } elseif ($p->jenis === 'pakai' && $p->peruntukan !== 'uj') {
+                $baris[] = ['tgl' => $p->tanggal, 'jenis' => UjPengalihan::PERUNTUKAN[$p->peruntukan] ?? 'Dipakai', 'id' => $p->kas_no_id ? 'NO ID '.$p->kas_no_id : null,
+                    'do' => $p->no_do, 'ket' => $p->keterangan, 'masuk' => null, 'keluar' => (float) $p->nominal];
+            } elseif (in_array($p->jenis, ['kembali', 'batal'], true)) {
+                $baris[] = ['tgl' => $p->tanggal, 'jenis' => UjPengalihan::JENIS[$p->jenis], 'id' => $p->id_uj, 'do' => $p->no_do, 'ket' => $p->keterangan, 'masuk' => null, 'keluar' => (float) $p->nominal];
+            }
+        }
+        $akhir = (float) (self::hutang()[$sopir]['total'] ?? 0);
+        $awal = round($akhir - $baris->sum(fn ($b) => ($b['masuk'] ?? 0) - ($b['keluar'] ?? 0)), 2);
+        $jalan = $awal;
+        $baris = $baris->sortBy(fn ($b) => $b['tgl']->format('Ymd').($b['masuk'] ? '0' : '1'))->values()->map(function ($b) use (&$jalan) {
+            $jalan += ($b['masuk'] ?? 0) - ($b['keluar'] ?? 0);
+
+            return [...$b, 'sisa' => round($jalan, 2)];
+        });
+
+        return ['awal' => $awal, 'akhir' => $akhir, 'baris' => $baris];
     }
 
     /** Saldo satu sopir; $kecualiDetail = detail pengajuan yang sedang diubah (pemakaiannya dihitung kembali tersedia). */

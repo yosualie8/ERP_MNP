@@ -44,17 +44,18 @@ class PengalihanUjController extends Controller
     public function index(Request $request): View
     {
         $saldo = SaldoSopir::perSopir();
-        $tab = in_array($request->query('tab'), ['pilih', 'saldo'], true) ? $request->query('tab')
-            : ($request->filled('asal') || $request->filled('mobil') || $saldo->where('saldo', '>', 0.5)->isEmpty() ? 'pilih' : 'saldo');
-        $data = ['tab' => $tab, 'saldo' => $saldo, 'tahap' => ProyekTahap::orderBy('nama')->get(['id', 'nama', 'status', 'tipe'])->keyBy('id'), 'dipilih' => null];
+        $tab = in_array($request->query('tab'), ['pilih', 'saldo'], true) ? $request->query('tab') : ($request->filled('asal') || $request->filled('mobil') ? 'pilih' : 'saldo');
+        $data = ['tab' => $tab, 'saldo' => $saldo, 'tahap' => ProyekTahap::orderBy('nama')->get(['id', 'nama', 'status', 'tipe'])->keyBy('id'), 'dipilih' => null,
+            // Utang sopir (owner 30 Okt 2026) = saldo di luar DO + UJ belum bongkar.
+            'hutang' => SaldoSopir::hutang()];
 
         if ($tab === 'saldo') {
             // Buku utang per sopir (owner 27 Okt 2026): sopir mana pun bisa dibuka (juga yang belum punya catatan) untuk mencatat kasbon.
             $data['namaSopir'] = collect(\App\Support\DaftarSopir::untukForm()['aktif'])->map(fn ($x) => SaldoSopir::kunci($x['nama']))->merge($saldo->keys())->filter()->unique()->sort()->values();
             if ($k = SaldoSopir::kunci($request->query('sopir'))) {
-                $data['dipilih'] = $saldo[$k] ?? ['sopir' => $k, 'mobil' => array_values(array_filter([\App\Support\DaftarSopir::cari($k)['mobil'] ?? null])), 'alih' => 0.0, 'n_alih' => 0,
-                    'kasbon' => 0.0, 'terpakai_do' => 0.0, 'dipakai' => 0.0, 'kembali' => 0.0, 'hangus' => 0.0, 'pakai' => 0.0, 'saldo' => 0.0, 'umur' => null, 'sejak' => null,
-                    'status' => 'habis', 'uj' => collect(), 'kasbon_rows' => collect(), 'pakai_rows' => collect(), 'terakhir' => null];
+                $data['dipilih'] = $saldo[$k] ?? SaldoSopir::kosong($k);
+                $data['belum'] = $data['hutang'][$k]['belum'] ?? collect();
+                $data['riwayat'] = SaldoSopir::riwayat($k);
                 $data['bonKasbon'] = self::bonKasbon()->filter(fn ($b) => $b->sisa > 0.5)->values();
                 // Uang jalan DO dari utang → transfer Kas UJ ber-DO sama (sisa uang jalannya), untuk kolom Status buku utang.
                 $doUtang = $data['dipilih']['pakai_rows']->where('peruntukan', 'uj')->pluck('no_do')->map(fn ($v) => SaldoSopir::kunciDo($v))->filter()->unique();
@@ -312,7 +313,7 @@ class PengalihanUjController extends Controller
         if ($lama === $baru) {
             return back();
         }
-        $baris = UjPengalihan::whereIn('jenis', ['alih', 'kasbon', 'pakai'])->get()->filter(fn ($p) => SaldoSopir::kunci($p->sopir ?: $p->nama) === $lama);
+        $baris = UjPengalihan::whereIn('jenis', UjPengalihan::BUKU)->get()->filter(fn ($p) => SaldoSopir::kunci($p->sopir ?: $p->nama) === $lama);
         UjPengalihan::whereIn('id', $baris->pluck('id'))->update(['sopir' => $baru]);
         KasRiwayat::create(['aksi' => 'uj-alih-sopir', 'lembar' => 'Kas UJ', 'baris_awal' => 0, 'baris_akhir' => 0,
             'ringkasan' => "Saldo sopir {$lama} dipindah ke nama {$baru} ({$baris->count()} catatan)", 'isi' => ['lama' => $lama, 'baru' => $baru, 'id' => $baris->pluck('id')],

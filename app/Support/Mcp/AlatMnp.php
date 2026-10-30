@@ -162,10 +162,10 @@ class AlatMnp
                 'jalankan' => fn (array $a) => self::cariBca($a),
             ],
             'saldo_sopir' => [
-                'judul' => 'Saldo sopir',
-                'deskripsi' => 'Saldo sopir: uang jalan yang sudah diberikan tetapi belum bongkar lalu dijadikan saldo (uang perusahaan di tangan sopir, belum biaya proyek). '
-                    .'Per sopir: dijadikan saldo, terpakai lewat DO lama, dipotong di Pengajuan UJ / dipakai, dikembalikan, tidak kembali, sisa & umur (hari). '
-                    .'Isi "sopir" untuk rincian (UJ asal & pemakaian beserta proyek yang menanggung).',
+                'judul' => 'Hutang sopir',
+                'deskripsi' => 'Hutang sopir (menu Hutang Supir): uang perusahaan di tangan sopir = UJ belum bongkar + saldo di luar DO (UJ yang tidak bongkar dijadikan saldo, kasbon, '
+                    .'penyesuaian settle 29 Okt 2026, dikurangi pemakaian). Per sopir: total utang, UJ belum bongkar, dijadikan saldo, terpakai lewat DO lama, dipotong / dipakai, '
+                    .'dikembalikan, tidak kembali, saldo di luar DO & umur (hari). Isi "sopir" untuk rincian (UJ belum bongkar, riwayat sejak settle, UJ asal & pemakaian).',
                 'skema' => $obj(['sopir' => ['type' => 'string'], 'hanya_ada_saldo' => ['type' => 'boolean', 'description' => 'bawaan true']]),
                 'jalankan' => fn (array $a) => self::saldoSopir($a),
             ],
@@ -413,10 +413,13 @@ class AlatMnp
 
     private static function saldoSopir(array $a): array
     {
-        $semua = \App\Support\SaldoSopir::perSopir();
+        // Utang sopir (owner 30 Okt 2026) = UJ belum bongkar + saldo di luar DO; buku di-settle per SaldoSopir::SETTLE.
+        $hutang = \App\Support\SaldoSopir::hutang();
+        $semua = $hutang->map(fn ($h) => $h['saldo']);
         $tahap = \App\Models\ProyekTahap::pluck('nama', 'id');
-        $ringkas = fn ($s) => ['sopir' => $s['sopir'], 'truk' => $s['mobil'], 'dijadikan_saldo' => (int) $s['alih'], 'jumlah_uj' => $s['n_alih'], 'kasbon' => (int) $s['kasbon'], 'terpakai_do_lama' => (int) $s['terpakai_do'],
-            'dipotong_atau_dipakai' => (int) $s['dipakai'], 'dikembalikan' => (int) $s['kembali'], 'tidak_kembali' => (int) $s['hangus'], 'sisa_saldo' => (int) $s['saldo'],
+        $ringkas = fn ($s) => ['sopir' => $s['sopir'], 'truk' => $s['mobil'], 'total_utang' => (int) $hutang[$s['sopir']]['total'], 'uj_belum_bongkar' => (int) $hutang[$s['sopir']]['belum_rp'],
+            'dijadikan_saldo' => (int) $s['alih'], 'jumlah_uj' => $s['n_alih'], 'kasbon' => (int) $s['kasbon'], 'penyesuaian_settle' => (int) $s['settle'], 'terpakai_do_lama' => (int) $s['terpakai_do'],
+            'dipotong_atau_dipakai' => (int) $s['dipakai'], 'dikembalikan' => (int) $s['kembali'], 'tidak_kembali' => (int) $s['hangus'], 'saldo_di_luar_do' => (int) $s['saldo'],
             'umur_hari' => $s['umur'], 'status' => $s['status']];
         if ($n = \App\Support\SaldoSopir::kunci($a['sopir'] ?? null)) {
             $s = $semua[$n] ?? $semua->first(fn ($x) => mb_stripos($x['sopir'], (string) $a['sopir']) !== false);
@@ -424,7 +427,14 @@ class AlatMnp
                 return ['galat' => "Sopir \"{$a['sopir']}\" tidak punya catatan saldo.", 'sopir_tersedia' => $semua->keys()->values()];
             }
 
+            $riwayat = \App\Support\SaldoSopir::riwayat($s['sopir']);
+
             return [...$ringkas($s),
+                'uj_belum_bongkar_rinci' => $hutang[$s['sopir']]['belum']->map(fn ($u) => ['id_uj' => $u->id_uj, 'tanggal' => $u->tgl?->toDateString(), 'no_do' => $u->do, 'dt' => $u->mobil,
+                    'nominal' => (int) $u->rp, 'umur_hari' => $u->umur, 'keterangan' => $u->ket])->values(),
+                'riwayat_sejak_settle' => ['tanggal_settle' => \App\Support\SaldoSopir::SETTLE, 'saldo_awal' => (int) $riwayat['awal'],
+                    'mutasi' => $riwayat['baris']->map(fn ($b) => ['tanggal' => $b['tgl']->toDateString(), 'jenis' => $b['jenis'], 'id' => $b['id'], 'no_do' => $b['do'],
+                        'nambah' => (int) ($b['masuk'] ?? 0), 'potong' => (int) ($b['keluar'] ?? 0), 'sisa' => (int) $b['sisa']])->values()],
                 'uj_dijadikan_saldo' => $s['uj']->map(fn ($x) => ['id_uj' => $x->p->id_uj, 'tanggal' => $x->p->tanggal?->toDateString(), 'no_do' => $x->no_do, 'nominal' => (int) $x->p->nominal,
                     'proyek_asal' => $x->p->dari?->nama, 'do_lama_bongkar' => $x->bongkar ? $x->bongkar->tanggal->toDateString().' di '.($tahap[$x->tahap_bongkar] ?? $x->bongkar->tahap) : null])->values(),
                 'kasbon_rinci' => $s['kasbon_rows']->map(fn ($p) => ['tanggal' => $p->tanggal?->toDateString(), 'nominal' => (int) $p->nominal, 'no_id_kas_harian' => $p->kas_no_id, 'keterangan' => $p->keterangan])->values(),
@@ -432,9 +442,10 @@ class AlatMnp
                     'nominal' => (int) $p->nominal, 'no_do' => $p->no_do, 'keterangan' => $p->keterangan,
                     'proyek' => ($t = \App\Support\SaldoSopir::tahapPakai($p)) ? ($tahap[$t] ?? null) : null])->values()];
         }
-        $daftar = $semua->filter(fn ($s) => ($a['hanya_ada_saldo'] ?? true) === false || $s['saldo'] > 0.5)->sortByDesc('saldo');
+        $daftar = $semua->filter(fn ($s) => ($a['hanya_ada_saldo'] ?? true) === false || $hutang[$s['sopir']]['total'] > 0.5)->sortByDesc(fn ($s) => $hutang[$s['sopir']]['total']);
 
-        return ['total_saldo_di_sopir' => (int) $semua->sum(fn ($s) => max(0, $s['saldo'])), 'sopir_bersaldo' => $semua->filter(fn ($s) => $s['saldo'] > 0.5)->count(),
+        return ['total_utang_sopir' => (int) $hutang->sum(fn ($h) => max(0, $h['total'])), 'total_uj_belum_bongkar' => (int) $hutang->sum('belum_rp'),
+            'total_saldo_di_luar_do' => (int) $semua->sum(fn ($s) => max(0, $s['saldo'])), 'sopir_berutang' => $hutang->filter(fn ($h) => $h['total'] > 0.5)->count(),
             'merah_lebih_14_hari' => $semua->where('status', 'merah')->count(), 'sopir' => $daftar->map($ringkas)->values()];
     }
 

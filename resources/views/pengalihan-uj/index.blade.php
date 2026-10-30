@@ -6,6 +6,8 @@
     @php
         $tgl = fn ($d) => $d ? \Illuminate\Support\Carbon::parse($d)->translatedFormat('d-M-y') : '';
         $adaSaldo = $saldo->filter(fn ($s) => $s['saldo'] > 0.5);
+        $adaHutang = $hutang->filter(fn ($h) => $h['total'] > 0.5);
+        $tglSettle = \Illuminate\Support\Carbon::parse(\App\Support\SaldoSopir::SETTLE)->translatedFormat('j M Y');
         $warnaUmur = ['merah' => 'merah', 'kuning' => 'kuning', 'baru' => 'hijau', 'kasbon' => '', 'habis' => ''];
         // Proyek untuk pilihan "ditanggung proyek": yang berjalan dulu
         $pilihTahap = $tahap->reject(fn ($t) => str_contains($t->nama, '(biaya'))->sortBy(fn ($t) => [in_array($t->status, ['progress', 'belum'], true) ? 0 : 1, $t->nama]);
@@ -25,19 +27,21 @@
     </style>
 
     <div class="tab-alih">
-        <a href="{{ route('pengalihan-uj.index', ['tab' => 'saldo']) }}" @class(['aktif' => $tab === 'saldo'])>💰 Utang / saldo sopir @if ($adaSaldo->count())· {{ $adaSaldo->count() }} sopir · {{ rp((int) $adaSaldo->sum('saldo')) }}@endif</a>
+        <a href="{{ route('pengalihan-uj.index', ['tab' => 'saldo']) }}" @class(['aktif' => $tab === 'saldo'])>💰 Utang sopir @if ($adaHutang->count())· {{ $adaHutang->count() }} sopir · {{ rp((int) $adaHutang->sum('total')) }}@endif</a>
         <a href="{{ route('pengalihan-uj.index', ['tab' => 'pilih']) }}" @class(['aktif' => $tab === 'pilih'])>☑ Pilih UJ → jadikan saldo</a>
     </div>
 
     @if ($tab === 'saldo')
         @php
             $saring = in_array(request('tampil'), ['merah', 'semua'], true) ? request('tampil') : 'ada';
-            $daftar = $saldo->filter(fn ($s) => $saring === 'semua' || ($saring === 'merah' ? $s['status'] === 'merah' : $s['saldo'] > 0.5))
-                ->sortBy(fn ($s) => [['merah' => 0, 'kuning' => 1, 'baru' => 2, 'kasbon' => 3, 'habis' => 4][$s['status']], -$s['saldo']]);
+            $daftar = $hutang->filter(fn ($h) => $saring === 'semua' || ($saring === 'merah' ? $h['saldo']['status'] === 'merah' : $h['total'] > 0.5))
+                ->sortBy(fn ($h) => [['merah' => 0, 'kuning' => 1, 'baru' => 2, 'kasbon' => 3, 'habis' => 4][$h['saldo']['status']], -$h['total']]);
             $merah = $saldo->where('status', 'merah');
         @endphp
-        <p class="redup" style="font-size: 13px; margin: 0 0 12px;">Utang / saldo sopir = <b>uang PT yang masih dipegang sopir</b>, dihitung per sopir (bukan per truk).
-            <b>➕ Nambah utang</b>: UJ yang sudah diberikan tetapi tidak bongkar (tab Pilih UJ), atau <b>kasbon</b> dari Kas Harian.
+        <p class="redup" style="font-size: 13px; margin: 0 0 12px;">Utang sopir = <b>uang PT yang masih dipegang sopir</b>, dihitung per sopir (bukan per truk):
+            <b>UJ belum bongkar</b> (setiap uang jalan yang diberikan = utang, ritnya bongkar = pengurang) + <b>saldo di luar DO</b>.
+            Buku di-settle per {{ $tglSettle }} ke rekap admin; riwayat sesudahnya ada di rincian sopir.
+            <b>➕ Nambah utang</b>: uang jalan di Kas UJ, UJ yang tidak bongkar dijadikan saldo (tab Pilih UJ), atau <b>kasbon</b> dari Kas Harian.
             <b>➖ Potong utang</b>: DO lamanya ternyata bongkar, dipotong untuk <b>uang jalan DO baru</b> (boleh sebagian — sisanya ditransfer di Kas UJ dengan No DO yang sama, tersambung otomatis),
             Uang MOB / lain (biaya proyek tempat dipakai), potong gaji / UM, dikembalikan sopir, atau tidak kembali.
             Umur &gt; {{ \App\Support\SaldoSopir::KUNING }} hari kuning, &gt; {{ \App\Support\SaldoSopir::MERAH }} hari merah — tagih atau putuskan (kasbon yang sedang dicicil tanpa warna umur).</p>
@@ -51,7 +55,9 @@
         </form>
 
         <div class="ringkas-alih">
-            <div class="kartu"><small>Saldo di sopir (belum biaya)</small><b>{{ rp((int) $adaSaldo->sum('saldo')) }}</b><small>{{ $adaSaldo->count() }} sopir</small></div>
+            <div class="kartu"><small>Total utang sopir</small><b>{{ rp((int) $adaHutang->sum('total')) }}</b><small>{{ $adaHutang->count() }} sopir</small></div>
+            <div class="kartu"><small>UJ belum bongkar</small><b>{{ rp((int) $hutang->sum('belum_rp')) }}</b><small>{{ $hutang->sum(fn ($h) => $h['belum']->count()) }} baris uang jalan</small></div>
+            <div class="kartu"><small>Saldo di luar DO (belum biaya)</small><b>{{ rp((int) $adaSaldo->sum('saldo')) }}</b><small>{{ $adaSaldo->count() }} sopir</small></div>
             <div class="kartu" @if ($merah->count()) style="border-top-color: var(--merah);" @endif><small>Merah (&gt; {{ \App\Support\SaldoSopir::MERAH }} hari)</small><b @if ($merah->count()) style="color: var(--merah);" @endif>{{ rp((int) $merah->sum('saldo')) }}</b><small>{{ $merah->count() }} sopir</small></div>
             <div class="kartu"><small>Sudah terpakai (jadi biaya proyek)</small><b>{{ rp((int) ($saldo->sum('terpakai_do') + $saldo->sum('dipakai') + $saldo->sum('hangus'))) }}</b><small>DO lama bongkar {{ rp((int) $saldo->sum('terpakai_do')) }} · dipotong / dipakai {{ rp((int) $saldo->sum('dipakai')) }}</small></div>
             <div class="kartu"><small>Dikembalikan / dicicil sopir</small><b>{{ rp((int) $saldo->sum('kembali')) }}</b><small>kasbon {{ rp((int) $saldo->sum('kasbon')) }} · tidak kembali {{ rp((int) $saldo->sum('hangus')) }}</small></div>
@@ -59,34 +65,38 @@
 
         <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 10px; flex-wrap: wrap;">
             <span class="redup" style="font-size: 13px;">Tampilkan:</span>
-            <a href="{{ route('pengalihan-uj.index', ['tab' => 'saldo']) }}" @class(['chip', 'aktif' => $saring === 'ada']) style="margin: 0;">Masih ada saldo · {{ $adaSaldo->count() }}</a>
+            <a href="{{ route('pengalihan-uj.index', ['tab' => 'saldo']) }}" @class(['chip', 'aktif' => $saring === 'ada']) style="margin: 0;">Masih ada utang · {{ $adaHutang->count() }}</a>
             <a href="{{ route('pengalihan-uj.index', ['tab' => 'saldo', 'tampil' => 'merah']) }}" @class(['chip', 'aktif' => $saring === 'merah']) style="margin: 0;">Merah · {{ $merah->count() }}</a>
-            <a href="{{ route('pengalihan-uj.index', ['tab' => 'saldo', 'tampil' => 'semua']) }}" @class(['chip', 'aktif' => $saring === 'semua']) style="margin: 0;">Semua (termasuk habis) · {{ $saldo->count() }}</a>
+            <a href="{{ route('pengalihan-uj.index', ['tab' => 'saldo', 'tampil' => 'semua']) }}" @class(['chip', 'aktif' => $saring === 'semua']) style="margin: 0;">Semua (termasuk habis) · {{ $hutang->count() }}</a>
             <span class="redup" style="font-size: 13px; margin-left: auto;">Klik nama sopir untuk rincian & mencatat pemakaian.</span>
         </div>
 
         <div class="kartu gulir" style="padding: 0;">
             <table class="kas">
-                <thead><tr><th>Sopir</th><th>Truk</th><th class="angka">UJ jadi saldo</th><th class="angka">Rp jadi saldo</th><th class="angka">Kasbon</th><th class="angka">Terpakai DO lama</th><th class="angka">Dipotong / dipakai</th>
-                    <th class="angka">Dikembalikan / dicicil</th><th class="angka">Tidak kembali</th><th class="angka">Sisa utang</th><th>Umur</th><th>Terakhir</th></tr></thead>
+                <thead><tr><th>Sopir</th><th>Truk</th><th class="angka">UJ belum bongkar</th><th class="angka">Rp belum bongkar</th><th class="angka">UJ jadi saldo</th><th class="angka">Rp jadi saldo</th><th class="angka">Kasbon / penyesuaian</th><th class="angka">Terpakai DO lama</th><th class="angka">Dipotong / dipakai</th>
+                    <th class="angka">Dikembalikan / dicicil</th><th class="angka">Tidak kembali</th><th class="angka">Saldo di luar DO</th><th class="angka">Total utang</th><th>Umur saldo</th><th>Terakhir</th></tr></thead>
                 <tbody>
-                    @forelse ($daftar as $s)
+                    @forelse ($daftar as $h)
+                        @php($s = $h['saldo'])
                         <tr @class(['t', 'pilih' => $dipilih && $dipilih['sopir'] === $s['sopir']])>
                             <td><a href="{{ route('pengalihan-uj.index', ['tab' => 'saldo', 'tampil' => $saring !== 'ada' ? $saring : null, 'sopir' => $s['sopir']]) }}#rinci"><b>{{ $s['sopir'] }}</b></a></td>
-                            <td>{{ implode(', ', $s['mobil']) }}</td>
+                            <td>{{ implode(', ', $s['mobil'] ?: $h['belum']->pluck('mobil')->filter()->unique()->all()) }}</td>
+                            <td class="angka">{{ $h['belum']->count() ?: '' }}</td>
+                            <td class="angka" data-n="{{ (int) $h['belum_rp'] }}">{{ rp((int) $h['belum_rp'], true) }}</td>
                             <td class="angka">{{ $s['n_alih'] }}</td>
                             <td class="angka" data-n="{{ (int) $s['alih'] }}">{{ rp((int) $s['alih'], true) }}</td>
-                            <td class="angka" data-n="{{ (int) $s['kasbon'] }}">{{ rp((int) $s['kasbon'], true) }}</td>
+                            <td class="angka" data-n="{{ (int) ($s['kasbon'] + $s['settle']) }}">{{ rp((int) ($s['kasbon'] + $s['settle']), true) }}</td>
                             <td class="angka" data-n="{{ (int) $s['terpakai_do'] }}">{{ rp((int) $s['terpakai_do'], true) }}</td>
                             <td class="angka" data-n="{{ (int) $s['dipakai'] }}">{{ rp((int) $s['dipakai'], true) }}</td>
                             <td class="angka" data-n="{{ (int) $s['kembali'] }}">{{ rp((int) $s['kembali'], true) }}</td>
                             <td class="angka" data-n="{{ (int) $s['hangus'] }}">{{ rp((int) $s['hangus'], true) }}</td>
-                            <td class="angka" data-n="{{ (int) $s['saldo'] }}"><b>{{ rp((int) $s['saldo']) }}</b></td>
-                            <td data-n="{{ $s['umur'] ?? -1 }}">@if ($s['umur'] !== null)<span class="label {{ $warnaUmur[$s['status']] }}">{{ $s['umur'] }} hari</span> <span class="redup" style="font-size: 11px;">sejak {{ $tgl($s['sejak']) }}</span>@elseif ($s['status'] === 'kasbon')<span class="redup">kasbon dicicil</span>@else<span class="redup">habis</span>@endif</td>
+                            <td class="angka" data-n="{{ (int) $s['saldo'] }}">{{ rp((int) $s['saldo'], true) }}</td>
+                            <td class="angka" data-n="{{ (int) $h['total'] }}"><b>{{ rp((int) $h['total']) }}</b></td>
+                            <td data-n="{{ $s['umur'] ?? -1 }}">@if ($s['umur'] !== null)<span class="label {{ $warnaUmur[$s['status']] }}">{{ $s['umur'] }} hari</span> <span class="redup" style="font-size: 11px;">sejak {{ $tgl($s['sejak']) }}</span>@elseif ($s['status'] === 'kasbon')<span class="redup">kasbon dicicil</span>@else<span class="redup">—</span>@endif</td>
                             <td data-n="{{ $s['terakhir']?->toDateString() }}">{{ $tgl($s['terakhir']) }}</td>
                         </tr>
                     @empty
-                        <tr><td colspan="12" class="redup" style="padding: 18px 14px;">Tidak ada saldo sopir{{ $saring === 'merah' ? ' yang merah' : '' }}. Pilih UJ di tab <a href="{{ route('pengalihan-uj.index', ['tab' => 'pilih']) }}">Pilih UJ → jadikan saldo</a>.</td></tr>
+                        <tr><td colspan="15" class="redup" style="padding: 18px 14px;">Tidak ada utang sopir{{ $saring === 'merah' ? ' yang merah' : '' }}. Pilih UJ di tab <a href="{{ route('pengalihan-uj.index', ['tab' => 'pilih']) }}">Pilih UJ → jadikan saldo</a>.</td></tr>
                     @endforelse
                 </tbody>
             </table>
@@ -102,6 +112,8 @@
                         'status' => $x->bongkar ? 'DO lama bongkar '.$tgl($x->bongkar->tanggal).' di '.($tahap[$x->tahap_bongkar]->nama ?? $x->bongkar->tahap).' → biaya proyek itu' : 'DO lama belum bongkar', 'p' => $x->p])
                     ->concat($s['kasbon_rows']->map(fn ($p) => ['tgl' => $p->tanggal, 'jenis' => 'Kasbon (Kas Harian)', 'id' => 'NO ID '.$p->kas_no_id, 'do' => null, 'ket' => $p->keterangan,
                         'proyek' => 'bukan biaya (piutang)', 'masuk' => $p->nominal, 'keluar' => null, 'status' => null, 'p' => $p]))
+                    ->concat($s['settle_rows']->map(fn ($p) => ['tgl' => $p->tanggal, 'jenis' => 'Penyesuaian settle', 'id' => null, 'do' => null, 'ket' => $p->keterangan,
+                        'proyek' => '—', 'masuk' => $p->nominal > 0 ? $p->nominal : null, 'keluar' => $p->nominal < 0 ? -$p->nominal : null, 'status' => null, 'p' => $p]))
                     ->concat($s['pakai_rows']->map(function ($p) use ($tahap, $kasUjDo) {
                         $sambung = $p->peruntukan === 'uj' ? ($kasUjDo[\App\Support\SaldoSopir::kunciDo($p->no_do)] ?? collect()) : collect();
 
@@ -152,9 +164,47 @@
                 <div style="padding: 12px 14px 8px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
                     <b style="font-size: 17px; color: var(--aksen-terang);">Buku utang {{ $s['sopir'] }}</b>
                     <span class="redup" style="font-size: 13px;">Truk: {{ implode(', ', $s['mobil']) ?: '—' }}</span>
-                    <span>Sisa utang <b>{{ rp((int) $s['saldo']) }}</b> @if ($s['umur'] !== null)<span class="label {{ $warnaUmur[$s['status']] }}">{{ $s['umur'] }} hari</span>@endif</span>
+                    <span>Total utang <b>{{ rp((int) $riwayat['akhir']) }}</b> = UJ belum bongkar {{ rp((int) $belum->sum('rp')) }} + saldo di luar DO {{ rp((int) $s['saldo']) }}
+                        @if ($s['umur'] !== null)<span class="label {{ $warnaUmur[$s['status']] }}">{{ $s['umur'] }} hari</span>@endif</span>
                     <a href="{{ route('pengalihan-uj.index', ['tab' => 'saldo']) }}" class="redup" style="margin-left: auto; font-size: 13px;">Tutup ✕</a>
                 </div>
+
+                <div style="padding: 4px 14px 6px;"><b>Riwayat utang sejak settle {{ $tglSettle }}</b>
+                    <span class="redup" style="font-size: 12px;">— ➕ uang jalan diberikan / kasbon, ➖ rit bongkar (senilai uang jalan DO-nya) / potongan. Uang jalan yang dipotong dari utang hanya berpindah ke DO-nya.</span></div>
+                <div class="gulir">
+                    <table class="kas">
+                        <thead><tr><th>Tanggal</th><th>Jenis</th><th>ID UJ / NO ID</th><th>No DO</th><th>Keterangan</th><th class="angka">➕ Nambah utang</th><th class="angka">➖ Potong utang</th><th class="angka">Sisa</th></tr></thead>
+                        <tbody>
+                            <tr class="t"><td>{{ $tglSettle }}</td><td colspan="6"><b>Saldo awal (settle)</b></td><td class="angka"><b>{{ rp((int) $riwayat['awal']) }}</b></td></tr>
+                            @foreach ($riwayat['baris'] as $b)
+                                <tr class="t"><td data-n="{{ $b['tgl']->toDateString() }}">{{ $tgl($b['tgl']) }}</td><td>{{ $b['jenis'] }}</td><td>{{ $b['id'] }}</td><td>{{ $b['do'] }}</td>
+                                    <td style="font-size: 12px;">{{ $b['ket'] }}</td>
+                                    <td class="angka nambah">{{ $b['masuk'] ? rp((int) $b['masuk']) : '' }}</td><td class="angka potong">{{ $b['keluar'] ? rp((int) $b['keluar']) : '' }}</td>
+                                    <td class="angka" data-n="{{ (int) $b['sisa'] }}"><b>{{ rp((int) $b['sisa']) }}</b></td></tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+
+                <div style="padding: 12px 14px 6px; border-top: 1px solid var(--garis);"><b>UJ belum bongkar · {{ $belum->count() }} baris · {{ rp((int) $belum->sum('rp')) }}</b>
+                    <span class="redup" style="font-size: 12px;">— berkurang otomatis saat ritnya bongkar (DO tercatat di Ritasi). Truk pindah sebelum bongkar → <a href="{{ route('pengalihan-uj.index', ['tab' => 'pilih', 'cari' => $s['sopir']]) }}">jadikan saldo</a>.</span></div>
+                <div class="gulir">
+                    <table class="kas">
+                        <thead><tr><th>Tanggal UJ</th><th>ID UJ</th><th>No DO</th><th>DT</th><th>Keterangan</th><th>Proyek</th><th class="angka">Nominal</th><th>Umur</th></tr></thead>
+                        <tbody>
+                            @forelse ($belum as $u)
+                                <tr class="t"><td data-n="{{ $u->tgl?->toDateString() }}">{{ $tgl($u->tgl) }}</td><td>{{ $u->id_uj }}</td><td>{{ $u->do }}</td><td>{{ $u->mobil }}</td>
+                                    <td style="font-size: 12px;">{{ $u->ket }}</td><td>{{ $u->tahap }}</td><td class="angka">{{ rp((int) $u->rp) }}</td>
+                                    <td data-n="{{ $u->umur ?? -1 }}"><span class="label {{ ['merah' => 'merah', 'lewat' => 'kuning', 'wajar' => 'hijau'][$u->status] ?? '' }}">{{ $u->umur }} hari</span></td></tr>
+                            @empty
+                                <tr><td colspan="8" class="redup" style="padding: 12px 14px;">Tidak ada uang jalan {{ $s['sopir'] }} yang belum bongkar.</td></tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+
+                <div style="padding: 12px 14px 6px; border-top: 1px solid var(--garis);"><b>Saldo di luar DO · {{ rp((int) $s['saldo']) }}</b>
+                    <span class="redup" style="font-size: 12px;">— UJ yang tidak bongkar dijadikan saldo, kasbon, penyesuaian settle, dan potongannya.</span></div>
                 <div class="gulir">
                     <table class="kas">
                         <thead><tr><th>Tanggal</th><th>Jenis</th><th>ID UJ / Pengajuan / NO ID</th><th>No DO</th><th>Keterangan</th><th>Proyek</th><th class="angka">➕ Nambah utang</th><th class="angka">➖ Potong utang</th>
