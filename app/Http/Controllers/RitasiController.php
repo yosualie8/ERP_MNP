@@ -233,7 +233,7 @@ class RitasiController extends Controller
         $n = \App\Support\SinkronPengajuan::jalankan($unggah, $pengajuan, $rencana['batal'], $request->user()->id);
 
         return $kembali->with('success', "{$n} baris {$pengajuan->kode()} dibatalkan (DO tidak ada di data bongkar). Pemakaian saldo sopir baris itu dikembalikan ke saldo."
-            .($rencana['lapor'] ? ' '.count($rencana['lapor']).' baris sudah ditransfer — tidak diubah, urus lewat Pengalihan UJ bila perlu.' : ''));
+            .($rencana['lapor'] ? ' '.count($rencana['lapor']).' baris sudah ditransfer — tidak diubah, urus lewat menu Hutang Supir bila perlu.' : ''));
     }
 
     /** Templat Excel upload surat jalan. */

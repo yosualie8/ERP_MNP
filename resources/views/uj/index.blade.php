@@ -61,7 +61,7 @@
 
         @if ($jumlahPengalihan)
             <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: -4px 0 12px;">
-                <span class="redup" style="font-size: 13px;">Pengalihan UJ:</span>
+                <span class="redup" style="font-size: 13px;">Hutang Supir:</span>
                 <a href="{{ route('uj.index', array_filter(['q' => $q]) + $periode->param()) }}" @class(['chip', 'aktif' => ! $alih]) style="margin: 0;">Semua transaksi</a>
                 @foreach ($namaAlih as $j => $nama)
                     @if ($jumlahPengalihan[$j] ?? 0)
@@ -69,7 +69,7 @@
                     @endif
                 @endforeach
                 @if (count($jumlahPengalihan) > 1)<a href="{{ route('uj.index', ['alih' => 'semua'] + array_filter(['q' => $q]) + $periode->param()) }}" @class(['chip', 'aktif' => $alih === 'semua']) style="margin: 0;">Semua pengalihan · {{ array_sum($jumlahPengalihan) }}</a>@endif
-                @if ($bolehPengalihan)<a href="{{ route('pengalihan-uj.index') }}" class="redup" style="font-size: 13px; margin-left: auto;">Buka Pengalihan UJ →</a>@endif
+                @if ($bolehPengalihan)<a href="{{ route('pengalihan-uj.index') }}" class="redup" style="font-size: 13px; margin-left: auto;">Buka Hutang Supir →</a>@endif
             </div>
             @if ($alih)
                 <div class="kartu" style="padding: 10px 14px; margin-bottom: 12px; border-left: 3px solid #4ea1ff;">
@@ -123,7 +123,7 @@
                             <td class="i">@if ($t->no_uj)UJ-{{ $t->no_uj }}@else<i title="Baris master belum diberi ID UJ di sheet">tanpa ID</i>@endif
                                 @if ($jumlahSudah === $detail->count() && $sudah)<span class="label hijau">Sudah reimburse</span>
                                 @elseif ($sudah)<span class="label kuning" title="{{ $jumlahSudah }} dari {{ $detail->count() }} detail sudah direimburse">Sebagian {{ $jumlahSudah }}/{{ $detail->count() }}</span>@endif
-                                @if ($nAlih && ! $alih)<span class="label alih" title="Ada UJ di transfer ini yang dialihkan / dikembalikan / dibatalkan (menu Pengalihan UJ)">↪ {{ $nAlih }} pengalihan</span>@endif</td>
+                                @if ($nAlih && ! $alih)<span class="label alih" title="Ada UJ di transfer ini yang dialihkan / dikembalikan / dibatalkan (menu Hutang Supir)">↪ {{ $nAlih }} pengalihan</span>@endif</td>
                             <td style="white-space: nowrap;">
                                 {{-- Edit, foto bon & Hapus hanya untuk akun yang punya menu Input UJ; yang sudah (sebagian) direimburse dikunci. --}}
                                 @if ($bolehInput && $sudah)

@@ -28,7 +28,7 @@ class MenuAkses
         'input-uj' => ['Input UJ', 'uj.input', ['uj.input', 'uj.input.bayar-tanah', 'uj.store', 'uj.periksa', 'uj.edit', 'uj.update', 'uj.hapus'], 'Input, edit & hapus transaksi uang jalan (Kas Seabank), termasuk realisasi pengajuan'],
         'kas-uj' => ['Kas UJ', 'uj.index', ['uj.index'], 'Melihat daftar transaksi uang jalan'],
         'reimburse-uj' => ['Reimburse UJ', 'reimburse.index', ['reimburse.*'], 'Memilih & mencatat reimburse uang jalan, unduh Excel'],
-        'pengalihan-uj' => ['Pengalihan UJ', 'pengalihan-uj.index', ['pengalihan-uj.*'], 'UJ yang sudah diberi tetapi truk pindah proyek sebelum bongkar: dialihkan ke proyek baru (saldo sopir untuk MOB / potong UJ) atau dikembalikan'],
+        'pengalihan-uj' => ['Hutang Supir', 'pengalihan-uj.index', ['pengalihan-uj.*'], 'Buku hutang per sopir (uang PT di tangan sopir): UJ belum bongkar, kasbon, dan potongannya (uang jalan, MOB, gaji, dikembalikan)'],
         'rapikan-uj' => ['Rapikan Kas UJ', 'uj.rapikan', ['uj.rapikan', 'uj.rapikan.*'], 'Mengisi No Mobil yang kosong di Kas UJ (ditulis ke sheet)'],
         'input-ritasi' => ['Input Ritasi', 'ritasi.input', ['ritasi.input', 'ritasi.store', 'ritasi.periksa', 'ritasi.edit', 'ritasi.update', 'ritasi.hapus'], 'Input, edit & hapus ritasi dump truck'],
         'ritasi' => ['Ritasi', 'ritasi.index', ['ritasi.index'], 'Melihat daftar ritasi dump truck'],

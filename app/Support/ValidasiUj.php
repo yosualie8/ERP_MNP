@@ -246,7 +246,7 @@ class ValidasiUj
                 $flag('3', 'tinggi', 'Total Uang Jalan DO '.$r['doAsli'].' menjadi '.rp($total).' (> '.rp(self::MAKS_UJ_PER_DO).').'.($uj->isNotEmpty() ? ' Sudah ada: '.$daftar($uj).'.' : '')
                     .($sebutUtang !== '' ? " Dipotong dari utang sopir: {$sebutUtang}." : ''));
             } elseif ($sebutUtang !== '') {
-                $flag('S', 'info', 'DO '.$r['doAsli']." juga dibayar {$sebutUtang} lewat Pengalihan UJ — total uang jalan DO ini ".rp($total).' (tersambung lewat No DO).');
+                $flag('S', 'info', 'DO '.$r['doAsli']." juga dibayar {$sebutUtang} lewat Hutang Supir — total uang jalan DO ini ".rp($total).' (tersambung lewat No DO).');
             }
             if ($uj->isNotEmpty()) {
                 $kurang = str_contains(strtolower($r['ket']), 'kekurangan');

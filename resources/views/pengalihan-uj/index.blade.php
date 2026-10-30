@@ -1,4 +1,4 @@
-@extends('layouts.app', ['judul' => 'Pengalihan UJ'])
+@extends('layouts.app', ['judul' => 'Hutang Supir'])
 
 @section('lebar', '1440px')
 

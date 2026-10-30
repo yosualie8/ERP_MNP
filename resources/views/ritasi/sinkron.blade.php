@@ -76,7 +76,7 @@
         @if ($rencana['lapor'])
             <div class="pesan galat"><b>{{ count($rencana['lapor']) }} baris DO yang tidak bongkar sudah ditransfer — tidak diubah:</b>
                 <ul style="margin: 6px 0 0; padding-left: 18px;">@foreach ($rencana['lapor'] as $l)<li>{{ $l['dt'] }} · DO {{ $l['do'] }} · {{ $l['nama'] }} · {{ $l['kategori'] }} {{ rp($l['nominal']) }}{{ $l['id_uj'] ? ' · '.$l['id_uj'] : '' }}</li>@endforeach</ul>
-                <div style="margin-top: 6px;">Uang jalan yang sudah di tangan sopir bisa dijadikan saldo sopir lewat menu Pengalihan UJ.</div></div>
+                <div style="margin-top: 6px;">Uang jalan yang sudah di tangan sopir bisa dijadikan saldo sopir lewat menu Hutang Supir.</div></div>
         @endif
         @if ($rencana['lebih'])
             <div class="pesan"><b>Surat jalan di Excel yang tidak punya DO di pengajuan ini:</b>
