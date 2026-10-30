@@ -164,28 +164,35 @@
                 <div style="padding: 12px 14px 8px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
                     <b style="font-size: 17px; color: var(--aksen-terang);">Buku utang {{ $s['sopir'] }}</b>
                     <span class="redup" style="font-size: 13px;">Truk: {{ implode(', ', $s['mobil']) ?: '—' }}</span>
-                    <span>Total utang <b>{{ rp((int) $riwayat['akhir']) }}</b> = UJ belum bongkar {{ rp((int) $belum->sum('rp')) }} + saldo di luar DO {{ rp((int) $s['saldo']) }}
-                        @if ($s['umur'] !== null)<span class="label {{ $warnaUmur[$s['status']] }}">{{ $s['umur'] }} hari</span>@endif</span>
+                    <span>Saldo akhir <b>{{ rp((int) $riwayat['akhir']) }}</b></span>
                     <a href="{{ route('pengalihan-uj.index', ['tab' => 'saldo']) }}" class="redup" style="margin-left: auto; font-size: 13px;">Tutup ✕</a>
                 </div>
-
-                <div style="padding: 4px 14px 6px;"><b>Riwayat utang sejak settle {{ $tglSettle }}</b>
-                    <span class="redup" style="font-size: 12px;">— ➕ uang jalan diberikan / kasbon, ➖ rit bongkar (senilai uang jalan DO-nya) / potongan. Uang jalan yang dipotong dari utang hanya berpindah ke DO-nya.</span></div>
+                @php
+                    // Buku sederhana (owner 30 Okt 2026): hanya Tanggal, Keterangan, Debit (utang bertambah), Kredit (utang berkurang), Saldo.
+                    $doTeks = fn ($b) => $b['do'] ? ' DO '.$b['do'] : '';
+                    $ketBuku = fn ($b) => match ($b['jenis']) {
+                        'Uang jalan diberikan' => 'Uang jalan'.$doTeks($b),
+                        'Rit bongkar' => 'Bongkar'.$doTeks($b),
+                        'Penyesuaian settle' => 'Penyesuaian',
+                        default => $b['jenis'].$doTeks($b),
+                    };
+                @endphp
                 <div class="gulir">
-                    <table class="kas">
-                        <thead><tr><th>Tanggal</th><th>Jenis</th><th>ID UJ / NO ID</th><th>No DO</th><th>Keterangan</th><th class="angka">➕ Nambah utang</th><th class="angka">➖ Potong utang</th><th class="angka">Sisa</th></tr></thead>
+                    <table class="kas" style="min-width: 0;">
+                        <thead><tr><th>Tanggal</th><th>Keterangan</th><th class="angka">Debit</th><th class="angka">Kredit</th><th class="angka">Saldo</th></tr></thead>
                         <tbody>
-                            <tr class="t"><td>{{ $tglSettle }}</td><td colspan="6"><b>Saldo awal (settle)</b></td><td class="angka"><b>{{ rp((int) $riwayat['awal']) }}</b></td></tr>
+                            <tr class="t"><td>{{ $tgl(\App\Support\SaldoSopir::SETTLE) }}</td><td>Saldo awal</td><td></td><td></td><td class="angka"><b>{{ rp((int) $riwayat['awal']) }}</b></td></tr>
                             @foreach ($riwayat['baris'] as $b)
-                                <tr class="t"><td data-n="{{ $b['tgl']->toDateString() }}">{{ $tgl($b['tgl']) }}</td><td>{{ $b['jenis'] }}</td><td>{{ $b['id'] }}</td><td>{{ $b['do'] }}</td>
-                                    <td style="font-size: 12px;">{{ $b['ket'] }}</td>
-                                    <td class="angka nambah">{{ $b['masuk'] ? rp((int) $b['masuk']) : '' }}</td><td class="angka potong">{{ $b['keluar'] ? rp((int) $b['keluar']) : '' }}</td>
+                                <tr class="t"><td data-n="{{ $b['tgl']->toDateString() }}">{{ $tgl($b['tgl']) }}</td><td>{{ $ketBuku($b) }}</td>
+                                    <td class="angka">{{ $b['masuk'] ? rp((int) $b['masuk']) : '' }}</td><td class="angka">{{ $b['keluar'] ? rp((int) $b['keluar']) : '' }}</td>
                                     <td class="angka" data-n="{{ (int) $b['sisa'] }}"><b>{{ rp((int) $b['sisa']) }}</b></td></tr>
                             @endforeach
                         </tbody>
                     </table>
                 </div>
 
+                <details style="border-top: 1px solid var(--garis);">
+                    <summary style="padding: 10px 14px; cursor: pointer; font-size: 13px;" class="redup">Rincian untuk admin — UJ belum bongkar {{ rp((int) $belum->sum('rp')) }} · saldo di luar DO {{ rp((int) $s['saldo']) }}</summary>
                 <div style="padding: 12px 14px 6px; border-top: 1px solid var(--garis);"><b>UJ belum bongkar · {{ $belum->count() }} baris · {{ rp((int) $belum->sum('rp')) }}</b>
                     <span class="redup" style="font-size: 12px;">— berkurang otomatis saat ritnya bongkar (DO tercatat di Ritasi). Truk pindah sebelum bongkar → <a href="{{ route('pengalihan-uj.index', ['tab' => 'pilih', 'cari' => $s['sopir']]) }}">jadikan saldo</a>.</span></div>
                 <div class="gulir">
@@ -223,6 +230,8 @@
                         </tbody>
                     </table>
                 </div>
+
+                </details>
 
                 <div class="arah-utang">
                     <span class="redup" style="font-size: 13px;">Transaksi baru:</span>
