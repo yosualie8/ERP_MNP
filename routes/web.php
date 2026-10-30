@@ -166,12 +166,14 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::put('/uj/{noUj}', [UjController::class, 'update'])->whereNumber('noUj')->name('uj.update');
     Route::delete('/uj/{noUj}', [UjController::class, 'hapus'])->whereNumber('noUj')->name('uj.hapus');
     // Pengajuan uang jalan (disimpan di aplikasi, direalisasikan lewat Input UJ).
-    Route::get('/uj/pengalihan', [\App\Http\Controllers\PengalihanUjController::class, 'index'])->name('pengalihan-uj.index');
-    Route::post('/uj/pengalihan', [\App\Http\Controllers\PengalihanUjController::class, 'simpan'])->name('pengalihan-uj.simpan');
-    Route::post('/uj/pengalihan/pakai', [\App\Http\Controllers\PengalihanUjController::class, 'pakai'])->name('pengalihan-uj.pakai');
-    Route::post('/uj/pengalihan/kasbon', [\App\Http\Controllers\PengalihanUjController::class, 'kasbon'])->name('pengalihan-uj.kasbon');
-    Route::post('/uj/pengalihan/sopir', [\App\Http\Controllers\PengalihanUjController::class, 'sopir'])->name('pengalihan-uj.sopir');
-    Route::delete('/uj/pengalihan/{pengalihan}', [\App\Http\Controllers\PengalihanUjController::class, 'hapus'])->whereNumber('pengalihan')->name('pengalihan-uj.hapus');
+    // Hutang Supir (dulu Pengalihan UJ; alamat diganti owner 30 Okt 2026 — nama route tetap pengalihan-uj.*). Alamat lama dialihkan.
+    Route::get('/hutang-supir', [\App\Http\Controllers\PengalihanUjController::class, 'index'])->name('pengalihan-uj.index');
+    Route::post('/hutang-supir', [\App\Http\Controllers\PengalihanUjController::class, 'simpan'])->name('pengalihan-uj.simpan');
+    Route::post('/hutang-supir/pakai', [\App\Http\Controllers\PengalihanUjController::class, 'pakai'])->name('pengalihan-uj.pakai');
+    Route::post('/hutang-supir/kasbon', [\App\Http\Controllers\PengalihanUjController::class, 'kasbon'])->name('pengalihan-uj.kasbon');
+    Route::post('/hutang-supir/sopir', [\App\Http\Controllers\PengalihanUjController::class, 'sopir'])->name('pengalihan-uj.sopir');
+    Route::delete('/hutang-supir/{pengalihan}', [\App\Http\Controllers\PengalihanUjController::class, 'hapus'])->whereNumber('pengalihan')->name('pengalihan-uj.hapus');
+    Route::get('/uj/pengalihan', fn (\Illuminate\Http\Request $r) => redirect('/hutang-supir'.($r->getQueryString() ? '?'.$r->getQueryString() : ''), 301));
     Route::get('/uj/pengajuan', [PengajuanUjController::class, 'daftar'])->name('pengajuan-uj.daftar');
     Route::get('/uj/pengajuan/baru', [PengajuanUjController::class, 'buat'])->name('pengajuan-uj.buat');
     Route::post('/uj/pengajuan', [PengajuanUjController::class, 'simpan'])->name('pengajuan-uj.simpan');
