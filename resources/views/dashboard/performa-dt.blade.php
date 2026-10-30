@@ -11,38 +11,20 @@
         $lr = fn ($v) => '<span class="'.($v < 0 ? 'rugi' : ($v > 0 ? 'untung' : '')).'">'.($v < 0 ? '−' : '').rp(abs($v)).'</span>';
         $status = fn ($a) => $a ? (\App\Models\AsetTruk::STATUS[$a->status] ?? $a->status).($a->kepemilikan === 'rental' ? ' · rental' : '') : '';
     @endphp
-    @include('dashboard.gaya')
+    @include('dashboard.performa-dt-gaya')
     <style>
-        .lr .untung { color: var(--sukses); }
-        .lr .rugi { color: var(--merah); }
-        .lr tr.total td { font-weight: 700; border-top: 2px solid var(--garis-kuat); background: var(--kartu-2); }
-        .lr tr.pilih td { background: var(--aksen-muda); }
-        .lr td.nol { color: var(--redup); }
-        .peringatan-lr { border-left: 3px solid #f5a524; font-size: 13px; }
         .lr tr.master-dt { cursor: pointer; }
         .lr tr.master-dt .panah { display: inline-block; width: 12px; color: var(--aksen-terang); }
         .lr tr.d { display: none; }
         .lr tr.d.buka { display: table-row; }
-        .lr tr.d > td { background: rgba(0, 0, 0, .18); padding: 10px 12px 14px 28px; }
-        /* Detail 1 di atas, detail 2 di bawahnya; width 0 + min-width 100% -> isi rincian tidak melebarkan grid master. */
-        .rinci-dt { display: flex; flex-direction: column; gap: 16px; width: 0; min-width: 100%; }
-        .rinci-dt > .detail-1 { max-width: 760px; }
-        .rinci-dt > div { overflow-x: auto; }
-        .rinci-dt h5 { margin: 0 0 6px; font-size: 12px; color: var(--aksen-terang); text-transform: uppercase; letter-spacing: .04em; }
-        .rinci-dt table { width: 100%; }
-        .rinci-dt tr.buka-tutup { cursor: pointer; font-weight: 700; }
-        .rinci-dt tr.buka-tutup td:first-child::before { content: '▸ '; color: var(--aksen-terang); }
-        .rinci-dt tr.buka-tutup.buka td:first-child::before { content: '▾ '; }
-        .rinci-dt tr[data-anak] td:first-child { padding-left: 26px; }
-        .rinci-dt .gulir-tx { max-height: 460px; overflow: auto; }
-        .rinci-dt .gulir-tx thead th { position: sticky; top: 0; background: var(--kartu); z-index: 1; }
+        .lr tr.d > td { background: rgba(0, 0, 0, .18); padding: 10px 12px 14px 28px; text-align: left; }
     </style>
 
     @include('partials.periode', ['rute' => 'dashboard.performa-dt'])
 
     <p class="redup" style="font-size: 13px; margin: -4px 0 12px;">
         <b>Pendapatan</b> = kolom Harga Jual lembar Ritasi (per rit, menurut No Lambung). <b>Biaya</b> = biaya langsung truk dari Monitoring Biaya DT
-        (Kas UJ + Kas Harian yang ber-No Mobil). Biaya bersama yang tidak ber-No Mobil — gaji, solar tangki, sparepart tanpa No Mobil, sewa, overhead — belum dibagi ke truk.
+        (Kas UJ + Kas Harian yang ber-No Mobil) ditambah transfer BCA berstatus Dihitung yang menyebut nomor DT. Biaya bersama yang tidak ber-No Mobil — gaji, solar tangki, sparepart tanpa No Mobil, sewa, overhead — belum dibagi ke truk.
         Hanya dump truck di Data Aset · {{ $periode->label() }}.
     </p>
 
@@ -98,7 +80,7 @@
     <div class="kartu gulir lr" style="padding: 0;">
         <div style="padding: 12px 14px 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
             <b class="dash-judul">Laba rugi per DT</b>
-            <span class="redup" style="font-size: 13px; margin-left: auto;">Klik baris DT untuk membuka / menutup rinciannya.</span>
+            <span class="redup" style="font-size: 13px; margin-left: auto;">Klik baris DT untuk membuka / menutup rinciannya · klik nomor DT untuk membuka rinciannya di halaman baru.</span>
         </div>
         <table class="kas" id="grid-dt">
             <thead><tr><th>DT</th><th>Jenis</th><th>Status</th><th class="angka">Rit</th><th class="angka">m³</th>
@@ -106,7 +88,7 @@
             <tbody>
                 @foreach ($truk as $t)
                     <tr class="t master-dt" data-mobil="{{ $t['mobil'] }}">
-                        <td data-v="{{ $t['mobil'] }}"><span class="panah">▸</span> <b>{{ $t['mobil'] }}</b></td>
+                        <td data-v="{{ $t['mobil'] }}"><span class="panah">▸</span> <a class="dt" href="{{ route('dashboard.performa-dt.truk', $pp + ['mobil' => $t['mobil']]) }}" target="_blank" title="Buka rincian {{ $t['mobil'] }} di halaman baru">{{ $t['mobil'] }}</a></td>
                         <td>{{ $t['aset']?->jenis }}</td>
                         <td>{{ $status($t['aset']) }}</td>
                         <td class="angka" data-n="{{ $t['rit'] }}">{{ rp($t['rit'], true) }}</td>
@@ -134,14 +116,7 @@
             const URL_RINCI = @json(route('dashboard.performa-dt.rinci', $pp));
             const grid = document.getElementById('grid-dt');
             grid.addEventListener('click', e => {
-                if (e.target.closest('a, button')) return;
-                // Detail 1 / 2: baris kelompok → buka-tutup baris anaknya.
-                const kelompok = e.target.closest('tr.buka-tutup');
-                if (kelompok) {
-                    const buka = kelompok.classList.toggle('buka');
-                    kelompok.closest('.rinci-dt').querySelectorAll(`[data-anak="${kelompok.dataset.grup}"]`).forEach(x => { x.hidden = !buka; });
-                    return;
-                }
+                if (e.target.closest('a, button, input')) return;
                 // Baris master → buka-tutup baris rincian di bawahnya (dimuat sekali saat pertama dibuka).
                 const tr = e.target.closest('tr.master-dt');
                 if (!tr) return;
@@ -153,7 +128,7 @@
                     d.dataset.dimuat = '1';
                     fetch(URL_RINCI + '&mobil=' + encodeURIComponent(tr.dataset.mobil), {headers: {'X-Requested-With': 'XMLHttpRequest'}})
                         .then(r => r.ok ? r.text() : Promise.reject(r.status))
-                        .then(html => { d.querySelector('.isi-rinci').outerHTML = html; })
+                        .then(html => { d.querySelector('.isi-rinci').outerHTML = html; window.pasangGridRinci(d); })
                         .catch(err => { d.dataset.dimuat = ''; d.querySelector('.isi-rinci').textContent = 'Gagal memuat rincian (' + err + '). Tutup lalu buka lagi untuk mencoba ulang.'; });
                 }
             });

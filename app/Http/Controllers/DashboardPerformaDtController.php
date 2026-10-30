@@ -13,18 +13,31 @@ use Illuminate\View\View;
 /**
  * Dashboard → Performa DT (owner 30 Okt 2026): laba rugi per dump truck = Harga Jual rit (lembar Ritasi) − biaya langsung truk
  * (Monitoring Biaya DT + transfer BCA ber-DT). Grid master per DT; baris dibuka → rincian (pendapatan per proyek, pengeluaran per
- * kategori, semua transaksi biaya) dimuat lewat rinci(). Lihat App\Support\LabaRugiDt.
+ * kategori, semua transaksi biaya) dimuat lewat rinci(); nomor DT → halaman rincian satu truk (truk()). Lihat App\Support\LabaRugiDt.
  */
 class DashboardPerformaDtController extends Controller
 {
-    public function __invoke(Request $request): View
+    /** Periode terpilih; bawaan sama dengan Monitoring Biaya DT: 6 bulan terakhir dalam tahun yang sama. */
+    private function periode(Request $request): Periode
     {
         $p = Periode::dari($request, LabaRugiDt::bulanAda());
-        // Bawaan sama dengan Monitoring Biaya DT: 6 bulan terakhir dalam tahun yang sama.
         if (! $request->filled('dari') && ! $request->filled('lembar') && ! $request->filled('bulan')) {
             $p = new Periode($p->tahun, $request->filled('tahun') ? 1 : max(1, $p->sampai - 5), $p->sampai, $p->daftarTahun, $p->bulanAda);
         }
-        $bulan = collect(range($p->dari, $p->sampai))->map(fn ($m) => Carbon::create($p->tahun, $m, 1)->format('Y-m'))->all();
+
+        return $p;
+    }
+
+    /** @return string[] bulan Y-m dalam periode */
+    private function bulan(Periode $p): array
+    {
+        return collect(range($p->dari, $p->sampai))->map(fn ($m) => Carbon::create($p->tahun, $m, 1)->format('Y-m'))->all();
+    }
+
+    public function __invoke(Request $request): View
+    {
+        $p = $this->periode($request);
+        $bulan = $this->bulan($p);
 
         $truk = LabaRugiDt::perTruk($p->awal(), $p->akhir());
         // Truk tidak aktif tanpa rit & tanpa biaya di periode ini tidak perlu tampil (sudah tersaring: hanya yang punya data).
@@ -54,11 +67,23 @@ class DashboardPerformaDtController extends Controller
     /** Rincian satu DT (potongan HTML untuk baris yang dibuka): ?mobil=DT 026 + periode. */
     public function rinci(Request $request): View
     {
-        $p = Periode::dari($request, LabaRugiDt::bulanAda());
+        $p = $this->periode($request);
         $mobil = NomorMobil::rapikan($request->query('mobil'));
         $t = $mobil ? LabaRugiDt::perTruk($p->awal(), $p->akhir())->get($mobil) : null;
         abort_unless($t, 404);
 
         return view('dashboard.performa-dt-rinci', ['t' => $t] + LabaRugiDt::rinci($mobil, $p->awal(), $p->akhir()));
+    }
+
+    /** Halaman rincian satu DT (dibuka dari nomor DT, tab baru): ringkasan, laba rugi per bulan, detail 1 & 2 terbuka. */
+    public function truk(Request $request): View
+    {
+        $p = $this->periode($request);
+        $mobil = NomorMobil::rapikan($request->query('mobil'));
+        abort_unless($mobil && isset(BiayaDt::aset()[$mobil]), 404);
+        $t = LabaRugiDt::perTruk($p->awal(), $p->akhir())->get($mobil) ?? ['mobil' => $mobil, 'aset' => BiayaDt::aset()[$mobil], 'rit' => 0, 'kubik' => 0.0,
+            'pendapatan' => 0, 'tanpa_harga' => 0, 'perkiraan' => 0, 'biaya' => 0, 'kelompok' => [], 'kategori' => [], 'laba' => 0, 'bulan' => []];
+
+        return view('dashboard.performa-dt-truk', ['t' => $t, 'periode' => $p, 'bulan' => $this->bulan($p)] + LabaRugiDt::rinci($mobil, $p->awal(), $p->akhir()));
     }
 }
