@@ -20,6 +20,9 @@
         .grafik .batang2 { fill: #2f7a55; }
         .grafik .garis-rasio { fill: none; stroke: #f0c05a; stroke-width: 2.5; }
         .grafik .titik { fill: #f0c05a; }
+        .grafik text.nilai { fill: var(--teks); font-size: 11px; font-weight: 600; }
+        .grafik text.nilai-rasio { fill: #f0c05a; font-size: 11px; font-weight: 700; }
+        .grafik text.halo { stroke: var(--kartu); stroke-width: 3px; stroke-linejoin: round; paint-order: stroke; }
         .legenda { display: flex; gap: 16px; font-size: 12px; color: var(--redup); margin-bottom: 4px; flex-wrap: wrap; }
         .legenda i { display: inline-block; width: 12px; height: 12px; border-radius: 2px; vertical-align: -1px; margin-right: 4px; font-style: normal; }
         tr.pilih-alat { cursor: pointer; }
@@ -53,14 +56,14 @@
     <div class="kartu">
         <h3 style="margin: 0 0 4px;">Tren bulanan — semua alat</h3>
         <div class="legenda"><span><i style="background: #3b6fb6;"></i>Solar keluar (L)</span><span><i style="background: #f0c05a;"></i>Rasio L/jam (sumbu kanan)</span></div>
-        <svg class="grafik" id="grafik-total" viewBox="0 0 1000 280" preserveAspectRatio="none"></svg>
+        <svg class="grafik" id="grafik-total" viewBox="0 0 1000 280"></svg>
     </div>
 
     <div class="kartu" id="detail-alat" hidden>
         <h3 style="margin: 0 0 4px;">Detail alat: <span id="nama-alat"></span></h3>
         <div class="legenda"><span><i style="background: #3b6fb6;"></i>Solar keluar (L)</span><span><i style="background: #2f7a55;"></i>Jam HM (×10)</span><span><i style="background: #f0c05a;"></i>Rasio L/jam (sumbu kanan)</span>
             <span id="median-alat"></span></div>
-        <svg class="grafik" id="grafik-alat" viewBox="0 0 1000 280" preserveAspectRatio="none"></svg>
+        <svg class="grafik" id="grafik-alat" viewBox="0 0 1000 280"></svg>
     </div>
 
     <div class="kartu gulir" style="padding: 0;">
@@ -137,10 +140,16 @@
             const el = (tag, attr, isi) => { const e = document.createElementNS(ns, tag); for (const k in attr) e.setAttribute(k, attr[k]); if (isi !== undefined) e.textContent = isi; return e; };
             const atas = v => { if (!v) return 1; const p = Math.pow(10, Math.floor(Math.log10(v))); return Math.ceil(v / p * 2) / 2 * p; };
 
-            // Grafik batang (1–2 seri) + garis rasio pada sumbu kanan.
+            // Grafik batang (1–2 seri) + garis rasio pada sumbu kanan. Owner 30 Okt 2026: angka liter (seri bertanda `angka`) dan rasio L/jam
+            // langsung tertulis di grafik. Lebar viewBox = lebar layar agar tulisan tidak melar; digambar ulang saat ukuran jendela berubah.
             const gambar = (svg, label, batang, rasio) => {
                 svg.innerHTML = '';
-                const W = 1000, H = 280, kiri = 56, kanan = 50, atasP = 12, bawah = 34;
+                svg._isi = [label, batang, rasio];
+                const W = Math.max(320, Math.round(svg.clientWidth || 1000)), H = 280, kiri = 56, kanan = 50, atasP = 28, bawah = 34;
+                svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+                const lebarTeks = t => t.length * 6.6;
+                const tulis = (x, y, t, kelas, putar) => svg.appendChild(el('text', {x, y, 'text-anchor': putar ? 'start' : 'middle', class: kelas + ' halo',
+                    ...(putar ? {transform: `rotate(-90 ${x} ${y})`, 'dominant-baseline': 'middle'} : {})}, t));
                 const lebar = W - kiri - kanan, tinggi = H - atasP - bawah, n = label.length;
                 const maksB = atas(Math.max(1, ...batang.flatMap(s => s.nilai)));
                 const r = rasio.filter(v => v !== null);
@@ -152,6 +161,7 @@
                     svg.appendChild(el('text', {x: W - kanan + 6, y: y + 4}, fmt(maksR * g / 4, 1)));
                 }
                 const slot = lebar / n, lb = Math.min(46, slot * 0.7) / batang.length;
+                const puncak = []; // y teratas tulisan angka batang per bulan (untuk menghindari tabrakan dengan angka rasio)
                 label.forEach((t, i) => {
                     const x0 = kiri + slot * i + (slot - lb * batang.length) / 2;
                     batang.forEach((s, j) => {
@@ -159,6 +169,19 @@
                         const rect = el('rect', {x: x0 + lb * j, y: atasP + tinggi - h, width: Math.max(lb - 2, 1), height: h, class: s.kelas});
                         rect.appendChild(el('title', {}, `${t}: ${s.nama} ${fmt(s.asli ? s.asli[i] : s.nilai[i], 1)}`));
                         svg.appendChild(rect);
+                        const v = s.asli ? s.asli[i] : s.nilai[i];
+                        if (!s.angka || !v) return;
+                        const teks = fmt(v, 1), cx = x0 + lb * j + Math.max(lb - 2, 1) / 2, yb = atasP + tinggi - h;
+                        if (lebarTeks(teks) <= slot - 4) {
+                            tulis(cx, yb - 5, teks, 'nilai');
+                            puncak[i] = yb - 16;
+                        } else if (h >= lebarTeks(teks) + 8) {
+                            tulis(cx, yb + 5, teks, 'nilai', true); // batang sempit: tulisan tegak di dalam batang
+                            puncak[i] = yb;
+                        } else {
+                            tulis(cx, yb - 4, teks, 'nilai', true);
+                            puncak[i] = yb - lebarTeks(teks) - 6;
+                        }
                     });
                     if (n <= 13 || i % Math.ceil(n / 12) === 0) svg.appendChild(el('text', {x: kiri + slot * (i + .5), y: H - 12, 'text-anchor': 'middle'}, t));
                 });
@@ -170,11 +193,18 @@
                     const c = el('circle', {cx: x, cy: y, r: 4, class: 'titik'});
                     c.appendChild(el('title', {}, `${label[i]}: ${fmt(v, 2)} L/jam`));
                     svg.appendChild(c);
+                    // Angka rasio di atas titik; pindah ke bawah titik bila menabrak angka liter atau terlalu dekat tepi atas.
+                    const yAtas = y - 9, bentrok = puncak[i] !== undefined && yAtas > puncak[i] - 2 && yAtas - 12 < puncak[i] + 16;
+                    tulis(x, bentrok || yAtas < 14 ? y + 17 : yAtas, fmt(v, 2), 'nilai-rasio');
                 });
                 svg.insertBefore(el('path', {d, class: 'garis-rasio'}), svg.querySelector('circle'));
             };
+            let jedaUkur;
+            window.addEventListener('resize', () => { clearTimeout(jedaUkur); jedaUkur = setTimeout(() => document.querySelectorAll('svg.grafik').forEach(g => {
+                if (g._isi && g.clientWidth) gambar(g, ...g._isi);
+            }), 150); });
 
-            gambar(document.getElementById('grafik-total'), BULAN, [{nama: 'Solar keluar (L)', kelas: 'batang', nilai: TOTAL.map(t => t.l)}], TOTAL.map(t => t.r));
+            gambar(document.getElementById('grafik-total'), BULAN, [{nama: 'Solar keluar (L)', kelas: 'batang', angka: true, nilai: TOTAL.map(t => t.l)}], TOTAL.map(t => t.r));
 
             // Grafik mini rasio per bulan di tabel per alat.
             document.querySelectorAll('svg[data-mini]').forEach(svg => {
@@ -198,7 +228,7 @@
                 document.getElementById('nama-alat').textContent = a.unit;
                 document.getElementById('median-alat').textContent = a.median ? `· median ${fmt(a.median, 2)} L/jam` : '';
                 gambar(document.getElementById('grafik-alat'), BULAN, [
-                    {nama: 'Solar keluar (L)', kelas: 'batang', nilai: b.map(x => x.l)},
+                    {nama: 'Solar keluar (L)', kelas: 'batang', angka: true, nilai: b.map(x => x.l)},
                     {nama: 'Jam HM', kelas: 'batang2', nilai: b.map(x => x.h * 10), asli: b.map(x => x.h)},
                 ], b.map(x => x.r));
                 detail.scrollIntoView({behavior: 'smooth', block: 'nearest'});
