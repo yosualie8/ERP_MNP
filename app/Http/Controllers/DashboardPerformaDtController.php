@@ -12,7 +12,8 @@ use Illuminate\View\View;
 
 /**
  * Dashboard → Performa DT (owner 30 Okt 2026): laba rugi per dump truck = Harga Jual rit (lembar Ritasi) − biaya langsung truk
- * (Monitoring Biaya DT). Per DT, per bulan, dan rincian satu truk. Lihat App\Support\LabaRugiDt.
+ * (Monitoring Biaya DT + transfer BCA ber-DT). Grid master per DT; baris dibuka → rincian (pendapatan per proyek, pengeluaran per
+ * kategori, semua transaksi biaya) dimuat lewat rinci(). Lihat App\Support\LabaRugiDt.
  */
 class DashboardPerformaDtController extends Controller
 {
@@ -47,9 +48,17 @@ class DashboardPerformaDtController extends Controller
             'tanpa_harga' => (int) $truk->sum('tanpa_harga'), 'perkiraan' => (int) $truk->sum('perkiraan'),
         ];
 
-        $mobil = NomorMobil::rapikan($request->query('mobil'));
-        $rinci = $mobil ? $truk->firstWhere('mobil', $mobil) : null;
+        return view('dashboard.performa-dt', compact('bulan', 'truk', 'perBulan', 'ringkas') + ['periode' => $p]);
+    }
 
-        return view('dashboard.performa-dt', compact('p', 'bulan', 'truk', 'perBulan', 'ringkas', 'rinci') + ['periode' => $p]);
+    /** Rincian satu DT (potongan HTML untuk baris yang dibuka): ?mobil=DT 026 + periode. */
+    public function rinci(Request $request): View
+    {
+        $p = Periode::dari($request, LabaRugiDt::bulanAda());
+        $mobil = NomorMobil::rapikan($request->query('mobil'));
+        $t = $mobil ? LabaRugiDt::perTruk($p->awal(), $p->akhir())->get($mobil) : null;
+        abort_unless($t, 404);
+
+        return view('dashboard.performa-dt-rinci', ['t' => $t] + LabaRugiDt::rinci($mobil, $p->awal(), $p->akhir()));
     }
 }
