@@ -70,17 +70,20 @@ class RitasiController extends Controller
     /**
      * Monitor Ritasi → simpan bongkar: admin mengisi Tanggal Bongkar, Tujuan Bongkar (tahap), Jenis Tanah & No Surat Jalan dari
      * surat jalan untuk DO yang belum bongkar; tiap baris yang diisi menjadi satu rit (jalur & validasi sama dengan Input Ritasi).
-     * Truk, driver & jenis dari Kas UJ; jenis buangan "Ritasi"; pemilik & plat dari rit terakhir truk; harga jual dari riwayat.
+     * Truk, driver & jenis dari Kas UJ; jenis buangan "Ritasi"; pemilik dari Excel (kolom Pemilik) atau rit terakhir truk; plat dari rit
+     * terakhir truk; harga jual dari riwayat. Rit truk mitra dari upload Excel (mitra[]) ikut disimpan tanpa DO (owner 31 Okt 2026).
      */
     public function simpanBongkar(Request $request): RedirectResponse
     {
-        $data = $request->validate(['bongkar' => ['required', 'array'], 'bongkar.*' => ['array']]);
+        $data = $request->validate(['bongkar' => ['nullable', 'array'], 'bongkar.*' => ['array'], 'mitra' => ['nullable', 'array'], 'mitra.*' => ['array']]);
         $rapi = fn ($v) => ($v = trim(preg_replace('/\s+/', ' ', (string) $v))) === '' ? null : $v;
-        $isian = collect($data['bongkar'])->map(fn ($b) => collect(['tanggal', 'jam', 'tahap', 'galian', 'jenis_tanah', 'no_seri', 'keterangan', 'konfirmasi', 'kubikasi'])
+        $isian = collect($data['bongkar'] ?? [])->map(fn ($b) => collect(['tanggal', 'jam', 'tahap', 'galian', 'jenis_tanah', 'no_seri', 'keterangan', 'konfirmasi', 'kubikasi', 'pemilik'])
             ->mapWithKeys(fn ($k) => [$k => $rapi($b[$k] ?? null)])->all())
             // Baris yang tidak diisi sama sekali dilewati (galian terisi otomatis, jadi tidak dihitung). Jam bongkar tidak wajib.
             ->filter(fn ($b) => $b['tanggal'] || $b['jam'] || $b['tahap'] || $b['jenis_tanah'] || $b['no_seri'] || $b['keterangan']);
-        if ($isian->isEmpty()) {
+        $mitra = collect($data['mitra'] ?? [])->map(fn ($b) => collect(['plat', 'pemilik', 'tanggal', 'jam', 'tahap', 'galian', 'jenis_tanah', 'no_seri', 'keterangan', 'kubikasi'])
+            ->mapWithKeys(fn ($k) => [$k => $rapi($b[$k] ?? null)])->all())->filter(fn ($b) => $b['no_seri'] || $b['plat'])->values();
+        if ($isian->isEmpty() && $mitra->isEmpty()) {
             return back()->with('error', 'Belum ada DO yang diisi data bongkarnya.');
         }
         $kurang = [];
@@ -100,6 +103,14 @@ class RitasiController extends Controller
                 $kurang["bongkar.{$do}"] = "DO {$do}: ".implode('; ', array_filter([$kosong ? implode(', ', $kosong).' belum diisi' : null, ...$salah])).'.';
             }
         }
+        foreach ($mitra as $i => $b) {
+            $kosong = array_keys(array_filter(['Pemilik' => $b['pemilik'], 'No Mobil (plat)' => $b['plat'], 'Tanggal Bongkar' => $b['tanggal'], 'Tujuan Bongkar' => $b['tahap'],
+                'Jenis Tanah' => $b['jenis_tanah'], 'No Surat Jalan' => $b['no_seri']], fn ($v) => ! $v));
+            $tgl = $b['tanggal'] ? self::tanggal($b['tanggal']) : null;
+            if ($kosong || ($b['tanggal'] && (! $tgl || $tgl->isAfter(today())))) {
+                $kurang["mitra.{$i}"] = "Truk mitra {$b['plat']} (SJ {$b['no_seri']}): ".($kosong ? implode(', ', $kosong).' belum diisi' : 'Tanggal Bongkar tidak sah').'.';
+            }
+        }
         if ($kurang) {
             return back()->withInput()->withErrors($kurang);
         }
@@ -113,7 +124,7 @@ class RitasiController extends Controller
             $do = $urutDo[$i];
             $uj = $dariUj[LembarRitasi::kunciAngka($do)] ?? [];
             $info = $dt[$uj['no_lambung'] ?? ''] ?? [];
-            $pemilik = $info['pemilik'] ?? 'MNP';
+            $pemilik = $b['pemilik'] ?: ($info['pemilik'] ?? 'MNP');
 
             return [
                 'tanggal' => $b['tanggal'], 'jam' => $b['jam'], 'tahap' => $b['tahap'], 'galian' => $b['galian'], 'jenis_buangan' => 'Ritasi', 'jenis_tanah' => $b['jenis_tanah'],
@@ -123,13 +134,22 @@ class RitasiController extends Controller
                 // Kubikasi dari form/Excel; kosong = standar jenis kendaraan (diisi di rapikan()).
                 'kubikasi' => $b['kubikasi'] === null ? '' : (string) UnggahBongkar::kubik($b['kubikasi']),
             ];
-        })->all();
+        })->concat($mitra->map(fn ($b) => [
+            // Truk mitra: tanpa DO / uang jalan MNP; No Lambung, driver & jenis kosong (seperti rit mitra lain), plat dari Excel.
+            'tanggal' => $b['tanggal'], 'jam' => $b['jam'], 'tahap' => $b['tahap'], 'galian' => $b['galian'], 'jenis_buangan' => 'Ritasi', 'jenis_tanah' => $b['jenis_tanah'],
+            'no_seri' => $b['no_seri'], 'plat' => $b['plat'], 'no_lambung' => null, 'driver' => null, 'jenis_kendaraan' => null, 'pemilik' => $b['pemilik'], 'no_do' => null,
+            'harga_jual' => (string) (self::cariHarga($harga, $b['tahap'], $b['galian'], null, $b['pemilik']) ?? ''), 'keterangan' => $b['keterangan'], 'konfirmasi' => null,
+            'kubikasi' => $b['kubikasi'] === null ? '' : (string) UnggahBongkar::kubik($b['kubikasi']),
+        ]))->values()->all();
         [$rit, $uj] = $this->rapikan(new Request(['rit' => $baris]), false);
         $rit = array_values($rit);
-        $keDo = fn (int $i) => 'DO '.$urutDo[$i];
+        // Label & kunci galat per baris: DO (truk MNP) atau surat jalan truk mitra.
+        $nDo = count($urutDo);
+        $keDo = fn (int $i) => $i < $nDo ? 'DO '.$urutDo[$i] : 'Truk mitra '.$mitra[$i - $nDo]['plat'].' (SJ '.$mitra[$i - $nDo]['no_seri'].')';
+        $kunci = fn (int $i) => $i < $nDo ? "bongkar.{$urutDo[$i]}" : 'mitra.'.($i - $nDo);
         $pesan = [];
         foreach (ValidasiRitasi::galat($rit, $uj, null) as $i => $daftar) {
-            $pesan["bongkar.{$urutDo[$i]}"] = $keDo($i).': '.implode(' ', $daftar);
+            $pesan[$kunci($i)] = $keDo($i).': '.implode(' ', $daftar);
         }
         if ($pesan) {
             return back()->withInput()->withErrors($pesan);
@@ -137,7 +157,7 @@ class RitasiController extends Controller
         $temuan = ValidasiRitasi::periksa($rit);
         foreach ($temuan as $i => $daftar) {
             if (mb_strlen((string) $rit[$i]['konfirmasi']) < self::MIN_KONFIRMASI) {
-                $pesan["konfirmasi.{$urutDo[$i]}"] = $keDo($i).': '.collect($daftar)->pluck('pesan')->implode(' ').' — tulis konfirmasi (min. '.self::MIN_KONFIRMASI.' karakter) di baris DO itu.';
+                $pesan[$i < $nDo ? "konfirmasi.{$urutDo[$i]}" : 'mitra.'.($i - $nDo)] = $keDo($i).': '.collect($daftar)->pluck('pesan')->implode(' ').' — tulis konfirmasi (min. '.self::MIN_KONFIRMASI.' karakter) di baris DO itu.';
             }
         }
         if ($pesan) {
@@ -151,13 +171,14 @@ class RitasiController extends Controller
             return back()->withInput()->with('error', 'Gagal menulis ke sheet: '.$e->getMessage());
         }
         $this->catatTemuan($temuan, $rit, $request->user()->id);
-        $ringkas = count($rit).' rit dari Monitor Ritasi · DO '.implode(', ', $urutDo);
+        $ringkas = count($rit).' rit dari Monitor Ritasi'.($urutDo ? ' · DO '.implode(', ', $urutDo) : '')
+            .($mitra->isNotEmpty() ? ' · '.$mitra->count().' rit truk mitra ('.$mitra->pluck('pemilik')->unique()->implode(', ').')' : '');
         KasRiwayat::create(['aksi' => 'rit-tambah', 'lembar' => 'Ritasi', 'baris_awal' => $hasil['baris_awal'], 'baris_akhir' => $hasil['baris_akhir'],
             'ringkasan' => mb_strimwidth($ringkas, 0, 490, '…'), 'isi' => ['rit' => self::untukRiwayat($rit)], 'user_id' => $request->user()->id]);
-        $tanpaHarga = collect($rit)->filter(fn ($r) => ! $r['harga_jual'])->pluck('no_do');
+        $tanpaHarga = collect($rit)->keys()->filter(fn ($i) => ! $rit[$i]['harga_jual'])->map($keDo);
 
         return back()->with('success', 'Tercatat bongkar & ditulis ke sheet Ritasi baris '.$hasil['baris_awal'].'–'.$hasil['baris_akhir'].': '.$ringkas.'.'
-            .($tanpaHarga->isNotEmpty() ? ' Harga jual belum ditemukan dari riwayat untuk DO '.$tanpaHarga->implode(', ').' — lengkapi lewat menu Ritasi → Edit.' : ''));
+            .($tanpaHarga->isNotEmpty() ? ' Harga jual belum ditemukan dari riwayat untuk '.$tanpaHarga->implode(', ').' — lengkapi lewat menu Ritasi → Edit.' : ''));
     }
 
     /**
@@ -184,14 +205,16 @@ class RitasiController extends Controller
         }
         $nama = $request->file('berkas')->getClientOriginalName();
         KasRiwayat::create(['aksi' => 'rit-unggah', 'lembar' => 'Ritasi', 'baris_awal' => 0, 'baris_akhir' => 0, 'user_id' => $request->user()->id,
-            'ringkasan' => mb_strimwidth("Upload surat jalan \"{$nama}\": ".count($sj).' surat jalan, '.count($hasil['isian']).' DO terisi (belum disimpan)', 0, 490, '…'),
+            'ringkasan' => mb_strimwidth("Upload surat jalan \"{$nama}\": ".count($sj).' surat jalan, '.count($hasil['isian']).' DO terisi'
+                .($hasil['mitra'] ? ', '.count($hasil['mitra']).' rit truk mitra' : '').' (belum disimpan)', 0, 490, '…'),
             'isi' => ['file' => $nama, 'per_dt' => collect($hasil['per_dt'])->map(fn ($d) => ['dt' => $d['dt'], 'sj' => $d['sj'], 'do_belum' => $d['do_belum'],
                 'galat' => $d['galat'], 'pasangan' => collect($d['pasangan'])->map(fn ($p) => $p['no_seri'].' → DO '.$p['do'])->all()])->all()]]);
 
         // Isian dikirim sebagai old input form bongkar; laporan per DT untuk ditinjau.
         return redirect()->route('ritasi.monitor', ['unggah' => 1])
-            ->withInput(['bongkar' => $hasil['isian']])
-            ->with('unggah_bongkar', ['file' => $nama, 'jumlah' => count($sj), 'per_dt' => $hasil['per_dt'], 'do' => array_map('strval', array_keys($hasil['isian']))]);
+            ->withInput(['bongkar' => $hasil['isian'], 'mitra' => $hasil['mitra']])
+            ->with('unggah_bongkar', ['file' => $nama, 'jumlah' => count($sj), 'per_dt' => $hasil['per_dt'], 'do' => array_map('strval', array_keys($hasil['isian'])),
+                'mitra' => count($hasil['mitra'])]);
     }
 
     /**

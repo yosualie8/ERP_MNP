@@ -14,6 +14,8 @@ use RuntimeException;
  * Upload Excel surat jalan di Monitor Ritasi: tiap baris = satu surat jalan (No Mobil/DT, tanggal & jam bongkar, tujuan,
  * jenis tanah, No Surat Jalan). Surat jalan dipasangkan ke DO belum bongkar milik DT yang sama; jumlah surat jalan suatu DT
  * tidak boleh melebihi jumlah DO belum bongkarnya. Hasilnya hanya mengisi form — admin tetap meninjau lalu Simpan bongkar.
+ * Kolom Pemilik (owner 31 Okt 2026): baris truk mitra (pemilik selain MNP, mis. "Mbah Ranto") tidak punya DO / uang jalan MNP —
+ * No Mobil-nya plat nomor, tidak dipasangkan ke DO, langsung menjadi rit tanpa DO dengan pemilik itu.
  */
 class UnggahBongkar
 {
@@ -27,13 +29,14 @@ class UnggahBongkar
         'no_seri' => ['no surat jalan', 'nomor surat jalan', 'no sj', 'surat jalan', 'no seri'],
         'galian' => ['galian'],
         'kubikasi' => ['kubikasi', 'kubikasi (m3)', 'kubikasi (m³)', 'kubikasi m3', 'kubik', 'volume', 'm3', 'm³'],
+        'pemilik' => ['pemilik', 'nama pemilik', 'pemilik truk', 'pemilik kendaraan'],
         'keterangan' => ['keterangan', 'catatan'],
     ];
 
     /** DO yang UJ-nya lebih dari sekian hari sebelum bongkar dianggap tertinggal lama (dipakai terakhir, ditandai). */
     public const HARI_LAMA = 30;
 
-    public const JUDUL_TEMPLAT = ['No Mobil', 'Tanggal Bongkar', 'Jam Bongkar', 'Tujuan Bongkar', 'Jenis Tanah', 'No Surat Jalan', 'Galian', 'Kubikasi', 'Keterangan'];
+    public const JUDUL_TEMPLAT = ['No Mobil', 'Tanggal Bongkar', 'Jam Bongkar', 'Tujuan Bongkar', 'Jenis Tanah', 'No Surat Jalan', 'Galian', 'Kubikasi', 'Pemilik', 'Keterangan'];
 
     /** @return array<int, array> baris surat jalan (baris = nomor baris Excel) */
     public static function baca(UploadedFile $file): array
@@ -101,6 +104,8 @@ class UnggahBongkar
                 'keterangan' => $teks('keterangan'),
                 // Kubikasi (m³) dari Excel; kosong = standar jenis kendaraan saat disimpan.
                 'kubikasi' => self::kubik($sel('kubikasi')), 'kubikasi_asli' => $teks('kubikasi'),
+                // Kosong = MNP (truk sendiri).
+                'pemilik' => $teks('pemilik'),
             ];
         }
 
@@ -114,7 +119,9 @@ class UnggahBongkar
      * Lalu dipasangkan urut waktu: surat jalan paling awal ↔ DO paling awal.
      *
      * @param  Collection<int, array>  $belum  DO belum bongkar (MonitorRitasi::belumBongkar)
-     * @return array{isian: array<string, array>, per_dt: array<int, array>, galat: string[]}
+     * Truk mitra (pemilik selain MNP) tidak dipasangkan ke DO: dikembalikan di "mitra" (No Mobil = plat).
+     *
+     * @return array{isian: array<string, array>, mitra: array<int, array>, per_dt: array<int, array>, galat: string[]}
      */
     public static function cocokkan(array $sj, Collection $belum): array
     {
@@ -123,9 +130,12 @@ class UnggahBongkar
         $galat = [];
 
         foreach ($sj as $s) {
+            $mnp = ValidasiRitasi::milikMnp($s['pemilik'] ?? null);
             $salah = array_filter([
-                // Wajib nomor DT — plat nomor sering berganti antar truk sehingga tidak dipakai untuk mencocokkan.
-                ! $s['dt'] ? 'No Mobil kosong' : (preg_match('/^DT \d{3}$/', $s['dt']) ? null : "No Mobil \"{$s['dt']}\" bukan nomor DT — tulis nomor DT (mis. DT 027), bukan plat nomor"),
+                // Truk MNP wajib nomor DT — plat nomor sering berganti antar truk sehingga tidak dipakai untuk mencocokkan.
+                // Truk mitra: No Mobil = plat nomornya.
+                ! $s['dt'] ? 'No Mobil kosong' : (! $mnp || preg_match('/^DT \d{3}$/', $s['dt']) ? null
+                    : "No Mobil \"{$s['dt']}\" bukan nomor DT — tulis nomor DT (mis. DT 027), bukan plat nomor; bila truk mitra, isi kolom Pemilik dengan nama pemiliknya"),
                 $s['tanggal'] ? null : ($s['tanggal_asli'] !== '' ? "Tanggal Bongkar \"{$s['tanggal_asli']}\" tidak dikenali" : 'Tanggal Bongkar kosong'),
                 $s['tanggal']?->isAfter(today()) ? 'Tanggal Bongkar sesudah hari ini' : null,
                 $s['tahap'] ? null : 'Tujuan Bongkar kosong',
@@ -138,15 +148,24 @@ class UnggahBongkar
             }
         }
         if ($galat) {
-            return ['isian' => [], 'per_dt' => [], 'galat' => $galat];
+            return ['isian' => [], 'mitra' => [], 'per_dt' => [], 'galat' => $galat];
         }
         $duplikat = collect($sj)->groupBy(fn ($s) => mb_strtolower($s['tahap']).'|'.LembarRitasi::kunciAngka($s['no_seri']))->filter(fn ($g) => $g->count() > 1);
         foreach ($duplikat as $g) {
             $galat[] = 'No Surat Jalan '.$g->first()['no_seri'].' ('.$g->first()['tahap'].') tertulis '.$g->count().'× (baris '.$g->pluck('baris')->implode(', ').').';
         }
         if ($galat) {
-            return ['isian' => [], 'per_dt' => [], 'galat' => $galat];
+            return ['isian' => [], 'mitra' => [], 'per_dt' => [], 'galat' => $galat];
         }
+
+        // Truk mitra langsung jadi rit tanpa DO; sisanya (MNP) dipasangkan ke DO.
+        $kubikTeks = fn (?float $v) => $v === null ? null : rtrim(rtrim(number_format($v, 2, ',', ''), '0'), ',');
+        $mitra = collect($sj)->reject(fn ($s) => ValidasiRitasi::milikMnp($s['pemilik'] ?? null))
+            ->sortBy(fn ($s) => $s['tanggal']->format('Ymd').($s['jam'] ? str_pad($s['jam'], 8, '0', STR_PAD_LEFT) : '99:99').$s['no_seri'])
+            ->map(fn ($s) => ['plat' => $s['dt'], 'pemilik' => $s['pemilik'], 'tanggal' => $s['tanggal']->toDateString(), 'jam' => $s['jam'], 'tahap' => $s['tahap'],
+                'galian' => $s['galian'], 'jenis_tanah' => $s['jenis_tanah'], 'no_seri' => $s['no_seri'], 'keterangan' => $s['keterangan'], 'kubikasi' => $kubikTeks($s['kubikasi'])])
+            ->values()->all();
+        $sj = array_values(array_filter($sj, fn ($s) => ValidasiRitasi::milikMnp($s['pemilik'] ?? null)));
 
         // Per DT + galian: surat jalan hanya dipasangkan ke DO DT itu yang galiannya sama (galian DO = tempat di keterangan UJ-nya).
         // Surat jalan tanpa galian di Excel dipasangkan ke semua DO DT itu (diproses terakhir, DO yang sudah terpakai tidak diulang).
@@ -194,7 +213,7 @@ class UnggahBongkar
                 $isian[$d['do']] = [
                     'tanggal' => $s['tanggal']->toDateString(), 'jam' => $s['jam'], 'tahap' => $s['tahap'], 'galian' => $s['galian'],
                     'jenis_tanah' => $s['jenis_tanah'], 'no_seri' => $s['no_seri'], 'keterangan' => $s['keterangan'],
-                    'kubikasi' => $s['kubikasi'] === null ? null : rtrim(rtrim(number_format($s['kubikasi'], 2, ',', ''), '0'), ','),
+                    'kubikasi' => $kubikTeks($s['kubikasi']), 'pemilik' => $s['pemilik'],
                 ];
                 // Galian wajib saat simpan: dari Excel, atau tebakan dari keterangan UJ DO itu.
                 $galian = $s['galian'] ?? self::galianDo($d);
@@ -215,7 +234,7 @@ class UnggahBongkar
             $perDt[] = $info;
         }
 
-        return ['isian' => $isian, 'per_dt' => $perDt, 'galat' => []];
+        return ['isian' => $isian, 'mitra' => $mitra, 'per_dt' => $perDt, 'galat' => []];
     }
 
     /** Angka kubikasi dari sel Excel (22 / 22,5 / "22.5" / "22 m3"); null bila kosong / bukan angka / di luar 0–100. */

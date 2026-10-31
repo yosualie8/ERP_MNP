@@ -111,7 +111,8 @@
                 {{-- Sesudah upload: batalkan baris Pengajuan UJ yang DO-nya tidak ada di data bongkar (owner 22 Okt 2026). --}}
                 @if (\App\Support\Fitur::pengajuanUj())<a href="{{ route('ritasi.monitor.sinkron') }}" class="tombol polos" style="padding: 6px 12px; margin-left: auto;" title="Bandingkan upload surat jalan dengan satu Pengajuan UJ, batalkan DO yang tidak bongkar">🔄 Sinkron dengan pengajuan</a>@endif
             </form>
-            <div class="redup" style="font-size: 12.5px; margin-top: 6px;">Kolom: No Mobil (<b>nomor DT</b>, mis. DT 027 — bukan plat nomor), Tanggal Bongkar, Jam Bongkar, Tujuan Bongkar, Jenis Tanah, No Surat Jalan, Galian (bila kosong ditebak dari keterangan UJ), <b>Kubikasi</b> (m³; bila kosong = kubikasi standar jenis kendaraan) &amp; Keterangan.
+            <div class="redup" style="font-size: 12.5px; margin-top: 6px;">Kolom: No Mobil (<b>nomor DT</b>, mis. DT 027 — bukan plat nomor), Tanggal Bongkar, Jam Bongkar, Tujuan Bongkar, Jenis Tanah, No Surat Jalan, Galian (bila kosong ditebak dari keterangan UJ), <b>Kubikasi</b> (m³; bila kosong = kubikasi standar jenis kendaraan), <b>Pemilik</b> (kosong / MNP = truk sendiri; nama pemilik lain = truk mitra, No Mobil diisi plat nomor) &amp; Keterangan.
+                Truk mitra tidak dipasangkan ke DO — langsung menjadi rit tanpa DO dengan pemilik itu.
                 Surat jalan tiap DT dipasangkan ke DO belum bongkar DT itu sesuai urutan waktu; jumlah surat jalan tidak boleh melebihi jumlah DO belum bongkarnya. Hasilnya hanya mengisi form di bawah — periksa dulu, lalu klik <b>Simpan bongkar</b>.</div>
             @if ($errors->unggah->any())
                 <div class="pesan galat" style="margin-top: 8px;"><b>Excel belum bisa dipakai:</b>
@@ -119,7 +120,7 @@
             @endif
             @if ($unggah)
                 <div style="margin-top: 10px;">
-                    <b>Hasil upload "{{ $unggah['file'] }}"</b>: {{ $unggah['jumlah'] }} surat jalan, {{ count($unggah['do']) }} DO terisi otomatis — <b>belum disimpan</b>.
+                    <b>Hasil upload "{{ $unggah['file'] }}"</b>: {{ $unggah['jumlah'] }} surat jalan, {{ count($unggah['do']) }} DO terisi otomatis{{ ($unggah['mitra'] ?? 0) ? ', '.$unggah['mitra'].' rit truk mitra (lihat tabel Truk mitra di bawah)' : '' }} — <b>belum disimpan</b>.
                     @if ($doUnggah !== null)<a href="{{ route('ritasi.monitor') }}" style="font-size: 13px;">Tampilkan semua DO</a>@endif
                     <table class="kas" style="margin-top: 6px; font-size: 13px;">
                         <thead><tr><th>DT · Galian</th><th class="angka">Surat jalan</th><th class="angka" title="DO belum bongkar DT itu dengan galian yang sama (galian DO dari keterangan UJ-nya)">DO belum bongkar (galian sama)</th><th>Pasangan (urut waktu)</th></tr></thead>
@@ -251,6 +252,38 @@
                     @endforelse
                 </table>
             </div>
+            {{-- Truk mitra dari upload Excel (kolom Pemilik selain MNP): rit tanpa DO, ikut tersimpan saat Simpan bongkar. --}}
+            @php($mitraLama = array_values(old('mitra', [])))
+            @if ($mitraLama)
+                <div class="kartu gulir" style="padding: 0;" id="kartu-mitra">
+                    <div style="padding: 12px 14px 4px;"><b>Truk mitra ({{ count($mitraLama) }} rit)</b>
+                        <span class="redup" style="font-size: 13px;">— dari kolom Pemilik di Excel; tanpa DO / uang jalan MNP. Ikut tersimpan saat <b>Simpan bongkar</b>.
+                            Hapus centang untuk tidak ikut menyimpan.</span></div>
+                    <table class="kas">
+                        <thead><tr><th>Simpan</th><th>Pemilik</th><th>Plat</th><th>Tanggal</th><th>Jam</th><th>Tujuan</th><th>Galian</th><th>Jenis Tanah</th><th>No Surat Jalan</th><th class="angka">Kubikasi</th><th>Keterangan</th></tr></thead>
+                        <tbody>
+                            @foreach ($mitraLama as $i => $m)
+                                <tr class="mitra" @if ($errors->has('mitra.'.$i)) style="outline: 1px solid #ff8a80;" @endif>
+                                    <td><input type="checkbox" class="pakai-mitra" checked>
+                                        @foreach (['plat', 'pemilik', 'tanggal', 'jam', 'tahap', 'galian', 'jenis_tanah', 'no_seri', 'keterangan', 'kubikasi'] as $f)
+                                            <input type="hidden" name="mitra[{{ $i }}][{{ $f }}]" value="{{ $m[$f] ?? '' }}">
+                                        @endforeach</td>
+                                    <td><b>{{ $m['pemilik'] ?? '' }}</b></td>
+                                    <td>{{ $m['plat'] ?? '' }}</td>
+                                    <td data-n="{{ $m['tanggal'] ?? '' }}">{{ ! empty($m['tanggal']) ? \Illuminate\Support\Carbon::parse($m['tanggal'])->translatedFormat('j M Y') : '' }}</td>
+                                    <td>{{ $m['jam'] ?? '' }}</td>
+                                    <td>{{ $m['tahap'] ?? '' }}</td>
+                                    <td>{{ $m['galian'] ?? '' }}</td>
+                                    <td>{{ $m['jenis_tanah'] ?? '' }}</td>
+                                    <td>{{ $m['no_seri'] ?? '' }}</td>
+                                    <td class="angka">{{ $m['kubikasi'] ?? '' }}</td>
+                                    <td>{{ $m['keterangan'] ?? '' }}</td>
+                                </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+            @endif
             <datalist id="saran-tahap">@foreach ($saran['tahap'] as $s)<option value="{{ $s }}">@endforeach</datalist>
             <datalist id="saran-tanah">@foreach ($saran['jenis_tanah'] as $s)<option value="{{ $s }}">@endforeach</datalist>
             <datalist id="saran-galian">@foreach ($saran['galian'] as $s)<option value="{{ $s }}">@endforeach</datalist>
@@ -482,13 +515,21 @@
                 tr.classList.toggle('diisi', t);
                 tr.classList.toggle('belum-lengkap', k);
             };
+            // Truk mitra (dari upload Excel): baris yang dicentang ikut disimpan; yang tidak dicentang isiannya dinonaktifkan.
+            const mitra = [...form.querySelectorAll('tr.mitra')];
+            const nMitra = () => mitra.filter(tr => tr.querySelector('.pakai-mitra').checked).length;
+            mitra.forEach(tr => tr.querySelector('.pakai-mitra').addEventListener('change', e => {
+                tr.querySelectorAll('input[type=hidden]').forEach(i => { i.disabled = !e.target.checked; });
+                tr.style.opacity = e.target.checked ? '' : '.45';
+            }));
             const ringkas = () => {
                 const isi = baris.filter(tr => status.get(tr)?.t);
                 const belum = isi.filter(tr => status.get(tr).k);
-                tombol.disabled = !isi.length || belum.length > 0;
-                info.textContent = !isi.length ? awal : belum.length
+                const m = nMitra(), teksMitra = m ? ` + ${m} rit truk mitra` : '';
+                tombol.disabled = (!isi.length && !m) || belum.length > 0;
+                info.textContent = !isi.length ? (m ? `${m} rit truk mitra siap disimpan.` : awal) : belum.length
                     ? `${isi.length} DO diisi · ${belum.length} belum lengkap (DO ${belum.map(tr => tr.dataset.do).join(', ')}) — lengkapi Tanggal, Tujuan, Galian, Jenis Tanah & No Surat Jalan.`
-                    : `${isi.length} DO siap disimpan sebagai bongkar: ${isi.map(tr => tr.dataset.do).join(', ')}.`;
+                    : `${isi.length} DO siap disimpan sebagai bongkar: ${isi.map(tr => tr.dataset.do).join(', ')}${teksMitra}.`;
             };
             const hitung = () => { baris.forEach(periksaBaris); ringkas(); };
             form.addEventListener('input', e => {
