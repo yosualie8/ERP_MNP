@@ -26,8 +26,11 @@ class LembarRitasi
     /** Nama tahap yang disatukan saat input / upload (owner 31 Okt 2026: Tujuan Bongkar "KIK" = "Proyek Industri Kendal"), kunci huruf kecil. */
     public const TAHAP_SAMA = ['kik' => 'Proyek Industri Kendal'];
 
-    /** Tahap yang No Seri dobelnya otomatis diberi akhiran -1, -2, … (owner 31 Okt 2026: nomor tiket loadscanner Kendal bisa sama dengan Jogja). */
-    public const SERI_BERAKHIRAN = ['proyek industri kendal'];
+    /**
+     * Tahap yang No Seri-nya boleh sama dengan rit PROYEK LAIN → otomatis diberi akhiran nama proyek (owner 31 Okt 2026: nomor tiket
+     * loadscanner Kendal bisa sama dengan Jogja). Kunci = tahap huruf kecil, nilai = akhiran.
+     */
+    public const SERI_BERAKHIRAN = ['proyek industri kendal' => 'Kendal'];
 
     public static function tahapBaku(?string $tahap): ?string
     {
@@ -35,37 +38,48 @@ class LembarRitasi
     }
 
     /**
-     * No Seri rit tahap SERI_BERAKHIRAN yang sudah dipakai (di data Ritasi tahap mana pun, atau rit sebelumnya di input yang sama)
-     * diberi akhiran berurutan: LS-2610-1489 → LS-2610-1489-1, lalu -2, dst. Rit tahap lain tidak diubah (tetap ditolak bila dobel).
+     * No Seri rit tahap SERI_BERAKHIRAN yang sudah dipakai rit PROYEK LAIN (di data Ritasi, atau rit lain di input yang sama) diberi
+     * akhiran nama proyek: LS-2610-1489 → LS-2610-1489-Kendal (bentrok lagi → -Kendal-2, dst.). Dobel dengan rit proyek yang SAMA
+     * tidak diubah — tetap ditolak validasi, karena biasanya tiket cetak ulang (rit yang sama tercatat dua kali).
      *
      * @param  array<int, array>  $rit
      * @return array{0: array<int, array>, 1: array<int, array{0: string, 1: string}>} rit & [indeks => [No Seri asal, No Seri baru]]
      */
     public static function akhiranSeri(array $rit): array
     {
-        $kena = fn ($r) => in_array(mb_strtolower(trim((string) ($r['tahap'] ?? ''))), self::SERI_BERAKHIRAN, true) && self::kunciAngka($r['no_seri'] ?? null);
-        $dasar = collect($rit)->filter($kena)->pluck('no_seri')->map(fn ($s) => trim((string) $s))->unique()->values();
+        $tahapKunci = fn ($t) => mb_strtolower(trim((string) self::tahapBaku($t)));
+        $akhiran = fn ($r) => self::kunciAngka($r['no_seri'] ?? null) ? (self::SERI_BERAKHIRAN[$tahapKunci($r['tahap'] ?? null)] ?? null) : null;
+        $dasar = collect($rit)->filter($akhiran)->pluck('no_seri')->map(fn ($s) => trim((string) $s))->unique()->values();
         if ($dasar->isEmpty()) {
             return [$rit, []];
         }
-        $dipakai = \App\Models\Ritasi::where(function ($q) use ($dasar) {
+        // No Seri terpakai (kunci → tahap-tahapnya), termasuk yang sudah berakhiran.
+        $dipakai = [];
+        foreach (\App\Models\Ritasi::where(function ($q) use ($dasar) {
             foreach ($dasar as $d) {
-                $q->orWhere('no_seri', $d)->orWhere('no_seri', 'like', str_replace(['%', '_'], ['\\%', '\\_'], $d).'-%');
+                $q->orWhere('no_seri', $d)->orWhere('no_seri', 'like', str_replace(['%', '_'], ['\%', '\_'], $d).'-%');
             }
-        })->pluck('no_seri')->map(fn ($s) => self::kunciAngka($s))->flip()->all();
-        $diInput = [];
+        })->get(['no_seri', 'tahap']) as $x) {
+            $dipakai[self::kunciAngka($x->no_seri)][] = $tahapKunci($x->tahap);
+        }
         $ubah = [];
         foreach ($rit as $i => $r) {
             $k = self::kunciAngka($r['no_seri'] ?? null);
-            if ($k && $kena($r) && (isset($dipakai[$k]) || isset($diInput[$k]))) {
+            $label = $akhiran($r);
+            $lain = array_diff($dipakai[$k] ?? [], [$tahapKunci($r['tahap'] ?? null)]);
+            // Hanya bila bentroknya dengan proyek lain dan tidak dengan proyek yang sama.
+            if ($k && $label && $lain && count($lain) === count($dipakai[$k])) {
                 $asal = trim((string) $r['no_seri']);
-                for ($n = 1; isset($dipakai[self::kunciAngka("{$asal}-{$n}")]) || isset($diInput[self::kunciAngka("{$asal}-{$n}")]); $n++);
-                $rit[$i]['no_seri'] = "{$asal}-{$n}";
-                $ubah[$i] = [$asal, $rit[$i]['no_seri']];
-                $k = self::kunciAngka($rit[$i]['no_seri']);
+                $baru = "{$asal}-{$label}";
+                for ($n = 2; isset($dipakai[self::kunciAngka($baru)]); $n++) {
+                    $baru = "{$asal}-{$label}-{$n}";
+                }
+                $rit[$i]['no_seri'] = $baru;
+                $ubah[$i] = [$asal, $baru];
+                $k = self::kunciAngka($baru);
             }
             if ($k) {
-                $diInput[$k] = true;
+                $dipakai[$k][] = $tahapKunci($r['tahap'] ?? null);
             }
         }
 

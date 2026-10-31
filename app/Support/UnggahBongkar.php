@@ -150,7 +150,7 @@ class UnggahBongkar
         if ($galat) {
             return ['isian' => [], 'mitra' => [], 'per_dt' => [], 'galat' => $galat];
         }
-        $duplikat = collect($sj)->reject(fn ($s) => in_array(mb_strtolower((string) $s['tahap']), LembarRitasi::SERI_BERAKHIRAN, true))->groupBy(fn ($s) => mb_strtolower($s['tahap']).'|'.LembarRitasi::kunciAngka($s['no_seri']))->filter(fn ($g) => $g->count() > 1);
+        $duplikat = collect($sj)->groupBy(fn ($s) => mb_strtolower($s['tahap']).'|'.LembarRitasi::kunciAngka($s['no_seri']))->filter(fn ($g) => $g->count() > 1);
         foreach ($duplikat as $g) {
             $galat[] = 'No Surat Jalan '.$g->first()['no_seri'].' ('.$g->first()['tahap'].') tertulis '.$g->count().'× (baris '.$g->pluck('baris')->implode(', ').').';
         }
