@@ -114,6 +114,9 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::post('/gaji-mingguan/hari', [\App\Http\Controllers\GajiMingguanController::class, 'hari'])->name('gaji-mingguan.hari');
     Route::post('/gaji-mingguan/um', [\App\Http\Controllers\GajiMingguanController::class, 'um'])->name('gaji-mingguan.um');
     Route::post('/gaji-mingguan/setujui', [\App\Http\Controllers\GajiMingguanController::class, 'setujuiSemua'])->name('gaji-mingguan.setujui');
+    Route::get('/potongan-muatan', [\App\Http\Controllers\PotonganMuatanController::class, 'index'])->name('potongan-muatan.index');
+    Route::post('/potongan-muatan/aturan', [\App\Http\Controllers\PotonganMuatanController::class, 'aturan'])->name('potongan-muatan.aturan');
+    Route::post('/potongan-muatan/catat', [\App\Http\Controllers\PotonganMuatanController::class, 'catat'])->name('potongan-muatan.catat');
     Route::get('/absen-mandor', [\App\Http\Controllers\AbsenMandorController::class, 'index'])->name('absen-mandor.index');
     Route::post('/absen-mandor', [\App\Http\Controllers\AbsenMandorController::class, 'simpan'])->name('absen-mandor.simpan');
     Route::post('/absen-mandor/tambah', [\App\Http\Controllers\AbsenMandorController::class, 'tambah'])->name('absen-mandor.tambah');

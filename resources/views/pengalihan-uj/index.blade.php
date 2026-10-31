@@ -79,6 +79,8 @@
                         'status' => $x->bongkar ? 'DO lama bongkar '.$tgl($x->bongkar->tanggal).' di '.($tahap[$x->tahap_bongkar]->nama ?? $x->bongkar->tahap).' → biaya proyek itu' : 'DO lama belum bongkar', 'p' => $x->p])
                     ->concat($s['kasbon_rows']->map(fn ($p) => ['tgl' => $p->tanggal, 'jenis' => 'Kasbon (Kas Harian)', 'id' => 'NO ID '.$p->kas_no_id, 'do' => null, 'ket' => $p->keterangan,
                         'proyek' => 'bukan biaya (piutang)', 'masuk' => $p->nominal, 'keluar' => null, 'status' => null, 'p' => $p]))
+                    ->concat($s['muatan_rows']->map(fn ($p) => ['tgl' => $p->tanggal, 'jenis' => 'Potongan muatan kurang', 'id' => null, 'do' => null, 'ket' => $p->keterangan,
+                        'proyek' => 'bukan biaya (dipotong dari sopir)', 'masuk' => $p->nominal, 'keluar' => null, 'status' => null, 'p' => $p]))
                     ->concat($s['settle_rows']->map(fn ($p) => ['tgl' => $p->tanggal, 'jenis' => 'Penyesuaian settle', 'id' => null, 'do' => null, 'ket' => $p->keterangan,
                         'proyek' => '—', 'masuk' => $p->nominal > 0 ? $p->nominal : null, 'keluar' => $p->nominal < 0 ? -$p->nominal : null, 'status' => null, 'p' => $p]))
                     ->concat($s['pakai_rows']->map(function ($p) use ($tahap, $kasUjDo) {

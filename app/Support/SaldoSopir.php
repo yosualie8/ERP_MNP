@@ -104,13 +104,15 @@ class SaldoSopir
             $pakai = $g->where('jenis', 'pakai')->values();
             $kasbon = $g->where('jenis', 'kasbon')->values();
             $settle = $g->where('jenis', 'settle')->values();
+            $muatan = $g->where('jenis', 'muatan')->values();
             $alih = (float) $baris->sum(fn ($x) => $x->p->nominal);
             $kasbonRp = (float) $kasbon->sum('nominal');
             $settleRp = (float) $settle->sum('nominal');
+            $muatanRp = (float) $muatan->sum('nominal');
             $terpakai = (float) $baris->filter(fn ($x) => $x->bongkar)->sum(fn ($x) => $x->p->nominal);
             $per = fn (array $jenis) => (float) $pakai->whereIn('peruntukan', $jenis)->sum('nominal');
             $pakaiRp = (float) $pakai->sum('nominal');
-            $saldo = round($alih + $kasbonRp + $settleRp - $terpakai - $pakaiRp, 2);
+            $saldo = round($alih + $kasbonRp + $settleRp + $muatanRp - $terpakai - $pakaiRp, 2);
 
             // Umur (FIFO): pemakaian menghabiskan utang tertua dulu (UJ jadi saldo & kasbon); yang tertua masih bersisa = awal masa tunggu.
             // Kasbon memang dicicil lama → bila yang tersisa kasbon, status "kasbon" (tanpa warna umur).
@@ -118,7 +120,7 @@ class SaldoSopir
             $sisaKasbon = false;
             if ($saldo > 0.5) {
                 $sisaPakai = $pakaiRp - (float) $settle->where('nominal', '<', 0)->sum('nominal');
-                $antre = $baris->reject(fn ($x) => $x->bongkar)->map(fn ($x) => $x->p)->concat($kasbon)->concat($settle->where('nominal', '>', 0))
+                $antre = $baris->reject(fn ($x) => $x->bongkar)->map(fn ($x) => $x->p)->concat($kasbon)->concat($muatan)->concat($settle->where('nominal', '>', 0))
                     ->sortBy(fn ($p) => $p->tanggal->format('Ymd').sprintf('%08d', $p->id));
                 foreach ($antre as $p) {
                     if ($sisaPakai + 0.5 >= $p->nominal) {
@@ -134,11 +136,11 @@ class SaldoSopir
             $umur = $sejak ? (int) $sejak->copy()->startOfDay()->diffInDays($hariIni) : null;
 
             return ['sopir' => (string) $sopir, 'mobil' => $g->pluck('no_mobil')->filter(fn ($m) => $m && $m !== '-')->reverse()->unique()->values()->all(),
-                'alih' => $alih, 'n_alih' => $baris->count(), 'kasbon' => $kasbonRp, 'settle' => $settleRp, 'terpakai_do' => $terpakai,
+                'alih' => $alih, 'n_alih' => $baris->count(), 'kasbon' => $kasbonRp, 'settle' => $settleRp, 'muatan' => $muatanRp, 'terpakai_do' => $terpakai,
                 'dipakai' => $per(['uj', 'mob', 'lain']), 'kembali' => $per(['kembali', 'gaji', 'sebelum']), 'hangus' => $per(['hangus']), 'pakai' => $pakaiRp, 'saldo' => $saldo,
                 'umur' => $umur, 'sejak' => $sejak,
                 'status' => $saldo <= 0.5 ? 'habis' : ($sisaKasbon ? 'kasbon' : ($umur > self::MERAH ? 'merah' : ($umur > self::KUNING ? 'kuning' : 'baru'))),
-                'uj' => $baris, 'kasbon_rows' => $kasbon, 'settle_rows' => $settle, 'pakai_rows' => $pakai, 'terakhir' => $g->max('tanggal')];
+                'uj' => $baris, 'kasbon_rows' => $kasbon, 'settle_rows' => $settle, 'muatan_rows' => $muatan, 'pakai_rows' => $pakai, 'terakhir' => $g->max('tanggal')];
         });
 
         return self::$cache = $hasil;
@@ -148,8 +150,8 @@ class SaldoSopir
     public static function kosong(string $sopir): array
     {
         return ['sopir' => $sopir, 'mobil' => array_values(array_filter([DaftarSopir::cari($sopir)['mobil'] ?? null])), 'alih' => 0.0, 'n_alih' => 0, 'kasbon' => 0.0,
-            'settle' => 0.0, 'terpakai_do' => 0.0, 'dipakai' => 0.0, 'kembali' => 0.0, 'hangus' => 0.0, 'pakai' => 0.0, 'saldo' => 0.0, 'umur' => null, 'sejak' => null,
-            'status' => 'habis', 'uj' => collect(), 'kasbon_rows' => collect(), 'settle_rows' => collect(), 'pakai_rows' => collect(), 'terakhir' => null];
+            'settle' => 0.0, 'muatan' => 0.0, 'terpakai_do' => 0.0, 'dipakai' => 0.0, 'kembali' => 0.0, 'hangus' => 0.0, 'pakai' => 0.0, 'saldo' => 0.0, 'umur' => null, 'sejak' => null,
+            'status' => 'habis', 'uj' => collect(), 'kasbon_rows' => collect(), 'settle_rows' => collect(), 'muatan_rows' => collect(), 'pakai_rows' => collect(), 'terakhir' => null];
     }
 
     /**
@@ -268,7 +270,7 @@ class SaldoSopir
             }
         }
         foreach ($buku->filter(fn ($p) => $p->tanggal->gt($batas)) as $p) {
-            if (in_array($p->jenis, ['kasbon', 'settle'], true)) {
+            if (in_array($p->jenis, ['kasbon', 'settle', 'muatan'], true)) {
                 $baris[] = ['tgl' => $p->tanggal, 'jenis' => UjPengalihan::JENIS[$p->jenis], 'id' => $p->kas_no_id ? 'NO ID '.$p->kas_no_id : null, 'do' => null, 'rute' => null, 'ket' => $p->keterangan,
                     'masuk' => $p->nominal > 0 ? (float) $p->nominal : null, 'keluar' => $p->nominal < 0 ? -(float) $p->nominal : null];
             } elseif ($p->jenis === 'pakai' && $p->peruntukan !== 'uj') {

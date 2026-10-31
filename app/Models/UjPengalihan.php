@@ -17,7 +17,9 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  *              Uang MOB / lain (biaya proyek tempat dipakai), potong gaji / UM, dikembalikan, sudah dicicil sebelum dicatat (bukan biaya),
  *              atau tidak kembali (dibebankan ke proyek);
  *  - settle  : penyesuaian sekali saat buku Hutang Supir di-settle (owner 30 Okt 2026, SaldoSopir::SETTLE) supaya utang sopir = rekap admin;
- *              nominal + menambah utang (selisih minus dicatat sebagai "pakai" tidak kembali, dibebankan ke proyek asal).
+ *              nominal + menambah utang (selisih minus dicatat sebagai "pakai" tidak kembali, dibebankan ke proyek asal);
+ *  - muatan  : potongan muatan kurang (owner 31 Okt 2026, App\Support\PotonganMuatan): rit ber-LS di bawah batas standar jenis truk →
+ *              utang sopir bertambah per hari bongkar, dicatat bertanggal hari berikutnya supaya terpotong dari uang jalan besoknya.
  */
 class UjPengalihan extends Model
 {
@@ -28,16 +30,17 @@ class UjPengalihan extends Model
 
     protected $casts = ['tanggal' => 'date', 'nominal' => 'float'];
 
-    public const JENIS = ['alih' => 'Jadi saldo sopir', 'kasbon' => 'Kasbon (Kas Harian)', 'kembali' => 'Dikembalikan', 'batal' => 'Batal (tidak bongkar)', 'pakai' => 'Saldo berkurang', 'settle' => 'Penyesuaian settle'];
+    public const JENIS = ['alih' => 'Jadi saldo sopir', 'kasbon' => 'Kasbon (Kas Harian)', 'kembali' => 'Dikembalikan', 'batal' => 'Batal (tidak bongkar)', 'pakai' => 'Saldo berkurang', 'settle' => 'Penyesuaian settle',
+        'muatan' => 'Potongan muatan kurang'];
 
     /** Jenis yang menutup UJ asalnya (tidak lagi "belum bongkar"). */
     public const MENUTUP = ['alih', 'kembali', 'batal'];
 
     /** Jenis yang menambah utang / saldo sopir. */
-    public const NAMBAH = ['alih', 'kasbon', 'settle'];
+    public const NAMBAH = ['alih', 'kasbon', 'settle', 'muatan'];
 
     /** Jenis yang tercatat di buku saldo / utang sopir (SaldoSopir::perSopir). */
-    public const BUKU = ['alih', 'kasbon', 'pakai', 'settle'];
+    public const BUKU = ['alih', 'kasbon', 'pakai', 'settle', 'muatan'];
 
     /** Cara utang / saldo sopir berkurang (jenis "pakai"). */
     public const PERUNTUKAN = [
