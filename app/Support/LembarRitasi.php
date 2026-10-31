@@ -23,6 +23,55 @@ class LembarRitasi
     /** Tahap yang Harga Jual-nya per m³ (owner 30 Okt 2026: Kendal & Jogja = kubikasi × Rp41.000), huruf kecil. */
     public const HARGA_PER_M3 = ['proyek industri kendal' => 41000, 'kik' => 41000, 'jogja' => 41000];
 
+    /** Nama tahap yang disatukan saat input / upload (owner 31 Okt 2026: Tujuan Bongkar "KIK" = "Proyek Industri Kendal"), kunci huruf kecil. */
+    public const TAHAP_SAMA = ['kik' => 'Proyek Industri Kendal'];
+
+    /** Tahap yang No Seri dobelnya otomatis diberi akhiran -1, -2, … (owner 31 Okt 2026: nomor tiket loadscanner Kendal bisa sama dengan Jogja). */
+    public const SERI_BERAKHIRAN = ['proyek industri kendal'];
+
+    public static function tahapBaku(?string $tahap): ?string
+    {
+        return $tahap === null ? null : (self::TAHAP_SAMA[mb_strtolower(trim($tahap))] ?? $tahap);
+    }
+
+    /**
+     * No Seri rit tahap SERI_BERAKHIRAN yang sudah dipakai (di data Ritasi tahap mana pun, atau rit sebelumnya di input yang sama)
+     * diberi akhiran berurutan: LS-2610-1489 → LS-2610-1489-1, lalu -2, dst. Rit tahap lain tidak diubah (tetap ditolak bila dobel).
+     *
+     * @param  array<int, array>  $rit
+     * @return array{0: array<int, array>, 1: array<int, array{0: string, 1: string}>} rit & [indeks => [No Seri asal, No Seri baru]]
+     */
+    public static function akhiranSeri(array $rit): array
+    {
+        $kena = fn ($r) => in_array(mb_strtolower(trim((string) ($r['tahap'] ?? ''))), self::SERI_BERAKHIRAN, true) && self::kunciAngka($r['no_seri'] ?? null);
+        $dasar = collect($rit)->filter($kena)->pluck('no_seri')->map(fn ($s) => trim((string) $s))->unique()->values();
+        if ($dasar->isEmpty()) {
+            return [$rit, []];
+        }
+        $dipakai = \App\Models\Ritasi::where(function ($q) use ($dasar) {
+            foreach ($dasar as $d) {
+                $q->orWhere('no_seri', $d)->orWhere('no_seri', 'like', str_replace(['%', '_'], ['\\%', '\\_'], $d).'-%');
+            }
+        })->pluck('no_seri')->map(fn ($s) => self::kunciAngka($s))->flip()->all();
+        $diInput = [];
+        $ubah = [];
+        foreach ($rit as $i => $r) {
+            $k = self::kunciAngka($r['no_seri'] ?? null);
+            if ($k && $kena($r) && (isset($dipakai[$k]) || isset($diInput[$k]))) {
+                $asal = trim((string) $r['no_seri']);
+                for ($n = 1; isset($dipakai[self::kunciAngka("{$asal}-{$n}")]) || isset($diInput[self::kunciAngka("{$asal}-{$n}")]); $n++);
+                $rit[$i]['no_seri'] = "{$asal}-{$n}";
+                $ubah[$i] = [$asal, $rit[$i]['no_seri']];
+                $k = self::kunciAngka($rit[$i]['no_seri']);
+            }
+            if ($k) {
+                $diInput[$k] = true;
+            }
+        }
+
+        return [$rit, $ubah];
+    }
+
     /** Harga Jual rit untuk tahap ber-harga per m³; null bila tahapnya per rit atau kubikasi belum ada. */
     public static function hargaPerM3(?string $tahap, ?float $kubikasi): ?int
     {

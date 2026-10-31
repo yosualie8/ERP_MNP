@@ -142,7 +142,7 @@ class RitasiController extends Controller
             'kubikasi' => $b['kubikasi'] === null ? '' : (string) UnggahBongkar::kubik($b['kubikasi']),
         ]))->values()->all();
         [$rit, $uj] = $this->rapikan(new Request(['rit' => $baris]), false);
-        $rit = array_values($rit);
+        [$rit, $akhiran] = LembarRitasi::akhiranSeri(array_values($rit));
         // Label & kunci galat per baris: DO (truk MNP) atau surat jalan truk mitra.
         $nDo = count($urutDo);
         $keDo = fn (int $i) => $i < $nDo ? 'DO '.$urutDo[$i] : 'Truk mitra '.$mitra[$i - $nDo]['plat'].' (SJ '.$mitra[$i - $nDo]['no_seri'].')';
@@ -172,7 +172,8 @@ class RitasiController extends Controller
         }
         $this->catatTemuan($temuan, $rit, $request->user()->id);
         $ringkas = count($rit).' rit dari Monitor Ritasi'.($urutDo ? ' · DO '.implode(', ', $urutDo) : '')
-            .($mitra->isNotEmpty() ? ' · '.$mitra->count().' rit truk mitra ('.$mitra->pluck('pemilik')->unique()->implode(', ').')' : '');
+            .($mitra->isNotEmpty() ? ' · '.$mitra->count().' rit truk mitra ('.$mitra->pluck('pemilik')->unique()->implode(', ').')' : '')
+            .($akhiran ? ' · No Seri dobel diberi akhiran: '.collect($akhiran)->map(fn ($x) => "{$x[0]} → {$x[1]}")->implode(', ') : '');
         KasRiwayat::create(['aksi' => 'rit-tambah', 'lembar' => 'Ritasi', 'baris_awal' => $hasil['baris_awal'], 'baris_akhir' => $hasil['baris_akhir'],
             'ringkasan' => mb_strimwidth($ringkas, 0, 490, '…'), 'isi' => ['rit' => self::untukRiwayat($rit)], 'user_id' => $request->user()->id]);
         $tanpaHarga = collect($rit)->keys()->filter(fn ($i) => ! $rit[$i]['harga_jual'])->map($keDo);
@@ -493,7 +494,7 @@ class RitasiController extends Controller
         $rit = [];
         foreach ((array) $request->input('rit', []) as $i => $r) {
             $baris = [
-                'tahap' => $rapi($r['tahap'] ?? null), 'tanggal' => self::tanggal($r['tanggal'] ?? null), 'galian' => $rapi($r['galian'] ?? null),
+                'tahap' => LembarRitasi::tahapBaku($rapi($r['tahap'] ?? null)), 'tanggal' => self::tanggal($r['tanggal'] ?? null), 'galian' => $rapi($r['galian'] ?? null),
                 'jenis_buangan' => $rapi($r['jenis_buangan'] ?? null), 'jenis_tanah' => $rapi($r['jenis_tanah'] ?? null),
                 'no_seri' => $rapi($r['no_seri'] ?? null), 'jam' => LembarRitasi::jam($rapi($r['jam'] ?? null)), 'no_lambung' => null,
                 'plat' => $rapi(strtoupper((string) ($r['plat'] ?? ''))), 'driver' => null, 'jenis_kendaraan' => null,
@@ -614,7 +615,7 @@ class RitasiController extends Controller
     {
         $request->validate($this->aturan(), self::PESAN);
         [$rit, $uj] = $this->rapikan($request, false);
-        $rit = array_values($rit);
+        [$rit, $akhiran] = LembarRitasi::akhiranSeri(array_values($rit));
         $temuan = $this->wajibKonfirmasi($rit, $uj, null);
         if ($temuan instanceof RedirectResponse) {
             return $temuan;
@@ -629,7 +630,8 @@ class RitasiController extends Controller
         $this->catatTemuan($temuan, $rit, $request->user()->id);
         $tgl = collect($rit)->pluck('tanggal')->sort()->values();
         $ringkas = count($rit).' rit · '.collect($rit)->pluck('tahap')->unique()->implode(', ').' · '.$tgl->first()->translatedFormat('j M Y')
-            .($tgl->last()->ne($tgl->first()) ? ' – '.$tgl->last()->translatedFormat('j M Y') : '');
+            .($tgl->last()->ne($tgl->first()) ? ' – '.$tgl->last()->translatedFormat('j M Y') : '')
+            .($akhiran ? ' · No Seri dobel diberi akhiran: '.collect($akhiran)->map(fn ($x) => "{$x[0]} → {$x[1]}")->implode(', ') : '');
         KasRiwayat::create(['aksi' => 'rit-tambah', 'lembar' => 'Ritasi', 'baris_awal' => $hasil['baris_awal'], 'baris_akhir' => $hasil['baris_akhir'],
             'ringkasan' => mb_strimwidth($ringkas, 0, 490, '…'), 'isi' => ['rit' => self::untukRiwayat($rit)], 'user_id' => $request->user()->id]);
 

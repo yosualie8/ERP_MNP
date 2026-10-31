@@ -97,7 +97,7 @@ class UnggahBongkar
                 'tanggal' => self::tanggal($sel('tanggal')),
                 'tanggal_asli' => is_scalar($sel('tanggal')) ? (string) $sel('tanggal') : ($sel('tanggal') instanceof \DateTimeInterface ? $sel('tanggal')->format('d/m/Y') : ''),
                 'jam' => self::jam($sel('jam')),
-                'tahap' => $teks('tahap'),
+                'tahap' => LembarRitasi::tahapBaku($teks('tahap')),
                 'jenis_tanah' => $teks('jenis_tanah'),
                 'no_seri' => is_float($sel('no_seri')) ? (string) (int) $sel('no_seri') : $teks('no_seri'),
                 'galian' => $teks('galian'),
@@ -150,7 +150,7 @@ class UnggahBongkar
         if ($galat) {
             return ['isian' => [], 'mitra' => [], 'per_dt' => [], 'galat' => $galat];
         }
-        $duplikat = collect($sj)->groupBy(fn ($s) => mb_strtolower($s['tahap']).'|'.LembarRitasi::kunciAngka($s['no_seri']))->filter(fn ($g) => $g->count() > 1);
+        $duplikat = collect($sj)->reject(fn ($s) => in_array(mb_strtolower((string) $s['tahap']), LembarRitasi::SERI_BERAKHIRAN, true))->groupBy(fn ($s) => mb_strtolower($s['tahap']).'|'.LembarRitasi::kunciAngka($s['no_seri']))->filter(fn ($g) => $g->count() > 1);
         foreach ($duplikat as $g) {
             $galat[] = 'No Surat Jalan '.$g->first()['no_seri'].' ('.$g->first()['tahap'].') tertulis '.$g->count().'× (baris '.$g->pluck('baris')->implode(', ').').';
         }
