@@ -47,7 +47,7 @@
                 <input name="sopir" list="daftar-sopir-buka" value="{{ $dipilih['sopir'] ?? '' }}" placeholder="ketik nama sopir" style="width: 260px;" autocomplete="off"></div>
             <button class="tombol" type="submit">Buka</button>
             <datalist id="daftar-sopir-buka">@foreach ($namaSopir ?? [] as $n)<option value="{{ $n }}">@endforeach</datalist>
-            <a href="{{ route('pengalihan-uj.unduh') }}" class="tombol polos" style="margin-left: auto;">⬇ Download Excel</a>
+            <a href="{{ route('pengalihan-uj.unduh') }}" class="tombol polos" style="margin-left: auto;">⬇ Download Excel semua sopir</a>
             <a href="{{ route('pengalihan-uj.index', ['tab' => 'saldo', 'tampil' => $semua ? null : 'semua']) }}" class="chip" style="margin: 0;">{{ $semua ? 'Hanya yang masih berhutang' : 'Tampilkan juga yang lunas' }}</a>
         </form>
 
@@ -72,35 +72,6 @@
         @if ($dipilih)
             @php
                 $s = $dipilih;
-                $kasUjDo ??= collect();
-                // Buku utang: ➕ nambah (UJ jadi saldo, kasbon) / ➖ potong (DO lama bongkar, pemakaian), urut tanggal, dengan sisa berjalan.
-                $buku = $s['uj']->map(fn ($x) => ['tgl' => $x->p->tanggal, 'jenis' => 'UJ tidak bongkar → saldo', 'id' => $x->p->id_uj, 'do' => $x->no_do, 'ket' => $x->u?->keterangan.($x->p->keterangan ? ' · '.$x->p->keterangan : ''),
-                        'proyek' => 'dari '.($x->p->dari?->nama ?? '?'), 'masuk' => $x->p->nominal, 'keluar' => $x->bongkar ? $x->p->nominal : null,
-                        'status' => $x->bongkar ? 'DO lama bongkar '.$tgl($x->bongkar->tanggal).' di '.($tahap[$x->tahap_bongkar]->nama ?? $x->bongkar->tahap).' → biaya proyek itu' : 'DO lama belum bongkar', 'p' => $x->p])
-                    ->concat($s['kasbon_rows']->map(fn ($p) => ['tgl' => $p->tanggal, 'jenis' => 'Kasbon (Kas Harian)', 'id' => 'NO ID '.$p->kas_no_id, 'do' => null, 'ket' => $p->keterangan,
-                        'proyek' => 'bukan biaya (piutang)', 'masuk' => $p->nominal, 'keluar' => null, 'status' => null, 'p' => $p]))
-                    ->concat($s['muatan_rows']->map(fn ($p) => ['tgl' => $p->tanggal, 'jenis' => 'Potongan muatan kurang', 'id' => null, 'do' => null, 'ket' => $p->keterangan,
-                        'proyek' => 'bukan biaya (dipotong dari sopir)', 'masuk' => $p->nominal, 'keluar' => null, 'status' => null, 'p' => $p]))
-                    ->concat($s['settle_rows']->map(fn ($p) => ['tgl' => $p->tanggal, 'jenis' => 'Penyesuaian settle', 'id' => null, 'do' => null, 'ket' => $p->keterangan,
-                        'proyek' => '—', 'masuk' => $p->nominal > 0 ? $p->nominal : null, 'keluar' => $p->nominal < 0 ? -$p->nominal : null, 'status' => null, 'p' => $p]))
-                    ->concat($s['pakai_rows']->map(function ($p) use ($tahap, $kasUjDo) {
-                        $sambung = $p->peruntukan === 'uj' ? ($kasUjDo[\App\Support\SaldoSopir::kunciDo($p->no_do)] ?? collect()) : collect();
-
-                        return ['tgl' => $p->tanggal, 'jenis' => \App\Models\UjPengalihan::PERUNTUKAN[$p->peruntukan] ?? 'Dipakai',
-                            'id' => $p->uj_pengajuan_detail_id ? \Illuminate\Support\Str::before((string) $p->keterangan, ' — ') : ($p->kas_no_id ? 'NO ID '.$p->kas_no_id : null),
-                            'do' => $p->no_do, 'ket' => $p->uj_pengajuan_detail_id ? \Illuminate\Support\Str::after((string) $p->keterangan, ' — ') : $p->keterangan,
-                            'proyek' => in_array($p->peruntukan, \App\Models\UjPengalihan::BUKAN_BIAYA, true) ? 'bukan biaya' : (($t = \App\Support\SaldoSopir::tahapPakai($p)) ? $tahap[$t]->nama ?? '?' : 'belum diketahui'),
-                            'masuk' => null, 'keluar' => $p->nominal,
-                            'status' => $sambung->isNotEmpty() ? 'Tersambung: '.$sambung->map(fn ($u) => $u->id_uj.' '.rp((int) $u->nominal))->implode(', ').' (Kas UJ) · total DO '.rp((int) ($sambung->sum('nominal') + $p->nominal)) : null,
-                            'p' => $p];
-                    }))
-                    ->sortBy(fn ($b) => $b['tgl']->format('Ymd').sprintf('%08d', $b['p']->id))->values();
-                $berjalan = 0;
-                $buku = $buku->map(function ($b) use (&$berjalan) {
-                    $berjalan += ($b['masuk'] ?? 0) - ($b['keluar'] ?? 0);
-
-                    return [...$b, 'sisa' => $berjalan];
-                });
                 $asalTertua = $s['uj']->first()?->p->dari_tahap_id;
                 $bisaPotong = $s['saldo'] > 0.5;
             @endphp
@@ -109,7 +80,8 @@
                 .arah-utang label { display: flex; gap: 6px; align-items: center; padding: 6px 12px; border: 1px solid var(--garis); border-radius: 8px; cursor: pointer; }
                 .arah-utang label:has(input:checked) { border-color: var(--aksen); background: var(--aksen-muda); font-weight: 700; }
                 .arah-utang label.mati { opacity: .5; cursor: not-allowed; }
-                td.nambah { color: var(--sukses); } td.potong { color: var(--merah); }
+                /* Owner 31 Okt 2026: Debit (utang bertambah) merah, Kredit (utang berkurang) hijau. */
+                td.debit { color: var(--merah); } td.kredit { color: var(--sukses); }
                 /* Grid isian seperti Input UJ: satu baris = satu transaksi. */
                 .grid-utang { padding: 6px 14px 14px; }
                 .grid-utang .petunjuk { font-size: 12px; color: var(--redup); margin: 0 0 6px; }
@@ -134,7 +106,8 @@
                     <b style="font-size: 17px; color: var(--aksen-terang);">Buku utang {{ $s['sopir'] }}</b>
                     <span class="redup" style="font-size: 13px;">Truk: {{ implode(', ', $s['mobil']) ?: '—' }}</span>
                     <span>Saldo akhir <b>{{ rp((int) $riwayat['akhir']) }}</b></span>
-                    <a href="{{ route('pengalihan-uj.index', ['tab' => 'saldo']) }}" class="redup" style="margin-left: auto; font-size: 13px;">Tutup ✕</a>
+                    <a href="{{ route('pengalihan-uj.unduh', ['sopir' => $s['sopir']]) }}" class="tombol polos" style="margin-left: auto; padding: 4px 12px;">⬇ Download Excel {{ $s['sopir'] }}</a>
+                    <a href="{{ route('pengalihan-uj.index', ['tab' => 'saldo']) }}" class="redup" style="font-size: 13px;">Tutup ✕</a>
                 </div>
                 @php
                     // Owner 30 Okt 2026: tanggal terbaru di atas, hanya 20 transaksi terakhir.
@@ -146,7 +119,7 @@
                         <tbody>
                             @foreach ($bukuTampil as $b)
                                 <tr class="t"><td data-n="{{ $b['tgl']->toDateString() }}">{{ $tgl($b['tgl']) }}</td><td>{{ \App\Support\SaldoSopir::ketBuku($b) }}</td>
-                                    <td class="angka">{{ $b['masuk'] ? rp((int) $b['masuk']) : '' }}</td><td class="angka">{{ $b['keluar'] ? rp((int) $b['keluar']) : '' }}</td>
+                                    <td class="angka debit">{{ $b['masuk'] ? rp((int) $b['masuk']) : '' }}</td><td class="angka kredit">{{ $b['keluar'] ? rp((int) $b['keluar']) : '' }}</td>
                                     <td class="angka" data-n="{{ (int) $b['sisa'] }}"><b>{{ rp((int) $b['sisa']) }}</b></td></tr>
                             @endforeach
                             @if ($riwayat['baris']->count() <= 20)
@@ -158,47 +131,6 @@
                     </table>
                 </div>
 
-                <details style="border-top: 1px solid var(--garis);">
-                    <summary style="padding: 10px 14px; cursor: pointer; font-size: 13px;" class="redup">Rincian untuk admin — UJ belum bongkar {{ rp((int) $belum->sum('rp')) }} · saldo di luar DO {{ rp((int) $s['saldo']) }}</summary>
-                <div style="padding: 12px 14px 6px; border-top: 1px solid var(--garis);"><b>UJ belum bongkar · {{ $belum->count() }} baris · {{ rp((int) $belum->sum('rp')) }}</b>
-                    <span class="redup" style="font-size: 12px;">— berkurang otomatis saat ritnya bongkar (DO tercatat di Ritasi). Truk pindah sebelum bongkar → <a href="{{ route('pengalihan-uj.index', ['tab' => 'pilih', 'cari' => $s['sopir']]) }}">jadikan saldo</a>.</span></div>
-                <div class="gulir">
-                    <table class="kas">
-                        <thead><tr><th>Tanggal UJ</th><th>ID UJ</th><th>No DO</th><th>DT</th><th>Keterangan</th><th>Proyek</th><th class="angka">Nominal</th><th>Umur</th></tr></thead>
-                        <tbody>
-                            @forelse ($belum as $u)
-                                <tr class="t"><td data-n="{{ $u->tgl?->toDateString() }}">{{ $tgl($u->tgl) }}</td><td>{{ $u->id_uj }}</td><td>{{ $u->do }}</td><td>{{ $u->mobil }}</td>
-                                    <td style="font-size: 12px;">{{ $u->ket }}</td><td>{{ $u->tahap }}</td><td class="angka">{{ rp((int) $u->rp) }}</td>
-                                    <td data-n="{{ $u->umur ?? -1 }}"><span class="label {{ ['merah' => 'merah', 'lewat' => 'kuning', 'wajar' => 'hijau'][$u->status] ?? '' }}">{{ $u->umur }} hari</span></td></tr>
-                            @empty
-                                <tr><td colspan="8" class="redup" style="padding: 12px 14px;">Tidak ada uang jalan {{ $s['sopir'] }} yang belum bongkar.</td></tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-
-                <div style="padding: 12px 14px 6px; border-top: 1px solid var(--garis);"><b>Saldo di luar DO · {{ rp((int) $s['saldo']) }}</b>
-                    <span class="redup" style="font-size: 12px;">— UJ yang tidak bongkar dijadikan saldo, kasbon, penyesuaian settle, dan potongannya.</span></div>
-                <div class="gulir">
-                    <table class="kas">
-                        <thead><tr><th>Tanggal</th><th>Jenis</th><th>ID UJ / Pengajuan / NO ID</th><th>No DO</th><th>Keterangan</th><th>Proyek</th><th class="angka">➕ Nambah utang</th><th class="angka">➖ Potong utang</th>
-                            <th class="angka">Sisa</th><th>Status</th><th data-tanpa-saring></th></tr></thead>
-                        <tbody>
-                            @forelse ($buku as $b)
-                                <tr class="t"><td data-n="{{ $b['tgl']->toDateString() }}">{{ $tgl($b['tgl']) }}</td><td>{{ $b['jenis'] }}</td><td>{{ $b['id'] }}</td><td>{{ $b['do'] }}</td>
-                                    <td style="font-size: 12px;">{{ $b['ket'] }}</td><td>{{ $b['proyek'] }}</td>
-                                    <td class="angka nambah">{{ $b['masuk'] ? rp((int) $b['masuk']) : '' }}</td><td class="angka potong">{{ $b['keluar'] ? rp((int) $b['keluar']) : '' }}</td>
-                                    <td class="angka" data-n="{{ (int) $b['sisa'] }}"><b>{{ rp((int) $b['sisa']) }}</b></td>
-                                    <td style="font-size: 12px;">{{ $b['status'] }}</td>
-                                    <td>@unless ($b['p']->uj_pengajuan_detail_id)<form method="POST" action="{{ route('pengalihan-uj.hapus', $b['p']) }}" onsubmit="return confirm('Hapus catatan ini? Sisa utang dihitung ulang.')">@csrf @method('DELETE')<button class="tombol polos" style="padding: 2px 8px; font-size: 12px;">Hapus</button></form>@endunless</td></tr>
-                            @empty
-                                <tr><td colspan="11" class="redup" style="padding: 14px;">Belum ada catatan untuk {{ $s['sopir'] }}. Catat kasbonnya di bawah (➕ Nambah utang).</td></tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-
-                </details>
 
                 <div class="arah-utang">
                     <span class="redup" style="font-size: 13px;">Transaksi baru:</span>

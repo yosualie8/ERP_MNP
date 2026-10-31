@@ -14,22 +14,29 @@ use OpenSpout\Writer\XLSX\Writer;
  * Excel Hutang Supir (owner 30 Okt 2026): sheet Ringkasan (nama sopir, mobil, saldo hutang — diambil dari sheet sopirnya), satu sheet buku
  * per sopir (Tanggal, Keterangan, Debit, Kredit, Saldo; terbaru di atas seperti di layar, SEMUA transaksi sejak settle, saldo berumus),
  * dan sheet UJ belum bongkar. Sopir yang tampil = yang masih berhutang atau punya transaksi sejak settle.
+ * $sopir diisi (owner 31 Okt 2026) = satu sopir saja: sheet buku utangnya + UJ belum bongkarnya, tanpa Ringkasan.
+ * Debit (utang bertambah) merah, Kredit (utang berkurang) hijau — sama dengan di layar.
  */
 class UnduhHutangSopir
 {
-    public static function tulis(string $ke): void
+    public static function tulis(string $ke, ?string $sopir = null): void
     {
         $judul = (new Style)->setFontBold()->setBackgroundColor('DDE7F0');
         $rp = (new Style)->setFormat('#,##0');
         $rpTebal = (new Style)->setFontBold()->setFormat('#,##0');
         $tgl = (new Style)->setFormat('dd-mm-yyyy');
         $tebal = (new Style)->setFontBold();
+        $debit = (new Style)->setFormat('#,##0')->setFontColor('C00000');
+        $kredit = (new Style)->setFormat('#,##0')->setFontColor('1E8449');
         $teks = fn (?string $v, ?Style $g = null) => new Cell\StringCell((string) $v, $g);
         $hari = fn ($t) => $t ? Carbon::parse($t)->startOfDay()->toDateTimeImmutable() : null;
 
         $hutang = SaldoSopir::hutang();
+        if ($sopir !== null) {
+            $hutang = collect([$sopir => $hutang[$sopir] ?? ['sopir' => $sopir, 'saldo' => SaldoSopir::kosong($sopir), 'belum' => collect(), 'belum_rp' => 0, 'total' => 0]]);
+        }
         $buku = $hutang->map(fn ($h) => SaldoSopir::riwayat($h['sopir']))
-            ->filter(fn ($r, $k) => $hutang[$k]['total'] > 0.5 || $r['baris']->isNotEmpty())
+            ->filter(fn ($r, $k) => $sopir !== null || $hutang[$k]['total'] > 0.5 || $r['baris']->isNotEmpty())
             ->sortByDesc(fn ($r) => $r['akhir']);
         $mobil = fn ($k) => DaftarSopir::cari($k)['mobil'] ?? ($hutang[$k]['belum']->last()?->mobil ?: ($hutang[$k]['saldo']['mobil'][0] ?? ''));
         // Nama sheet: maks 31 karakter, tanpa karakter terlarang, unik.
@@ -45,25 +52,27 @@ class UnduhHutangSopir
         $w = new Writer;
         $w->openToFile($ke);
 
-        // Ringkasan
+        // Ringkasan (hanya Excel semua sopir)
         $s = $w->getCurrentSheet();
-        $s->setName('Ringkasan');
-        $s->setSheetView((new SheetView)->setFreezeRow(2));
-        foreach ([24, 12, 16] as $i => $lebar) {
-            $s->setColumnWidth($lebar, $i + 1);
+        if ($sopir === null) {
+            $s->setName('Ringkasan');
+            $s->setSheetView((new SheetView)->setFreezeRow(2));
+            foreach ([24, 12, 16] as $i => $lebar) {
+                $s->setColumnWidth($lebar, $i + 1);
+            }
+            $w->addRow(Row::fromValues(['Nama sopir', 'Mobil', 'Saldo hutang'], $judul));
+            $n = 1;
+            foreach ($buku as $k => $r) {
+                $w->addRow(new Row([$teks($k), $teks($mobil($k)), new Cell\FormulaCell("='".str_replace("'", "''", $namaSheet[$k])."'!E2", $rp, $r['akhir'])]));
+                $n++;
+            }
+            $w->addRow(new Row([$teks('TOTAL', $tebal), $teks($buku->count().' sopir', $tebal), new Cell\FormulaCell('=SUM(C2:C'.max($n, 2).')', $rpTebal, $buku->sum('akhir'))]));
+            $s->setAutoFilter(new AutoFilter(0, 1, 2, max($n, 2)));
         }
-        $w->addRow(Row::fromValues(['Nama sopir', 'Mobil', 'Saldo hutang'], $judul));
-        $n = 1;
-        foreach ($buku as $k => $r) {
-            $w->addRow(new Row([$teks($k), $teks($mobil($k)), new Cell\FormulaCell("='".str_replace("'", "''", $namaSheet[$k])."'!E2", $rp, $r['akhir'])]));
-            $n++;
-        }
-        $w->addRow(new Row([$teks('TOTAL', $tebal), $teks($buku->count().' sopir', $tebal), new Cell\FormulaCell('=SUM(C2:C'.max($n, 2).')', $rpTebal, $buku->sum('akhir'))]));
-        $s->setAutoFilter(new AutoFilter(0, 1, 2, max($n, 2)));
 
         // Buku per sopir: terbaru di atas; baris terakhir = saldo awal settle; Saldo = saldo baris di bawahnya + Debit − Kredit.
         foreach ($buku as $k => $r) {
-            $s = $w->addNewSheetAndMakeItCurrent();
+            $s = $sopir !== null && $k === $buku->keys()->first() ? $s : $w->addNewSheetAndMakeItCurrent();
             $s->setName($namaSheet[$k]);
             $s->setSheetView((new SheetView)->setFreezeRow(2));
             foreach ([12, 60, 14, 14, 14] as $i => $lebar) {
@@ -74,7 +83,7 @@ class UnduhHutangSopir
             $akhir = $baris->count() + 2; // baris saldo awal
             foreach ($baris as $i => $b) {
                 $no = $i + 2;
-                $w->addRow(new Row([Cell::fromValue($hari($b['tgl']), $tgl), $teks(SaldoSopir::ketBuku($b)), Cell::fromValue($b['masuk'] ?: null, $rp), Cell::fromValue($b['keluar'] ?: null, $rp),
+                $w->addRow(new Row([Cell::fromValue($hari($b['tgl']), $tgl), $teks(SaldoSopir::ketBuku($b)), Cell::fromValue($b['masuk'] ?: null, $debit), Cell::fromValue($b['keluar'] ?: null, $kredit),
                     new Cell\FormulaCell('=E'.($no + 1)."+C{$no}-D{$no}", $rp, $b['sisa'])]));
             }
             $w->addRow(new Row([Cell::fromValue($hari(SaldoSopir::SETTLE), $tgl), $teks('Saldo awal (settle)'), Cell::fromValue(null), Cell::fromValue(null), Cell::fromValue($r['awal'], $rpTebal)]));

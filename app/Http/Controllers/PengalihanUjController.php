@@ -57,11 +57,6 @@ class PengalihanUjController extends Controller
                 $data['belum'] = $data['hutang'][$k]['belum'] ?? collect();
                 $data['riwayat'] = SaldoSopir::riwayat($k);
                 $data['bonKasbon'] = self::bonKasbon()->filter(fn ($b) => $b->sisa > 0.5)->values();
-                // Uang jalan DO dari utang → transfer Kas UJ ber-DO sama (sisa uang jalannya), untuk kolom Status buku utang.
-                $doUtang = $data['dipilih']['pakai_rows']->where('peruntukan', 'uj')->pluck('no_do')->map(fn ($v) => SaldoSopir::kunciDo($v))->filter()->unique();
-                $data['kasUjDo'] = $doUtang->isEmpty() ? collect() : UjDetail::where('biaya_transfer', false)->where('kategori', 'like', '%jalan%')
-                    ->where(fn ($q) => $doUtang->each(fn ($k) => $q->orWhere('no_do', 'like', '%'.$k)))->get(['id_uj', 'nominal', 'no_do'])
-                    ->filter(fn ($u) => $doUtang->contains(SaldoSopir::kunciDo($u->no_do)))->groupBy(fn ($u) => SaldoSopir::kunciDo($u->no_do));
             }
         }
 
@@ -121,11 +116,16 @@ class PengalihanUjController extends Controller
         return view('pengalihan-uj.index', $data);
     }
 
-    /** Excel Hutang Supir (owner 30 Okt 2026): ringkasan semua sopir, buku utang per sopir (sheet sendiri), UJ belum bongkar. */
-    public function unduh(): \Symfony\Component\HttpFoundation\StreamedResponse
+    /**
+     * Excel Hutang Supir (owner 30 Okt 2026): ringkasan semua sopir, buku utang per sopir (sheet sendiri), UJ belum bongkar.
+     * ?sopir=Nama (owner 31 Okt 2026) = buku utang satu sopir saja beserta UJ belum bongkarnya.
+     */
+    public function unduh(Request $request): \Symfony\Component\HttpFoundation\StreamedResponse
     {
-        return response()->streamDownload(fn () => \App\Support\UnduhHutangSopir::tulis('php://output'),
-            'Hutang Supir '.now()->format('Y-m-d H.i').'.xlsx', ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
+        $sopir = $request->filled('sopir') ? SaldoSopir::kunci($request->query('sopir')) : null;
+
+        return response()->streamDownload(fn () => \App\Support\UnduhHutangSopir::tulis('php://output', $sopir),
+            'Hutang Supir '.($sopir ? $sopir.' ' : '').now()->format('Y-m-d H.i').'.xlsx', ['Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet']);
     }
 
     /** Pilih UJ → jadikan saldo sopir (atau catat dikembalikan sopir). Tanpa proyek tujuan. */
