@@ -53,7 +53,7 @@ class RitasiController extends Controller
         $mitra = (bool) preg_match('/\bASG\b/i', $tahap['nama'] ?? $kata);
         // ...dan bisa dipilih pemilik mana saja yang tampil (?pemilik[]=MNP&pemilik[]=RUDI; kosong = semua).
         $pemilik = $mitra && is_array($request->query('pemilik')) ? array_values(array_filter(array_map('strval', $request->query('pemilik')))) : null;
-        $data = PerformaRitasi::data($tahun, null, $tahap ? [$tahap['id']] : ($kata !== '' ? $idKata : null), $mitra, $pemilik ?: null);
+        $data = PerformaRitasi::data($tahun, null, $tahap ? [$tahap['id']] : ($kata !== '' ? $idKata : null), $mitra, $pemilik ?: null, $kata);
 
         // Hanya satu bulan yang dibuka (?bulan=, bawaan bulan terakhir); pilihan pemilik mengikuti bulan itu.
         $bulanBuka = isset($data['bulan'][$request->integer('bulan')]) ? $request->integer('bulan') : array_key_last($data['bulan']);

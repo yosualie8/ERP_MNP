@@ -48,9 +48,11 @@ class PerformaRitasi
      * @param  bool  $termasukMitra  truk selain MNP ikut dihitung (owner 22 Okt 2026: untuk proyek ASG) — dikelompokkan per PEMILIK
      *                               (kunci "~RUDI"), karena hampir semuanya tanpa nomor DT (hanya plat, ±120 plat)
      * @param  string[]|null  $pemilik  hanya pemilik ini ("MNP" = semua DT MNP; selain itu label pemilik non-MNP, mis. "RUDI"); null = semua
+     * @param  string|null  $kata  rit yang kolom Tahap-nya mengandung kata ini ikut dihitung walau tahapnya belum ada di Daftar Proyek
+     *                             (owner 31 Okt 2026: "ASG Tahap 118" belum didaftarkan → rit-nya hilang dari "Semua mengandung ASG")
      * @return array{truk: string[], mitra: string[], label: array<string, string>, pemilik_ada: array<string, int>, pemilik_bulan: array<int, array<string, int>>, bulan: array<int, array>, total: array<string, int>, jumlah: int, terakhir: ?Carbon}
      */
-    public static function data(int $tahun, ?array $hanyaTruk = null, ?array $tahapIds = null, bool $termasukMitra = false, ?array $pemilik = null): array
+    public static function data(int $tahun, ?array $hanyaTruk = null, ?array $tahapIds = null, bool $termasukMitra = false, ?array $pemilik = null, ?string $kata = null): array
     {
         $aset = AsetTruk::truk()->pluck('no_lambung')->flip();
         $pilih = $tahapIds !== null ? array_flip($tahapIds) : null;
@@ -61,7 +63,8 @@ class PerformaRitasi
         $terakhir = null;
         $q = Ritasi::whereYear('tanggal', $tahun)->when(! $termasukMitra, fn ($q) => $q->whereNotNull('no_lambung'));
         foreach ($q->get(['tanggal', 'no_lambung', 'tahap', 'pemilik']) as $r) {
-            if ($pilih !== null && ! isset($pilih[DaftarProyek::tahapId('ritasi', $r->tahap) ?? 0])) {
+            if ($pilih !== null && ! isset($pilih[DaftarProyek::tahapId('ritasi', $r->tahap) ?? 0])
+                && ($kata === null || $kata === '' || mb_stripos((string) $r->tahap, $kata) === false)) {
                 continue;
             }
             $dt = NomorMobil::rapikan($r->no_lambung);
