@@ -28,6 +28,11 @@
                     @endif
                 </b>
             </div>
+            <div class="kartu" title="Detail transaksi Kas Harian sejak {{ $belum90['dari']->translatedFormat('j M Y') }} yang belum direimburse — tidak mengikuti pilihan bulan di atas">
+                <span class="redup">Belum reimburse · 90 hari</span>
+                <b style="color: var(--merah);">{{ rp($belum90['nilai']) }}</b>
+                <span class="redup" style="font-size: 12px;">{{ $belum90['transfer'] }} transfer · sejak {{ $belum90['dari']->translatedFormat('j M') }}</span>
+            </div>
         </div>
 
         @if ($ringkas['catatan'])

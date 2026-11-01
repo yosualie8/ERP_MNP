@@ -132,8 +132,16 @@ class KasController extends Controller
         ] : null;
         $namaLembar = $lembar->pluck('lembar', 'id');
 
+        // Belum reimburse 90 hari terakhir (owner 1 Nov 2026): TIDAK mengikuti pilihan periode/bulan di atas, lembar arsip tidak dihitung.
+        $dari90 = today()->subDays(89);
+        $kas90 = KasTransfer::whereDate('tanggal', '>=', $dari90)->whereNotIn('kas_bulan_id', $bulanArsip->keys())->with('bon')->get()
+            ->filter(fn ($t) => $t->bon->isNotEmpty());
+        $sudah90 = StatusReimburse::untuk($kas90->flatMap(fn ($t) => $t->bon->map(fn ($b) => StatusReimburse::idBon($b, $t)))->all());
+        $nilaiBelum90 = $kas90->map(fn ($t) => (int) $t->bon->reject(fn ($b) => array_key_exists(StatusReimburse::idBon($b, $t), $sudah90))->sum('nominal'));
+        $belum90 = ['dari' => $dari90, 'nilai' => (int) $nilaiBelum90->sum(), 'transfer' => $nilaiBelum90->filter()->count()];
+
         return view('kas.index', compact('daftarBulan', 'bulan', 'transfer', 'q', 'tanggal', 'daftarTanggal', 'punyaBiaya', 'jumlahFoto', 'jam',
-            'statusBon', 'statusTransfer', 'ringkasStatus', 'filterStatus', 'periode', 'lembar', 'ringkas', 'namaLembar') + [
+            'statusBon', 'statusTransfer', 'ringkasStatus', 'filterStatus', 'periode', 'lembar', 'ringkas', 'namaLembar', 'belum90') + [
                 'bolehInput' => $request->user()->bolehMenu('input-kas'), 'antreanSheet' => StatusReimburse::antreanSheet(),
             ]);
     }
