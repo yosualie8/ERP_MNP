@@ -178,6 +178,7 @@
             <form method="POST" action="{{ route('logout') }}">
                 @csrf
                 @if (auth()->user()->isSuperAdmin())
+                    <a class="tombol polos" href="{{ route('mic.index') }}" title="Bicara lewat HP/tablet, suaranya jadi mikrofon di laptop">🎤 Mic</a>
                     <a class="tombol polos" href="{{ route('login-perangkat.index') }}" title="Masuk di HP lain lewat QR sekali pakai">📱 Login HP lain</a>
                 @endif
                 <span class="redup surel">{{ auth()->user()->email }}</span>

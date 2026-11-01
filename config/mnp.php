@@ -28,4 +28,8 @@ return [
 
     // Spreadsheet PM2 Infra "Progress Project Infra" (Monitoring BOQ Regatta, Transaksi Kas & Mutasi PT BCA bertag Proyek/BOQ) — dasar rekomendasi Pilah Transaksi.
     'sheet_infra' => env('MNP_SHEET_INFRA', '1C6Ti0Tdwv7HvRyVOGATUPeYqQrJb87mngSF8os1s_Qo'),
+
+    // Mic ke Laptop: relay WebSocket (php artisan mnp:relay-mic) di belakang Nginx. URL relatif = dari APP_URL (https → wss).
+    'mic_relay_url' => env('MIC_RELAY_URL', '/mic-relay'),
+    'mic_relay_port' => (int) env('MIC_RELAY_PORT', 8095),
 ];

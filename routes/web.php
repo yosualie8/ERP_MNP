@@ -251,6 +251,10 @@ Route::middleware(['auth', 'menu'])->group(function () {
         Route::post('/login-perangkat', [\App\Http\Controllers\LoginPerangkatController::class, 'buat'])->name('login-perangkat.buat');
         Route::get('/login-perangkat/{login}/status', [\App\Http\Controllers\LoginPerangkatController::class, 'status'])->whereNumber('login')->name('login-perangkat.status');
         Route::post('/login-perangkat/{login}/keluarkan', [\App\Http\Controllers\LoginPerangkatController::class, 'keluarkan'])->whereNumber('login')->name('login-perangkat.keluarkan');
+        Route::get('/mic', [\App\Http\Controllers\MicController::class, 'index'])->name('mic.index');
+        Route::post('/mic/token', [\App\Http\Controllers\MicController::class, 'token'])->name('mic.token');
+        Route::post('/mic/kode-pasang', [\App\Http\Controllers\MicController::class, 'kodePasang'])->name('mic.kode');
+        Route::delete('/mic/perangkat/{perangkat}', [\App\Http\Controllers\MicController::class, 'hapus'])->whereNumber('perangkat')->name('mic.hapus');
         Route::get('/pengguna', [PenggunaController::class, 'index'])->name('pengguna.index');
         Route::post('/pengguna', [PenggunaController::class, 'store'])->name('pengguna.store');
         Route::patch('/pengguna/{user}', [PenggunaController::class, 'update'])->name('pengguna.update');
