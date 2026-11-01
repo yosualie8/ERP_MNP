@@ -177,6 +177,17 @@ class GoogleSheets
         return $res->json('spreadsheetId');
     }
 
+    /** Gandakan lembar di spreadsheet yang sama dengan nama baru di urutan $posisi (0 = paling kiri); kembalikan sheetId-nya. */
+    public function duplikatLembar(string $id, int $sheetId, string $judul, int $posisi): int
+    {
+        $res = $this->api()->post(self::API."/{$id}:batchUpdate", ['requests' => [[
+            'duplicateSheet' => ['sourceSheetId' => $sheetId, 'insertSheetIndex' => $posisi, 'newSheetName' => $judul],
+        ]]]);
+        $this->pastikan($res, 'menggandakan lembar');
+
+        return (int) $res->json('replies.0.duplicateSheet.properties.sheetId');
+    }
+
     /** Salin satu lembar ke spreadsheet lain; kembalikan sheetId lembar hasil salinan. */
     public function salinLembar(string $dariId, int $sheetId, string $keId): int
     {

@@ -16,6 +16,7 @@ use RuntimeException;
  * Baris diisi di baris kosong pertama sebelum TOTAL; bila kurang, baris disisipkan di dalam jangkauan TOTAL.
  * Transaksi dari mutasi Jago (owner 1 Nov 2026) disisipkan di posisi sesuai urutan mutasinya — sebelum transaksi pertama yang
  * tanggalnya lebih baru atau (tanggal sama) mutasinya lebih akhir — supaya urutan Kas Harian = urutan mutasi bank.
+ * Lembar bulan yang belum ada dibuat otomatis dari lembar bulan sebelumnya (owner 1 Nov 2026), lihat buatLembar().
  */
 class TulisKasSheet
 {
@@ -23,6 +24,9 @@ class TulisKasSheet
 
     /** Batas atas nominal baris "Biaya Transfer Keluar" (default 2.500, bisa diganti admin). */
     public const BIAYA_TRANSFER_MAKS = 100000;
+
+    /** Baris kosong siap isi di lembar bulan baru (Okt 2026 memakai ±4.000 baris; bila kurang, baris disisipkan otomatis saat input). */
+    public const BARIS_LEMBAR_BARU = 2000;
 
     public function __construct(private GoogleSheets $sheets, private ?string $spreadsheetId = null)
     {
@@ -46,10 +50,7 @@ class TulisKasSheet
         $tanggal = $input['tanggal'];
         $lembar = $tanggal->format('my');
         $info = collect($this->sheets->info($this->spreadsheetId)['sheets'])->firstWhere('properties.title', $lembar);
-        if (! $info) {
-            throw new RuntimeException("Lembar {$lembar} belum ada di sheet Kas Harian MNP. Buat dulu lembar bulan ini (salin dari bulan lalu), lalu simpan lagi.");
-        }
-        $sheetId = $info['properties']['sheetId'];
+        $sheetId = $info ? $info['properties']['sheetId'] : $this->buatLembar($tanggal, $lembar);
 
         $nilai = $this->sheets->nilai($this->spreadsheetId, [$lembar])[$lembar];
         [$judul, $total, $terakhir] = $this->posisi($nilai, $lembar);
@@ -79,6 +80,63 @@ class TulisKasSheet
         $this->sheets->tulis($this->spreadsheetId, $this->dataBlok($lembar, $baris, $mulai, $daftarNoId, $total, self::barisSaldoSebelum($nilai, $mulai, $judul)) + $this->kepalaNoMobil($lembar, $nilai, $judul));
 
         return ['lembar' => $lembar, 'baris_awal' => $mulai, 'baris_akhir' => $mulai + $butuh - 1, 'no_id' => $daftarNoId];
+    }
+
+    /**
+     * Buat lembar bulan baru (owner 1 Nov 2026: admin tidak perlu menyalin lembar tiap awal bulan): gandakan lembar bulan sebelumnya
+     * (format, lebar kolom, judul, baris beku ikut), buang baris transaksinya, sisakan BARIS_LEMBAR_BARU baris kosong berumus saldo,
+     * lalu isi judul "Per [akhir bulan]", baris Saldo Awal bertanggal 1 = rumus ke Saldo baris TOTAL bulan sebelumnya, dan rumus TOTAL.
+     *
+     * @return int sheetId lembar baru
+     */
+    private function buatLembar(CarbonInterface $tanggal, string $lembar): int
+    {
+        $awal = \Carbon\Carbon::parse($tanggal->format('Y-m-01'));
+        $sebelum = $awal->copy()->subMonth()->format('my');
+        $asal = collect($this->sheets->info($this->spreadsheetId)['sheets'])->firstWhere('properties.title', $sebelum)
+            ?? throw new RuntimeException("Lembar {$lembar} belum ada, dan lembar bulan sebelumnya ({$sebelum}) juga tidak ditemukan untuk disalin. Buat lembar {$lembar} manual, lalu simpan lagi.");
+        $nilai = $this->sheets->nilai($this->spreadsheetId, [$sebelum])[$sebelum];
+        [$judul, $total] = $this->posisi($nilai, $sebelum);
+        $saldoAwal = $judul + 1;
+        if (strcasecmp(trim((string) ($nilai[$saldoAwal - 1][5] ?? '')), 'Saldo Awal') !== 0) {
+            throw new RuntimeException("Baris \"Saldo Awal\" tidak ada tepat di bawah judul kolom lembar {$sebelum}; lembar {$lembar} tidak bisa dibuat otomatis. Buat manual, lalu simpan lagi.");
+        }
+
+        $sheetId = $this->sheets->duplikatLembar($this->spreadsheetId, $asal['properties']['sheetId'], $lembar, $asal['properties']['index'] + 1);
+        // Baris transaksi pertama dipertahankan sebagai contoh format baris kosong; sisanya dibuang, lalu baris kosong disisipkan di bawahnya.
+        $contoh = $saldoAwal + 1;
+        $n = self::BARIS_LEMBAR_BARU;
+        $permintaan = [];
+        if ($total - 1 > $contoh) {
+            $permintaan[] = ['deleteDimension' => ['range' => ['sheetId' => $sheetId, 'dimension' => 'ROWS', 'startIndex' => $contoh, 'endIndex' => $total - 1]]];
+        }
+        $permintaan[] = ['insertDimension' => ['range' => ['sheetId' => $sheetId, 'dimension' => 'ROWS', 'startIndex' => $contoh, 'endIndex' => $contoh + $n - 1], 'inheritFromBefore' => true]];
+        $this->sheets->permintaan($this->spreadsheetId, $permintaan, 'menyiapkan baris lembar baru');
+
+        $totalBaru = $contoh + $n;
+        $kosong = [];
+        for ($r = $contoh; $r < $totalBaru; $r++) {
+            $kosong[] = array_replace(array_fill(0, 18, ''), [7 => "=I".($r - 1)."+G{$r}-H{$r}"]);
+        }
+        $data = [
+            "{$lembar}!B4" => [['Per '.$awal->copy()->endOfMonth()->translatedFormat('j F Y')]],
+            "{$lembar}!B{$saldoAwal}:I{$saldoAwal}" => [[$awal->toDateString(), '', '', '', 'Saldo Awal', "='{$sebelum}'!I{$total}", '-', "=G{$saldoAwal}"]],
+            "{$lembar}!J{$saldoAwal}:S{$saldoAwal}" => [array_fill(0, 10, '')],
+            "{$lembar}!B{$contoh}:S".($totalBaru - 1) => $kosong,
+            "{$lembar}!G{$totalBaru}:I{$totalBaru}" => [["=SUM(G{$saldoAwal}:INDEX(G:G;ROW()-1))", "=SUM(H{$saldoAwal}:INDEX(H:H;ROW()-1))", "=G{$totalBaru}-H{$totalBaru}"]],
+        ];
+        // Sel pemeriksa admin di bawah TOTAL (mis. =SUM(K7:K2283)): jangkauannya disamakan dengan baris data lembar baru.
+        $bawah = $this->sheets->nilai($this->spreadsheetId, ["{$lembar}!A{$totalBaru}:S".($totalBaru + 15)], 'FORMULA')["{$lembar}!A{$totalBaru}:S".($totalBaru + 15)] ?? [];
+        foreach ($bawah as $i => $r) {
+            foreach ($r as $k => $v) {
+                if ($i > 0 && is_string($v) && preg_match('/SUM\(([A-Z]+)\d+:\1\d+\)/', $v)) {
+                    $data["{$lembar}!".chr(65 + $k).($totalBaru + $i)] = [[preg_replace('/SUM\(([A-Z]+)\d+:\1\d+\)/', 'SUM(${1}'.$saldoAwal.':${1}'.($totalBaru - 1).')', $v)]];
+                }
+            }
+        }
+        $this->sheets->tulis($this->spreadsheetId, $data);
+
+        return $sheetId;
     }
 
     /**
