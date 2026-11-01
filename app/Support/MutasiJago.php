@@ -277,7 +277,7 @@ class MutasiJago
                     'nominal_masuk' => $masuk ? $nominal : 0, 'kode_gl_masuk' => null, 'nominal_transfer' => $masuk ? null : $nominal,
                     'bon' => $masuk ? [] : [['nominal' => $nominal, 'pic' => null, 'keterangan' => 'Pajak Bunga', 'kode_gl' => 'Pajak Bunga', 'uj' => null, 'no_mobil' => null]],
                     'biaya_transfer' => false, 'nominal_biaya' => TulisKasSheet::BIAYA_TRANSFER, 'reimburse_uj' => null, 'tanggal_reimburse' => null];
-                $tulis = (new TulisKasSheet(GoogleSheets::wajib()))->tulis($input);
+                $tulis = (new TulisKasSheet(GoogleSheets::wajib()))->tulis($input, null, $m);
                 self::tandaiDipakai($m, 'kas:'.$tulis['no_id'][0], $userId);
                 CerminReimburse::tambahSegera($tulis['no_id']);
                 \App\Models\KasRiwayat::create([

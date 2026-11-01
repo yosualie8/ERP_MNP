@@ -54,9 +54,10 @@ class KasController extends Controller
 
         // Transfer yang tepat di bawahnya ada baris "Biaya Transfer Keluar" miliknya (ditanyakan saat menghapus).
         $punyaBiaya = [];
+        $biayaMilik = []; // id baris Biaya Transfer Keluar → NO ID transfernya (jamnya ikut transfer itu)
         foreach ($lembar as $lb) {
             $semua = KasTransfer::where('kas_bulan_id', $lb->id)->withMax('bon', 'baris')->withCount('bon')
-                ->orderBy('baris')->get(['id', 'baris', 'kredit', 'keterangan'])->values();
+                ->orderBy('baris')->get(['id', 'baris', 'kredit', 'keterangan', 'no_id'])->values();
             foreach ($semua as $i => $t) {
                 $berikut = $semua[$i + 1] ?? null;
                 if ($berikut && $berikut->kredit > 0 && $berikut->kredit <= TulisKasSheet::BIAYA_TRANSFER_MAKS &&$berikut->bon_count <= 1
@@ -64,9 +65,16 @@ class KasController extends Controller
                     && stripos((string) $t->keterangan, 'biaya transfer') === false
                     && $berikut->baris === max($t->baris, (int) $t->bon_max_baris) + 1) {
                     $punyaBiaya[$t->id] = true;
+                    $biayaMilik[$berikut->id] = $t->no_id;
                 }
             }
         }
+
+        // Jam:menit transaksi dari mutasi Jago yang menjadi masternya (owner 1 Nov 2026); biaya transfer ikut jam transfernya.
+        $noIdJam = $transfer->map(fn ($t) => $biayaMilik[$t->id] ?? $t->no_id)->filter()->unique();
+        $jamNoId = \App\Models\JagoMutasi::where('kantong', 'kas')->whereIn('dipakai', $noIdJam->map(fn ($n) => "kas:{$n}"))->get(['dipakai', 'waktu'])
+            ->mapWithKeys(fn ($m) => [(int) substr($m->dipakai, 4) => $m->waktu->format('H:i')]);
+        $jam = $transfer->mapWithKeys(fn ($t) => [$t->id => $jamNoId[$biayaMilik[$t->id] ?? $t->no_id] ?? null])->filter()->all();
 
         // Status reimburse per detail (lembar "Sudah Reimburse") dan per transfer: sudah semua / sebagian / belum.
         $sudah = StatusReimburse::untuk($transfer->flatMap(fn ($t) => $t->bon->map(fn ($b) => StatusReimburse::idBon($b, $t)))->all());
@@ -124,7 +132,7 @@ class KasController extends Controller
         ] : null;
         $namaLembar = $lembar->pluck('lembar', 'id');
 
-        return view('kas.index', compact('daftarBulan', 'bulan', 'transfer', 'q', 'tanggal', 'daftarTanggal', 'punyaBiaya', 'jumlahFoto',
+        return view('kas.index', compact('daftarBulan', 'bulan', 'transfer', 'q', 'tanggal', 'daftarTanggal', 'punyaBiaya', 'jumlahFoto', 'jam',
             'statusBon', 'statusTransfer', 'ringkasStatus', 'filterStatus', 'periode', 'lembar', 'ringkas', 'namaLembar') + [
                 'bolehInput' => $request->user()->bolehMenu('input-kas'), 'antreanSheet' => StatusReimburse::antreanSheet(),
             ]);

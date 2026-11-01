@@ -102,7 +102,7 @@
                         <tr @class(['t', 'm' => $t->debet, 'ada-bon' => $t->bon->isNotEmpty()])>
                             <td>
                                 <span class="panah" aria-hidden="true">@if ($t->bon->isNotEmpty())▸@endif</span>
-                                {{ $t->tanggal->translatedFormat('j M') }}
+                                {{ $t->tanggal->translatedFormat('j M') }}@if (isset($jam[$t->id])) <span class="redup" style="font-size: 12px;" title="Jam transaksi di mutasi Jago">{{ $jam[$t->id] }}</span>@endif
                                 @if ($t->bon->count() > 1)<span class="jumlah-bon" title="{{ $t->bon->count() }} transaksi detail">{{ $t->bon->count() }}</span>@endif
                             </td>
                             <td><b>{{ $t->nama_tujuan ?? '—' }}</b> <span class="redup">{{ $t->bank_tujuan }} {{ $t->no_rek_tujuan }}</span></td>

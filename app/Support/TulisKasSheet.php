@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\JagoMutasi;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Facades\Cache;
 use RuntimeException;
@@ -13,6 +14,8 @@ use RuntimeException;
  * - Saldo (I) dan ID TRANSAKSI (R) berupa rumus, NO ID (Q) melanjutkan nomor terakhir
  * - Kode Bon: link folder foto bon di Drive bila transaksinya berfoto; selain itu TTTTBBHH-PIC-NN (+ -k bila satu transfer berisi beberapa bon PIC yang sama)
  * Baris diisi di baris kosong pertama sebelum TOTAL; bila kurang, baris disisipkan di dalam jangkauan TOTAL.
+ * Transaksi dari mutasi Jago (owner 1 Nov 2026) disisipkan di posisi sesuai urutan mutasinya — sebelum transaksi pertama yang
+ * tanggalnya lebih baru atau (tanggal sama) mutasinya lebih akhir — supaya urutan Kas Harian = urutan mutasi bank.
  */
 class TulisKasSheet
 {
@@ -30,14 +33,15 @@ class TulisKasSheet
      * @param  array{tanggal: CarbonInterface, arah: string, nama_tujuan: ?string, no_rek: ?string, bank: ?string, keterangan: ?string,
      *               nominal_masuk?: int, bon?: array<int, array{nominal: int, pic: ?string, keterangan: ?string, kode_gl: ?string}>, biaya_transfer?: bool, nominal_biaya?: int}  $input
      * @param  (callable(int): ?array)|null  $linkBon  NO ID transfer → folder foto bon di Drive yang sudah dikenal; bila ada, link-nya ditulis di kolom Kode Bon
+     * @param  JagoMutasi|null  $mutasi  transfer bank asal transaksi: posisi barisnya mengikuti urutan mutasi
      * @return array{lembar: string, baris_awal: int, baris_akhir: int, no_id: int[]}
      */
-    public function tulis(array $input, ?callable $linkBon = null): array
+    public function tulis(array $input, ?callable $linkBon = null, ?JagoMutasi $mutasi = null): array
     {
-        return Cache::lock('tulis-kas-sheet', 60)->block(30, fn () => $this->tulisTerkunci($input, $linkBon));
+        return Cache::lock('tulis-kas-sheet', 60)->block(30, fn () => $this->tulisTerkunci($input, $linkBon, $mutasi));
     }
 
-    private function tulisTerkunci(array $input, ?callable $linkBon): array
+    private function tulisTerkunci(array $input, ?callable $linkBon, ?JagoMutasi $mutasi = null): array
     {
         $tanggal = $input['tanggal'];
         $lembar = $tanggal->format('my');
@@ -55,10 +59,15 @@ class TulisKasSheet
         $baris = $this->susunBaris($input, $nilai, $judul, $total);
         $butuh = count($baris);
         $mulai = $terakhir + 1;
+        $sisip = $mutasi ? self::barisMenurutMutasi($nilai, $judul, $terakhir, $mutasi) : null;
 
-        // Sisakan minimal satu baris kosong di atas TOTAL supaya jangkauan SUM tetap ikut melebar.
-        $kosong = $total - $mulai;
-        if ($kosong < $butuh + 1) {
+        if ($sisip !== null) {
+            // Di tengah data: sisipkan baris baru; rumus saldo transaksi sesudahnya disambungkan ulang oleh dataBlok.
+            $mulai = $sisip;
+            $this->sheets->sisipBaris($this->spreadsheetId, $sheetId, $mulai, $butuh);
+            $total += $butuh;
+        } elseif (($kosong = $total - $mulai) < $butuh + 1) {
+            // Sisakan minimal satu baris kosong di atas TOTAL supaya jangkauan SUM tetap ikut melebar.
             if ($kosong < 1) {
                 throw new RuntimeException("Tidak ada baris kosong di atas TOTAL pada lembar {$lembar}. Tambahkan beberapa baris kosong di atas baris TOTAL, lalu simpan lagi.");
             }
@@ -184,6 +193,53 @@ class TulisKasSheet
     private function kepalaNoMobil(string $lembar, array $nilai, int $judul): array
     {
         return trim((string) ($nilai[$judul - 1][18] ?? '')) === '' ? ["{$lembar}!S{$judul}" => [['NO MOBIL']]] : [];
+    }
+
+    /**
+     * Baris tempat transaksi dari $mutasi disisipkan: awal transaksi pertama di lembar yang tanggalnya lebih baru, atau bertanggal sama
+     * dan tertaut ke mutasi Jago yang urutannya (rantai saldo bank) sesudah $mutasi. null = tidak ada → ditulis di bawah seperti biasa.
+     * Baris "Biaya Transfer Keluar" ikut transaksi di atasnya; transaksi bertanggal sama tanpa tautan mutasi dilewati.
+     */
+    public static function barisMenurutMutasi(array $nilai, int $judul, int $terakhir, JagoMutasi $mutasi): ?int
+    {
+        $urut = collect(MutasiJago::validitas($mutasi->kantong)['urut'])->values()->pluck('id')->flip();
+        $ke = $urut[$mutasi->id] ?? null;
+        if ($ke === null) {
+            return null;
+        }
+        $tgl = $mutasi->waktu->toDateString();
+        $posNoId = JagoMutasi::where('kantong', $mutasi->kantong)->where('dipakai', 'like', 'kas:%')->get(['id', 'dipakai'])
+            ->mapWithKeys(fn ($m) => [(int) substr($m->dipakai, 4) => $urut[$m->id] ?? null])->filter(fn ($v) => $v !== null);
+        for ($r = $judul + 1; $r <= $terakhir; $r++) {
+            $sel = $nilai[$r - 1] ?? [];
+            if ((trim((string) ($sel[6] ?? '')) === '' && trim((string) ($sel[7] ?? '')) === '') || preg_match('/^\s*biaya transfer/i', (string) ($sel[5] ?? ''))) {
+                continue;
+            }
+            $d = self::tanggalSel($sel[1] ?? '');
+            if (! $d) {
+                continue;
+            }
+            $d = $d->toDateString();
+            $posisi = $posNoId[self::angkaNoId($sel[16] ?? '') ?? 0] ?? null;
+            if ($d > $tgl || ($d === $tgl && $posisi !== null && $posisi > $ke)) {
+                return $r;
+            }
+        }
+
+        return null;
+    }
+
+    /** Tanggal di kolom B lembar Kas ("31-Okt-26", "31/10/2026", "2026-10-31"). */
+    private static function tanggalSel(mixed $v): ?CarbonInterface
+    {
+        if ($d = KasSeabank::tanggal($v)) {
+            return $d;
+        }
+        try {
+            return \Carbon\Carbon::createFromFormat('!d/m/Y', trim((string) $v));
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /** Nomor baris terakhir di atas $baris yang kolom Saldo (I) terisi — baris detail buatan admin dikosongkan. */

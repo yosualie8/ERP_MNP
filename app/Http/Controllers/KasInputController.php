@@ -231,7 +231,7 @@ class KasInputController extends Controller
         }
 
         try {
-            $hasil = (new TulisKasSheet(GoogleSheets::wajib()))->tulis($input);
+            $hasil = (new TulisKasSheet(GoogleSheets::wajib()))->tulis($input, null, $mj['mutasi']);
         } catch (\Throwable $e) {
             report($e);
 
