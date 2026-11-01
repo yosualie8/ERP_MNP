@@ -32,4 +32,6 @@ return [
     // Mic ke Laptop: relay WebSocket (php artisan mnp:relay-mic) di belakang Nginx. URL relatif = dari APP_URL (https → wss).
     'mic_relay_url' => env('MIC_RELAY_URL', '/mic-relay'),
     'mic_relay_port' => (int) env('MIC_RELAY_PORT', 8095),
+    // Satu-satunya akun yang boleh memakai Mic ke Laptop (owner, 1 Nov 2026).
+    'mic_email' => env('MIC_EMAIL', 'yosua160891@gmail.com'),
 ];

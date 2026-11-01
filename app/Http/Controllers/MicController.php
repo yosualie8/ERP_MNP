@@ -12,7 +12,7 @@ use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 /**
- * Mic ke Laptop (khusus Super Admin): HP/tablet membuka halaman ini dan berbicara; suara diteruskan relay
+ * Mic ke Laptop (hanya akun owner config mnp.mic_email, Gate 'mic' — bukan semua Super Admin): HP/tablet membuka halaman ini dan berbicara; suara diteruskan relay
  * (mnp:relay-mic) ke aplikasi Windows "Mic HP" yang memutarnya ke mikrofon virtual (VB-Cable) — dipakai Claude, Zoom, dsb.
  */
 class MicController extends Controller
@@ -78,7 +78,7 @@ class MicController extends Controller
     {
         $kunci = (string) $request->bearerToken();
         $perangkat = $kunci !== '' ? MicPerangkat::with('user')->where('kunci_hash', MicPerangkat::hash($kunci))->first() : null;
-        if (! $perangkat || ! $perangkat->user?->isSuperAdmin()) {
+        if (! $perangkat || ! $perangkat->user?->bolehMic()) {
             return response()->json(['pesan' => 'Laptop ini belum / tidak lagi dipasangkan.'], 401);
         }
         $perangkat->forceFill(['terakhir_aktif' => now()])->save();

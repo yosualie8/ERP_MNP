@@ -98,6 +98,12 @@ class User extends Authenticatable
         return $this->role === 'super_admin' || in_array(strtolower($this->email), self::emailSuperAdminEnv(), true);
     }
 
+    /** Menu Mic ke Laptop hanya untuk akun owner (config mnp.mic_email), tidak untuk Super Admin lain. */
+    public function bolehMic(): bool
+    {
+        return strtolower((string) $this->email) === strtolower((string) config('mnp.mic_email'));
+    }
+
     /** @return string[] */
     public static function emailSuperAdminEnv(): array
     {

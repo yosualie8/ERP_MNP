@@ -24,5 +24,7 @@ class AuthServiceProvider extends ServiceProvider
     {
         // Menu Pengguna, API key Claude, dan menghubungkan Google Sheets.
         Gate::define('super-admin', fn (User $user) => $user->isSuperAdmin());
+        // Mic ke Laptop: hanya satu akun (owner), bukan semua Super Admin.
+        Gate::define('mic', fn (User $user) => $user->bolehMic());
     }
 }
