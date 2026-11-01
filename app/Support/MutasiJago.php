@@ -152,6 +152,8 @@ class MutasiJago
     /**
      * Calon master Input UJ / Input Kas: transfer bank yang VALID (sebelum titik putus) dan belum punya pasangan di buku, 14 hari terakhir.
      * Kas UJ hanya transfer keluar; Kas Harian keluar & masuk. Baris biaya ikut sebagai "biaya" transfernya (menit sama, sesudahnya).
+     * Kas Harian: pasangan "transfer kembali" (keluar lalu masuk lagi) juga calon — owner 1 Nov 2026: dicatat lengkap di buku (keluar,
+     * biaya, masuk) supaya jejak salah transfer terlihat; sesudah diinput keduanya berstatus cocok.
      *
      * @return array<int, array{id: int, waktu: string, jam: string, nama: string, bank: ?string, rekening: ?string, arah: string, nominal: int, biaya: int, catatan: ?string, saran: ?string}>
      */
@@ -161,11 +163,14 @@ class MutasiJago
         $urut = collect($c['validitas']['urut'])->values();
         $posisi = $urut->pluck('id')->flip();
 
-        return $c['baris']->filter(fn ($r) => $r['status'] === 'belum' && ! $r['m']->dipakai && ($kantong === 'kas' || $r['m']->arah === 'keluar'))
+        return $c['baris']->filter(fn ($r) => ($r['status'] === 'belum' || ($kantong === 'kas' && $r['status'] === 'kembali')) && ! $r['m']->dipakai
+            && ($kantong === 'kas' || $r['m']->arah === 'keluar'))
             ->map(fn ($r) => [
                 'id' => $r['m']->id, 'waktu' => $r['m']->waktu->toDateString(), 'jam' => $r['m']->waktu->format('H:i'), 'nama' => (string) $r['m']->nama,
                 'bank' => $r['m']->bank, 'rekening' => $r['m']->rekening, 'arah' => $r['m']->arah, 'nominal' => (int) abs($r['m']->jumlah),
-                'biaya' => self::biayaDari($r['m'], $urut, $posisi), 'catatan' => $r['m']->catatan, 'saran' => $r['saran'], 'nama_buku' => self::namaBunga($r['m']),
+                'biaya' => self::biayaDari($r['m'], $urut, $posisi), 'catatan' => $r['m']->catatan,
+                'saran' => $r['status'] === 'kembali' ? '↩ Transfer kembali (keluar lalu masuk lagi dengan jumlah & penerima sama) — catat keluar DAN masuknya' : $r['saran'],
+                'nama_buku' => self::namaBunga($r['m']),
             ])->values()->all();
     }
 
