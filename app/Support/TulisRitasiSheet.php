@@ -14,6 +14,9 @@ use RuntimeException;
  */
 class TulisRitasiSheet
 {
+    /** Baris kosong cadangan yang ditambahkan sekaligus bila lembar Ritasi kehabisan baris. */
+    private const BARIS_CADANGAN = 1000;
+
     private string $id;
 
     public function __construct(private GoogleSheets $sheets, ?string $spreadsheetId = null)
@@ -53,6 +56,7 @@ class TulisRitasiSheet
             }
             // Format (tanggal, jam, angka) mengikuti baris data terakhir.
             $sheetId = $this->sheetId();
+            $this->pastikanBaris($sheetId, $sampai);
             try {
                 $this->sheets->permintaan($this->id, [['copyPaste' => [
                     'source' => ['sheetId' => $sheetId, 'startRowIndex' => $akhir - 1, 'endRowIndex' => $akhir, 'startColumnIndex' => 0, 'endColumnIndex' => 19],
@@ -158,6 +162,19 @@ class TulisRitasiSheet
             'jenis_buangan' => $k['jenis_buangan'], 'jenis_tanah' => $k['jenis_tanah'], 'jenis_kendaraan' => $r['jenis_kendaraan'] ?: null,
             'pemilik' => $r['pemilik'] ?: null, 'harga_jual' => $r['harga_jual'] ?: null, 'kubikasi' => $r['kubikasi'] ?? null, 'keterangan' => $r['keterangan'] ?: null, 'no_do' => $r['no_do'] ?: null,
         ];
+    }
+
+    /**
+     * Lembar Ritasi kehabisan baris (owner 2 Nov 2026: grid 10.542 baris, upload 57 rit ditolak "exceeds grid limits") →
+     * tambahkan baris kosong di bawah sheet sebelum menulis: sejumlah kekurangannya + cadangan BARIS_CADANGAN.
+     */
+    private function pastikanBaris(int $sheetId, int $sampai): void
+    {
+        $grid = collect($this->sheets->info($this->id)['sheets'])->firstWhere('properties.sheetId', $sheetId)['properties']['gridProperties']['rowCount'] ?? null;
+        if ($grid !== null && $sampai > $grid) {
+            $this->sheets->permintaan($this->id, [['appendDimension' => ['sheetId' => $sheetId, 'dimension' => 'ROWS', 'length' => $sampai - $grid + self::BARIS_CADANGAN]]],
+                'menambah baris lembar Ritasi');
+        }
     }
 
     private function kosong(int $dari, int $sampai): bool
