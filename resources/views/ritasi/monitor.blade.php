@@ -314,7 +314,7 @@
     @php($bolehBayar = true)
     @if ($rekapTanah->isNotEmpty())
         <div class="kartu" style="padding: 10px 14px;">
-            <b>Rekap bayar tanah</b> <span class="redup" style="font-size: 12px;">— dibayar admin lewat Input UJ → 🏔️ Input bayar tanah</span>
+            <b>Rekap bayar tanah</b> <span class="redup" style="font-size: 12px;">— 5 terakhir · dibayar admin lewat Input UJ → 🏔️ Input bayar tanah</span>
             <table class="kas" style="margin-top: 6px; font-size: 13px;">
                 <thead><tr><th>Rekap</th><th>Status</th><th class="angka">DO</th><th class="angka">Total</th><th>Dibuat</th><th>Catatan</th><th></th></tr></thead>
                 @foreach ($rekapTanah as $rb)
