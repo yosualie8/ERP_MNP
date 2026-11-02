@@ -31,15 +31,16 @@ Route::get('/', fn () => auth()->check() ? redirect()->route('dashboard') : view
 Route::view('/kebijakan-privasi', 'publik.privasi')->name('privasi');
 Route::view('/syarat-layanan', 'publik.syarat')->name('syarat');
 
+// Batas per IP (hardening 3 Nov 2026): halaman login & alur Google OAuth tidak bisa dibanjiri bot.
 Route::middleware('guest')->group(function () {
-    Route::get('/login', [GoogleController::class, 'show'])->name('login');
-    Route::get('/auth/google/redirect', [GoogleController::class, 'redirect'])->name('auth.google.redirect');
+    Route::get('/login', [GoogleController::class, 'show'])->middleware('throttle:60,1')->name('login');
+    Route::get('/auth/google/redirect', [GoogleController::class, 'redirect'])->middleware('throttle:20,1')->name('auth.google.redirect');
 });
 // Masuk lewat QR sekali pakai dari halaman Login Perangkat Lain (di luar grup guest: HP yang sudah login akun lain pun bisa).
 Route::get('/masuk/{token}', [\App\Http\Controllers\LoginPerangkatController::class, 'konfirmasi'])->where('token', '[A-Za-z0-9]{48}')->middleware('throttle:30,1')->name('login-perangkat.masuk');
 Route::post('/masuk/{token}', [\App\Http\Controllers\LoginPerangkatController::class, 'masuk'])->where('token', '[A-Za-z0-9]{48}')->middleware('throttle:10,1');
 // Di luar grup guest: juga dipakai super admin yang sudah login untuk menghubungkan Google Sheets.
-Route::get('/auth/google/callback', [GoogleController::class, 'callback'])->name('auth.google.callback');
+Route::get('/auth/google/callback', [GoogleController::class, 'callback'])->middleware('throttle:20,1')->name('auth.google.callback');
 
 // "menu": tiap halaman/aksi hanya untuk akun yang diberi menunya (App\Support\MenuAkses, diatur di halaman Pengguna).
 Route::middleware(['auth', 'menu'])->group(function () {

@@ -21,8 +21,8 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 // MCP server untuk ChatGPT (hanya baca), dilindungi OAuth: hanya email terdaftar (lihat McpController & OAuthMcpController).
 Route::match(['get', 'post', 'delete'], '/mcp', \App\Http\Controllers\McpController::class)
     ->withoutMiddleware(\Illuminate\Routing\Middleware\ThrottleRequests::class.':api')->middleware('throttle:240,1')->name('mcp');
-Route::post('/oauth/register', [\App\Http\Controllers\OAuthMcpController::class, 'daftar'])->name('oauth.daftar');
-Route::post('/oauth/token', [\App\Http\Controllers\OAuthMcpController::class, 'token'])->name('oauth.token');
+Route::post('/oauth/register', [\App\Http\Controllers\OAuthMcpController::class, 'daftar'])->middleware('throttle:10,1')->name('oauth.daftar');
+Route::post('/oauth/token', [\App\Http\Controllers\OAuthMcpController::class, 'token'])->middleware('throttle:30,1')->name('oauth.token');
 
 // Aplikasi Windows "Mic HP" (menu Mic ke Laptop): pasang dengan kode 6 angka, lalu minta token relay dengan kunci perangkat.
 Route::post('/mic/pasang', [\App\Http\Controllers\MicController::class, 'apiPasang'])->middleware('throttle:10,1')->name('mic.api.pasang');
