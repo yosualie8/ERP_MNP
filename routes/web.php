@@ -114,6 +114,7 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/gaji-mingguan/unduh', [\App\Http\Controllers\GajiMingguanController::class, 'unduh'])->name('gaji-mingguan.unduh');
     Route::post('/gaji-mingguan/hari', [\App\Http\Controllers\GajiMingguanController::class, 'hari'])->name('gaji-mingguan.hari');
     Route::post('/gaji-mingguan/um', [\App\Http\Controllers\GajiMingguanController::class, 'um'])->name('gaji-mingguan.um');
+    Route::post('/gaji-mingguan/tunjangan', [\App\Http\Controllers\GajiMingguanController::class, 'tunjangan'])->name('gaji-mingguan.tunjangan');
     Route::post('/gaji-mingguan/setujui', [\App\Http\Controllers\GajiMingguanController::class, 'setujuiSemua'])->name('gaji-mingguan.setujui');
     Route::get('/potongan-muatan', [\App\Http\Controllers\PotonganMuatanController::class, 'index'])->name('potongan-muatan.index');
     Route::post('/potongan-muatan/aturan', [\App\Http\Controllers\PotonganMuatanController::class, 'aturan'])->name('potongan-muatan.aturan');

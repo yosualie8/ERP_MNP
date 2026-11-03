@@ -9,7 +9,10 @@ class JabatanMenu extends Model
 {
     protected $table = 'jabatan_menu';
 
-    protected $fillable = ['jabatan', 'menu', 'um_harian', 'user_id'];
+    protected $fillable = ['jabatan', 'menu', 'um_harian', 'basic_mingguan', 'transport_mingguan', 'kesehatan_mingguan', 'tarif_hm', 'user_id'];
+
+    /** Komponen gaji mingguan selain UM (operator alat berat, owner 3 Nov 2026): kolom => label. */
+    public const MINGGUAN = ['basic_mingguan' => 'Basic', 'transport_mingguan' => 'Transport', 'kesehatan_mingguan' => 'Uang kesehatan'];
 
     protected $casts = ['menu' => 'array'];
 

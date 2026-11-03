@@ -9,6 +9,7 @@ use App\Models\Lapor;
 use App\Models\LokasiAbsen;
 use App\Models\ProyekTahap;
 use App\Models\RekapAbsen;
+use App\Models\TunjanganMingguan;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 
@@ -19,6 +20,9 @@ use Illuminate\Support\Collection;
  *   Tukang tanpa absen HP diisi mandor (rekap_absen sumber "mandor"). Admin boleh menimpa hari mana pun (bayar / tidak).
  * - Lembur = ½ UM per hari (mulai & selesai lembur lengkap; yang belum lengkap menunggu persetujuan), hanya bila hari itu dibayar.
  * - Tahap kerja per hari: isian admin/mandor → tahap kiriman Lapor Lapangan / lokasi absen → tahap hari kerja sebelumnya.
+ * - Operator alat berat (owner 3 Nov 2026): + basic, transport, uang kesehatan per minggu (tarif jabatan, dibayar bila minggu itu
+ *   ada hari dibayar; admin boleh mengubahnya per orang per minggu (tunjangan_mingguan); dibebankan rata ke tahap hari-hari kerjanya)
+ *   + HM × tarif HM jabatan (HM per hari diisi admin, hanya hari dibayar).
  */
 class RekapAbsenMingguan
 {
@@ -59,11 +63,15 @@ class RekapAbsenMingguan
         // Karyawan aktif kecuali sopir DT (sama dengan Review Absen) + siapa pun yang absen / direkap minggu itu.
         $karyawan = Karyawan::where(fn ($q) => $q->where('status', 'aktif')->where(fn ($w) => $w->whereNull('jabatan')->orWhere('jabatan', '!=', DaftarSopir::JABATAN)->orWhereNull('no_mobil')))
             ->orWhereIn('id', $absen->keys()->concat($rekap->keys())->unique())->orderBy('nama')->get();
-        $tarif = JabatanMenu::pluck('um_harian', 'jabatan');
+        $jabatan = JabatanMenu::get()->keyBy('jabatan');
+        $tarif = $jabatan->map->um_harian;
+        $tunjangan = TunjanganMingguan::where('senin', $senin->toDateString())->get()->keyBy('karyawan_id');
         $namaTahap = ProyekTahap::pluck('nama', 'id');
 
-        $baris = $karyawan->map(function ($k) use ($absen, $rekap, $hari, $tarif, $tahapLapor, $tahapLokasi, $tahapLalu, $namaTahap) {
+        $baris = $karyawan->map(function ($k) use ($absen, $rekap, $hari, $jabatan, $tarif, $tunjangan, $tahapLapor, $tahapLokasi, $tahapLalu, $namaTahap) {
             $um = self::um($k, $tarif);
+            $j = $jabatan[$k->jabatan] ?? null;
+            $tarifHm = (int) ($j?->tarif_hm ?? 0);
             $jalan = $tahapLalu[$k->id] ?? null;
             $perHari = [];
             foreach ($hari as $h) {
@@ -92,22 +100,38 @@ class RekapAbsenMingguan
                     'putus_lembur' => $putusLembur ? $r->lembur : null, 'sumber' => $r?->sumber, 'catatan' => $r?->catatan,
                     'tahap_id' => $tahap, 'tahap' => $tahap ? ($namaTahap[$tahap] ?? null) : null, 'tahap_diisi' => (bool) $r?->proyek_tahap_id,
                     'bayar' => $hadir ? (int) $um : 0, 'bayar_lembur' => $lembur ? (int) round($um / 2) : 0,
+                    'hm' => $r?->hm, 'bayar_hm' => $hadir && $r?->hm ? (int) round($r->hm * $tarifHm) : 0, 'bayar_mingguan' => 0,
                 ];
             }
             $x = collect($perHari);
+            // Komponen mingguan (operator): dibayar penuh bila ada hari dibayar (atau sesuai ubahan admin minggu itu),
+            // dibebankan rata ke hari-hari itu (sisa bagi ke hari pertama).
+            $ubah = $tunjangan[$k->id] ?? null;
+            $mingguan = collect(JabatanMenu::MINGGUAN)->mapWithKeys(fn ($l, $kol) => [$kol => (int) ($ubah?->{$kol} ?? $j?->{$kol} ?? 0)]);
+            $bawaan = collect(JabatanMenu::MINGGUAN)->mapWithKeys(fn ($l, $kol) => [$kol => $j?->{$kol}]);
+            $dibayar = $x->where('hadir', true);
+            $totalMingguan = $dibayar->isNotEmpty() ? $mingguan->sum() : 0;
+            foreach ($dibayar->keys()->values() as $i => $d) {
+                $perHari[$d]->bayar_mingguan = intdiv($totalMingguan, $dibayar->count()) + ($i === 0 ? $totalMingguan % $dibayar->count() : 0);
+            }
+            foreach ($perHari as $h) {
+                $h->jumlah = $h->bayar + $h->bayar_lembur + $h->bayar_hm + $h->bayar_mingguan;
+            }
 
             return (object) [
-                'k' => $k, 'um' => $um, 'um_sendiri' => (bool) $k->um_harian, 'hari' => $perHari,
+                'k' => $k, 'um' => $um, 'um_sendiri' => (bool) $k->um_harian, 'hari' => $perHari, 'tarif_hm' => $tarifHm,
+                'operator' => $tarifHm > 0 || $bawaan->filter()->isNotEmpty() || $ubah, 'tunjangan_ubah' => $ubah, 'tunjangan_bawaan' => $bawaan->all(), 'mingguan' => $dibayar->isNotEmpty() ? $mingguan->all() : array_fill_keys($mingguan->keys()->all(), 0),
+                'total_mingguan' => $totalMingguan, 'jam_hm' => $tarifHm ? round($x->where('hadir', true)->sum('hm'), 1) : 0, 'total_hm' => $x->sum('bayar_hm'),
                 'hadir' => $x->where('hadir', true)->count(), 'lembur' => $x->where('lembur', true)->count(),
                 'tunggu' => $x->where('tunggu', true)->count() + $x->where('tunggu_lembur', true)->count(),
-                'total_um' => $x->sum('bayar'), 'total_lembur' => $x->sum('bayar_lembur'), 'total' => $x->sum('bayar') + $x->sum('bayar_lembur'),
-                'ada' => $x->contains(fn ($h) => $h->absen || $h->absen_lembur || $h->sumber || $h->hadir),
+                'total_um' => $x->sum('bayar'), 'total_lembur' => $x->sum('bayar_lembur'), 'total' => $x->sum('jumlah'),
+                'ada' => $x->contains(fn ($h) => $h->absen || $h->absen_lembur || $h->sumber || $h->hadir || $h->hm),
             ];
         })->sortBy(fn ($b) => [$b->ada ? 0 : 1, $b->k->site ?? 'zzz', $b->k->nama])->values();
 
         $semuaHari = $baris->flatMap(fn ($b) => array_values($b->hari));
-        $perTahap = $semuaHari->filter(fn ($h) => $h->bayar || $h->bayar_lembur)->groupBy(fn ($h) => $h->tahap ?? self::BELUM_TAHAP)
-            ->map(fn ($g) => $g->sum('bayar') + $g->sum('bayar_lembur'))->sortDesc();
+        $perTahap = $semuaHari->filter(fn ($h) => $h->jumlah > 0)->groupBy(fn ($h) => $h->tahap ?? self::BELUM_TAHAP)
+            ->map(fn ($g) => $g->sum('jumlah'))->sortDesc();
 
         return [
             'senin' => $senin, 'hari' => $hari, 'baris' => $baris, 'perTahap' => $perTahap,
@@ -116,6 +140,10 @@ class RekapAbsenMingguan
             'ringkas' => [
                 'orang' => $baris->where('total', '>', 0)->count(), 'hari' => $baris->sum('hadir'), 'lembur' => $baris->sum('lembur'),
                 'total_um' => $baris->sum('total_um'), 'total_lembur' => $baris->sum('total_lembur'), 'total' => $baris->sum('total'),
+                'total_mingguan' => $baris->sum('total_mingguan'), 'total_hm' => $baris->sum('total_hm'), 'jam_hm' => round($baris->sum('jam_hm'), 1),
+                'operator' => $baris->filter(fn ($b) => $b->total_mingguan || $b->total_hm)->count(),
+                // HM diisi pada hari yang tidak dibayar → tidak ikut dihitung (perlu dicek admin).
+                'hm_tak_dibayar' => $semuaHari->filter(fn ($h) => $h->hm && ! $h->hadir)->count(),
                 'tunggu' => $baris->sum('tunggu'), 'tanpa_um' => $baris->filter(fn ($b) => $b->hadir && ! $b->um)->count(),
                 'tanpa_tahap' => $semuaHari->filter(fn ($h) => $h->hadir && ! $h->tahap_id)->count(),
             ],

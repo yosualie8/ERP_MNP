@@ -1,6 +1,6 @@
 @extends('layouts.app', ['judul' => 'Master Jabatan'])
 
-@section('lebar', '1000px')
+@section('lebar', '1250px')
 
 @section('isi')
     <style>
@@ -28,19 +28,25 @@
     {{-- Tarif dasar UM per hari (owner 26 Okt 2026): dasar penggajian UM mingguan dari absensi; tarif khusus per orang menyusul. --}}
     <form method="POST" action="{{ route('jabatan.um') }}" id="form-um" class="kartu" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
         @csrf
-        <span class="redup" style="font-size: 13px;"><b>UM per hari</b> = tarif dasar uang makan harian jabatan itu. Kosongkan bila jabatan itu tidak dibayar UM harian (mis. gaji bulanan).</span>
-        <button type="submit" class="tombol" style="margin-left: auto; padding: 7px 14px;">Simpan tarif UM</button>
+        <span class="redup" style="font-size: 13px;"><b>UM per hari</b> = tarif dasar uang makan harian jabatan itu. Kosongkan bila jabatan itu tidak dibayar UM harian (mis. gaji bulanan).
+            <b>Basic, Transport, Kesehatan</b> = dibayar per minggu bila minggu itu ada hari kerja dibayar; <b>Tarif HM</b> = per jam kerja alat (HM diisi di Rekap Absen &amp; Gaji Mingguan) — untuk operator alat berat.</span>
+        <button type="submit" class="tombol" style="margin-left: auto; padding: 7px 14px;">Simpan tarif</button>
     </form>
 
     <div class="kartu gulir" style="padding: 0;">
         <table class="kas">
-            <thead><tr><th>Jabatan</th><th class="angka">UM per hari</th><th class="angka">Karyawan aktif</th><th class="angka">Semua karyawan</th><th class="angka">Jumlah menu</th><th data-tanpa-saring></th></tr></thead>
+            <thead><tr><th>Jabatan</th><th class="angka">UM per hari</th><th class="angka">Basic / minggu</th><th class="angka">Transport / minggu</th>
+                <th class="angka">Kesehatan / minggu</th><th class="angka">Tarif HM</th><th class="angka">Karyawan aktif</th><th class="angka">Semua karyawan</th><th class="angka">Jumlah menu</th><th data-tanpa-saring></th></tr></thead>
             <tbody>
                 @foreach ($jabatan as $j)
                     <tr class="t">
                         <td><b>{{ $j->nama }}</b></td>
                         <td class="angka" data-n="{{ $j->um ?? '' }}"><input type="text" form="form-um" name="um[{{ $j->id }}]" value="{{ $j->um ? number_format($j->um, 0, ',', '.') : '' }}"
                             inputmode="numeric" autocomplete="off" class="rupiah-um" placeholder="–" style="width: 110px; text-align: right;"></td>
+                        @foreach (['basic_mingguan', 'transport_mingguan', 'kesehatan_mingguan', 'tarif_hm'] as $kol)
+                            <td class="angka" data-n="{{ $j->{$kol} ?? '' }}"><input type="text" form="form-um" name="{{ $kol }}[{{ $j->id }}]" value="{{ $j->{$kol} ? number_format($j->{$kol}, 0, ',', '.') : '' }}"
+                                inputmode="numeric" autocomplete="off" class="rupiah-um" placeholder="–" style="width: 95px; text-align: right;"></td>
+                        @endforeach
                         <td class="angka">{{ $j->aktif }}</td>
                         <td class="angka">{{ $j->semua }}</td>
                         <td class="angka">{{ $j->menu }}</td>

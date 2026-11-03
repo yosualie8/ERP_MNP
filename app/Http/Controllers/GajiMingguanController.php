@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Karyawan;
 use App\Models\RekapAbsen;
+use App\Models\TunjanganMingguan;
 use App\Support\RekapAbsenMingguan;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -19,7 +20,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 /**
  * Rekap Absen & Gaji Mingguan (owner 30 Okt 2026, menggantikan versi awal 27 Okt): grid karyawan × hari Senin–Minggu dari absensi,
  * admin menyetujui absen belum lengkap, mengisi tahap kerja, mengubah UM per orang; lembur ½ UM; rekap per tahap; Excel seperti
- * file UM admin. Hitungan di App\Support\RekapAbsenMingguan.
+ * file UM admin; operator alat berat + basic/transport/kesehatan mingguan & HM (3 Nov 2026). Hitungan di App\Support\RekapAbsenMingguan.
  */
 class GajiMingguanController extends Controller
 {
@@ -28,18 +29,19 @@ class GajiMingguanController extends Controller
         return view('karyawan.gaji-mingguan', RekapAbsenMingguan::data(RekapAbsenMingguan::senin($request->query('minggu'))));
     }
 
-    /** Simpan keputusan satu karyawan satu hari (bayar / tidak / ikut absen, lembur, tahap). */
+    /** Simpan keputusan satu karyawan satu hari (bayar / tidak / ikut absen, lembur, HM operator, tahap). */
     public function hari(Request $request): JsonResponse
     {
         $v = $request->validate([
             'karyawan_id' => ['required', 'integer', 'exists:karyawan,id'], 'tanggal' => ['required', 'date'],
-            'hadir' => ['required', 'in:auto,1,0'], 'lembur' => ['required', 'in:auto,1,0'],
+            'hadir' => ['required', 'in:auto,1,0'], 'lembur' => ['required', 'in:auto,1,0'], 'hm' => ['nullable', 'numeric', 'min:0', 'max:24'],
             'tahap' => ['nullable', 'integer', 'exists:proyek_tahap,id'], 'semua_minggu' => ['nullable', 'boolean'], 'catatan' => ['nullable', 'string', 'max:300'],
         ]);
         $tanggal = \Carbon\Carbon::parse($v['tanggal'])->toDateString();
         $this->simpan((int) $v['karyawan_id'], $tanggal, [
             'hadir' => $v['hadir'] === 'auto' ? null : (bool) $v['hadir'], 'lembur' => $v['lembur'] === 'auto' ? null : (bool) $v['lembur'],
             'proyek_tahap_id' => $v['tahap'] ?? null, 'catatan' => trim((string) ($v['catatan'] ?? '')) ?: null,
+            'hm' => isset($v['hm']) && (float) $v['hm'] > 0 ? round((float) $v['hm'], 1) : null,
         ], $request->user()->id);
 
         // Tahap yang sama untuk semua hari kerja orang itu minggu ini.
@@ -64,6 +66,26 @@ class GajiMingguanController extends Controller
         return response()->json(['ok' => true]);
     }
 
+    /** Tunjangan mingguan (basic / transport / kesehatan) satu orang untuk satu minggu; isian kosong = ikut tarif jabatan. */
+    public function tunjangan(Request $request): JsonResponse
+    {
+        $v = $request->validate([
+            'karyawan_id' => ['required', 'integer', 'exists:karyawan,id'], 'minggu' => ['required', 'date'], 'catatan' => ['nullable', 'string', 'max:300'],
+            'basic_mingguan' => ['nullable', 'integer', 'min:0', 'max:10000000'], 'transport_mingguan' => ['nullable', 'integer', 'min:0', 'max:10000000'],
+            'kesehatan_mingguan' => ['nullable', 'integer', 'min:0', 'max:10000000'],
+        ]);
+        $isi = collect(\App\Models\JabatanMenu::MINGGUAN)->mapWithKeys(fn ($l, $kol) => [$kol => isset($v[$kol]) ? (int) $v[$kol] : null])->all();
+        $catatan = trim((string) ($v['catatan'] ?? '')) ?: null;
+        $kunci = ['karyawan_id' => (int) $v['karyawan_id'], 'senin' => RekapAbsenMingguan::senin($v['minggu'])->toDateString()];
+        if (collect($isi)->every(fn ($x) => $x === null) && ! $catatan) {
+            TunjanganMingguan::where($kunci)->delete();
+        } else {
+            TunjanganMingguan::updateOrCreate($kunci, $isi + ['catatan' => $catatan, 'user_id' => $request->user()->id]);
+        }
+
+        return response()->json(['ok' => true]);
+    }
+
     /** Setujui semua absen / lembur yang belum lengkap minggu itu (setelah admin memeriksa). */
     public function setujuiSemua(Request $request): RedirectResponse
     {
@@ -83,18 +105,18 @@ class GajiMingguanController extends Controller
 
     /**
      * Simpan rekap satu hari. $sebagian = hanya kolom yang diberikan yang diubah; selain itu semua kolom diganti.
-     * Baris yang kembali "ikut absen" seluruhnya (tanpa tahap/catatan) dihapus.
+     * Baris yang kembali "ikut absen" seluruhnya (tanpa HM/tahap/catatan) dihapus.
      */
     private function simpan(int $karyawan, string $tanggal, array $isi, int $user, bool $sebagian = false): void
     {
         $r = RekapAbsen::firstOrNew(['karyawan_id' => $karyawan, 'tanggal' => $tanggal]);
-        $r->fill($sebagian ? $isi : $isi + ['hadir' => null, 'lembur' => null, 'proyek_tahap_id' => null, 'catatan' => null]);
+        $r->fill($sebagian ? $isi : $isi + ['hadir' => null, 'lembur' => null, 'hm' => null, 'proyek_tahap_id' => null, 'catatan' => null]);
         // Mandor tetap tercatat sebagai pengisi bila admin hanya mengubah tahap / catatan.
         if (! $r->exists || $r->isDirty(['hadir', 'lembur'])) {
             $r->sumber = 'admin';
         }
         $r->user_id = $user;
-        if ($r->hadir === null && $r->lembur === null && ! $r->proyek_tahap_id && ! $r->catatan) {
+        if ($r->hadir === null && $r->lembur === null && ! $r->hm && ! $r->proyek_tahap_id && ! $r->catatan) {
             if ($r->exists) {
                 $r->delete();
             }
@@ -159,21 +181,49 @@ class GajiMingguanController extends Controller
             $s = $w->addNewSheetAndMakeItCurrent();
             $s->setName('Rekap per orang');
             $s->setSheetView((new SheetView)->setFreezeRow(2));
-            foreach ([5, 26, 22, 10, 12, 8, 8, 14, 14, 14, 36] as $i => $l) {
+            foreach ([5, 26, 22, 10, 12, 8, 8, 14, 14, 12, 12, 14, 9, 9, 12, 14, 36] as $i => $l) {
                 $s->setColumnWidth($l, $i + 1);
             }
-            $w->addRow(Row::fromValues(['No', 'Nama Karyawan', 'Jabatan', 'Site', 'UM / hari', 'Hari', 'Lembur', 'Total UM', 'Total lembur', 'Total', 'Rekening'], $kepala));
+            // Basic / transport / kesehatan / HM: operator alat berat (tarif di Master Jabatan); Uang HM = HM × tarif HM.
+            $w->addRow(Row::fromValues(['No', 'Nama Karyawan', 'Jabatan', 'Site', 'UM / hari', 'Hari', 'Lembur', 'Total UM', 'Total lembur',
+                'Basic', 'Transport', 'Uang kesehatan', 'HM (jam)', 'Tarif HM', 'Uang HM', 'Total', 'Rekening'], $kepala));
             foreach ($dibayar as $i => $b) {
                 $n = $i + 2;
+                $m = $b->mingguan;
                 $w->addRow(new Row([$angka($i + 1), $teks($b->k->nama), $teks($b->k->jabatan), $teks($b->k->site), $angka($b->um, $rp), $angka($b->hadir), $angka($b->lembur),
-                    $angka($b->total_um, $rp), $angka($b->total_lembur, $rp), new Cell\FormulaCell("=H{$n}+I{$n}", $rpTebal, $b->total),
+                    $angka($b->total_um, $rp), $angka($b->total_lembur, $rp), $angka($m['basic_mingguan'] ?: null, $rp), $angka($m['transport_mingguan'] ?: null, $rp),
+                    $angka($m['kesehatan_mingguan'] ?: null, $rp), $angka($b->jam_hm ?: null), $angka($b->tarif_hm ?: null, $rp),
+                    $b->tarif_hm ? new Cell\FormulaCell("=M{$n}*N{$n}", $rp, $b->total_hm) : $teks(''),
+                    new Cell\FormulaCell("=SUM(H{$n}:L{$n})+O{$n}", $rpTebal, $b->total),
                     $teks(trim(implode(' ', array_filter([$b->k->bank, $b->k->no_rekening, $b->k->nama_rekening ? 'a.n. '.$b->k->nama_rekening : null]))))]));
             }
             $akhir = max($dibayar->count() + 1, 2);
+            $jumlah = fn (string $kol, $nilai, Style $g) => new Cell\FormulaCell("=SUM({$kol}2:{$kol}{$akhir})", $g, $nilai);
+            $kolom = fn (string $k) => $dibayar->sum(fn ($b) => $b->mingguan[$k] ?? 0);
             $w->addRow(new Row([$teks(''), $teks('TOTAL', $tebal), $teks(''), $teks(''), $teks(''),
-                new Cell\FormulaCell("=SUM(F2:F{$akhir})", $tebal, $d['ringkas']['hari']), new Cell\FormulaCell("=SUM(G2:G{$akhir})", $tebal, $d['ringkas']['lembur']),
-                new Cell\FormulaCell("=SUM(H2:H{$akhir})", $rpTebal, $d['ringkas']['total_um']), new Cell\FormulaCell("=SUM(I2:I{$akhir})", $rpTebal, $d['ringkas']['total_lembur']),
-                new Cell\FormulaCell("=SUM(J2:J{$akhir})", $rpTebal, $d['ringkas']['total'])]));
+                $jumlah('F', $d['ringkas']['hari'], $tebal), $jumlah('G', $d['ringkas']['lembur'], $tebal),
+                $jumlah('H', $d['ringkas']['total_um'], $rpTebal), $jumlah('I', $d['ringkas']['total_lembur'], $rpTebal),
+                $jumlah('J', $kolom('basic_mingguan'), $rpTebal), $jumlah('K', $kolom('transport_mingguan'), $rpTebal), $jumlah('L', $kolom('kesehatan_mingguan'), $rpTebal),
+                $jumlah('M', $d['ringkas']['jam_hm'], $tebal), $teks(''), $jumlah('O', $d['ringkas']['total_hm'], $rpTebal),
+                $jumlah('P', $d['ringkas']['total'], $rpTebal)]));
+
+            // 2b. HM operator per hari (dasar Uang HM).
+            $operator = $dibayar->filter(fn ($b) => $b->operator)->values();
+            if ($operator->isNotEmpty()) {
+                $s = $w->addNewSheetAndMakeItCurrent();
+                $s->setName('HM operator');
+                foreach ([26, 22, 9, 9, 9, 9, 9, 9, 9, 10, 10, 14] as $i => $l) {
+                    $s->setColumnWidth($l, $i + 1);
+                }
+                $w->addRow(Row::fromValues(array_merge(['Nama Karyawan', 'Jabatan'], $d['hari']->map(fn ($h) => $h->translatedFormat('D j/n'))->all(),
+                    ['Total HM', 'Tarif HM', 'Uang HM']), $kepala));
+                foreach ($operator as $i => $b) {
+                    $n = $i + 2;
+                    $w->addRow(new Row(array_merge([$teks($b->k->nama), $teks($b->k->jabatan)],
+                        array_map(fn ($x) => $angka($x->hadir && $x->hm ? $x->hm : null), array_values($b->hari)),
+                        [new Cell\FormulaCell("=SUM(C{$n}:I{$n})", $tebal, $b->jam_hm), $angka($b->tarif_hm, $rp), new Cell\FormulaCell("=J{$n}*K{$n}", $rpTebal, $b->total_hm)])));
+                }
+            }
 
             // 3. Rekap per tahap (biaya UM per proyek).
             $s = $w->addNewSheetAndMakeItCurrent();
