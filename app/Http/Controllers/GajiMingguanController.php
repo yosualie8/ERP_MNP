@@ -138,7 +138,7 @@ class GajiMingguanController extends Controller
             $rp = (new Style)->setFormat('#,##0');
             $rpTebal = (new Style)->setFontBold()->setFormat('#,##0');
             $teks = fn ($v, ?Style $g = null) => new Cell\StringCell((string) $v, $g);
-            $angka = fn ($v, ?Style $g = null) => $v === null || $v === '' ? new Cell\StringCell('') : new Cell\NumericCell($v, $g);
+            $angka = fn ($v, ?Style $g = null) => $v === null || $v === '' ? new Cell\StringCell('', null) : new Cell\NumericCell($v, $g);
             $dibayar = $d['baris']->filter(fn ($b) => $b->total > 0)->values();
 
             $w = new Writer;
