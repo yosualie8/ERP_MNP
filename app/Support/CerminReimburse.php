@@ -387,9 +387,7 @@ class CerminReimburse
     {
         $p = collect($this->sheets->info($this->id)['sheets'])->firstWhere('properties.title', self::LEMBAR)['properties'];
         $ada = $p['gridProperties']['rowCount'];
-        if ($sampai > $ada) {
-            $this->sheets->permintaan($this->id, [['appendDimension' => ['sheetId' => $p['sheetId'], 'dimension' => 'ROWS', 'length' => $sampai - $ada + 200]]], 'menambah baris Mutasi Reimburse');
-        }
+        $this->sheets->sisakanBaris($this->id, $p['sheetId'], $ada, $sampai, self::LEMBAR);
     }
 
     private function sheetId(): int

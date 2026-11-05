@@ -15,7 +15,6 @@ use RuntimeException;
 class TulisRitasiSheet
 {
     /** Baris kosong cadangan yang ditambahkan sekaligus bila lembar Ritasi kehabisan baris. */
-    private const BARIS_CADANGAN = 1000;
 
     private string $id;
 
@@ -36,6 +35,7 @@ class TulisRitasiSheet
         return Cache::lock('tulis-ritasi-sheet', 120)->block(60, function () use ($rit) {
             $l = LembarRitasi::LEMBAR;
             $akhir = max((int) Ritasi::max('baris'), (int) Cache::get('ritasi-akhir', 1));
+            $this->pastikanBaris($this->sheetId(), $akhir + count($rit) + 2);
             if (! $this->kosong($akhir + 1, $akhir + count($rit) + 2)) {
                 $akhir = 1;
                 foreach ($this->sheets->nilaiMentah($this->id, ["{$l}!A2:Q"])["{$l}!A2:Q"] as $i => $r) {
@@ -166,14 +166,13 @@ class TulisRitasiSheet
 
     /**
      * Lembar Ritasi kehabisan baris (owner 2 Nov 2026: grid 10.542 baris, upload 57 rit ditolak "exceeds grid limits") →
-     * tambahkan baris kosong di bawah sheet sebelum menulis: sejumlah kekurangannya + cadangan BARIS_CADANGAN.
+     * tambahkan baris kosong di bawah sheet sebelum menulis; sejak 5 Nov 2026 selalu disisakan ≥ 500 baris kosong (GoogleSheets::sisakanBaris).
      */
     private function pastikanBaris(int $sheetId, int $sampai): void
     {
         $grid = collect($this->sheets->info($this->id)['sheets'])->firstWhere('properties.sheetId', $sheetId)['properties']['gridProperties']['rowCount'] ?? null;
-        if ($grid !== null && $sampai > $grid) {
-            $this->sheets->permintaan($this->id, [['appendDimension' => ['sheetId' => $sheetId, 'dimension' => 'ROWS', 'length' => $sampai - $grid + self::BARIS_CADANGAN]]],
-                'menambah baris lembar Ritasi');
+        if ($grid !== null) {
+            $this->sheets->sisakanBaris($this->id, $sheetId, $grid, $sampai, LembarRitasi::LEMBAR);
         }
     }
 

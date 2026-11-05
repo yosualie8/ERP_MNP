@@ -41,7 +41,13 @@ class TulisUjSheet
             $max = self::idTerbesar();
             $akhir = self::barisTerakhir();
             $jumlah = count($input['detail']) + ($input['biaya_transfer'] ? 1 : 0);
-            if ($akhir === null || ! $this->kosong($akhir + 1, $akhir + $jumlah + 2)) {
+            // Ukuran grid dibaca segar tiap simpan: baris di luar grid pasti kosong (Google menolak membaca di luar grid, 5 Nov 2026).
+            Cache::forget("uj-grid-{$this->id}");
+            $g = $this->grid();
+            if ($akhir !== null) {
+                $g['rowCount'] = $this->sheets->sisakanBaris($this->id, $g['sheetId'], $g['rowCount'], $akhir + $jumlah + 2, KasSeabank::LEMBAR);
+            }
+            if ($akhir === null || ! $this->kosong($akhir + 1, $akhir + $jumlah + 2, $g['rowCount'])) {
                 [$akhir, $maxSheet] = $this->ujung();
                 $max = max($max, $maxSheet);
             }
@@ -54,13 +60,9 @@ class TulisUjSheet
             Cache::forever('uj-akhir', $sampai);
             Cache::forever('uj-max', $idBiaya ?? end($ids));
 
-            $g = $this->grid();
-            $requests = [];
-            if ($sampai > $g['rowCount']) {
-                $requests[] = ['appendDimension' => ['sheetId' => $g['sheetId'], 'dimension' => 'ROWS', 'length' => $sampai - $g['rowCount'] + 200]];
-                Cache::forget("uj-grid-{$this->id}");
-            }
-            $this->sheets->permintaan($this->id, [...$requests, ...$this->isiSel($g['sheetId'], $mulai, $baris, false)], 'menulis Kas Seabank');
+            $this->sheets->sisakanBaris($this->id, $g['sheetId'], $g['rowCount'], $sampai, KasSeabank::LEMBAR);
+            Cache::forget("uj-grid-{$this->id}");
+            $this->sheets->permintaan($this->id, [...$this->isiSel($g['sheetId'], $mulai, $baris, false)], 'menulis Kas Seabank');
 
             return ['baris_awal' => $mulai, 'baris_akhir' => $sampai, 'no_uj' => $ids[0], 'ids' => $ids, 'id_biaya' => $idBiaya, 'mentah' => self::keMentah($baris)];
         });
@@ -218,9 +220,15 @@ class TulisUjSheet
         }
     }
 
-    /** Baris $dari..$sampai di kolom A..H masih kosong (satu bacaan kecil). */
-    private function kosong(int $dari, int $sampai): bool
+    /** Baris $dari..$sampai di kolom A..H masih kosong (satu bacaan kecil); baris sesudah $grid (di luar grid) dianggap kosong. */
+    private function kosong(int $dari, int $sampai, ?int $grid = null): bool
     {
+        if ($grid !== null) {
+            if ($dari > $grid) {
+                return true;
+            }
+            $sampai = min($sampai, $grid);
+        }
         $l = KasSeabank::LEMBAR;
         foreach ($this->sheets->nilaiMentah($this->id, ["{$l}!A{$dari}:H{$sampai}"])["{$l}!A{$dari}:H{$sampai}"] as $r) {
             if (KasSeabank::adaData($r)) {

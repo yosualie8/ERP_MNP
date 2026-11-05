@@ -131,6 +131,26 @@ class GoogleSheets
     }
 
     /** Kirim beberapa permintaan spreadsheets.batchUpdate sekaligus (sisip/hapus baris, dll.). */
+    /** Sisa baris kosong minimal di bawah data / tambahan baris sekali tambah (owner 5 Nov 2026: tambah sebelum habis, jangan tunggu galat). */
+    public const BARIS_SISA_MIN = 500;
+
+    public const BARIS_TAMBAH = 1000;
+
+    /**
+     * Pastikan lembar masih punya cadangan baris kosong sesudah baris $sampai: bila sisanya < BARIS_SISA_MIN,
+     * tambahkan baris di bawah sheet sampai $sampai + BARIS_TAMBAH. Mengembalikan jumlah baris grid sesudahnya.
+     */
+    public function sisakanBaris(string $id, int $sheetId, int $grid, int $sampai, string $lembar): int
+    {
+        if ($grid - $sampai >= self::BARIS_SISA_MIN) {
+            return $grid;
+        }
+        $tambah = $sampai - $grid + self::BARIS_TAMBAH;
+        $this->permintaan($id, [['appendDimension' => ['sheetId' => $sheetId, 'dimension' => 'ROWS', 'length' => $tambah]]], "menambah baris lembar {$lembar}");
+
+        return $grid + $tambah;
+    }
+
     public function permintaan(string $id, array $requests, string $kegiatan): void
     {
         if ($requests) {

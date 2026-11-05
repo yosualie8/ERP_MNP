@@ -123,9 +123,7 @@ class StatusReimburse
             if ($baris) {
                 $mulai = $akhir + 1;
                 $sheetId = collect($sheets->info($id)['sheets'])->firstWhere('properties.title', self::LEMBAR)['properties'];
-                if ($mulai + count($baris) > $sheetId['gridProperties']['rowCount']) {
-                    $sheets->permintaan($id, [['appendDimension' => ['sheetId' => $sheetId['sheetId'], 'dimension' => 'ROWS', 'length' => count($baris) + 200]]], 'menambah baris Sudah Reimburse');
-                }
+                $sheets->sisakanBaris($id, $sheetId['sheetId'], $sheetId['gridProperties']['rowCount'], $mulai + count($baris), self::LEMBAR);
                 $sheets->permintaan($id, [['copyPaste' => [
                     'source' => ['sheetId' => $sheetId['sheetId'], 'startRowIndex' => $akhir - 1, 'endRowIndex' => $akhir, 'startColumnIndex' => 0, 'endColumnIndex' => 16],
                     'destination' => ['sheetId' => $sheetId['sheetId'], 'startRowIndex' => $mulai - 1, 'endRowIndex' => $mulai - 1 + count($baris), 'startColumnIndex' => 0, 'endColumnIndex' => 16],
