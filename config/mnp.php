@@ -40,6 +40,6 @@ return [
     'tuya_client_id' => env('TUYA_CLIENT_ID'),
     'tuya_secret' => env('TUYA_SECRET'),
     'tuya_host' => env('TUYA_HOST', 'https://openapi.tuyaeu.com'),
-    // Akun yang boleh membuka Kendali Rumah (pisahkan koma).
-    'rumah_emails' => env('RUMAH_EMAILS', 'yosua160891@gmail.com'),
+    // Satu-satunya akun yang boleh membuka Kendali Rumah (owner, 5 Nov 2026) — sengaja TIDAK bisa diubah lewat .env.
+    'rumah_email' => 'yosua160891@gmail.com',
 ];

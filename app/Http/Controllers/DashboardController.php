@@ -21,6 +21,8 @@ class DashboardController extends Controller
             'bulanBercatatan' => KasBulan::where('arsip', false)->get()->reject->cocok()->pluck('lembar'),
             // Kesehatan server (sisa disk, foto tertahan) hanya untuk Super Admin.
             'server' => auth()->user()?->isSuperAdmin() ? \App\Support\CekServer::periksa() : null,
+            // Pengingat perpanjang langganan Tuya (Kendali Rumah) — hanya akun owner, mulai 30 hari sebelum habis.
+            'masaTuya' => auth()->user()?->bolehRumah() && \App\Support\Tuya::siap() ? \App\Support\Rumah::masaBerlaku() : null,
         ]);
     }
 }

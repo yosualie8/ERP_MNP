@@ -2,23 +2,35 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\PengaturanApp;
 use App\Support\Rumah;
 use App\Support\Tuya;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 use InvalidArgumentException;
 use Throwable;
 
 /**
- * Kendali Rumah (Gate 'rumah', config mnp.rumah_emails): satu halaman layar penuh untuk iPhone & tablet
+ * Kendali Rumah (Gate 'rumah', hanya config mnp.rumah_email): satu halaman layar penuh untuk iPhone & tablet
  * (bisa dipasang ke layar utama) yang mengendalikan perangkat Smart Life/Tuya lewat Tuya Cloud API.
  */
 class RumahController extends Controller
 {
     public function index(): View
     {
-        return view('rumah.index', ['siap' => Tuya::siap()]);
+        return view('rumah.index', ['siap' => Tuya::siap(), 'masa' => Rumah::masaBerlaku()]);
+    }
+
+    /** Simpan tanggal habis langganan Tuya IoT Core (diisi ulang tiap selesai memperpanjang). */
+    public function simpanMasaBerlaku(Request $request): RedirectResponse
+    {
+        $v = $request->validate(['tanggal' => 'required|date']);
+        PengaturanApp::simpan(Rumah::KUNCI_HABIS, Carbon::parse($v['tanggal'])->toDateString(), $request->user()->id);
+
+        return redirect()->route('rumah.index');
     }
 
     public function data(Request $request): JsonResponse

@@ -1,6 +1,17 @@
 @extends('layouts.app', ['judul' => 'Beranda'])
 
 @section('isi')
+    @if (($masaTuya ?? null) && $masaTuya['ingatkan'])
+        <div class="pesan galat"><b>🏠 Kendali Rumah:</b>
+            @if (! $masaTuya['tanggal'])
+                tanggal habis langganan Tuya belum diisi.
+            @elseif ($masaTuya['sisa_hari'] < 0)
+                langganan Tuya IoT Core <b>sudah habis</b> sejak {{ $masaTuya['tanggal']->translatedFormat('j F Y') }} — lampu tidak bisa dikendalikan sampai diperpanjang.
+            @else
+                langganan Tuya IoT Core habis <b>{{ $masaTuya['tanggal']->translatedFormat('j F Y') }}</b> ({{ $masaTuya['sisa_hari'] }} hari lagi) — perpanjang di platform.tuya.com.
+            @endif
+            <a href="{{ route('rumah.index') }}">Buka Rumah</a></div>
+    @endif
     @if ($server)
         @foreach ($server['masalah'] as $m)
             <div class="pesan galat"><b>⚠ Server:</b> {{ $m }}</div>

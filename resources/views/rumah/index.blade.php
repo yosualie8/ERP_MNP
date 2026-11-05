@@ -88,6 +88,16 @@
 
         .pesan { position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); transform: translateX(-50%); background: #3a1f22; color: #ffd6d6;
             padding: 12px 16px; border-radius: 14px; font-size: 15px; display: none; z-index: 20; max-width: 90vw; }
+        .ingat { background: #3a2a12; color: #ffd99a; border-radius: 16px; padding: 14px 16px; margin-bottom: 18px; line-height: 1.5; font-size: 15px; }
+        .ingat.habis { background: #3a1f22; color: #ffd6d6; }
+        .masa { margin-top: 18px; background: var(--kartu); border-radius: 16px; padding: 14px 16px; font-size: 14px; color: var(--redup); line-height: 1.5; }
+        .masa form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
+        .masa input[type=date] { background: #0f1115; color: var(--teks); border: 1px solid var(--garis); border-radius: 10px; padding: 9px 10px; font-size: 15px; }
+        .ubin.listrik { grid-column: span 2; min-height: 170px; }
+        .ubin .watt { font-size: 34px; font-weight: 700; letter-spacing: -.5px; margin-top: 8px; font-variant-numeric: tabular-nums; }
+        .ubin .watt small { font-size: 16px; font-weight: 600; color: var(--redup); margin-left: 3px; }
+        .ubin .rinci-listrik { font-size: 13px; color: var(--redup); font-variant-numeric: tabular-nums; }
+        .ubin canvas.grafik { width: 100%; height: 56px; display: block; margin-top: 8px; }
         .kosong { background: var(--kartu); border-radius: 18px; padding: 22px; color: var(--redup); line-height: 1.6; }
     </style>
 </head>
@@ -103,12 +113,33 @@
     @if (! $siap)
         <div class="kosong">Kunci Tuya belum diisi di server (<code>TUYA_CLIENT_ID</code> &amp; <code>TUYA_SECRET</code> di <code>.env</code>).</div>
     @else
+        @if ($masa['ingatkan'])
+            <div class="ingat {{ ($masa['sisa_hari'] ?? 0) < 0 ? 'habis' : '' }}">
+                @if (! $masa['tanggal'])
+                    ⏰ Tanggal habis langganan <b>Tuya IoT Core</b> belum diisi. Lihat di platform.tuya.com → Cloud → project Anda (masa berlaku IoT Core), lalu isi di bagian bawah halaman ini.
+                @elseif ($masa['sisa_hari'] < 0)
+                    ⛔ Langganan Tuya IoT Core <b>sudah habis</b> sejak {{ $masa['tanggal']->translatedFormat('j F Y') }}. Perpanjang di platform.tuya.com, lalu ubah tanggalnya di bawah.
+                @else
+                    ⏰ Langganan Tuya IoT Core habis <b>{{ $masa['tanggal']->translatedFormat('j F Y') }}</b> — <b>{{ $masa['sisa_hari'] }} hari lagi</b>. Perpanjang di platform.tuya.com (IoT Core → Extend), lalu ubah tanggalnya di bawah.
+                @endif
+            </div>
+        @endif
         <div class="skenario">
             <button type="button" class="terang" data-semua="1">💡 Semua lampu nyala</button>
             <button type="button" data-semua="0">🌙 Semua lampu mati</button>
         </div>
         <div id="isi"></div>
         <div class="bawah" id="bawah"></div>
+        <div class="masa">
+            Langganan Tuya IoT Core berlaku sampai
+            <b>{{ $masa['tanggal'] ? $masa['tanggal']->translatedFormat('j F Y') : 'belum diisi' }}</b>{{ $masa['sisa_hari'] !== null && $masa['sisa_hari'] >= 0 ? ' ('.$masa['sisa_hari'].' hari lagi)' : '' }}.
+            Pengingat muncul di sini &amp; di Beranda ERP mulai {{ \App\Support\Rumah::HARI_INGATKAN }} hari sebelum habis.
+            <form method="POST" action="{{ route('rumah.masa-berlaku') }}">
+                @csrf
+                <input type="date" name="tanggal" value="{{ $masa['tanggal']?->toDateString() }}" required>
+                <button type="submit" class="tombol-kecil">Simpan tanggal</button>
+            </form>
+        </div>
     @endif
 
     <div class="tirai" id="tirai">
@@ -158,6 +189,42 @@
             return j;
         }
 
+        const angka = (v, d = 1) => (v === null || v === undefined) ? '-' : Number(v).toLocaleString('id-ID', { maximumFractionDigits: d });
+        // Riwayat daya per stop kontak (10 menit terakhir), disimpan di browser supaya grafik tidak kosong saat aplikasi dibuka lagi.
+        const RENTANG = 10 * 60 * 1000;
+        let riwayat = {};
+        try { riwayat = JSON.parse(localStorage.getItem('rumah-daya') || '{}'); } catch (e) {}
+        function catatDaya() {
+            const now = Date.now();
+            daftar.filter(p => p.jenis === 'stopkontak' && p.daya !== null && p.daya !== undefined).forEach(p => {
+                const r = (riwayat[p.id] || []).filter(x => now - x[0] < RENTANG);
+                r.push([now, p.nyala ? p.daya : 0]);
+                riwayat[p.id] = r;
+            });
+            try { localStorage.setItem('rumah-daya', JSON.stringify(riwayat)); } catch (e) {}
+        }
+        function grafik(c, data) {
+            if (!c) return;
+            const dpr = window.devicePixelRatio || 1, W = c.clientWidth, H = c.clientHeight;
+            if (!W || !H) return;
+            c.width = W * dpr; c.height = H * dpr;
+            const x = c.getContext('2d'); x.scale(dpr, dpr);
+            const now = Date.now();
+            const maks = Math.max(10, ...data.map(d => d[1])) * 1.15;
+            const px = (t) => W - ((now - t) / RENTANG) * W, py = (v) => H - 2 - (v / maks) * (H - 6);
+            x.strokeStyle = 'rgba(255,255,255,.07)'; x.lineWidth = 1;
+            x.beginPath(); x.moveTo(0, H / 2); x.lineTo(W, H / 2); x.stroke();
+            x.fillStyle = 'rgba(255,255,255,.35)'; x.font = '10px sans-serif';
+            x.fillText(`${Math.round(maks)} W`, 2, 10);
+            if (data.length < 2) return;
+            const grad = x.createLinearGradient(0, 0, 0, H); grad.addColorStop(0, 'rgba(255,200,100,.35)'); grad.addColorStop(1, 'rgba(255,200,100,0)');
+            x.beginPath(); x.moveTo(px(data[0][0]), H);
+            data.forEach(d => x.lineTo(px(d[0]), py(d[1])));
+            x.lineTo(px(data[data.length - 1][0]), H); x.closePath(); x.fillStyle = grad; x.fill();
+            x.beginPath(); data.forEach((d, i) => i ? x.lineTo(px(d[0]), py(d[1])) : x.moveTo(px(d[0]), py(d[1])));
+            x.strokeStyle = '#ffc864'; x.lineWidth = 2; x.lineJoin = 'round'; x.stroke();
+        }
+
         function warnaLampu(p) {
             if (p.mode === 'warna' && p.warna) return `hsl(${p.warna.h}, ${Math.max(40, p.warna.s)}%, 62%)`;
             // putih: 0 = hangat, 100 = dingin
@@ -175,7 +242,7 @@
                 ikon = '💡'; el.style.setProperty('--warna', warnaLampu(p));
                 ket = p.nyala ? `Nyala · ${p.terang}%` : 'Mati';
             } else if (p.jenis === 'stopkontak') {
-                ikon = '🔌'; ket = p.nyala ? ('Nyala' + (p.daya !== null ? ` · ${p.daya} W` : '')) : 'Mati';
+                ikon = '🔌'; ket = p.nyala ? 'Nyala' : 'Mati';
             } else if (p.jenis === 'fingerbot') {
                 ikon = '👆'; ket = p.nyala ? 'Posisi tekan' : 'Siap';
             } else {
@@ -185,6 +252,15 @@
             el.innerHTML = `<div class="ikon">${ikon}</div><div><div class="nama"></div><div class="ket"></div></div>`;
             el.querySelector('.nama').textContent = p.nama;
             el.querySelector('.ket').textContent = ket;
+            if (p.jenis === 'stopkontak' && p.daya !== null && p.daya !== undefined) {
+                el.classList.add('listrik');
+                const w = document.createElement('div');
+                w.innerHTML = `<div class="watt"></div><div class="rinci-listrik"></div><canvas class="grafik"></canvas>`;
+                w.querySelector('.watt').innerHTML = `${angka(p.nyala ? p.daya : 0)}<small>W</small>`;
+                w.querySelector('.rinci-listrik').textContent = `${angka(p.tegangan)} V · ${angka((p.arus || 0) / 1000, 2)} A · grafik 10 menit`;
+                el.appendChild(w);
+                requestAnimationFrame(() => grafik(w.querySelector('canvas'), riwayat[p.id] || []));
+            }
             if (p.jenis === 'lampu' && p.online) {
                 const b = document.createElement('button'); b.className = 'lebih'; b.type = 'button'; b.textContent = '⋯'; b.setAttribute('aria-label', 'Atur ' + p.nama);
                 b.addEventListener('click', (e) => { e.stopPropagation(); bukaLembar(p.id); });
@@ -195,7 +271,11 @@
                 b.addEventListener('click', (e) => { e.stopPropagation(); ubah(p, 'nyala', !p.nyala); });
                 el.appendChild(b);
             }
-            if (p.online && p.nyala !== null) el.addEventListener('click', () => ubah(p, 'nyala', !p.nyala));
+            if (p.online && p.nyala !== null) el.addEventListener('click', () => {
+                // Stop kontak: konfirmasi dulu sebelum dimatikan (ubinnya besar, gampang tersentuh saat melihat grafik).
+                if (p.jenis === 'stopkontak' && p.nyala && !confirm('Matikan ' + p.nama + '?')) return;
+                ubah(p, 'nyala', !p.nyala);
+            });
             return el;
         }
 
@@ -226,9 +306,10 @@
                 const j = await minta(URL_DATA + (segarkan ? '?segarkan=1' : ''));
                 if (Date.now() < tahanSampai) return;
                 daftar = j.perangkat;
+                catatDaya();
                 gambar();
                 const on = daftar.filter(p => p.jenis !== 'gateway' && p.online).length;
-                status(true, `${on} perangkat online · ${new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}`);
+                status(true, `${on} perangkat online · diperbarui ${new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}`);
             } catch (e) { status(false, e.message); }
         }
 
@@ -293,9 +374,11 @@
         $('l-tutup').addEventListener('click', tutupLembar);
         $('tirai').addEventListener('click', (e) => { if (e.target.id === 'tirai') tutupLembar(); });
 
-        // Segarkan tiap 8 detik selama halaman terlihat; langsung segarkan saat aplikasi dibuka lagi.
+        // Segarkan otomatis tiap 3 detik selama halaman terlihat (berhenti saat aplikasi di latar belakang); langsung segarkan saat dibuka lagi.
+        let jalan = false;
+        async function putaran() { if (jalan) return; jalan = true; try { await muat(); } finally { jalan = false; } }
         muat(true);
-        setInterval(() => muat(), 8000);
+        setInterval(putaran, 3000);
         document.addEventListener('visibilitychange', () => { if (!document.hidden) muat(true); });
     })();
     </script>

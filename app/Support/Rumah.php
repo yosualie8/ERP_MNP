@@ -12,6 +12,22 @@ use InvalidArgumentException;
  */
 class Rumah
 {
+    /** PengaturanApp: tanggal habis langganan Tuya IoT Core (Y-m-d). */
+    public const KUNCI_HABIS = 'tuya_habis';
+
+    /** Pengingat muncul mulai sekian hari sebelum habis. */
+    public const HARI_INGATKAN = 30;
+
+    /** @return array{tanggal: ?\Carbon\Carbon, sisa_hari: ?int, ingatkan: bool} */
+    public static function masaBerlaku(): array
+    {
+        $t = \App\Models\PengaturanApp::ambil(self::KUNCI_HABIS);
+        $tanggal = $t ? \Carbon\Carbon::parse($t)->startOfDay() : null;
+        $sisa = $tanggal ? (int) now()->startOfDay()->diffInDays($tanggal, false) : null;
+
+        return ['tanggal' => $tanggal, 'sisa_hari' => $sisa, 'ingatkan' => $sisa === null || $sisa <= self::HARI_INGATKAN];
+    }
+
     /** @return array<int, array<string, mixed>> */
     public static function perangkat(bool $segarkan = false): array
     {
