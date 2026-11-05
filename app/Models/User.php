@@ -104,6 +104,14 @@ class User extends Authenticatable
         return strtolower((string) $this->email) === strtolower((string) config('mnp.mic_email'));
     }
 
+    /** Kendali Rumah (lampu/perangkat Smart Life) hanya untuk email di config mnp.rumah_emails. */
+    public function bolehRumah(): bool
+    {
+        $boleh = array_map(fn ($e) => strtolower(trim($e)), explode(',', (string) config('mnp.rumah_emails')));
+
+        return in_array(strtolower((string) $this->email), $boleh, true);
+    }
+
     /** @return string[] */
     public static function emailSuperAdminEnv(): array
     {

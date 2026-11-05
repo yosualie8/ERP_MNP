@@ -34,4 +34,12 @@ return [
     'mic_relay_port' => (int) env('MIC_RELAY_PORT', 8095),
     // Satu-satunya akun yang boleh memakai Mic ke Laptop (owner, 1 Nov 2026).
     'mic_email' => env('MIC_EMAIL', 'yosua160891@gmail.com'),
+
+    // Kendali Rumah: perangkat Tuya/Smart Life (lampu Bardi, finger bot, stop kontak) lewat Tuya Cloud API.
+    // Akun Smart Life owner berwilayah UK → data center Central Europe (openapi.tuyaeu.com).
+    'tuya_client_id' => env('TUYA_CLIENT_ID'),
+    'tuya_secret' => env('TUYA_SECRET'),
+    'tuya_host' => env('TUYA_HOST', 'https://openapi.tuyaeu.com'),
+    // Akun yang boleh membuka Kendali Rumah (pisahkan koma).
+    'rumah_emails' => env('RUMAH_EMAILS', 'yosua160891@gmail.com'),
 ];

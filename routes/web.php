@@ -260,6 +260,13 @@ Route::middleware(['auth', 'menu'])->group(function () {
             Route::post('/mic/kode-pasang', [\App\Http\Controllers\MicController::class, 'kodePasang'])->name('mic.kode');
             Route::delete('/mic/perangkat/{perangkat}', [\App\Http\Controllers\MicController::class, 'hapus'])->whereNumber('perangkat')->name('mic.hapus');
         });
+        // Kendali Rumah (Smart Life/Tuya): hanya email di mnp.rumah_emails (Gate 'rumah').
+        Route::middleware('can:rumah')->group(function () {
+            Route::get('/rumah', [\App\Http\Controllers\RumahController::class, 'index'])->name('rumah.index');
+            Route::get('/rumah/data', [\App\Http\Controllers\RumahController::class, 'data'])->name('rumah.data');
+            Route::post('/rumah/perangkat/{id}', [\App\Http\Controllers\RumahController::class, 'aksi'])->where('id', '[A-Za-z0-9]{6,40}')->middleware('throttle:120,1')->name('rumah.aksi');
+            Route::post('/rumah/semua-lampu', [\App\Http\Controllers\RumahController::class, 'semuaLampu'])->middleware('throttle:30,1')->name('rumah.semua-lampu');
+        });
         Route::get('/pengguna', [PenggunaController::class, 'index'])->name('pengguna.index');
         Route::post('/pengguna', [PenggunaController::class, 'store'])->name('pengguna.store');
         Route::patch('/pengguna/{user}', [PenggunaController::class, 'update'])->name('pengguna.update');

@@ -180,6 +180,9 @@
                 @if (auth()->user()->bolehMic())
                     <a class="tombol polos" href="{{ route('mic.index') }}" title="Bicara lewat HP/tablet, suaranya jadi mikrofon di laptop">🎤 Mic</a>
                 @endif
+                @if (auth()->user()->bolehRumah())
+                    <a class="tombol polos" href="{{ route('rumah.index') }}" title="Kendali lampu & perangkat rumah (Smart Life)">🏠 Rumah</a>
+                @endif
                 @if (auth()->user()->isSuperAdmin())
                     <a class="tombol polos" href="{{ route('login-perangkat.index') }}" title="Masuk di HP lain lewat QR sekali pakai">📱 Login HP lain</a>
                 @endif

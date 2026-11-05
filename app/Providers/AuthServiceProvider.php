@@ -26,5 +26,6 @@ class AuthServiceProvider extends ServiceProvider
         Gate::define('super-admin', fn (User $user) => $user->isSuperAdmin());
         // Mic ke Laptop: hanya satu akun (owner), bukan semua Super Admin.
         Gate::define('mic', fn (User $user) => $user->bolehMic());
+        Gate::define('rumah', fn (User $user) => $user->bolehRumah());
     }
 }
