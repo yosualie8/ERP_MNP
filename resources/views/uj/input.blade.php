@@ -337,6 +337,10 @@
             <p class="redup" id="catatan-biaya" style="margin: 4px 0 0 24px;" @if ($ajukan) hidden @endif></p>
         </div>
 
+        @if (! $ajukan && ! $edit)
+            @include('uj._potong-hutang')
+        @endif
+
         @php($teksTombol = $ajukan ? ($edit ? 'Simpan perubahan pengajuan' : 'Ajukan') : ($edit ? 'Simpan perubahan ke sheet' : 'Simpan ke sheet'))
         <div id="hasil-validasi" hidden></div>
         <div style="display: flex; gap: 12px; align-items: center;">

@@ -169,6 +169,7 @@ class MutasiJago
                 'id' => $r['m']->id, 'waktu' => $r['m']->waktu->toDateString(), 'jam' => $r['m']->waktu->format('H:i'), 'nama' => (string) $r['m']->nama,
                 'bank' => $r['m']->bank, 'rekening' => $r['m']->rekening, 'arah' => $r['m']->arah, 'nominal' => (int) abs($r['m']->jumlah),
                 'biaya' => self::biayaDari($r['m'], $urut, $posisi), 'catatan' => $r['m']->catatan,
+                'catatan_biaya' => self::barisBiaya($r['m'], $urut, $posisi)?->catatan,
                 'saran' => $r['status'] === 'kembali' ? '↩ Transfer kembali (keluar lalu masuk lagi dengan jumlah & penerima sama) — catat keluar DAN masuknya' : $r['saran'],
                 'nama_buku' => self::namaBunga($r['m']),
             ])->values()->all();
@@ -177,14 +178,22 @@ class MutasiJago
     /** Biaya transfer bank untuk satu transfer keluar = baris biaya tepat sesudahnya di menit yang sama (Rp0 bila tidak ada). */
     public static function biayaDari(JagoMutasi $m, ?Collection $urut = null, ?Collection $posisi = null): int
     {
+        $n = self::barisBiaya($m, $urut, $posisi);
+
+        return $n ? (int) round(abs($n->jumlah)) : 0;
+    }
+
+    /** Baris biaya transfer milik satu transfer keluar (tepat sesudahnya, menit sama) — catatannya kadang berisi keterangan (mis. potong hutang). */
+    public static function barisBiaya(JagoMutasi $m, ?Collection $urut = null, ?Collection $posisi = null): ?JagoMutasi
+    {
         if ($m->arah !== 'keluar') {
-            return 0;
+            return null;
         }
         $urut ??= collect(self::validitas($m->kantong)['urut'])->values();
         $posisi ??= $urut->pluck('id')->flip();
         $n = $urut[($posisi[$m->id] ?? -2) + 1] ?? null;
 
-        return $n && $n->biaya && $n->waktu->format('YmdHi') === $m->waktu->format('YmdHi') ? (int) round(abs($n->jumlah)) : 0;
+        return $n && $n->biaya && $n->waktu->format('YmdHi') === $m->waktu->format('YmdHi') ? $n : null;
     }
 
     /**

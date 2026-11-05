@@ -46,7 +46,7 @@
                                 <td style="white-space: nowrap;">{{ \Illuminate\Support\Carbon::parse($c['waktu'])->translatedFormat('d-M') }} <b>{{ $c['jam'] }}</b></td>
                                 <td>{{ $c['nama'] }}@if ($kantong === 'kas')<div class="kecil">{{ $c['arah'] === 'masuk' ? '⬇ uang masuk' : '⬆ transfer keluar' }}</div>@endif</td>
                                 <td>{{ trim($c['bank'].' '.$c['rekening']) }}</td>
-                                <td style="max-width: 320px;">{{ $c['catatan'] }}@if ($c['saran'])<div class="kecil" style="color: #f0c05a;">⚠ {{ $c['saran'] }} — pastikan belum pernah diinput.</div>@endif</td>
+                                <td style="max-width: 320px;">{{ $c['catatan'] }}@if (! empty($c['catatan_biaya']))<div class="kecil">catatan biaya transfer: <b>{{ $c['catatan_biaya'] }}</b></div>@endif @if ($c['saran'])<div class="kecil" style="color: #f0c05a;">⚠ {{ $c['saran'] }} — pastikan belum pernah diinput.</div>@endif</td>
                                 <td class="angka"><b>{{ number_format($c['nominal'], 0, ',', '.') }}</b></td>
                                 <td class="angka">{{ $c['biaya'] ? number_format($c['biaya'], 0, ',', '.') : '–' }}</td>
                                 <td><button type="button" class="tombol" data-pakai="{{ $c['id'] }}" style="padding: 3px 12px; font-size: 12.5px;">Pakai</button></td>

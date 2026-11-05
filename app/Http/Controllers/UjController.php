@@ -574,6 +574,11 @@ class UjController extends Controller
             return $mj;
         }
         $input = $mj['input'];
+        // Potongan hutang sopir (owner 4 Nov 2026): catatan / keterangan "potong" wajib dipilih potongannya ke sopir mana.
+        $potong = \App\Support\PotongHutangUj::periksa($request, $input, $mj['mutasi']);
+        if (is_string($potong)) {
+            return back()->withInput()->with('error', $potong);
+        }
         // Fitur Pengajuan UJ nonaktif: tautan ke pengajuan dari form lama diabaikan.
         if (! \App\Support\Fitur::pengajuanUj()) {
             $input['detail'] = array_map(fn ($d) => [...$d, 'pengajuan' => null], $input['detail']);
@@ -634,6 +639,7 @@ class UjController extends Controller
         $this->catatTemuan($temuan, $input, $hasil['ids'], $request->user()->id);
         $jumlahFoto = $this->simpanFoto($request, $hasil['no_uj'], $input['tanggal']);
         $rekapTanah?->update(['status' => 'dibayar', 'no_uj' => $hasil['no_uj'], 'dibayar_pada' => now(), 'dibayar_oleh' => $request->user()->id]);
+        $pesanPotong = \App\Support\PotongHutangUj::catat($potong, $input, $hasil['ids'], $request->user()->id);
 
         // Rekening baru masuk Daftar Rekening (nama penerima Input UJ dicatat "perlu dicek": sering diisi nama sopir).
         \App\Support\DaftarRekening::catat($input['rekening'] ?? null, $input['bank'] ?? null, $input['nama'] ?? null, $request->user()->id, false);
@@ -653,7 +659,7 @@ class UjController extends Controller
             .($hasil['id_biaya'] ? ', biaya transfer UJ-'.$hasil['id_biaya'] : '').'): '
             .$this->ringkasanInput($input).'.'.($jumlahFoto ? " {$jumlahFoto} foto bon terlampir." : '').($rekapTanah ? ' '.$rekapTanah->kode().' tercatat dibayar.' : '')
             .($terealisasi ? " {$terealisasi} detail pengajuan tercatat terealisasi".($berbeda ? " ({$berbeda} berbeda dari pengajuannya, tercatat beserta alasannya)" : '').'.' : '').$pesanImpor
-            .$this->terapkanSopir($input, $request));
+            .$pesanPotong.$this->terapkanSopir($input, $request));
     }
 
     public function edit(int $noUj): View|RedirectResponse
@@ -765,6 +771,7 @@ class UjController extends Controller
         $pesanImpor = $this->perbarui(fn () => KasSeabank::perbaruiBlok($t, $hasil['baris_akhir'] + 1, -$jumlah));
         $foto = FotoBon::hapusMilik($noUj, 'uj');
         UjTemuan::whereIn('id_uj', $t->detail->pluck('id_uj')->filter())->delete();
+        $potong = \App\Support\PotongHutangUj::hapusMilik($t->detail->pluck('id_uj')->all());
         // Detail pengajuan yang direalisasikan oleh transaksi ini kembali "menunggu" (bisa direalisasikan ulang).
         $kembali = UjPengajuanDetail::whereIn('id_uj', $t->detail->pluck('id_uj')->filter())->get();
         if ($kembali->isNotEmpty()) {
@@ -778,7 +785,7 @@ class UjController extends Controller
         ]);
 
         return redirect()->route('uj.index', ['bulan' => $t->tanggal?->format('Y-m'), 'q' => $request->input('q') ?: null])->with($pesanImpor ? 'error' : 'success',
-            "Dihapus dari Kas Seabank baris {$hasil['baris_awal']}–{$hasil['baris_akhir']}: {$ringkasan}".($foto ? ", {$foto} foto bon ikut dihapus" : '').'.'.$pesanImpor);
+            "Dihapus dari Kas Seabank baris {$hasil['baris_awal']}–{$hasil['baris_akhir']}: {$ringkasan}".($foto ? ", {$foto} foto bon ikut dihapus" : '').($potong ? ", {$potong} catatan potongan Hutang Supir ikut dihapus" : '').'.'.$pesanImpor);
     }
 
     private function simpanFoto(Request $request, int $noUj, Carbon $tanggal): int
