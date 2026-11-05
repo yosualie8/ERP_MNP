@@ -8,7 +8,7 @@ use InvalidArgumentException;
 /**
  * Kendali Rumah: daftar perangkat Tuya diringkas jadi bentuk sederhana untuk halaman /rumah
  * (lampu, stop kontak, finger bot, gateway) + penerjemah aksi halaman → perintah Tuya.
- * Hemat kuota API: daftar perangkat di-cache 60 dtk, spesifikasi 1 hari, status 2 dtk.
+ * Hemat kuota API: daftar perangkat di-cache 60 dtk, status 1 dtk.
  */
 class Rumah
 {
@@ -51,7 +51,7 @@ class Rumah
             return $semua;
         });
         $ids = array_column($daftar, 'id');
-        $status = Cache::remember('rumah:status', 2, fn () => $ids ? Tuya::statusBanyak($ids) : []);
+        $status = Cache::remember('rumah:status', 1, fn () => $ids ? Tuya::statusBanyak($ids) : []);
 
         $hasil = [];
         foreach ($daftar as $p) {

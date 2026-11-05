@@ -374,11 +374,11 @@
         $('l-tutup').addEventListener('click', tutupLembar);
         $('tirai').addEventListener('click', (e) => { if (e.target.id === 'tirai') tutupLembar(); });
 
-        // Segarkan otomatis tiap 3 detik selama halaman terlihat (berhenti saat aplikasi di latar belakang); langsung segarkan saat dibuka lagi.
+        // Segarkan otomatis tiap 2 detik selama halaman terlihat (berhenti saat aplikasi di latar belakang); langsung segarkan saat dibuka lagi.
         let jalan = false;
         async function putaran() { if (jalan) return; jalan = true; try { await muat(); } finally { jalan = false; } }
         muat(true);
-        setInterval(putaran, 3000);
+        setInterval(putaran, 2000);
         document.addEventListener('visibilitychange', () => { if (!document.hidden) muat(true); });
     })();
     </script>
