@@ -169,6 +169,11 @@
             </table>
         </div>
 
+        <div id="kemajuan-unduh" class="kartu" hidden style="position: fixed; right: 20px; bottom: 20px; z-index: 50; width: 340px; padding: 12px 14px; box-shadow: 0 4px 18px rgba(0,0,0,.25);">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px;"><b>⬇ Download Excel Kas Harian</b><b class="angka-persen">0%</b></div>
+            <div style="height: 10px; border-radius: 5px; background: var(--garis, #ddd); overflow: hidden;"><div class="isi" style="height: 100%; width: 0; background: var(--biru, #2f6fd1); transition: width .4s;"></div></div>
+            <div class="pesan-unduh redup" style="font-size: 12px; margin-top: 6px;"></div>
+        </div>
         {{-- Periode, tanggal, pencarian & status di URL (dibaca sama seperti halaman ini); daftar baris yang tampil di isi form. --}}
         <form method="POST" action="{{ route('kas.unduh', $pp + array_filter(['tgl' => $tanggal, 'q' => $q !== '' ? $q : null, 'status' => $filterStatus])) }}" id="form-unduh" hidden>
             @csrf
@@ -198,17 +203,51 @@
             });
             aturTombolSemua();
 
-            // Download Excel: transfer yang tampil (lolos saringan kolom), urut seperti di layar; detail yang tersaring ikut dikecualikan.
-            document.getElementById('unduh-excel').addEventListener('click', () => {
+            // Download Excel: transfer yang tampil (lolos saringan kolom); detail yang tersaring ikut dikecualikan. File dibuat di server
+            // (data setahun ±30 detik) — progress bar membaca kemajuannya, lalu file diunduh otomatis.
+            const tombolUnduh = document.getElementById('unduh-excel'), kotakUnduh = document.getElementById('kemajuan-unduh');
+            const isiBar = kotakUnduh.querySelector('.isi'), angkaBar = kotakUnduh.querySelector('.angka-persen'), pesanBar = kotakUnduh.querySelector('.pesan-unduh');
+            const tampilkan = (persen, pesan, galat = false) => {
+                kotakUnduh.hidden = false;
+                isiBar.style.width = persen + '%';
+                isiBar.style.background = galat ? 'var(--merah)' : '';
+                angkaBar.textContent = galat ? '' : persen + '%';
+                pesanBar.textContent = pesan;
+            };
+            tombolUnduh.addEventListener('click', async () => {
                 const form = document.getElementById('form-unduh');
                 const tampil = [...document.querySelectorAll('tbody.grup[data-id]')].filter(g => g.style.display !== 'none');
                 if (!tampil.length) { alert('Tidak ada baris yang tampil di grid.'); return; }
                 const bon = tampil.flatMap(g => [...g.querySelectorAll('tr.b[data-id]')]);
                 const saringDetail = bon.some(tr => tr.style.display === 'none');
-                form.t.value = tampil.map(g => g.dataset.id).join(',');
-                form.b.value = saringDetail ? bon.filter(tr => tr.style.display !== 'none').map(tr => tr.dataset.id).join(',') : '';
-                form.saring_detail.value = saringDetail ? '1' : '0';
-                form.submit();
+                const data = new FormData(form);
+                data.set('t', tampil.map(g => g.dataset.id).join(','));
+                data.set('b', saringDetail ? bon.filter(tr => tr.style.display !== 'none').map(tr => tr.dataset.id).join(',') : '');
+                data.set('saring_detail', saringDetail ? '1' : '0');
+                tombolUnduh.disabled = true;
+                tampilkan(0, `Menyiapkan ${tampil.length.toLocaleString('id-ID')} transfer…`);
+                try {
+                    const r = await fetch(form.action, {method: 'POST', body: data, headers: {Accept: 'application/json'}});
+                    if (!r.ok) throw new Error('server menolak (' + r.status + ')');
+                    const {token} = await r.json();
+                    const statusUrl = @json(route('kas.unduh.status', '__T__')).replace('__T__', token);
+                    for (;;) {
+                        await new Promise(ok => setTimeout(ok, 800));
+                        const x = await (await fetch(statusUrl, {headers: {Accept: 'application/json'}})).json();
+                        if (x.galat) { tampilkan(100, x.galat, true); break; }
+                        tampilkan(x.persen ?? 0, x.pesan ?? '');
+                        if (x.siap) {
+                            tampilkan(100, 'Selesai — file diunduh.');
+                            window.location = x.url;
+                            setTimeout(() => { kotakUnduh.hidden = true; }, 4000);
+                            break;
+                        }
+                    }
+                } catch (e) {
+                    tampilkan(100, 'Gagal: ' + e.message, true);
+                } finally {
+                    tombolUnduh.disabled = false;
+                }
             });
 
             document.querySelectorAll('[data-hapus]').forEach(tombol => tombol.addEventListener('click', () => {

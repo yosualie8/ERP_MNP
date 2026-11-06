@@ -2,19 +2,22 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\BuatExcelKas;
 use App\Models\AkunGl;
 use App\Models\CostCenter;
 use App\Models\KasBulan;
 use App\Models\KasTransfer;
 use App\Models\KasFoto;
 use App\Models\KodeGl;
-use App\Support\KasExcel;
 use App\Support\Periode;
 use App\Support\StatusReimburse;
 use App\Support\TebakKodeGl;
 use App\Support\TulisKasSheet;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
@@ -29,30 +32,56 @@ class KasController extends Controller
     }
 
     /**
-     * Download Excel isi grid Kas Harian yang sedang tampil (owner 6 Nov 2026): periode, tanggal, pencarian & status reimburse sama
-     * dengan halaman; saringan/urutan per kolom di browser dikirim sebagai daftar transfer ("t") & detail ("b") yang tampil, urut seperti di layar.
+     * Download Excel isi grid Kas Harian (owner 6 Nov 2026): periode, tanggal, pencarian & status reimburse dari URL (sama dengan halaman);
+     * saringan/urutan per kolom di browser dikirim sebagai daftar transfer ("t") & detail ("b") yang tampil (teks dipisah koma — ribuan baris
+     * melewati max_input_vars bila array). File dibuat SESUDAH respons (data setahun ±30 detik) — browser memantau kemajuannya (status) lalu mengambil file.
      */
-    public function unduh(Request $request): BinaryFileResponse
+    public function unduh(Request $request): JsonResponse
     {
-        // Daftar id dikirim sebagai teks dipisah koma (ribuan baris melewati batas max_input_vars bila dikirim sebagai array).
         $request->validate(['t' => ['nullable', 'string', 'regex:/^[\d,]*$/'], 'b' => ['nullable', 'string', 'regex:/^[\d,]*$/'], 'saring_detail' => ['nullable', 'boolean']]);
-        $ids = fn (string $k) => array_flip(array_map('intval', array_values(array_filter(explode(',', (string) $request->input($k)), 'strlen'))));
-        $d = $this->data($request);
-        $transfer = $d['transfer'];
-        if ($request->has('t')) {
-            $urut = $ids('t');
-            $transfer = $transfer->filter(fn ($t) => isset($urut[$t->id]))->sortBy(fn ($t) => $urut[$t->id])->values();
+        $ids = fn (string $k) => array_map('intval', array_values(array_filter(explode(',', (string) $request->input($k)), 'strlen')));
+        // Satu akun satu unduhan berjalan; file lama (> 1 jam) dibersihkan.
+        $kunciAkun = 'kas-unduh-akun:'.$request->user()->id;
+        if (($lama = Cache::get($kunciAkun)) && ($x = Cache::get(BuatExcelKas::kunci($lama))) && empty($x['siap']) && empty($x['galat'])) {
+            return response()->json(['token' => $lama, 'lanjut' => true]);
         }
-        $bonTampil = $request->boolean('saring_detail') ? $ids('b') : null;
+        foreach (glob(BuatExcelKas::folder().'/*.xlsx') ?: [] as $f) {
+            if (filemtime($f) < time() - 3600) {
+                @unlink($f);
+            }
+        }
+        $token = Str::random(32);
+        Cache::put($kunciAkun, $token, now()->addMinutes(BuatExcelKas::MENIT_SIMPAN));
+        $q = $request->query();
+        BuatExcelKas::lapor($token, ['persen' => 0, 'pesan' => 'Memulai…', 'user' => $request->user()->id,
+            'nama' => 'Kas Harian '.Periode::dari($request, KasBulan::orderBy('bulan')->get()->map(fn ($b) => $b->bulan->format('Y-m')))->label()
+                .(($q['tgl'] ?? null) ? ' tgl '.$q['tgl'] : '').(($q['q'] ?? '') !== '' ? ' cari '.mb_substr(preg_replace('/[^\pL\pN ]+/u', '', $q['q']), 0, 30) : '')
+                .' - '.now()->format('Y-m-d H.i').'.xlsx']);
+        BuatExcelKas::dispatchAfterResponse($token, $request->user()->id, $q, $request->has('t') ? $ids('t') : null, $request->boolean('saring_detail') ? $ids('b') : null);
 
-        $path = KasExcel::buat($transfer, $bonTampil, $d);
-        $nama = 'Kas Harian '.$d['periode']->label().($d['tanggal'] ? ' tgl '.$d['tanggal'] : '').($d['q'] !== '' ? ' cari '.mb_substr(preg_replace('/[^\pL\pN ]+/u', '', $d['q']), 0, 30) : '')
-            .' - '.now()->format('Y-m-d H.i').'.xlsx';
-
-        return response()->download($path, $nama)->deleteFileAfterSend();
+        return response()->json(['token' => $token]);
     }
 
-    private function data(Request $request): array
+    public function unduhStatus(Request $request, string $token): JsonResponse
+    {
+        $x = Cache::get(BuatExcelKas::kunci($token));
+        abort_unless($x && ($x['user'] ?? null) === $request->user()->id, 404);
+
+        return response()->json(collect($x)->only(['persen', 'pesan', 'siap', 'galat'])->all()
+            + (! empty($x['siap']) ? ['url' => route('kas.unduh.ambil', $token)] : []));
+    }
+
+    public function unduhAmbil(Request $request, string $token): BinaryFileResponse
+    {
+        $x = Cache::get(BuatExcelKas::kunci($token));
+        abort_unless($x && ($x['user'] ?? null) === $request->user()->id && ! empty($x['siap']) && is_file($x['file'] ?? ''), 404);
+        Cache::forget(BuatExcelKas::kunci($token));
+
+        return response()->download($x['file'], $x['nama'])->deleteFileAfterSend();
+    }
+
+    /** Data halaman Kas Harian (dipakai halaman & Excel). */
+    public function data(Request $request): array
     {
         $daftarBulan = KasBulan::orderBy('bulan')->get();
         $periode = Periode::dari($request, $daftarBulan->map(fn ($b) => $b->bulan->format('Y-m')));

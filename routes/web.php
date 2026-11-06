@@ -53,6 +53,8 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/dashboard/aktivitas', AktivitasAdminController::class)->name('dashboard.aktivitas')->middleware('can:super-admin');
     Route::get('/kas', [KasController::class, 'index'])->name('kas.index');
     Route::post('/kas/unduh', [KasController::class, 'unduh'])->name('kas.unduh');
+    Route::get('/kas/unduh/{token}/status', [KasController::class, 'unduhStatus'])->where('token', '[A-Za-z0-9]{32}')->name('kas.unduh.status');
+    Route::get('/kas/unduh/{token}', [KasController::class, 'unduhAmbil'])->where('token', '[A-Za-z0-9]{32}')->name('kas.unduh.ambil');
     Route::get('/kas/input', [KasInputController::class, 'create'])->name('kas.input');
     Route::post('/kas/input', [KasInputController::class, 'store'])->name('kas.input.store');
     Route::get('/kas/input/reimburse-uj', [KasInputController::class, 'reimburseUj'])->name('kas.input.reimburse-uj');
