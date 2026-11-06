@@ -44,24 +44,30 @@ class RitasiController extends Controller
         $tahun = in_array($request->integer('tahun'), $daftarTahun, true) ? $request->integer('tahun') : ($daftarTahun[0] ?? (int) now()->year);
         $daftarTahap = collect(PerformaRitasi::daftarTahap($tahun));
         $tahap = $daftarTahap->firstWhere('id', $request->integer('tahap'));
-        $kata = $tahap ? '' : trim((string) $request->query('kata'));
+        // Saringan cost center (owner 6 Nov 2026): pilih salah satu — proyek/tahap ATAU cost center (semua tahap ber-cost center itu).
+        $daftarCc = $daftarTahap->filter(fn ($t) => $t['cc'])->groupBy('cc')->map(fn ($g, $k) => ['kode' => $k, 'tahap' => $g->count(), 'rit' => $g->sum('rit')])
+            ->sortByDesc('rit')->values();
+        $cc = $tahap ? null : ($daftarCc->firstWhere('kode', trim((string) $request->query('cc')))['kode'] ?? null);
+        $kata = $tahap || $cc ? '' : trim((string) $request->query('kata'));
         $cocokKata = $kata !== '' ? $daftarTahap->filter(fn ($t) => mb_stripos($t['nama'], $kata) !== false)->values() : collect();
         // Id semua tahap Daftar Proyek yang namanya mengandung kata itu — termasuk tahap yang hanya dibongkar truk non-MNP.
         $idKata = $kata !== '' ? \App\Models\ProyekTahap::where('nama', 'like', '%'.addcslashes($kata, '%_\\').'%')->pluck('id')->all() : [];
         // Saran grup: kata depan nama tahap yang dipakai lebih dari satu tahap (ASG, Infra, …).
         $grup = $daftarTahap->groupBy(fn ($t) => strtok($t['nama'], ' '))->filter(fn ($g) => $g->count() > 1)->map->count()->sortDesc();
+        $idCc = $cc ? \App\Models\ProyekTahap::where('cost_center', $cc)->pluck('id')->all() : [];
         $pilihan = $tahap ? ['label' => $tahap['nama'], 'isi' => $tahap['nama']]
-            : ($kata !== '' ? ['label' => "Semua proyek mengandung \"{$kata}\" ({$cocokKata->count()} tahap)", 'isi' => "Semua yang mengandung: {$kata}"] : null);
+            : ($cc ? ['label' => "Cost center {$cc} (".count($idCc).' tahap)', 'isi' => '']
+            : ($kata !== '' ? ['label' => "Semua proyek mengandung \"{$kata}\" ({$cocokKata->count()} tahap)", 'isi' => "Semua yang mengandung: {$kata}"] : null));
         // Proyek ASG (owner 22 Okt 2026): truk selain MNP ikut ditampilkan, dikelompokkan per pemilik.
-        $mitra = (bool) preg_match('/\bASG\b/i', $tahap['nama'] ?? $kata);
+        $mitra = (bool) preg_match('/\bASG\b/i', $tahap['nama'] ?? ($cc ?? $kata));
         // ...dan bisa dipilih pemilik mana saja yang tampil (?pemilik[]=MNP&pemilik[]=RUDI; kosong = semua).
         $pemilik = $mitra && is_array($request->query('pemilik')) ? array_values(array_filter(array_map('strval', $request->query('pemilik')))) : null;
-        $data = PerformaRitasi::data($tahun, null, $tahap ? [$tahap['id']] : ($kata !== '' ? $idKata : null), $mitra, $pemilik ?: null, $kata);
+        $data = PerformaRitasi::data($tahun, null, $tahap ? [$tahap['id']] : ($cc ? $idCc : ($kata !== '' ? $idKata : null)), $mitra, $pemilik ?: null, $kata);
 
         // Hanya satu bulan yang dibuka (?bulan=, bawaan bulan terakhir); pilihan pemilik mengikuti bulan itu.
         $bulanBuka = isset($data['bulan'][$request->integer('bulan')]) ? $request->integer('bulan') : array_key_last($data['bulan']);
 
-        return view('ritasi.performa', compact('daftarTahun', 'tahun', 'daftarTahap', 'tahap', 'kata', 'grup', 'pilihan', 'mitra', 'pemilik', 'data', 'bulanBuka'));
+        return view('ritasi.performa', compact('daftarTahun', 'tahun', 'daftarTahap', 'tahap', 'kata', 'grup', 'pilihan', 'mitra', 'pemilik', 'data', 'bulanBuka', 'daftarCc', 'cc'));
     }
 
     /** Monitor Ritasi: DO yang sudah ada uang jalannya di Kas UJ tetapi belum ada di data Ritasi (belum bongkar). */

@@ -38,7 +38,8 @@ class PerformaRitasi
         }
         $tahap = \App\Models\ProyekTahap::whereIn('id', array_keys($per))->get()->keyBy('id');
 
-        return collect($per)->map(fn ($x, $id) => ['id' => (int) $id, 'nama' => $tahap[$id]->nama ?? "#{$id}", 'status' => $tahap[$id]->status ?? null, ...$x])
+        return collect($per)->map(fn ($x, $id) => ['id' => (int) $id, 'nama' => $tahap[$id]->nama ?? "#{$id}", 'status' => $tahap[$id]->status ?? null,
+            'cc' => $tahap[$id]->cost_center ?? null, ...$x])
             ->sortByDesc('terakhir')->values()->all();
     }
 

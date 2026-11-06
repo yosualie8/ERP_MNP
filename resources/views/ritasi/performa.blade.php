@@ -38,7 +38,7 @@
         // Hanya satu bulan yang terbuka (owner 22 Okt 2026): bawaan bulan terakhir, atau ?bulan=.
         $bulanKini = $bulanBuka;
         $judulTujuan = ($pilihan['label'] ?? 'Semua proyek').($pemilik ? ' · pemilik: '.implode(', ', $pemilik) : '');
-        $namaFile = 'Performa Ritasi '.$tahun.' - '.($tahap['nama'] ?? ($kata !== '' ? 'Semua '.$kata : 'Semua')).' ('.now()->format('Y-m-d').').png';
+        $namaFile = 'Performa Ritasi '.$tahun.' - '.($tahap['nama'] ?? ($cc ? 'Cost center '.$cc : ($kata !== '' ? 'Semua '.$kata : 'Semua'))).' ('.now()->format('Y-m-d').').png';
         // Teks yang ikut dibagikan = rekap bulan yang sedang dibuka (disiapkan untuk tiap bulan; berganti saat bulan lain dibuka).
         $teksPerBulan = [];
         foreach ($data['bulan'] as $mTeks => $b) {
@@ -71,7 +71,21 @@
         @endforeach
     </div>
     {{-- Proyek = kolom Tahap di Data Ritasi (dicocokkan ke Daftar Proyek), terbaru dibongkar dulu. --}}
-    <div class="alat-performa pilih-proyek">
+    {{-- Saring menurut: Proyek (tahap / kata) ATAU Cost center — salah satu (owner 6 Nov 2026). --}}
+    <div class="alat-performa">
+        <span class="redup">Saring menurut:</span>
+        <button type="button" @class(['chip', 'aktif' => ! $cc]) data-mode="proyek">Proyek</button>
+        <button type="button" @class(['chip', 'aktif' => (bool) $cc]) data-mode="cc">Cost center</button>
+    </div>
+    <div class="alat-performa pilih-cc" @if (! $cc) hidden @endif>
+        <span class="redup">Cost center:</span>
+        @foreach ($daftarCc as $c)
+            <a href="{{ route('ritasi.performa', ['tahun' => $tahun, 'cc' => $c['kode']]) }}" @class(['chip', 'aktif' => $cc === $c['kode']])
+               title="{{ $c['tahap'] }} tahap · {{ number_format($c['rit'], 0, ',', '.') }} rit truk MNP {{ $tahun }}">{{ $c['kode'] }} <span class="redup">· {{ number_format($c['rit'], 0, ',', '.') }} rit</span></a>
+        @endforeach
+        @if ($cc)<a href="{{ route('ritasi.performa', ['tahun' => $tahun]) }}" class="tombol polos" style="padding: 4px 10px;">× Semua cost center</a>@endif
+    </div>
+    <div class="alat-performa pilih-proyek" @if ($cc) hidden @endif>
         <span class="redup">Proyek:</span>
         <input type="search" id="cari-proyek" list="daftar-proyek" autocomplete="off" placeholder="Semua proyek — ketik nama proyek / tahap, atau kata lalu Enter (mis. ASG)…"
             value="{{ $pilihan['isi'] ?? '' }}" title="Pilih satu proyek dari saran, pilih &quot;Semua yang mengandung: …&quot;, atau ketik kata lalu tekan Enter">
@@ -84,14 +98,14 @@
                 <option value="{{ $t['nama'] }}">{{ number_format($t['rit'], 0, ',', '.') }} rit · bongkar terakhir {{ \Illuminate\Support\Carbon::parse($t['terakhir'])->translatedFormat('j M') }}{{ $t['status'] ? ' · '.$t['status'] : '' }}</option>
             @endforeach
         </datalist>
-        @if ($pilihan)<a href="{{ route('ritasi.performa', ['tahun' => $tahun]) }}" class="tombol polos" style="padding: 4px 10px;">× Semua proyek</a>@endif
+        @if ($pilihan && ! $cc)<a href="{{ route('ritasi.performa', ['tahun' => $tahun]) }}" class="tombol polos" style="padding: 4px 10px;">× Semua proyek</a>@endif
     </div>
     {{-- Proyek ASG: pilih pemilik truk yang ditampilkan (MNP = semua DT MNP; lainnya kolom oranye per pemilik). Pilihannya hanya
          pemilik yang bongkar di bulan yang sedang dibuka (owner 22 Okt 2026); berganti saat bulan lain dibuka. --}}
     @if ($mitra && $data['pemilik_ada'])
         <form method="GET" action="{{ route('ritasi.performa') }}" class="alat-performa pilih-pemilik" id="form-pemilik">
             <input type="hidden" name="tahun" value="{{ $tahun }}">
-            @if ($tahap)<input type="hidden" name="tahap" value="{{ $tahap['id'] }}">@else<input type="hidden" name="kata" value="{{ $kata }}">@endif
+            @if ($tahap)<input type="hidden" name="tahap" value="{{ $tahap['id'] }}">@elseif ($cc)<input type="hidden" name="cc" value="{{ $cc }}">@else<input type="hidden" name="kata" value="{{ $kata }}">@endif
             <input type="hidden" name="bulan" id="bulan-pemilik" value="{{ $bulanKini }}">
             <span class="redup">Pemilik truk <b id="judul-bulan-pemilik">{{ $bulanKini ? \Illuminate\Support\Carbon::create($tahun, $bulanKini, 1)->translatedFormat('F') : '' }}</b>:</span>
             @foreach ($data['pemilik_ada'] as $p => $n)
@@ -169,7 +183,15 @@
         (() => {
             // Saringan proyek: satu tahap dari saran (?tahap=), "Semua yang mengandung: ASG" atau kata + Enter (?kata=), kosong = semua proyek.
             const PROYEK = @json(collect($daftarTahap)->mapWithKeys(fn ($t) => [mb_strtolower($t['nama']) => $t['id']]));
-            const KINI = @json($tahap ? 'tahap='.$tahap['id'] : ($kata !== '' ? 'kata='.rawurlencode($kata) : ''));
+            const KINI = @json($tahap ? 'tahap='.$tahap['id'] : ($cc ? 'cc='.rawurlencode($cc) : ($kata !== '' ? 'kata='.rawurlencode($kata) : '')));
+            // Saring menurut Proyek / Cost center: tampilkan pilihannya; berpindah mode tidak langsung menyaring sampai salah satu dipilih.
+            document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => {
+                const cc = b.dataset.mode === 'cc';
+                document.querySelectorAll('[data-mode]').forEach(x => x.classList.toggle('aktif', x === b));
+                document.querySelector('.pilih-cc').hidden = !cc;
+                document.querySelector('.pilih-proyek').hidden = cc;
+                if (!cc) document.getElementById('cari-proyek').focus();
+            }));
             const cariProyek = document.getElementById('cari-proyek');
             const tujuanProyek = (bebas) => {
                 const asli = cariProyek.value.trim(), v = asli.toLowerCase();
