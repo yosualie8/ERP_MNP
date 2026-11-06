@@ -23,6 +23,9 @@ use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class KasController extends Controller
 {
+    /** Rentang periode terpanjang halaman & Excel Kas Harian (owner 6 Nov 2026). */
+    public const MAKS_BULAN = 6;
+
     /** Buku rekening per periode (tahun, bulan mulai s.d. akhir): transfer + rincian bon, saldo berjalan seperti lembar bulanan. */
     public function index(Request $request): View
     {
@@ -54,7 +57,7 @@ class KasController extends Controller
         Cache::put($kunciAkun, $token, now()->addMinutes(BuatExcelKas::MENIT_SIMPAN));
         $q = $request->query();
         BuatExcelKas::lapor($token, ['persen' => 0, 'pesan' => 'Memulai…', 'user' => $request->user()->id,
-            'nama' => 'Kas Harian '.Periode::dari($request, KasBulan::orderBy('bulan')->get()->map(fn ($b) => $b->bulan->format('Y-m')))->label()
+            'nama' => 'Kas Harian '.Periode::dari($request, KasBulan::orderBy('bulan')->get()->map(fn ($b) => $b->bulan->format('Y-m')))->batasi(self::MAKS_BULAN)->label()
                 .(($q['tgl'] ?? null) ? ' tgl '.$q['tgl'] : '').(($q['q'] ?? '') !== '' ? ' cari '.mb_substr(preg_replace('/[^\pL\pN ]+/u', '', $q['q']), 0, 30) : '')
                 .' - '.now()->format('Y-m-d H.i').'.xlsx']);
         BuatExcelKas::dispatchAfterResponse($token, $request->user()->id, $q, $request->has('t') ? $ids('t') : null, $request->boolean('saring_detail') ? $ids('b') : null);
@@ -84,7 +87,10 @@ class KasController extends Controller
     public function data(Request $request): array
     {
         $daftarBulan = KasBulan::orderBy('bulan')->get();
-        $periode = Periode::dari($request, $daftarBulan->map(fn ($b) => $b->bulan->format('Y-m')));
+        // Maksimal 6 bulan sekali tampil / unduh (owner 6 Nov 2026) supaya server tidak berat.
+        $periodeMinta = Periode::dari($request, $daftarBulan->map(fn ($b) => $b->bulan->format('Y-m')));
+        $periode = $periodeMinta->batasi(self::MAKS_BULAN);
+        $dipangkas = $periode !== $periodeMinta ? $periodeMinta->label() : null;
         // Lembar bulanan di dalam periode (urut lama → baru); $bulan = lembar terakhir (untuk satu bulan: lembar itu sendiri).
         $lembar = $daftarBulan->filter(fn ($b) => $b->bulan->between($periode->awal(), $periode->akhir()))->values();
         $bulan = $lembar->last();
@@ -203,7 +209,7 @@ class KasController extends Controller
         $belum90 = ['dari' => $dari90, 'nilai' => (int) $nilaiBelum90->sum(), 'transfer' => $nilaiBelum90->filter()->count()];
 
         return compact('daftarBulan', 'bulan', 'transfer', 'q', 'tanggal', 'daftarTanggal', 'punyaBiaya', 'jumlahFoto', 'jam',
-            'statusBon', 'statusTransfer', 'ringkasStatus', 'filterStatus', 'periode', 'lembar', 'ringkas', 'namaLembar', 'belum90');
+            'statusBon', 'statusTransfer', 'ringkasStatus', 'filterStatus', 'periode', 'lembar', 'ringkas', 'namaLembar', 'belum90', 'dipangkas');
     }
 
     /** Pengeluaran (jumlah bon) per akun × bulan, bisa disaring per cost center. */

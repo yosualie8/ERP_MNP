@@ -50,6 +50,18 @@ class Periode
         return new self($tahun, $dari, $sampai, $daftarTahun, $bulanAda);
     }
 
+    /** Rentang paling banyak $maks bulan (owner 6 Nov 2026: Kas Harian maks 6 bulan); bulan akhir dipangkas. */
+    public function batasi(int $maks): self
+    {
+        return $this->jumlahBulan() <= $maks ? $this
+            : new self($this->tahun, $this->dari, $this->dari + $maks - 1, $this->daftarTahun, $this->bulanAda);
+    }
+
+    public function jumlahBulan(): int
+    {
+        return $this->sampai - $this->dari + 1;
+    }
+
     public function awal(): Carbon
     {
         return Carbon::create($this->tahun, $this->dari, 1)->startOfDay();

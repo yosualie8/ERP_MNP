@@ -38,6 +38,7 @@
             @endforeach
         </select>
     </label>
+    @isset($maksBulan)<span class="redup" style="font-size: 12px; align-self: center;">maks {{ $maksBulan }} bulan</span>@endisset
 </form>
 <script>
     (() => {
@@ -50,6 +51,10 @@
         f.querySelectorAll('.periode-rentang').forEach(s => s.addEventListener('change', () => {
             const [dari, sampai] = [...f.querySelectorAll('.periode-rentang')];
             if (+dari.value > +sampai.value) (s === dari ? sampai : dari).value = s.value; // mulai tidak boleh sesudah akhir
+            const maks = {{ (int) ($maksBulan ?? 12) }}; // rentang terpanjang: ujung yang lain ikut digeser
+            if (+sampai.value - +dari.value + 1 > maks) {
+                if (s === dari) sampai.value = +dari.value + maks - 1; else dari.value = +sampai.value - maks + 1;
+            }
             f.submit();
         }));
     })();

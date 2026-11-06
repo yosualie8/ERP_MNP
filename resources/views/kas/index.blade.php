@@ -9,7 +9,10 @@
             <p class="redup">Jalankan <code>php artisan mnp:impor-kas --simpan</code> di server untuk mengimpor lembar bulanan dari Kas Harian MNP.</p>
         </div>
     @else
-        @include('partials.periode', ['rute' => 'kas.index', 'bawa' => ['q' => $q, 'status' => $filterStatus]])
+        @include('partials.periode', ['rute' => 'kas.index', 'bawa' => ['q' => $q, 'status' => $filterStatus], 'maksBulan' => \App\Http\Controllers\KasController::MAKS_BULAN])
+        @if ($dipangkas)
+            <div class="pesan">Periode {{ $dipangkas }} lebih dari {{ \App\Http\Controllers\KasController::MAKS_BULAN }} bulan — yang ditampilkan {{ $periode->label() }}. Untuk bulan berikutnya, pilih periode lagi.</div>
+        @endif
     @if (! $bulan)
         <div class="kartu"><p class="redup" style="margin: 0;">Belum ada data Kas Harian di periode {{ $periode->label() }}.</p></div>
     @else
