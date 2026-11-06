@@ -209,12 +209,14 @@ class Anggaran
         $boq = self::boq($t);
         $rb = $boq ? PilahTransaksi::realisasiBoq()[$t->id] ?? null : null;
         $kas = $rb ? $rb['grup'] : self::kasGrup($t->id);
+        // Tipe Infra: rit material & Uang Material Kas UJ yang jenisnya punya item BOQ masuk langsung ke item (owner 6 Nov 2026).
+        $mb = $boq && $t->tipe === 'infra' ? MaterialInfra::keBoq($t) : ['item' => [], 'ritasi' => 0.0, 'material' => 0.0];
         $tarifBbm = $t->tarif_bbm ?? ProyekTahap::BAWAAN['tarif_bbm'];
         $tarifRental = $t->tarif_rental ?? ProyekTahap::BAWAAN['tarif_rental'];
         // sumber => [volume realisasi, rupiah realisasi, nama bila tidak dianggarkan, satuan]
         $real = [
-            'ritasi_m3' => [$r['m3'] ?? 0, $r['rp_rit'] ?? 0, 'Tanah urug & angkutan (Ritasi)', 'm³'],
-            'rit' => [$r['rit'] ?? 0, $r['rp_rit'] ?? 0, 'Tanah urug & angkutan (Ritasi)', 'rit'],
+            'ritasi_m3' => [$r['m3'] ?? 0, ($r['rp_rit'] ?? 0) - $mb['ritasi'], 'Tanah urug & angkutan (Ritasi)', 'm³'],
+            'rit' => [$r['rit'] ?? 0, ($r['rp_rit'] ?? 0) - $mb['ritasi'], 'Tanah urug & angkutan (Ritasi)', 'rit'],
             'ngepok' => [$r['ngepok'] ?? 0, $r['rp_ngepok'] ?? 0, 'Ngepok', 'rit'],
             'solar' => [$b['liter'] ?? 0, ($b['liter'] ?? 0) * $tarifBbm, 'Solar alat', 'liter'],
             'rental' => [$b['hm'] ?? 0, ($b['hm'] ?? 0) * $tarifRental, 'Rental alat berat', 'jam'],
@@ -225,12 +227,16 @@ class Anggaran
             'kas_bbm' => [null, $kas['bbm'] ?? 0, 'BBM kendaraan & genset (Kas)', null],
             'overhead' => [null, $overhead, 'Biaya umum teralokasi', null],
         ];
+        if ($t->tipe === 'infra') {
+            // Uang Material Kas UJ lewat No DO rit tahap ini (owner 6 Nov 2026), di luar yang sudah masuk item BOQ.
+            $real['uang_material'] = [null, MaterialInfra::uangMaterial($t->id) - $mb['material'], 'Uang Material (Kas UJ)', null];
+        }
         $h = self::hitung($baris, $t);
         $hasil = [];
         $terpakai = [];
         if ($boq) {
             $hasil[] = ['nama' => 'Item BOQ — modal material & jasa ('.$boq['n'].' item)', 'satuan' => null, 'v_rencana' => null, 'rp_rencana' => (float) $boq['modal'], 'tunda' => false,
-                'v_real' => null, 'rp_real' => (float) ($rb['boq'] ?? 0), 'catatan' => 'biaya berkode BOQ — rincian di BOQ & Progres', 'boq' => true];
+                'v_real' => null, 'rp_real' => (float) ($rb['boq'] ?? 0) + array_sum($mb['item']), 'catatan' => 'biaya berkode BOQ — rincian di BOQ & Progres', 'boq' => true];
         }
         foreach (collect($baris)->values() as $i => $x) {
             if ($x->komponen->jenis !== 'hpp') {

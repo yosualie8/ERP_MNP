@@ -8,10 +8,10 @@
         @foreach ($daftar as $x)
             <tr>
                 <td style="white-space: nowrap;">{{ \Illuminate\Support\Carbon::parse($x->tanggal)->translatedFormat('d-M-Y') }}</td>
-                <td>@if ($x->sumber === 'bca')<span class="label">BCA</span>@else<span class="label hijau">Kas</span>@if ($x->no_id)<span class="redup" style="font-size: 11px;"> #{{ $x->no_id }}</span>@endif @endif</td>
+                <td>@if ($x->sumber === 'bca')<span class="label">BCA</span>@elseif ($x->sumber === 'ritasi')<span class="label">Ritasi</span>@elseif ($x->sumber === 'kasuj')<span class="label">Kas UJ</span>@if ($x->kode)<span class="redup" style="font-size: 11px;"> {{ $x->kode }}</span>@endif @else<span class="label hijau">Kas</span>@if ($x->no_id)<span class="redup" style="font-size: 11px;"> #{{ $x->no_id }}</span>@endif @endif</td>
                 <td>{{ $x->keterangan }}@if ($x->pic)<span class="redup" style="font-size: 11px;"> · {{ $x->pic }}</span>@endif
                     @if ($x->catatan)<div style="font-size: 12px; font-weight: 600; color: #93c5fd;">{{ $x->catatan }}</div>@endif</td>
-                <td style="font-size: 12px;">{{ $x->akun }}@if ($x->kode)<br><span class="redup">{{ $x->kode }}</span>@endif</td>
+                <td style="font-size: 12px;">{{ $x->akun }}@if ($x->kode && $x->sumber !== 'kasuj')<br><span class="redup">{{ $x->kode }}</span>@endif</td>
                 <td class="angka">{{ rp((int) round($x->nominal)) }}</td>
             </tr>
         @endforeach

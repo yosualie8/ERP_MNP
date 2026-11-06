@@ -1,9 +1,9 @@
-{{-- Asal "Bagian biaya lain" satu item BOQ: biaya tahap yang belum berkode BOQ × bobot Total Harga item (bukan transaksi item itu sendiri). --}}
+{{-- Asal "Bagian biaya lain" satu item BOQ: biaya tahap yang belum berkode BOQ × bobot omset dihasilkan item (bukan transaksi item itu sendiri). --}}
 @php
     $porsi = ($bobot ?? 0) / 100;
 @endphp
 <table class="rinci-trx" style="margin-top: 6px; max-width: 900px;">
-    <thead><tr><th>Bagian biaya lain {{ $kode }} = biaya belum ber-BOQ × bobot {{ number_format($bobot ?? 0, 2, ',', '.') }}%</th><th class="angka">Biaya total</th><th class="angka">Bagian {{ $kode }}</th></tr></thead>
+    <thead><tr><th>Bagian biaya lain {{ $kode }} = biaya belum ber-BOQ × bobot {{ ($omset ?? false) ? 'omset dihasilkan' : 'Total Harga' }} {{ number_format($bobot ?? 0, 2, ',', '.') }}%</th><th class="angka">Biaya total</th><th class="angka">Bagian {{ $kode }}</th></tr></thead>
     <tbody>
         @foreach ($lain['sendiri'] as [$nm, $v])
             <tr><td>{{ $nama }} — {{ $nm }}</td><td class="angka">{{ rp((int) round($v)) }}</td><td class="angka">{{ rp((int) round($v * $porsi)) }}</td></tr>
