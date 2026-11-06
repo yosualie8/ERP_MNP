@@ -29,6 +29,10 @@ class KasController extends Controller
     /** Buku rekening per periode (tahun, bulan mulai s.d. akhir): transfer + rincian bon, saldo berjalan seperti lembar bulanan. */
     public function index(Request $request): View
     {
+        // Periode 6 bulan (±2.700 transfer, ±150 MB) melewati batas web 128 MB → khusus halaman ini dinaikkan (owner 6 Nov 2026; RAM server 8 GB).
+        @ini_set('memory_limit', '384M');
+        @set_time_limit(90);
+
         return view('kas.index', $this->data($request) + [
             'bolehInput' => $request->user()->bolehMenu('input-kas'), 'antreanSheet' => StatusReimburse::antreanSheet(),
         ]);
