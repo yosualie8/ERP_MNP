@@ -39,6 +39,7 @@
             <button class="tombol" type="submit" style="padding: 8px 14px;">Cari</button>
             @if ($q !== '')<a href="{{ route('ritasi.index', $pp + ['tgl' => $tanggal]) }}" class="redup">Hapus pencarian</a>@endif
             <span class="redup">{{ $rit->count() }} rit · terbaru di atas</span>
+            <button type="button" class="tombol polos" id="unduh-excel" title="Download Excel berisi semua rit yang tampil di grid (periode, tanggal, pencarian & saringan kolom)">⬇ Download Excel</button>
             <span class="redup" style="margin-left: auto;">@if ($diimpor)Data diperbarui otomatis · terakhir {{ \Illuminate\Support\Carbon::parse($diimpor)->translatedFormat('j M Y H:i') }}@endif</span>
             @if ($bolehInput)<a href="{{ route('ritasi.input') }}" class="tombol" style="padding: 8px 14px;">+ Input ritasi</a>@endif
         </form>
@@ -50,7 +51,7 @@
                 </thead>
                 <tbody>
                     @forelse ($rit as $r)
-                        <tr class="t">
+                        <tr class="t" data-id="{{ $r->id }}">
                             {{-- data-v: saring kolom Tanggal hanya membaca tanggalnya (jam 16:21 tidak ikut cocok dengan "21") --}}
                             <td data-v="{{ $r->tanggal?->translatedFormat('j M Y') }}">{{ $r->tanggal?->translatedFormat('j M') }} <span class="redup">{{ $r->jam }}</span></td>
                             <td>{{ $r->tahap }}</td>
@@ -76,6 +77,8 @@
                 </tbody>
             </table>
         </div>
+        @include('partials.unduh-excel', ['aksi' => route('ritasi.unduh', $pp + array_filter(['tgl' => $tanggal, 'q' => $q !== '' ? $q : null])),
+            'status' => route('ritasi.unduh.status', '__T__'), 'judul' => 'Ritasi', 'baris' => 'table.kas tbody tr.t[data-id]', 'kata' => 'rit'])
         <form method="POST" id="form-hapus" hidden>@csrf @method('DELETE')<input type="hidden" name="q" value="{{ $q }}"></form>
         <script>
             document.querySelectorAll('[data-hapus]').forEach(t => t.addEventListener('click', () => {

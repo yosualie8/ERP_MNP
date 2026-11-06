@@ -14,6 +14,8 @@ use App\Support\MonitorRitasi;
 use App\Support\PerformaRitasi;
 use App\Support\NomorMobil;
 use App\Support\TebakGalian;
+use App\Jobs\BuatExcelKas;
+use App\Jobs\BuatExcelRitasi;
 use App\Support\Periode;
 use App\Support\TulisRitasiSheet;
 use App\Support\UnggahBongkar;
@@ -373,9 +375,59 @@ class RitasiController extends Controller
 
     public function index(Request $request): View
     {
-        // Filter periode & tanggal sama dengan Kas Harian (owner 6 Nov 2026): tahun, bulan mulai s.d. akhir (maks 6 bulan), tanggal bila satu bulan.
         @ini_set('memory_limit', '384M');
         @set_time_limit(90);
+
+        return view('ritasi.index', $this->data($request) + [
+            'diimpor' => Cache::get('ritasi-diimpor-pada'), 'bolehInput' => $request->user()->bolehMenu('input-ritasi'),
+        ]);
+    }
+
+    /**
+     * Download Excel Ritasi (owner 6 Nov 2026) — sama dengan Kas Harian: periode, tanggal & pencarian dari URL; rit yang tampil di grid
+     * (saringan kolom) dikirim sebagai "ids" (teks dipisah koma); file dibuat sesudah respons, browser memantau progresnya.
+     */
+    public function unduh(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $request->validate(['ids' => ['nullable', 'string', 'regex:/^[\d,]*$/']]);
+        $kunciAkun = 'ritasi-unduh-akun:'.$request->user()->id;
+        if (($lama = Cache::get($kunciAkun)) && ($x = Cache::get(BuatExcelKas::kunci($lama))) && empty($x['siap']) && empty($x['galat'])) {
+            return response()->json(['token' => $lama, 'lanjut' => true]);
+        }
+        $token = \Illuminate\Support\Str::random(32);
+        Cache::put($kunciAkun, $token, now()->addMinutes(BuatExcelKas::MENIT_SIMPAN));
+        $label = Periode::dari($request, Ritasi::whereNotNull('tanggal')->selectRaw("DATE_FORMAT(tanggal, '%Y-%m') as bulan")->distinct()->pluck('bulan'))->batasi(KasController::MAKS_BULAN)->label();
+        $q = $request->query();
+        BuatExcelKas::lapor($token, ['persen' => 0, 'pesan' => 'Memulai…', 'user' => $request->user()->id,
+            'nama' => 'Ritasi '.$label.(($q['tgl'] ?? null) ? ' tgl '.$q['tgl'] : '').(($q['q'] ?? '') !== '' ? ' cari '.mb_substr(preg_replace('/[^\pL\pN ]+/u', '', $q['q']), 0, 30) : '')
+                .' - '.now()->format('Y-m-d H.i').'.xlsx']);
+        $ids = $request->has('ids') ? array_map('intval', array_values(array_filter(explode(',', (string) $request->input('ids')), 'strlen'))) : null;
+        BuatExcelRitasi::dispatchAfterResponse($token, $request->user()->id, $q, $ids);
+
+        return response()->json(['token' => $token]);
+    }
+
+    public function unduhStatus(Request $request, string $token): \Illuminate\Http\JsonResponse
+    {
+        $x = Cache::get(BuatExcelKas::kunci($token));
+        abort_unless($x && ($x['user'] ?? null) === $request->user()->id, 404);
+
+        return response()->json(collect($x)->only(['persen', 'pesan', 'siap', 'galat'])->all()
+            + (! empty($x['siap']) ? ['url' => route('ritasi.unduh.ambil', $token)] : []));
+    }
+
+    public function unduhAmbil(Request $request, string $token): \Symfony\Component\HttpFoundation\BinaryFileResponse
+    {
+        $x = Cache::get(BuatExcelKas::kunci($token));
+        abort_unless($x && ($x['user'] ?? null) === $request->user()->id && ! empty($x['siap']) && is_file($x['file'] ?? ''), 404);
+        Cache::forget(BuatExcelKas::kunci($token));
+
+        return response()->download($x['file'], $x['nama'])->deleteFileAfterSend();
+    }
+
+    /** Data halaman Ritasi (dipakai halaman & Excel). Filter periode & tanggal sama dengan Kas Harian (owner 6 Nov 2026). */
+    public function data(Request $request): array
+    {
         $daftarBulan = Ritasi::whereNotNull('tanggal')->selectRaw("DATE_FORMAT(tanggal, '%Y-%m') as bulan")->distinct()->orderBy('bulan')->pluck('bulan');
         $periodeMinta = Periode::dari($request, $daftarBulan);
         $periode = $periodeMinta->batasi(KasController::MAKS_BULAN);
@@ -397,10 +449,7 @@ class RitasiController extends Controller
                 ->orderByDesc('baris')->get();
         }
 
-        return view('ritasi.index', [
-            'daftarBulan' => $daftarBulan, 'periode' => $periode, 'dipangkas' => $dipangkas, 'tanggal' => $tanggal, 'daftarTanggal' => $daftarTanggal, 'q' => $q, 'rit' => $rit,
-            'diimpor' => Cache::get('ritasi-diimpor-pada'), 'bolehInput' => $request->user()->bolehMenu('input-ritasi'),
-        ]);
+        return ['daftarBulan' => $daftarBulan, 'periode' => $periode, 'dipangkas' => $dipangkas, 'tanggal' => $tanggal, 'daftarTanggal' => $daftarTanggal, 'q' => $q, 'rit' => $rit];
     }
 
     /** DT → plat, driver, jenis, pemilik dari rit terakhir setahun (cadangan: driver & jenis dari Kas UJ). */

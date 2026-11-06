@@ -211,6 +211,9 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/ritasi/monitor/sinkron', [RitasiController::class, 'sinkronPengajuan'])->name('ritasi.monitor.sinkron');
     Route::post('/ritasi/monitor/sinkron', [RitasiController::class, 'jalankanSinkron'])->name('ritasi.monitor.sinkron.jalankan');
     Route::post('/ritasi/monitor/tutup', [\App\Http\Controllers\PengalihanUjController::class, 'tutup'])->name('ritasi.monitor.tutup');
+    Route::post('/ritasi/unduh', [RitasiController::class, 'unduh'])->name('ritasi.unduh');
+    Route::get('/ritasi/unduh/{token}/status', [RitasiController::class, 'unduhStatus'])->where('token', '[A-Za-z0-9]{32}')->name('ritasi.unduh.status');
+    Route::get('/ritasi/unduh/{token}', [RitasiController::class, 'unduhAmbil'])->where('token', '[A-Za-z0-9]{32}')->name('ritasi.unduh.ambil');
     Route::get('/ritasi/bayar-tanah', [RitasiController::class, 'bayarTanah'])->name('ritasi.bayar-tanah');
     Route::post('/ritasi/bayar-tanah/rekap', [\App\Http\Controllers\BayarTanahRekapController::class, 'simpan'])->name('ritasi.bayar-tanah.rekap');
     Route::post('/ritasi/bayar-tanah/rekap/{rekap}/batal', [\App\Http\Controllers\BayarTanahRekapController::class, 'batal'])->whereNumber('rekap')->name('ritasi.bayar-tanah.batal');

@@ -31,7 +31,7 @@ class MenuAkses
         'rapikan-uj' => ['Rapikan Kas UJ', 'uj.rapikan', ['uj.rapikan', 'uj.rapikan.*'], 'Mengisi No Mobil yang kosong di Kas UJ (ditulis ke sheet)'],
         'input-ritasi' => ['Input Ritasi', 'ritasi.input', ['ritasi.input', 'ritasi.store', 'ritasi.periksa', 'ritasi.edit', 'ritasi.update', 'ritasi.hapus'], 'Input, edit & hapus ritasi dump truck'],
         'potongan-muatan' => ['Potongan Muatan', 'potongan-muatan.index', ['potongan-muatan.*'], 'Rit Kendal/Jogja ber-LS di bawah standar volume jenis truk (Faw/Mercy): potongan per sopir per hari, dicatat ke Hutang Supir (dipotong dari uang jalan besoknya)'],
-        'ritasi' => ['Ritasi', 'ritasi.index', ['ritasi.index'], 'Melihat daftar ritasi dump truck'],
+        'ritasi' => ['Ritasi', 'ritasi.index', ['ritasi.index', 'ritasi.unduh', 'ritasi.unduh.*'], 'Melihat daftar ritasi dump truck'],
         'buangan-truk' => ['Buangan Truck', 'ritasi.buangan', ['ritasi.buangan', 'ritasi.buangan.*'], 'Truk aktif 30 hari terakhir & tujuan buangannya; ubah tujuan buangan'],
         'performa-ritasi' => ['Performa Ritasi', 'ritasi.performa', ['ritasi.performa'], 'Jumlah rit per truk per bulan & tanggal; bagikan ke WhatsApp sebagai gambar'],
         'bayar-tanah' => ['Bayar Tanah', 'ritasi.bayar-tanah', ['ritasi.bayar-tanah', 'ritasi.bayar-tanah.*'], 'DO yang sudah ada uang jalannya di Kas UJ tetapi belum ada transaksi uang tanahnya'],
