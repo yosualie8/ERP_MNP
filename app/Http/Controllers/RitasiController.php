@@ -14,6 +14,7 @@ use App\Support\MonitorRitasi;
 use App\Support\PerformaRitasi;
 use App\Support\NomorMobil;
 use App\Support\TebakGalian;
+use App\Support\Periode;
 use App\Support\TulisRitasiSheet;
 use App\Support\UnggahBongkar;
 use App\Support\ValidasiRitasi;
@@ -372,13 +373,22 @@ class RitasiController extends Controller
 
     public function index(Request $request): View
     {
+        // Filter periode & tanggal sama dengan Kas Harian (owner 6 Nov 2026): tahun, bulan mulai s.d. akhir (maks 6 bulan), tanggal bila satu bulan.
+        @ini_set('memory_limit', '384M');
+        @set_time_limit(90);
         $daftarBulan = Ritasi::whereNotNull('tanggal')->selectRaw("DATE_FORMAT(tanggal, '%Y-%m') as bulan")->distinct()->orderBy('bulan')->pluck('bulan');
-        $bulan = $daftarBulan->contains($request->query('bulan')) ? $request->query('bulan') : $daftarBulan->last();
+        $periodeMinta = Periode::dari($request, $daftarBulan);
+        $periode = $periodeMinta->batasi(KasController::MAKS_BULAN);
+        $dipangkas = $periode !== $periodeMinta ? $periodeMinta->label() : null;
+        $tanggal = $periode->tunggal() ? ($request->integer('tgl') ?: null) : null;
         $q = trim((string) $request->query('q'));
         $rit = collect();
-        if ($bulan) {
-            $awal = Carbon::parse($bulan.'-01');
-            $rit = Ritasi::whereBetween('tanggal', [$awal, $awal->copy()->endOfMonth()])
+        $daftarTanggal = collect();
+        if ($daftarBulan->isNotEmpty()) {
+            $antara = [$periode->awal()->toDateString(), $periode->akhir()->toDateString()];
+            $daftarTanggal = $periode->tunggal() ? Ritasi::whereBetween('tanggal', $antara)->selectRaw('DATE(tanggal) t')->distinct()->orderBy('t')->pluck('t')->map(fn ($t) => Carbon::parse($t)) : collect();
+            $rit = Ritasi::whereBetween('tanggal', [$periode->awal(), $periode->akhir()])
+                ->when($tanggal, fn ($query) => $query->whereDay('tanggal', $tanggal))
                 ->when($q !== '', function ($query) use ($q) {
                     $like = '%'.$q.'%';
                     $query->where(fn ($w) => collect(['tahap', 'no_seri', 'no_polisi', 'no_lambung', 'galian', 'jenis_tanah', 'pemilik', 'no_do', 'keterangan'])
@@ -388,7 +398,7 @@ class RitasiController extends Controller
         }
 
         return view('ritasi.index', [
-            'daftarBulan' => $daftarBulan, 'bulan' => $bulan, 'q' => $q, 'rit' => $rit,
+            'daftarBulan' => $daftarBulan, 'periode' => $periode, 'dipangkas' => $dipangkas, 'tanggal' => $tanggal, 'daftarTanggal' => $daftarTanggal, 'q' => $q, 'rit' => $rit,
             'diimpor' => Cache::get('ritasi-diimpor-pada'), 'bolehInput' => $request->user()->bolehMenu('input-ritasi'),
         ]);
     }

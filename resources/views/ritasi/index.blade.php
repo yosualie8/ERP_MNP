@@ -3,17 +3,27 @@
 @section('lebar', '1440px')
 
 @section('isi')
-    @if (! $bulan)
+    @if ($daftarBulan->isEmpty())
         <div class="kartu">
             <h3 style="margin-top: 0;">Belum ada data ritasi</h3>
             <p class="redup">Data diambil otomatis dari lembar "Ritasi" (sheet <i>Proyek ASG - Gsheet</i>) setiap 5 menit.</p>
         </div>
     @else
-        <div style="margin-bottom: 10px;">
-            @foreach ($daftarBulan as $b)
-                <a href="{{ route('ritasi.index', ['bulan' => $b]) }}" @class(['chip', 'aktif' => $b === $bulan])>{{ \Illuminate\Support\Carbon::parse($b.'-01')->translatedFormat('M Y') }}</a>
-            @endforeach
-        </div>
+        {{-- Pemilih periode & tanggal sama dengan Kas Harian (owner 6 Nov 2026). --}}
+        @include('partials.periode', ['rute' => 'ritasi.index', 'bawa' => ['q' => $q], 'maksBulan' => \App\Http\Controllers\KasController::MAKS_BULAN])
+        @if ($dipangkas)
+            <div class="pesan">Periode {{ $dipangkas }} lebih dari {{ \App\Http\Controllers\KasController::MAKS_BULAN }} bulan — yang ditampilkan {{ $periode->label() }}. Untuk bulan berikutnya, pilih periode lagi.</div>
+        @endif
+        @php($pp = $periode->param())
+        @if ($periode->tunggal())
+            <div style="margin-bottom: 8px;">
+                <span class="redup" style="margin-right: 6px;">Tanggal:</span>
+                <a href="{{ route('ritasi.index', $pp + ['q' => $q ?: null]) }}" @class(['chip', 'aktif' => ! $tanggal])>Sebulan</a>
+                @foreach ($daftarTanggal as $tgl)
+                    <a href="{{ route('ritasi.index', $pp + ['tgl' => $tgl->day, 'q' => $q ?: null]) }}" @class(['chip', 'aktif' => $tanggal === $tgl->day])>{{ $tgl->day }}</a>
+                @endforeach
+            </div>
+        @endif
 
         <div class="ringkas">
             <div class="kartu"><span class="redup">Jumlah rit</span><b>{{ number_format($rit->count(), 0, ',', '.') }}</b></div>
@@ -23,10 +33,11 @@
         </div>
 
         <form method="GET" action="{{ route('ritasi.index') }}" style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
-            <input type="hidden" name="bulan" value="{{ $bulan }}">
+            @foreach ($pp as $k => $v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endforeach
+            @if ($tanggal)<input type="hidden" name="tgl" value="{{ $tanggal }}">@endif
             <input type="search" name="q" value="{{ $q }}" placeholder="Cari tahap, No Seri, DT, plat/driver, galian, DO…">
             <button class="tombol" type="submit" style="padding: 8px 14px;">Cari</button>
-            @if ($q !== '')<a href="{{ route('ritasi.index', ['bulan' => $bulan]) }}" class="redup">Hapus pencarian</a>@endif
+            @if ($q !== '')<a href="{{ route('ritasi.index', $pp + ['tgl' => $tanggal]) }}" class="redup">Hapus pencarian</a>@endif
             <span class="redup">{{ $rit->count() }} rit · terbaru di atas</span>
             <span class="redup" style="margin-left: auto;">@if ($diimpor)Data diperbarui otomatis · terakhir {{ \Illuminate\Support\Carbon::parse($diimpor)->translatedFormat('j M Y H:i') }}@endif</span>
             @if ($bolehInput)<a href="{{ route('ritasi.input') }}" class="tombol" style="padding: 8px 14px;">+ Input ritasi</a>@endif
