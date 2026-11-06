@@ -19,7 +19,7 @@ class MenuAkses
         'dashboard-aktivitas' => ['Dashboard Aktivitas Admin', 'dashboard.aktivitas', ['dashboard.aktivitas'], 'Log kegiatan semua pengguna (khusus Super Admin)'],
         'tanya-ai' => ['Tanya AI', 'tanya-ai', ['tanya-ai', 'tanya-ai.*'], 'Chat tanya data ERP (hanya baca, sesuai menu akun) + 🎤 speech to text; pertanyaan & jawaban dicatat'],
         'input-kas' => ['Input Kas', 'kas.input', ['kas.input', 'kas.input.*', 'kas.edit', 'kas.update', 'kas.hapus', 'kas.bon', 'kas.bon.*'], 'Input, edit & hapus transaksi Kas Harian (Bank Jago), foto bon'],
-        'kas-harian' => ['Kas Harian', 'kas.index', ['kas.index'], 'Melihat buku Kas Harian per bulan'],
+        'kas-harian' => ['Kas Harian', 'kas.index', ['kas.index', 'kas.unduh'], 'Melihat buku Kas Harian per bulan'],
         // Membuat / mengubah / membatalkan pengajuan dipisah dari melihat Pengajuan UJ (owner 23 Okt 2026: Admin Mobil hanya melihat & merealisasikan).
         // Harus sebelum 'pengajuan-uj' supaya rute-rute ini tidak tertangkap pola pengajuan-uj.*.
         'ajukan-uj' => ['Buat Pengajuan UJ', 'pengajuan-uj.buat', ['pengajuan-uj.buat', 'pengajuan-uj.simpan', 'pengajuan-uj.periksa', 'pengajuan-uj.ubah', 'pengajuan-uj.simpan-ubah', 'pengajuan-uj.batal'], 'Membuat, mengubah & membatalkan pengajuan uang jalan (divalidasi seperti Input UJ)'],

@@ -8,6 +8,7 @@ use App\Models\KasBulan;
 use App\Models\KasTransfer;
 use App\Models\KasFoto;
 use App\Models\KodeGl;
+use App\Support\KasExcel;
 use App\Support\Periode;
 use App\Support\StatusReimburse;
 use App\Support\TebakKodeGl;
@@ -15,11 +16,43 @@ use App\Support\TulisKasSheet;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 
 class KasController extends Controller
 {
     /** Buku rekening per periode (tahun, bulan mulai s.d. akhir): transfer + rincian bon, saldo berjalan seperti lembar bulanan. */
     public function index(Request $request): View
+    {
+        return view('kas.index', $this->data($request) + [
+            'bolehInput' => $request->user()->bolehMenu('input-kas'), 'antreanSheet' => StatusReimburse::antreanSheet(),
+        ]);
+    }
+
+    /**
+     * Download Excel isi grid Kas Harian yang sedang tampil (owner 6 Nov 2026): periode, tanggal, pencarian & status reimburse sama
+     * dengan halaman; saringan/urutan per kolom di browser dikirim sebagai daftar transfer ("t") & detail ("b") yang tampil, urut seperti di layar.
+     */
+    public function unduh(Request $request): BinaryFileResponse
+    {
+        // Daftar id dikirim sebagai teks dipisah koma (ribuan baris melewati batas max_input_vars bila dikirim sebagai array).
+        $request->validate(['t' => ['nullable', 'string', 'regex:/^[\d,]*$/'], 'b' => ['nullable', 'string', 'regex:/^[\d,]*$/'], 'saring_detail' => ['nullable', 'boolean']]);
+        $ids = fn (string $k) => array_flip(array_map('intval', array_values(array_filter(explode(',', (string) $request->input($k)), 'strlen'))));
+        $d = $this->data($request);
+        $transfer = $d['transfer'];
+        if ($request->has('t')) {
+            $urut = $ids('t');
+            $transfer = $transfer->filter(fn ($t) => isset($urut[$t->id]))->sortBy(fn ($t) => $urut[$t->id])->values();
+        }
+        $bonTampil = $request->boolean('saring_detail') ? $ids('b') : null;
+
+        $path = KasExcel::buat($transfer, $bonTampil, $d);
+        $nama = 'Kas Harian '.$d['periode']->label().($d['tanggal'] ? ' tgl '.$d['tanggal'] : '').($d['q'] !== '' ? ' cari '.mb_substr(preg_replace('/[^\pL\pN ]+/u', '', $d['q']), 0, 30) : '')
+            .' - '.now()->format('Y-m-d H.i').'.xlsx';
+
+        return response()->download($path, $nama)->deleteFileAfterSend();
+    }
+
+    private function data(Request $request): array
     {
         $daftarBulan = KasBulan::orderBy('bulan')->get();
         $periode = Periode::dari($request, $daftarBulan->map(fn ($b) => $b->bulan->format('Y-m')));
@@ -140,10 +173,8 @@ class KasController extends Controller
         $nilaiBelum90 = $kas90->map(fn ($t) => (int) $t->bon->reject(fn ($b) => array_key_exists(StatusReimburse::idBon($b, $t), $sudah90))->sum('nominal'));
         $belum90 = ['dari' => $dari90, 'nilai' => (int) $nilaiBelum90->sum(), 'transfer' => $nilaiBelum90->filter()->count()];
 
-        return view('kas.index', compact('daftarBulan', 'bulan', 'transfer', 'q', 'tanggal', 'daftarTanggal', 'punyaBiaya', 'jumlahFoto', 'jam',
-            'statusBon', 'statusTransfer', 'ringkasStatus', 'filterStatus', 'periode', 'lembar', 'ringkas', 'namaLembar', 'belum90') + [
-                'bolehInput' => $request->user()->bolehMenu('input-kas'), 'antreanSheet' => StatusReimburse::antreanSheet(),
-            ]);
+        return compact('daftarBulan', 'bulan', 'transfer', 'q', 'tanggal', 'daftarTanggal', 'punyaBiaya', 'jumlahFoto', 'jam',
+            'statusBon', 'statusTransfer', 'ringkasStatus', 'filterStatus', 'periode', 'lembar', 'ringkas', 'namaLembar', 'belum90');
     }
 
     /** Pengeluaran (jumlah bon) per akun × bulan, bisa disaring per cost center. */

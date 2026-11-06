@@ -81,6 +81,7 @@
             @endif
             <span class="redup">{{ $transfer->count() }} transfer · {{ $transfer->sum(fn ($t) => $t->bon->count()) }} detail · terbaru di atas</span>
             <button type="button" class="tombol polos" id="buka-semua">Buka semua detail</button>
+            <button type="button" class="tombol polos" id="unduh-excel" title="Download Excel berisi semua transfer & detail yang tampil di grid (periode, tanggal, pencarian, status & saringan kolom)">⬇ Download Excel</button>
             <span class="redup" style="margin-left: auto;">Data diperbarui otomatis · terakhir {{ $lembar->min('diimpor_pada')->translatedFormat('j M Y H:i') }} (lembar {{ $lembar->pluck('lembar')->implode(', ') }})</span>
             @if ($bolehInput)<a href="{{ route('kas.input') }}" class="tombol" style="padding: 8px 14px;">+ Input kas</a>@endif
         </form>
@@ -103,7 +104,7 @@
                 @forelse ($transfer as $t)
                     @php($jumlahBon = $t->bon->sum('nominal'))
                     @php($akunBon = $t->bon->map(fn ($b) => $b->kodeGl ? ($b->kodeGl->akun?->nama ?? $b->kodeGl->kode_asli).($b->kodeGl->costCenter ? ' '.$b->kodeGl->costCenter->kode : '') : 'tanpa Kode GL')->unique()->values())
-                    <tbody @class(['grup', 'buka' => $q !== ''])>
+                    <tbody @class(['grup', 'buka' => $q !== '']) data-id="{{ $t->id }}">
                         <tr @class(['t', 'm' => $t->debet, 'ada-bon' => $t->bon->isNotEmpty()])>
                             <td>
                                 <span class="panah" aria-hidden="true">@if ($t->bon->isNotEmpty())▸@endif</span>
@@ -159,7 +160,7 @@
                         @endif
                         @foreach ($t->bon as $b)
                             @php($k = $b->kodeGl)
-                            <tr class="b"><td></td><td class="p">{{ $b->pic }}</td><td>{{ $b->keterangan }}@if ($b->no_mobil) <span class="label" title="No Mobil (truk)">🚛 {{ $b->no_mobil }}</span>@endif</td><td>@if ($k){{ $k->akun?->nama ?? $k->kode_asli }}@if ($k->costCenter) <i>{{ $k->costCenter->kode }}</i>@endif @if ($k->ref)<i title="Tahap proyek">{{ $k->ref }}</i>@endif @if ($b->kode_gl_ditebak)<i title="Kode GL kosong di sheet, ditebak dari keterangan">ditebak</i>@endif @else<i class="x">tanpa Kode GL</i>@endif</td><td></td><td class="angka">{{ rp($b->nominal) }}</td><td class="i">{{ $b->id_transaksi }}</td><td style="white-space: nowrap;">@if (! isset($statusBon[$b->id]))<span class="redup" style="font-size: 12px;">Arsip</span>@elseif ($statusBon[$b->id]['sudah'])<span class="label hijau">✓ Sudah{{ $statusBon[$b->id]['tanggal'] ? ' · '.$statusBon[$b->id]['tanggal']->translatedFormat('j M') : '' }}</span>@else<span class="label merah">Belum</span>@endif</td><td></td></tr>
+                            <tr class="b" data-id="{{ $b->id }}"><td></td><td class="p">{{ $b->pic }}</td><td>{{ $b->keterangan }}@if ($b->no_mobil) <span class="label" title="No Mobil (truk)">🚛 {{ $b->no_mobil }}</span>@endif</td><td>@if ($k){{ $k->akun?->nama ?? $k->kode_asli }}@if ($k->costCenter) <i>{{ $k->costCenter->kode }}</i>@endif @if ($k->ref)<i title="Tahap proyek">{{ $k->ref }}</i>@endif @if ($b->kode_gl_ditebak)<i title="Kode GL kosong di sheet, ditebak dari keterangan">ditebak</i>@endif @else<i class="x">tanpa Kode GL</i>@endif</td><td></td><td class="angka">{{ rp($b->nominal) }}</td><td class="i">{{ $b->id_transaksi }}</td><td style="white-space: nowrap;">@if (! isset($statusBon[$b->id]))<span class="redup" style="font-size: 12px;">Arsip</span>@elseif ($statusBon[$b->id]['sudah'])<span class="label hijau">✓ Sudah{{ $statusBon[$b->id]['tanggal'] ? ' · '.$statusBon[$b->id]['tanggal']->translatedFormat('j M') : '' }}</span>@else<span class="label merah">Belum</span>@endif</td><td></td></tr>
                         @endforeach
                     </tbody>
                 @empty
@@ -168,6 +169,11 @@
             </table>
         </div>
 
+        {{-- Periode, tanggal, pencarian & status di URL (dibaca sama seperti halaman ini); daftar baris yang tampil di isi form. --}}
+        <form method="POST" action="{{ route('kas.unduh', $pp + array_filter(['tgl' => $tanggal, 'q' => $q !== '' ? $q : null, 'status' => $filterStatus])) }}" id="form-unduh" hidden>
+            @csrf
+            <input type="hidden" name="t"><input type="hidden" name="b"><input type="hidden" name="saring_detail" value="0">
+        </form>
         <form method="POST" id="form-hapus" hidden>
             @csrf
             @method('DELETE')
@@ -191,6 +197,19 @@
                 aturTombolSemua();
             });
             aturTombolSemua();
+
+            // Download Excel: transfer yang tampil (lolos saringan kolom), urut seperti di layar; detail yang tersaring ikut dikecualikan.
+            document.getElementById('unduh-excel').addEventListener('click', () => {
+                const form = document.getElementById('form-unduh');
+                const tampil = [...document.querySelectorAll('tbody.grup[data-id]')].filter(g => g.style.display !== 'none');
+                if (!tampil.length) { alert('Tidak ada baris yang tampil di grid.'); return; }
+                const bon = tampil.flatMap(g => [...g.querySelectorAll('tr.b[data-id]')]);
+                const saringDetail = bon.some(tr => tr.style.display === 'none');
+                form.t.value = tampil.map(g => g.dataset.id).join(',');
+                form.b.value = saringDetail ? bon.filter(tr => tr.style.display !== 'none').map(tr => tr.dataset.id).join(',') : '';
+                form.saring_detail.value = saringDetail ? '1' : '0';
+                form.submit();
+            });
 
             document.querySelectorAll('[data-hapus]').forEach(tombol => tombol.addEventListener('click', () => {
                 const d = tombol.dataset;
