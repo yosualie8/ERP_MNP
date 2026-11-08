@@ -26,6 +26,9 @@
         table.kas tr.st-belum td, table.kas tr.st-tidak-di-bank td, table.kas tr.st-bukan-mutasi td { background: rgba(255, 92, 97, .08); }
         table.kas tr.st-catatan td { background: rgba(224, 165, 38, .07); }
         .label.kuning { background: rgba(224, 165, 38, .16); color: #f0c05a; }
+        button.ubah-catatan { background: none; border: 0; color: var(--redup); cursor: pointer; padding: 0 3px; font-size: 13px; }
+        button.ubah-catatan:hover { color: #93c5fd; }
+        td .edit-catatan textarea { width: 100%; min-width: 220px; font-size: 12.5px; box-sizing: border-box; }
     </style>
 
     <div class="kartu">
@@ -108,7 +111,9 @@
                     <tr class="t st-{{ $r['status'] }}">
                         <td data-n="{{ $r['waktu']->format('YmdHi') }}">@if ($m){{ $tgl($m->waktu) }} <b>{{ $m->waktu->format('H:i') }}</b>@else<span class="redup">{{ $tgl($r['tanggal']) }} (buku)</span>@endif</td>
                         <td>@if ($m){{ $m->nama }}<div class="kecil">{{ trim($m->bank.' '.$m->rekening) }} · {{ $m->jenis }}</div>@endif</td>
-                        <td style="font-size: 12.5px; max-width: 320px;">{{ $m?->catatan }}</td>
+                        <td style="font-size: 12.5px; max-width: 320px;" @if ($m) data-catatan-id="{{ $m->id }}" @endif><span class="isi-catatan">{{ $m?->catatan }}</span>
+                            @if ($m && $m->catatan_diubah_pada)<span class="label kuning" style="font-size: 10.5px;" title="Diubah {{ $m->catatan_diubah_pada->translatedFormat('j M Y H:i') }} · catatan asli bank: {{ $m->catatan_bank ?? '(kosong)' }}">diubah</span>@endif
+                            @if ($m && $bolehCatatan)<button type="button" class="ubah-catatan" title="Ubah catatan">✎</button>@endif</td>
                         <td class="angka" data-n="{{ $m ? (int) $m->jumlah : (int) $b['nominal'] }}">{{ $rupiah($m ? $m->jumlah : $b['nominal']) }}</td>
                         @if ($kantong === 'uj')<td class="angka">{{ $r['fee'] ? $rupiah($r['fee']->jumlah) : '' }}</td>@endif
                         <td class="angka">{{ $rupiah($r['saldo']) }}</td>
@@ -152,4 +157,36 @@
             </tbody>
         </table>
     </div>
+    @if ($bolehCatatan)
+        <script>
+            // Ubah catatan mutasi (hak akses "Edit catatan Mutasi Jago"): klik ✎ → kotak isian → Simpan; halaman dimuat ulang supaya pencocokan ikut diperbarui.
+            document.addEventListener('click', async e => {
+                const tombol = e.target.closest('button.ubah-catatan');
+                if (!tombol) return;
+                const td = tombol.closest('td[data-catatan-id]');
+                if (td.querySelector('.edit-catatan')) return;
+                const isi = td.querySelector('.isi-catatan').textContent.trim();
+                const kotak = document.createElement('div');
+                kotak.className = 'edit-catatan';
+                kotak.innerHTML = '<textarea rows="2" maxlength="500"></textarea><div style="display: flex; gap: 6px; margin-top: 4px;"><button type="button" class="tombol" data-simpan style="padding: 3px 10px; font-size: 12px;">Simpan</button><button type="button" class="tombol polos" data-batal style="padding: 3px 10px; font-size: 12px;">Batal</button></div>';
+                kotak.querySelector('textarea').value = isi;
+                td.appendChild(kotak);
+                kotak.querySelector('textarea').focus();
+                kotak.querySelector('[data-batal]').addEventListener('click', () => kotak.remove());
+                kotak.querySelector('[data-simpan]').addEventListener('click', async ev => {
+                    ev.target.disabled = true; ev.target.textContent = 'Menyimpan…';
+                    try {
+                        const r = await fetch(@json(route('jago-catatan.simpan', '__ID__')).replace('__ID__', td.dataset.catatanId), {
+                            method: 'POST', headers: {'Content-Type': 'application/json', Accept: 'application/json', 'X-CSRF-TOKEN': @json(csrf_token())},
+                            body: JSON.stringify({catatan: kotak.querySelector('textarea').value})});
+                        if (!r.ok) throw new Error(r.status === 422 ? 'catatan terlalu panjang (maks 500 huruf)' : 'server menolak (' + r.status + ')');
+                        location.reload();
+                    } catch (err) {
+                        alert('Gagal menyimpan catatan: ' + err.message);
+                        ev.target.disabled = false; ev.target.textContent = 'Simpan';
+                    }
+                });
+            });
+        </script>
+    @endif
 @endsection

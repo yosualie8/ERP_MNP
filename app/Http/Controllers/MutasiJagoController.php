@@ -2,10 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\JagoMutasi;
 use App\Models\JagoUnggah;
 use App\Models\KasRiwayat;
 use App\Support\MutasiJago;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -36,6 +38,7 @@ class MutasiJagoController extends Controller
         return view('mutasi-jago.index', [
             'kantong' => $kantong, 'kantongBoleh' => $kantongBoleh, 'dari' => $dari, 'sampai' => $sampai,
             'hasil' => MutasiJago::cocokkan($kantong, $dari, $sampai),
+            'bolehCatatan' => \App\Support\MenuAkses::boleh($user, 'jago-catatan'),
             'unggahan' => JagoUnggah::with('user')->whereIn('kantong', $kantongBoleh)->latest('id')->limit(12)->get(),
         ]);
     }
@@ -86,6 +89,31 @@ class MutasiJagoController extends Controller
         }
 
         return redirect($tujuan)->with($v['valid'] && ! $lain ? 'success' : 'error', $isi.($h['peringatan'] ? ' '.implode(' ', $h['peringatan']) : ''));
+    }
+
+    /**
+     * Ubah catatan satu transaksi mutasi yang sudah diunggah (owner 9 Nov 2026 — untuk Eddy; hak akses "Edit catatan Mutasi Jago").
+     * Catatan asli dari PDF bank disimpan di catatan_bank saat pertama diubah; unggah ulang PDF tidak menimpa catatan yang sudah diubah.
+     */
+    public function catatan(Request $request, JagoMutasi $mutasi): JsonResponse
+    {
+        abort_unless(MutasiJago::bolehLihat($request->user(), $mutasi->kantong), 403);
+        $baru = trim(preg_replace('/\s+/', ' ', (string) ($request->validate(['catatan' => ['nullable', 'string', 'max:500']])['catatan'] ?? '')));
+        $baru = $baru === '' ? null : $baru;
+        $lama = $mutasi->catatan;
+        if ($baru === $lama) {
+            return response()->json(['ok' => true, 'catatan' => $lama, 'berubah' => false]);
+        }
+        $mutasi->update([
+            'catatan_bank' => $mutasi->catatan_diubah_pada ? $mutasi->catatan_bank : $lama,
+            'catatan' => $baru, 'catatan_diubah_oleh' => $request->user()->id, 'catatan_diubah_pada' => now(),
+        ]);
+        KasRiwayat::create(['aksi' => 'jago-catatan', 'lembar' => 'Jago', 'baris_awal' => 0, 'baris_akhir' => 0, 'user_id' => $request->user()->id,
+            'ringkasan' => mb_strimwidth('Catatan mutasi Jago '.$mutasi->id_bank.' ('.$mutasi->waktu->format('d-m-Y H:i').' Rp '.number_format(abs($mutasi->jumlah), 0, ',', '.')
+                .') diubah: "'.($lama ?? '–').'" → "'.($baru ?? '–').'"', 0, 490, '…'),
+            'isi' => ['id' => $mutasi->id, 'id_bank' => $mutasi->id_bank, 'lama' => $lama, 'baru' => $baru, 'catatan_bank' => $mutasi->catatan_bank]]);
+
+        return response()->json(['ok' => true, 'catatan' => $baru, 'berubah' => true]);
     }
 
     /** PDF asli yang diunggah. */

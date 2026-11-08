@@ -63,6 +63,7 @@ class MenuAkses
         'aset' => ['Data Aset', 'aset.index', ['aset.*'], 'Semua aset MNP (dump truck, alat berat, LV, engkel, …): lihat, tambah & ubah'],
         'mutasi-pt' => ['Mutasi Rekening PT (BCA)', 'mutasi-pt.index', ['mutasi-pt.*'], 'Mutasi rekening PT BCA dari file Drive — hanya dilihat, per bulan & cari keterangan'],
         'mutasi-jago' => ['Mutasi Jago', 'mutasi-jago.index', ['mutasi-jago.*'], 'Unggah PDF riwayat transaksi kantong Jago & cocokkan dengan Kas UJ (kantong Kas MNP hanya untuk akun ber-menu Kas Harian)'],
+        'jago-catatan' => ['Edit catatan Mutasi Jago', 'mutasi-jago.index', ['jago-catatan.*'], 'Ubah catatan transaksi di Mutasi Jago yang sudah diunggah (catatan asli bank tetap tersimpan; tombol ✎ di halaman Mutasi Jago)'],
         'kode-gl' => ['Kode GL', 'kas.kode-gl', ['kas.kode-gl'], 'Daftar Kode GL'],
         'daftar-rekening' => ['Daftar Rekening', 'rekening.index', ['rekening.*'], 'Database rekening bersama Kas Harian & Kas UJ: satu nomor rekening = satu nama pemilik (saran di Input Kas & Input UJ); isi pemilik yang belum diketahui'],
     ];
@@ -72,7 +73,7 @@ class MenuAkses
         'asisten' => ['Asisten AI', '🤖', ['tanya-ai']],
         'dashboard' => ['Dashboard', '📊', ['dashboard-proyek', 'dashboard-biaya-dt', 'dashboard-performa-dt', 'dashboard-bbm', 'dashboard-aktivitas']],
         'proyek' => ['Proyek', '🏗️', ['daftar-proyek', 'anggaran-proyek', 'pilah-transaksi', 'boq-proyek', 'alokasi-overhead', 'komponen-anggaran', 'pengaturan-proyek']],
-        'kas' => ['Kas Harian', '🏦', ['input-kas', 'kas-harian', 'validasi-reimburse', 'riwayat-reimburse', 'kas-belum-reimburse', 'rekap', 'mutasi-jago', 'mutasi-pt', 'kode-gl', 'daftar-rekening']],
+        'kas' => ['Kas Harian', '🏦', ['input-kas', 'kas-harian', 'validasi-reimburse', 'riwayat-reimburse', 'kas-belum-reimburse', 'rekap', 'mutasi-jago', 'jago-catatan', 'mutasi-pt', 'kode-gl', 'daftar-rekening']],
         'uj' => ['Uang Jalan', '🚚', ['pengajuan-uj', 'ajukan-uj', 'input-uj', 'kas-uj', 'reimburse-uj', 'pengalihan-uj', 'rapikan-uj']],
         'ritasi' => ['Ritasi', '⛰️', ['input-ritasi', 'ritasi', 'buangan-truk', 'monitor-ritasi', 'bayar-tanah', 'performa-ritasi', 'potongan-muatan', 'kubikasi-kendaraan']],
         'bbm' => ['BBM & HM', '⛽', ['input-bbm', 'bbm']],
@@ -88,7 +89,7 @@ class MenuAkses
     public const KHUSUS_SUPER = ['dashboard-aktivitas'];
 
     /** Hak akses yang diatur per jabatan tetapi tidak tampil di sidebar (dibuka lewat tombol di halaman lain). */
-    public const TANPA_SIDEBAR = []; // 'ajukan-uj' tampil lagi di sidebar (owner 25 Okt 2026)
+    public const TANPA_SIDEBAR = ['jago-catatan']; // 'ajukan-uj' tampil lagi di sidebar (owner 25 Okt 2026)
 
     public static function boleh(?User $user, string $menu): bool
     {
