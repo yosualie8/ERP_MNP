@@ -4,6 +4,7 @@
 @section('lebar', '1440px')
 
 @section('isi')
+    @include('partials.gaya-dasbor')
     <style>
         .umur { display: inline-block; min-width: 54px; text-align: center; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 10px; }
         .umur.baru { background: rgba(76, 195, 138, .18); color: var(--sukses); }
@@ -43,7 +44,7 @@
             background: var(--kartu); border: 1px solid var(--garis); border-radius: 10px; z-index: 2; }
     </style>
 
-    <div class="ringkas">
+    <div class="ringkas kpi-gaya">
         <div class="kartu"><span class="redup">{{ $tanah ? 'DO belum bayar tanah' : 'DO belum ada di Ritasi' }}</span><b>{{ $semua->count() }}</b></div>
         <div class="kartu"><span class="redup">Uang jalan DO tersebut</span><b>{{ rp($semua->sum('total')) }}</b></div>
         <div class="kartu"><span class="redup">Lebih dari 30 hari</span><b>{{ $jumlahUmur['lama'] }}</b></div>

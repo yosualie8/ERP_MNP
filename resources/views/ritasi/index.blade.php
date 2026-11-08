@@ -3,6 +3,7 @@
 @section('lebar', '1440px')
 
 @section('isi')
+    @include('partials.gaya-dasbor')
     @if ($daftarBulan->isEmpty())
         <div class="kartu">
             <h3 style="margin-top: 0;">Belum ada data ritasi</h3>
@@ -25,7 +26,7 @@
             </div>
         @endif
 
-        <div class="ringkas">
+        <div class="ringkas kpi-gaya">
             <div class="kartu"><span class="redup">Jumlah rit</span><b>{{ number_format($rit->count(), 0, ',', '.') }}</b></div>
             <div class="kartu"><span class="redup">Total harga jual</span><b>{{ rp($rit->sum('harga_jual')) }}</b></div>
             <div class="kartu"><span class="redup">Proyek / tahap</span><b>{{ $rit->pluck('tahap')->filter()->unique()->count() }}</b></div>
@@ -44,7 +45,7 @@
             @if ($bolehInput)<a href="{{ route('ritasi.input') }}" class="tombol" style="padding: 8px 14px;">+ Input ritasi</a>@endif
         </form>
 
-        <div class="kartu gulir" style="padding: 0;">
+        <div class="kartu gulir bulat" style="padding: 0;">
             <table class="kas" data-saring-kolom>
                 <thead>
                     <tr><th title="Tanggal & jam bongkar menurut surat jalan">Tanggal bongkar</th><th>Tahap</th><th>No Seri</th><th>DT · Plat / Driver</th><th>Galian</th><th>Tanah · Buangan</th><th>Kendaraan · Pemilik</th><th>No DO</th><th class="angka">Kubikasi</th><th class="angka">Harga jual</th><th></th></tr>

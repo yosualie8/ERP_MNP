@@ -3,6 +3,7 @@
 @section('lebar', '1440px')
 
 @section('isi')
+    @include('partials.gaya-dasbor')
     <style>
         table.kas td.angka, table.kas th.angka { text-align: right; font-variant-numeric: tabular-nums; }
         table.kas input.tujuan { width: 100%; min-width: 220px; padding: 7px 9px; border-radius: 6px; font-size: 14px; }
@@ -16,7 +17,7 @@
     </style>
 
     @php($perTujuan = $truk->groupBy(fn ($t) => $t['tujuan'] ?? '(belum ada)')->map->count()->sortDesc())
-    <div class="ringkas">
+    <div class="ringkas kpi-gaya">
         <div class="kartu"><span class="redup">Truk aktif {{ \App\Support\BuanganTruk::HARI }} hari terakhir</span><b>{{ $truk->count() }}</b></div>
         <div class="kartu"><span class="redup">Tujuan buangan</span><b>{{ $perTujuan->count() }}</b></div>
         <div class="kartu"><span class="redup">Diatur admin</span><b>{{ $truk->where('sumber', 'admin')->count() }}</b></div>

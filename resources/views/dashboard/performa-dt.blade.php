@@ -9,6 +9,9 @@
         $persen = fn ($a, $b) => $b ? number_format($a / $b * 100, 1, ',', '.').'%' : '-';
         // Laba/rugi berwarna: hijau untung, merah rugi.
         $lr = fn ($v) => '<span class="'.($v < 0 ? 'rugi' : ($v > 0 ? 'untung' : '')).'">'.($v < 0 ? '−' : '').rp(abs($v)).'</span>';
+        // Tampilan v2 (owner 9 Nov 2026): laba per DT dengan bar hijau/merah, sel laba bulanan berwarna.
+        $maksLaba = max(1, (float) collect($truk)->map(fn ($t) => abs($t['laba']))->max());
+        $warnaLaba = fn ($v) => $v > 0 ? 'background: rgba(76, 195, 138, .12);' : ($v < 0 ? 'background: rgba(255, 92, 97, .12);' : '');
         $status = fn ($a) => $a ? (\App\Models\AsetTruk::STATUS[$a->status] ?? $a->status).($a->kepemilikan === 'rental' ? ' · rental' : '') : '';
     @endphp
     @include('dashboard.performa-dt-gaya')
@@ -18,6 +21,7 @@
         .lr tr.d { display: none; }
         .lr tr.d.buka { display: table-row; }
         .lr tr.d > td { background: rgba(0, 0, 0, .18); padding: 10px 12px 14px 28px; text-align: left; }
+        .lr .bar-isi { justify-content: center; }
     </style>
 
     @include('partials.periode', ['rute' => 'dashboard.performa-dt'])
@@ -61,7 +65,7 @@
     </div>
 
     {{-- Per bulan --}}
-    <div class="kartu gulir lr" style="padding: 0;">
+    <div class="kartu gulir bulat lr" style="padding: 0;">
         <div style="padding: 12px 14px 0;"><b class="dash-judul">Laba rugi per bulan — semua DT</b></div>
         <table class="kas" data-tanpa-saring-kolom>
             <thead><tr><th></th>@foreach ($bulan as $b)<th class="angka">{{ $namaBulan($b) }}</th>@endforeach<th class="angka">Total</th></tr></thead>
@@ -69,7 +73,7 @@
                 <tr><td class="redup">Jumlah rit</td>@foreach ($bulan as $b)<td class="angka">{{ rp($perBulan[$b]['rit'], true) }}</td>@endforeach<td class="angka">{{ rp($ringkas['rit']) }}</td></tr>
                 <tr><td>Pendapatan</td>@foreach ($bulan as $b)<td class="angka">{{ rp($perBulan[$b]['pendapatan'], true) }}</td>@endforeach<td class="angka"><b>{{ rp($ringkas['pendapatan']) }}</b></td></tr>
                 <tr><td>Biaya</td>@foreach ($bulan as $b)<td class="angka">{{ rp($perBulan[$b]['biaya'], true) }}</td>@endforeach<td class="angka"><b>{{ rp($ringkas['biaya']) }}</b></td></tr>
-                <tr class="total"><td>Laba / rugi</td>@foreach ($bulan as $b)<td class="angka">{!! $lr($perBulan[$b]['laba']) !!}</td>@endforeach<td class="angka">{!! $lr($ringkas['laba']) !!}</td></tr>
+                <tr class="total"><td>Laba / rugi</td>@foreach ($bulan as $b)<td class="angka" style="{{ $warnaLaba($perBulan[$b]['laba']) }}">{!! $lr($perBulan[$b]['laba']) !!}</td>@endforeach<td class="angka">{!! $lr($ringkas['laba']) !!}</td></tr>
                 <tr><td class="redup">Margin</td>@foreach ($bulan as $b)<td class="angka redup">{{ $perBulan[$b]['pendapatan'] ? $persen($perBulan[$b]['laba'], $perBulan[$b]['pendapatan']) : '-' }}</td>@endforeach
                     <td class="angka redup">{{ $persen($ringkas['laba'], $ringkas['pendapatan']) }}</td></tr>
             </tbody>
@@ -77,7 +81,7 @@
     </div>
 
     {{-- Per DT: master sederhana; klik baris → detail 1 (pendapatan per proyek, pengeluaran per kategori) & detail 2 (semua transaksi biaya). --}}
-    <div class="kartu gulir lr" style="padding: 0;">
+    <div class="kartu gulir bulat lr" style="padding: 0;">
         <div style="padding: 12px 14px 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
             <b class="dash-judul">Laba rugi per DT</b>
             <span class="redup" style="font-size: 13px; margin-left: auto;">Klik baris DT untuk membuka / menutup rinciannya · klik nomor DT untuk membuka rinciannya di halaman baru.</span>
@@ -97,7 +101,7 @@
                             @if ($t['tanpa_harga'])<span title="{{ $t['tanpa_harga'] }} rit tanpa Harga Jual (perkiraan Rp {{ rp($t['perkiraan']) }})" style="cursor: help;">⚠</span>@endif
                             {{ rp($t['pendapatan'], true) }}</td>
                         <td class="angka" data-n="{{ $t['biaya'] }}">{{ rp($t['biaya'], true) }}</td>
-                        <td class="angka" data-n="{{ $t['laba'] }}"><b>{!! $lr($t['laba']) !!}</b></td>
+                        <td class="angka" data-n="{{ $t['laba'] }}"><div class="bar-isi"><span @class(['jalur', 'untung' => $t['laba'] >= 0, 'rugi' => $t['laba'] < 0]) aria-hidden="true"><span style="width: {{ round(abs($t['laba']) / $maksLaba * 100, 1) }}%;"></span></span><b>{!! $lr($t['laba']) !!}</b></div></td>
                     </tr>
                     <tr class="d"><td colspan="8"><div class="isi-rinci redup">Memuat rincian…</div></td></tr>
                 @endforeach

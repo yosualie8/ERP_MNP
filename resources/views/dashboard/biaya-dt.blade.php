@@ -13,6 +13,10 @@
         $bolehUj = auth()->user()->bolehMenu('kas-uj');
         $bolehKas = auth()->user()->bolehMenu('kas-harian');
         $warnaKelompok = ['Perjalanan' => '#4ea1ff', 'Perawatan' => '#f5a524', 'Material' => '#a78bfa', 'Lain-lain' => '#8b93a1'];
+        // Tampilan v2 (owner 9 Nov 2026): sel berwarna menurut besarnya (heatmap) + bar perbandingan total per DT.
+        $maksSel = max(1, (float) collect($kategori)->flatMap(fn ($k) => array_values($k['bulan']))->max());
+        $maksDt = max(1, (float) collect($truk)->max('rp'));
+        $panas = fn ($v, $maks) => $v > 0 ? 'background: rgba(91, 141, 239, '.number_format(0.05 + 0.33 * min(1, $v / $maks), 3, '.', '').');' : '';
     @endphp
     @include('dashboard.gaya')
     <style>
@@ -26,6 +30,8 @@
         .saring-kat label { display: inline-flex; gap: 5px; align-items: center; font-size: 13px; padding: 3px 9px; border: 1px solid var(--garis); border-radius: 999px; cursor: pointer; margin: 0; }
         .saring-kat label.on { border-color: var(--aksen); background: var(--aksen-muda); }
         .titik { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; }
+        .komposisi { display: flex; height: 10px; border-radius: 5px; overflow: hidden; margin: 6px 0 8px; background: var(--kartu-2); }
+        .komposisi span { display: block; height: 100%; }
     </style>
 
     @include('partials.periode', ['rute' => 'dashboard.biaya-dt', 'bawa' => $bawa])
@@ -66,6 +72,7 @@
         </div>
         <div class="kartu">
             <h4>Per kelompok</h4>
+            <div class="komposisi" aria-hidden="true">@foreach ($katTampil->groupBy('kelompok') as $kel => $g)<span style="width: {{ $ringkas['total'] ? $g->sum('rp') / $ringkas['total'] * 100 : 0 }}%; background: {{ $warnaKelompok[$kel] }};" title="{{ $kel }}"></span>@endforeach</div>
             @foreach ($katTampil->groupBy('kelompok') as $kel => $g)
                 <div class="dash-baris"><span><span class="titik" style="background: {{ $warnaKelompok[$kel] }}"></span>{{ $kel }}</span>
                     <span>{{ rp($g->sum('rp')) }} <span class="redup">· {{ $persen($g->sum('rp'), $ringkas['total']) }}</span></span></div>
@@ -74,7 +81,7 @@
     </div>
 
     {{-- Kategori × bulan --}}
-    <div class="kartu gulir biaya-dt" style="padding: 0;">
+    <div class="kartu gulir bulat biaya-dt" style="padding: 0;">
         <div style="padding: 12px 14px 0;"><b class="dash-judul">Biaya per kategori per bulan</b></div>
         <table class="kas" data-tanpa-saring-kolom>
             <thead><tr><th>Kelompok</th><th>Kategori</th><th>Sumber</th>
@@ -88,7 +95,7 @@
                         <td class="redup">{{ collect($k['sumber'])->map(fn ($s) => $s === 'uj' ? 'Kas UJ' : 'Kas Harian')->implode(' + ') }}</td>
                         @foreach ($bulan as $b)
                             @php($v = $k['bulan'][$b] ?? 0)
-                            <td @class(['angka', 'nol' => ! $v])>{{ rp($v, true) }}</td>
+                            <td @class(['angka', 'nol' => ! $v]) style="{{ $panas($v, $maksSel) }}">{{ rp($v, true) }}</td>
                         @endforeach
                         <td class="angka"><b>{{ rp($k['rp']) }}</b></td>
                         <td class="angka redup">{{ $persen($k['rp'], $kategori->sum('rp')) }}</td>
@@ -108,7 +115,7 @@
     </div>
 
     {{-- Per truk --}}
-    <div class="kartu gulir biaya-dt" style="padding: 0;">
+    <div class="kartu gulir bulat biaya-dt" style="padding: 0;">
         <div style="padding: 12px 14px 8px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
             <b class="dash-judul">Biaya per DT</b>
             <span class="redup" style="font-size: 13px;">Kolom:</span>
@@ -141,7 +148,7 @@
                                 <td @class(['angka', 'nol' => ! $v]) data-n="{{ $v }}">{{ rp($v, true) }}</td>
                             @endforeach
                         @endif
-                        <td class="angka" data-n="{{ $t['rp'] }}"><b>{{ rp($t['rp']) }}</b></td>
+                        <td class="angka" data-n="{{ $t['rp'] }}"><div class="bar-isi"><span class="jalur" aria-hidden="true"><span style="width: {{ round($t['rp'] / $maksDt * 100, 1) }}%;"></span></span><b>{{ rp($t['rp']) }}</b></div></td>
                         <td class="angka" data-n="{{ $t['rit'] }}">{{ rp($t['rit'], true) }}</td>
                         <td class="angka" data-n="{{ (int) $t['per_rit'] }}">{{ $t['rit'] ? rp($t['per_rit']) : '-' }}</td>
                     </tr>

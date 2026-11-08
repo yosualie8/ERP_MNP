@@ -3,6 +3,7 @@
 @section('lebar', '1400px')
 
 @section('isi')
+    @include('partials.gaya-dasbor')
     @php
         $m3 = fn ($v) => \App\Support\PotonganMuatan::m3($v);
         $mulai = $aturan['mulai'] ? \Illuminate\Support\Carbon::parse($aturan['mulai']) : null;
@@ -46,7 +47,7 @@
         <button type="submit" class="tombol polos">Tampilkan</button>
     </form>
 
-    <div class="ringkas-muatan">
+    <div class="ringkas ringkas-muatan kpi-gaya">
         <div class="kartu"><span class="redup">Rit ber-LS</span><b>{{ rp($ringkas['rit']) }}</b>
             <span class="redup" style="font-size: 12px;">rata-rata @foreach ($ringkas['rata'] as $j => $r){{ $j ?: '?' }} {{ $m3($r) }}@if (! $loop->last) · @endif @endforeach m³</span></div>
         <div class="kartu"><span class="redup">Rit di bawah batas</span><b @if ($ringkas['kurang']) style="color: #f0c05a;" @endif>{{ $ringkas['kurang'] }}</b>

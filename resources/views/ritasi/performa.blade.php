@@ -3,6 +3,7 @@
 @section('lebar', '1600px')
 
 @section('isi')
+    @include('partials.gaya-dasbor')
     <style>
         .alat-performa { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
         .gulir-rekap { overflow-x: auto; border-radius: 8px; }
@@ -63,19 +64,34 @@
             ], fn ($x) => $x !== null));
         }
         $teksBagikan = $teksPerBulan[$bulanKini] ?? '';
+        // Ringkasan KPI (owner 9 Nov 2026, gaya dashboard v2): tahun ini, bulan yang dibuka, hari data terakhir, truk aktif.
+        $kpiTahun = collect($data['bulan'])->sum('total');
+        $bk = $data['bulan'][$bulanKini] ?? null;
+        $bkHari = collect($bk['hari'] ?? []);
+        $bkRata = $bkHari->count() ? $bk['total'] / $bkHari->count() : null;
+        $bkAkhir = $bkHari->last();
+        $bkTruk = $bk ? collect($bk['truk'])->filter()->keys()->reject(fn ($k) => str_starts_with($k, '~'))->count() : 0;
+        $bkMitra = $bk ? collect($bk['truk'])->filter()->keys()->filter(fn ($k) => str_starts_with($k, '~'))->count() : 0;
+        $bkSebelum = $data['bulan'][$bulanKini - 1] ?? null;
+        $bkSebelumRata = $bkSebelum && count($bkSebelum['hari']) ? $bkSebelum['total'] / count($bkSebelum['hari']) : null;
+        $bkBeda = $bkRata !== null && $bkSebelumRata ? ($bkRata - $bkSebelumRata) / $bkSebelumRata * 100 : null;
     @endphp
     <div class="alat-performa">
-        <span class="redup">Tahun:</span>
-        @foreach ($daftarTahun as $t)
-            <a href="{{ route('ritasi.performa', ['tahun' => $t]) }}" @class(['chip', 'aktif' => $t === $tahun])>{{ $t }}</a>
-        @endforeach
+        <span class="redup">Tahun</span>
+        <nav class="segmen" aria-label="Tahun">
+            @foreach ($daftarTahun as $t)
+                <a href="{{ route('ritasi.performa', ['tahun' => $t]) }}" @class(['aktif' => $t === $tahun]) @if ($t === $tahun) aria-current="page" @endif>{{ $t }}</a>
+            @endforeach
+        </nav>
     </div>
     {{-- Proyek = kolom Tahap di Data Ritasi (dicocokkan ke Daftar Proyek), terbaru dibongkar dulu. --}}
     {{-- Saring menurut: Proyek (tahap / kata) ATAU Cost center — salah satu (owner 6 Nov 2026). --}}
     <div class="alat-performa">
-        <span class="redup">Saring menurut:</span>
-        <button type="button" @class(['chip', 'aktif' => ! $cc]) data-mode="proyek">Proyek</button>
-        <button type="button" @class(['chip', 'aktif' => (bool) $cc]) data-mode="cc">Cost center</button>
+        <span class="redup">Saring menurut</span>
+        <span class="segmen" role="group" aria-label="Saring menurut">
+            <button type="button" @class(['aktif' => ! $cc]) data-mode="proyek">Proyek</button>
+            <button type="button" @class(['aktif' => (bool) $cc]) data-mode="cc">Cost center</button>
+        </span>
     </div>
     <div class="alat-performa pilih-cc" @if (! $cc) hidden @endif>
         <span class="redup">Cost center:</span>
@@ -117,6 +133,27 @@
             <button type="button" class="tombol polos" data-semua-pemilik="0" style="padding: 3px 10px; font-size: 12px;">Kosongkan</button>
             <button type="submit" class="tombol" style="padding: 4px 14px;">Terapkan</button>
         </form>
+    @endif
+    @if ($data['truk'])
+        <div class="kpi-baris" style="margin-top: 6px;">
+            <div class="kpi"><div class="kpi-label"><i style="background: #5b8def;"></i>Total rit {{ $tahun }}</div>
+                <div class="kpi-nilai">{{ number_format($kpiTahun, 0, ',', '.') }}<small>rit</small></div>
+                <div class="kpi-sub">{{ $judulTujuan }}</div></div>
+            @if ($bk)
+                <div class="kpi"><div class="kpi-label"><i style="background: #3fae7a;"></i>{{ $bk['awal']->translatedFormat('F Y') }}</div>
+                    <div class="kpi-nilai">{{ number_format($bk['total'], 0, ',', '.') }}<small>rit</small></div>
+                    <div class="kpi-sub">{{ $bkHari->count() }} hari ber-rit</div></div>
+                <div class="kpi"><div class="kpi-label"><i style="background: #f0c05a;"></i>Rata-rata per hari</div>
+                    <div class="kpi-nilai">{{ $bkRata !== null ? number_format($bkRata, 1, ',', '.') : '–' }}<small>rit/hari</small></div>
+                    <div class="kpi-sub">@if ($bkBeda !== null)<span class="delta {{ abs($bkBeda) < .5 ? 'datar' : ($bkBeda > 0 ? 'baik' : 'buruk') }}">{{ $bkBeda > 0 ? '▲' : '▼' }} {{ number_format(abs($bkBeda), 0, ',', '.') }}%</span> vs {{ $bkSebelum['awal']->translatedFormat('F') }}@else&nbsp;@endif</div></div>
+                <div class="kpi"><div class="kpi-label"><i style="background: #a78bfa;"></i>Hari data terakhir</div>
+                    <div class="kpi-nilai">{{ $bkAkhir ? number_format($bkAkhir['total'], 0, ',', '.') : '–' }}<small>rit</small></div>
+                    <div class="kpi-sub">{{ $bkAkhir ? $bkAkhir['tanggal']->translatedFormat('l, j M Y') : '' }}</div></div>
+                <div class="kpi"><div class="kpi-label"><i style="background: var(--aksen);"></i>Truk aktif {{ $bk['awal']->translatedFormat('M') }}</div>
+                    <div class="kpi-nilai">{{ $bkTruk }}<small>DT MNP</small></div>
+                    <div class="kpi-sub">@if ($bkMitra)+ {{ $bkMitra }} pemilik non-MNP @else&nbsp;@endif</div></div>
+            @endif
+        </div>
     @endif
     <div class="alat-performa">
         <span class="redup" style="font-size: 13px;">Klik baris bulan untuk membuka rincian per tanggal — hanya satu bulan yang terbuka. Gambar yang dibagikan mengikuti tampilan saat ini.</span>

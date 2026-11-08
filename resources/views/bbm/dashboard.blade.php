@@ -3,6 +3,7 @@
 @section('lebar', '1500px')
 
 @section('isi')
+    @include('partials.gaya-dasbor')
     @php
         // Angka Indonesia; nol di belakang koma dibuang (hanya bagian desimal — 78.070 tetap 78.070).
         $l = function ($v, $d = 1) { if ($v === null) return '–'; $t = number_format((float) $v, $d, ',', '.'); return $d > 0 ? rtrim(rtrim($t, '0'), ',') : $t; };
