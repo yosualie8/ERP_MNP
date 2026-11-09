@@ -20,8 +20,9 @@ use Illuminate\Support\Collection;
  *   Tukang tanpa absen HP diisi mandor (rekap_absen sumber "mandor"). Admin boleh menimpa hari mana pun (bayar / tidak).
  * - Lembur = ½ UM per hari (mulai & selesai lembur lengkap; yang belum lengkap menunggu persetujuan), hanya bila hari itu dibayar.
  * - Tahap kerja per hari: isian admin/mandor → tahap kiriman Lapor Lapangan / lokasi absen → tahap hari kerja sebelumnya.
- * - Tukang tanpa absen HP (owner 9 Nov 2026): jam kehadirannya IKUT MANDOR — absen HP pengisi (bila Mandor / Pengawas), kalau tidak
- *   Mandor lalu Pengawas yang bekerja di tahap yang sama hari itu (jam_mandor). Hanya keterangan; yang dibayar tetap isian mandor / admin.
+ * - Tukang TANPA AKUN absen (owner 9 Nov 2026): jam kehadirannya IKUT MANDOR — absen HP pengisi (bila Mandor / Pengawas), kalau tidak
+ *   Mandor → Pengawas → siapa pun yang absen HP di tahap yang sama hari itu (jam_mandor). Hanya untuk tukang tanpa akun (bukan pengawas /
+ *   operator / yang wajib absen sendiri). Hanya keterangan; yang dibayar tetap isian mandor / admin.
  * - Operator alat berat (owner 3 Nov 2026): + basic, transport, uang kesehatan per minggu (tarif jabatan, dibayar bila minggu itu
  *   ada hari dibayar; admin boleh mengubahnya per orang per minggu (tunjangan_mingguan); dibebankan rata ke tahap hari-hari kerjanya)
  *   + HM × tarif HM jabatan (HM per hari diisi admin, hanya hari dibayar).
@@ -164,29 +165,31 @@ class RekapAbsenMingguan
     }
 
     /**
-     * Isi jam_mandor ['nama', 'masuk', 'pulang'] untuk hari dibayar tanpa absen HP milik tukang (diisi mandor / tanpa akun absen):
-     * pengisi absen tukang bila ia Mandor / Pengawas yang absen hari itu, kalau tidak Mandor → Pengawas di tahap yang sama (absen lengkap didahulukan).
+     * Isi jam_mandor ['nama', 'masuk', 'pulang'] untuk hari dibayar milik tukang TANPA AKUN absen (email kosong; bukan Mandor / Pengawas /
+     * Operator): pengisi absen tukang bila ia Mandor / Pengawas yang absen hari itu, kalau tidak yang absen HP di tahap yang sama hari itu —
+     * Mandor dulu, lalu Pengawas, lalu siapa pun (operator, surveyor, …); absen lengkap didahulukan.
      */
     private static function jamIkutMandor(Collection $baris): void
     {
         $urutan = array_flip(self::JABATAN_MANDOR);
+        $lain = count($urutan);
         [$perOrang, $perTahap] = [[], []];
         foreach ($baris as $b) {
-            if (! isset($urutan[$b->k->jabatan])) {
-                continue;
-            }
+            $tingkat = $urutan[$b->k->jabatan] ?? $lain;
             foreach ($b->hari as $d => $h) {
-                if (! $h->masuk && ! $h->pulang) {
+                if ((! $h->masuk && ! $h->pulang) || $h->hadir === false) {
                     continue;
                 }
-                $calon = ['nama' => $b->k->nama, 'masuk' => $h->masuk, 'pulang' => $h->pulang, 'skor' => [$h->masuk && $h->pulang ? 0 : 1, $urutan[$b->k->jabatan]]];
-                $perOrang[$b->k->id][$d] = $calon;
+                $calon = ['nama' => $b->k->nama, 'masuk' => $h->masuk, 'pulang' => $h->pulang, 'skor' => [$tingkat, $h->masuk && $h->pulang ? 0 : 1]];
+                if ($tingkat < $lain) {
+                    $perOrang[$b->k->id][$d] = $calon;
+                }
                 if ($h->tahap_id && (! isset($perTahap[$d][$h->tahap_id]) || $calon['skor'] < $perTahap[$d][$h->tahap_id]['skor'])) {
                     $perTahap[$d][$h->tahap_id] = $calon;
                 }
             }
         }
-        if (! $perOrang) {
+        if (! $perTahap) {
             return;
         }
         $pengisi = [];
@@ -195,12 +198,12 @@ class RekapAbsenMingguan
             $pengisi[$uid] = Karyawan::where('email', strtolower((string) $email))->where('status', 'aktif')->value('id');
         }
         foreach ($baris as $b) {
-            if (isset($urutan[$b->k->jabatan])) {
+            // Hanya tukang tanpa akun absen; pengawas / operator / yang punya akun wajib absen sendiri.
+            if (isset($urutan[$b->k->jabatan]) || str_contains(mb_strtolower((string) $b->k->jabatan), 'operator') || trim((string) $b->k->email) !== '') {
                 continue;
             }
-            $tanpaAkun = trim((string) $b->k->email) === '';
             foreach ($b->hari as $d => $h) {
-                if (! $h->hadir || $h->masuk || $h->pulang || ($h->sumber !== 'mandor' && ! $tanpaAkun)) {
+                if (! $h->hadir || $h->masuk || $h->pulang) {
                     continue;
                 }
                 $kp = $h->oleh ? ($pengisi[$h->oleh] ?? null) : null;

@@ -166,7 +166,7 @@ class GajiMingguanController extends Controller
                 foreach ($hariIni as [$b, $x]) {
                     $ket = $x->masuk || $x->pulang ? ($x->masuk ?? '?').' - '.($x->pulang ?? '?').($x->tunggu === false && $x->absen === 'kurang' ? ' (disetujui)' : '')
                         : ($x->jam_mandor ? ($x->jam_mandor['masuk'] ?? '?').' - '.($x->jam_mandor['pulang'] ?? '?').' (ikut '.$x->jam_mandor['nama'].')'
-                            : ($x->sumber === 'mandor' ? 'diisi mandor (mandor tidak absen)' : 'disetujui admin'));
+                            : ($x->sumber === 'mandor' ? 'diisi mandor (tidak ada yang absen di lokasi)' : 'disetujui admin'));
                     $w->addRow(new Row([$angka(++$no), $teks($label), $teks($b->k->nama), $teks($b->k->jabatan), $angka($x->bayar, $rp), $teks($ket),
                         $teks($x->tahap ?? RekapAbsenMingguan::BELUM_TAHAP)]));
                 }
