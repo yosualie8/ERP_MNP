@@ -56,7 +56,7 @@ class DaftarProyek
 
             return self::tahapId('ritasi', $nama);
         }
-        if ($cc && $ref && ($id = self::tahapId('kas', $cc.' '.$ref))) {
+        if ($cc && $ref && ($id = self::tahapId('kas', $cc.' '.$ref) ?? self::tahapNomor($cc, $ref))) {
             return $id;
         }
         // Kode GL = akun + cost center + T-nomor (lihat UraiKodeGl::urai). Cocok ke kata kunci >1 tahap (seri) = tidak dibagi
@@ -67,6 +67,26 @@ class DaftarProyek
         }
 
         return self::tahapId('kas_cc', $cc ?: '-');
+    }
+
+    /** @var array<int, string>|null id tahap → nama, dipakai ulang selama satu permintaan */
+    private static ?array $namaTahap = null;
+
+    /**
+     * Tahap dari T-nomor Kode GL tanpa alias (owner 9 Nov 2026 — "ASG T117" lupa didaftarkan, gajinya jatuh ke biaya tanpa tahap):
+     * cost center + T-nomor dicocokkan ke nama tahap "<cc> Tahap <n>…" atau "<cc> T<n>…" (nol depan diabaikan, mis. Infra T06).
+     * Hanya bila tepat satu tahap yang cocok; alias Daftar Proyek tetap didahulukan.
+     */
+    public static function tahapNomor(string $cc, string $ref): ?int
+    {
+        if (! preg_match('/^T0*(\d+)$/i', trim($ref), $m)) {
+            return null;
+        }
+        self::$namaTahap ??= \App\Models\ProyekTahap::pluck('nama', 'id')->all();
+        $pola = '/^'.preg_quote(trim($cc), '/').'\s+(Tahap\s*|T)0*'.$m[1].'(?!\d)/i';
+        $cocok = array_keys(array_filter(self::$namaTahap, fn ($n) => preg_match($pola, (string) $n)));
+
+        return count($cocok) === 1 ? $cocok[0] : null;
     }
 
     /** @var array<int, array{0: string, 1: int}>|null [kata, id tahap] */

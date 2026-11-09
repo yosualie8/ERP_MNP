@@ -12,6 +12,18 @@
             @endif
             <a href="{{ route('rumah.index') }}">Buka Rumah</a></div>
     @endif
+    @if ($gajiTanpaTahap->isNotEmpty())
+        <div class="pesan galat"><b>⚠ {{ $gajiTanpaTahap->count() }} transaksi gaji ({{ rp($gajiTanpaTahap->sum('nominal')) }}) belum jelas tahap proyeknya</b>
+            — pilih tahapnya di <a href="{{ route('pilah.index', ['proyek' => $gajiTanpaTahap->pluck('proyek_id')->filter()->unique()->values()->all(), 'dari' => $gajiTanpaTahap->min('tanggal')]) }}">Pilah Transaksi</a>
+            (gaji yang memang biaya umum: pilih pos biaya umumnya).
+            <ul style="margin: 6px 0 0; padding-left: 18px; font-size: 13px;">
+                @foreach ($gajiTanpaTahap->take(8) as $g)
+                    <li>{{ \Carbon\Carbon::parse($g->tanggal)->translatedFormat('j M Y') }} · {{ rp($g->nominal) }} · {{ $g->keterangan }}
+                        <span class="redup">({{ $g->gl }} → {{ $g->tahap ?? 'tanpa tahap' }})</span></li>
+                @endforeach
+                @if ($gajiTanpaTahap->count() > 8)<li class="redup">… dan {{ $gajiTanpaTahap->count() - 8 }} lagi</li>@endif
+            </ul></div>
+    @endif
     @if ($server)
         @foreach ($server['masalah'] as $m)
             <div class="pesan galat"><b>⚠ Server:</b> {{ $m }}</div>
