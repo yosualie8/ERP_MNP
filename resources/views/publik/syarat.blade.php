@@ -1,6 +1,7 @@
 @extends('layouts.publik')
 
 @section('judul', 'Syarat Layanan')
+@section('bahasa', 'id')
 
 @section('isi')
     <article class="dokumen bungkus">

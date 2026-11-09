@@ -1,6 +1,7 @@
 @extends('layouts.publik')
 
 @section('judul', 'Kebijakan Privasi')
+@section('bahasa', 'id')
 
 @section('isi')
     <article class="dokumen bungkus">

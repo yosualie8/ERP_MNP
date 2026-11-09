@@ -28,6 +28,8 @@ Route::get('/.well-known/openid-configuration', [OAuthMcpController::class, 'met
 
 // Halaman publik (tanpa login): dipakai sebagai Homepage, Privacy policy & Terms of service URL di Google Cloud.
 Route::get('/', fn () => auth()->check() ? redirect()->route('dashboard') : view('publik.beranda'))->name('beranda');
+// Pintu masuk ERP yang mudah diingat (owner 9 Nov 2026): multiniagaputra.com/erp → login / dashboard; halaman depan = company profile.
+Route::get('/erp', fn () => redirect()->route(auth()->check() ? 'dashboard' : 'login'))->name('erp');
 Route::view('/kebijakan-privasi', 'publik.privasi')->name('privasi');
 Route::view('/syarat-layanan', 'publik.syarat')->name('syarat');
 
