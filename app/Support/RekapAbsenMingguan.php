@@ -52,7 +52,9 @@ class RekapAbsenMingguan
     {
         $hari = collect(range(0, 6))->map(fn ($i) => $senin->copy()->addDays($i));
         $rentang = [$senin->toDateString(), $hari->last()->toDateString()];
-        $absen = Absensi::whereBetween('tanggal', $rentang)->orderBy('waktu')->get()->groupBy(['karyawan_id', fn ($a) => $a->tanggal->toDateString()]);
+        // Jam koreksi admin (absen_koreksi) ikut dihitung; absen asli tetap tersimpan (owner 9 Nov 2026).
+        $absen = Absensi::denganKoreksi(Absensi::whereBetween('tanggal', $rentang)->orderBy('waktu')->get(), $rentang)
+            ->groupBy(['karyawan_id', fn ($a) => $a->tanggal->toDateString()]);
         $rekap = RekapAbsen::whereBetween('tanggal', $rentang)->get()->groupBy(['karyawan_id', fn ($r) => $r->tanggal->toDateString()]);
         $tahapLapor = Lapor::whereIn('id', $absen->flatten()->pluck('lapor_id')->filter()->unique())->pluck('proyek_tahap_id', 'id');
         $tahapLokasi = LokasiAbsen::pluck('proyek_tahap_id', 'id');
@@ -100,6 +102,11 @@ class RekapAbsenMingguan
                     'putus_lembur' => $putusLembur ? $r->lembur : null, 'sumber' => $r?->sumber, 'catatan' => $r?->catatan,
                     'tahap_id' => $tahap, 'tahap' => $tahap ? ($namaTahap[$tahap] ?? null) : null, 'tahap_diisi' => (bool) $r?->proyek_tahap_id,
                     'bayar' => $hadir ? (int) $um : 0, 'bayar_lembur' => $lembur ? (int) round($um / 2) : 0,
+                    // Per jenis absen: jam berlaku, jam asli (null = tidak ada absen asli), penanda koreksi admin.
+                    'jam' => collect(Absensi::JENIS)->map(fn ($l, $j) => ($x = $a->get($j)) ? ['jam' => $x->waktu->format('H:i'), 'asli' => $x->koreksiAdmin()
+                        ? $x->getAttribute('waktu_asli')?->format('H:i') : $x->waktu->format('H:i'), 'diedit' => (bool) $x->koreksiAdmin(), 'ket' => $x->catatanKoreksi(),
+                        'catatan' => $x->koreksiAdmin()?->catatan] : null)->all(),
+                    'diedit' => $a->contains(fn ($x) => $x->koreksiAdmin()),
                     'hm' => $r?->hm, 'bayar_hm' => $hadir && $r?->hm ? (int) round($r->hm * $tarifHm) : 0, 'bayar_mingguan' => 0,
                 ];
             }

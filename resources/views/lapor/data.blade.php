@@ -59,7 +59,7 @@
                         <td>@if ($b['kiriman'])<a href="#k{{ $b['k']->id }}"><b>{{ $b['k']->nama }}</b></a>@else<b>{{ $b['k']->nama }}</b>@endif</td>
                         <td>{{ $b['k']->site }}</td>
                         @foreach (['masuk', 'pulang', 'lembur_mulai', 'lembur_selesai'] as $j)
-                            <td class="sel-absen">@if (isset($a[$j])){{ $a[$j]->waktu->format('H:i') }}<a href="{{ route('absen.foto', $a[$j]) }}" target="_blank" title="Foto">📷</a>@endif</td>
+                            <td class="sel-absen">@if (isset($a[$j])){{ $a[$j]->waktu->format('H:i') }}@if ($a[$j]->koreksiAdmin()) <span class="tanda-edit" title="{{ $a[$j]->catatanKoreksi() }}">✎</span>@endif @if ($a[$j]->exists)<a href="{{ route('absen.foto', $a[$j]) }}" target="_blank" title="Foto">📷</a>@endif @endif</td>
                         @endforeach
                         <td class="angka">{{ $kerja !== null ? intdiv($kerja, 60).' j '.($kerja % 60).' m' : '' }}@if ($lembur)<br><span class="redup">+ lembur {{ intdiv($lembur, 60) }} j {{ $lembur % 60 }} m</span>@endif</td>
                         <td>{{ $a->first()?->lokasi?->tahap?->nama }}@if ($a->first()?->lokasi) <span class="redup">· {{ $a->first()->lokasi->lokasiProyek() }}</span>@elseif ($a->first()?->lapor)<span style="color: #f0c05a;">📍 {{ $a->first()->lapor->alamat ?? ($a->first()->lat ? 'bukan lokasi proyek' : 'tanpa GPS') }}</span>@endif</td>
@@ -100,7 +100,7 @@
             <div class="kepala">
                 <b>{{ $k?->nama }}</b><span class="redup">{{ $k?->site }}{{ $k?->jabatan ? ' · '.$k->jabatan : '' }}</span>
                 @foreach (['masuk' => 'Masuk', 'pulang' => 'Pulang', 'lembur_mulai' => 'Lembur', 'lembur_selesai' => 's/d'] as $j => $label)
-                    @if (isset($a[$j]))<span @class(['label', 'hijau' => in_array($j, ['masuk', 'pulang'], true), 'kuning' => str_starts_with($j, 'lembur')])>{{ $label }} {{ $a[$j]->waktu->format('H:i') }}</span>@endif
+                    @if (isset($a[$j]))<span @class(['label', 'hijau' => in_array($j, ['masuk', 'pulang'], true), 'kuning' => str_starts_with($j, 'lembur')])>{{ $label }} {{ $a[$j]->waktu->format('H:i') }}@if ($a[$j]->koreksiAdmin()) <span title="{{ $a[$j]->catatanKoreksi() }}">✎</span>@endif</span>@endif
                 @endforeach
                 @if (! isset($a['masuk']))<span class="label merah">Belum ada absen masuk (tidak ada foto kamera)</span>@elseif (! isset($a['pulang']))<span class="label kuning">Belum ada pulang</span>@endif
                 <span class="redup" style="margin-left: auto; font-size: 12px;">{{ $g->count() }} kiriman</span>

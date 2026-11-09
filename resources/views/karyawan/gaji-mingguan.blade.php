@@ -36,6 +36,14 @@
         dialog.atur-hari .pilih3 { display: flex; gap: 6px; flex-wrap: wrap; }
         dialog.atur-hari .pilih3 label { display: inline-flex; gap: 5px; align-items: center; padding: 4px 10px; border: 1px solid var(--garis); border-radius: 999px; font-size: 13px; cursor: pointer; margin: 0; }
         dialog.atur-hari select, dialog.atur-hari input[type=text] { width: 100%; box-sizing: border-box; }
+        dialog.atur-hari .blok-jam { margin-top: 10px; padding: 8px 10px 10px; border: 1px solid var(--garis); border-radius: 8px; }
+        dialog.atur-hari .blok-jam > label.baris { margin-top: 0; }
+        dialog.atur-hari .kisi-jam { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+        dialog.atur-hari .kisi-jam label { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; color: var(--redup); }
+        dialog.atur-hari .kisi-jam input { width: 100%; box-sizing: border-box; }
+        dialog.atur-hari .kisi-jam input.diedit { border-color: #f0a35a; }
+        dialog.atur-hari .kisi-jam small { font-size: 11.5px; min-height: 14px; }
+        dialog.atur-hari .kisi-jam small.diedit { color: #f0a35a; }
     </style>
 
     <form method="GET" style="display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap;">
@@ -77,6 +85,7 @@
         <span><b style="color: var(--merah);">✗</b> tidak dibayar</span>
         <span><b>+L</b> lembur ½ UM (<b>+L?</b> menunggu)</span>
         <span><b style="color: #8ab4f8;">7 HM</b> jam kerja alat operator (× tarif HM jabatan)</span>
+        <span><b class="tanda-edit" style="margin: 0;">✎</b> jam absen dikoreksi admin (arahkan kursor / klik sel untuk melihat jam asli)</span>
         <span>Klik sel hari untuk menyetujui / menolak / mengisi tahap / HM · klik UM untuk mengubah UM orang itu · klik Tunjangan mingguan operator untuk mengubahnya minggu ini (biru = diubah admin).</span>
     </div>
 
@@ -103,15 +112,18 @@
                                     'tunggu' => '?', 'tolak' => '✗', 'kosong' => '·',
                                     default => $x->sumber === 'mandor' && $x->putus_hadir ? 'M' : ($x->absen === 'lengkap' && $x->putus_hadir === null ? '✓' : 'A'),
                                 };
-                                $info = collect([$x->masuk || $x->pulang ? 'masuk '.($x->masuk ?? '–').' · pulang '.($x->pulang ?? '–') : null,
-                                    $x->lembur_mulai || $x->lembur_selesai ? 'lembur '.($x->lembur_mulai ?? '–').'–'.($x->lembur_selesai ?? '–') : null,
+                                // Jam yang dikoreksi admin ditandai ✎ (asli …) — owner 9 Nov 2026.
+                                $tj = fn ($j) => ($y = $x->jam[$j] ?? null) ? $y['jam'].($y['diedit'] ? ' ✎(asli '.($y['asli'] ?? 'tidak ada').')' : '') : '–';
+                                $info = collect([$x->masuk || $x->pulang ? 'masuk '.$tj('masuk').' · pulang '.$tj('pulang') : null,
+                                    $x->lembur_mulai || $x->lembur_selesai ? 'lembur '.$tj('lembur_mulai').'–'.$tj('lembur_selesai') : null,
+                                    $x->diedit ? 'jam dikoreksi admin' : null,
                                     $x->sumber === 'mandor' ? 'diisi mandor' : null, $x->catatan])->filter()->implode(' · ');
                             @endphp
                             <td class="hr {{ $kelas }}" data-v="{{ $simbol }}" data-k="{{ $b->k->id }}" data-nama="{{ $b->k->nama }}" data-d="{{ $d }}"
                                 data-label="{{ $x->tanggal->translatedFormat('l, j M') }}" data-hadir="{{ $pilihan($x->putus_hadir) }}" data-lembur="{{ $pilihan($x->putus_lembur) }}"
                                 data-tahap="{{ $x->tahap_diisi ? $x->tahap_id : '' }}" data-tahap-tebak="{{ $x->tahap }}" data-catatan="{{ $x->catatan }}" data-info="{{ $info }}"
-                                data-hm="{{ $x->hm }}" data-tarif-hm="{{ $b->tarif_hm }}" title="{{ $info }}{{ $x->tahap ? ' · '.$x->tahap : '' }}">
-                                <span class="s">{{ $simbol }}{{ $x->lembur ? '+L' : ($x->tunggu_lembur ? '+L?' : '') }}</span>
+                                data-hm="{{ $x->hm }}" data-tarif-hm="{{ $b->tarif_hm }}" data-jam="{{ json_encode($x->jam) }}" title="{{ $info }}{{ $x->tahap ? ' · '.$x->tahap : '' }}">
+                                <span class="s">{{ $simbol }}{{ $x->lembur ? '+L' : ($x->tunggu_lembur ? '+L?' : '') }}@if ($x->diedit)<span class="tanda-edit" style="font-size: 11px;">✎</span>@endif</span>
                                 @if ($x->hadir || $x->tunggu)<span class="t">{{ $pendek($x->tahap) ?? 'tahap ?' }}</span>@endif
                                 @if ($x->hm)<span class="hm" @if (! $x->hadir) style="color: var(--merah);" title="HM tidak dibayar karena hari ini tidak dibayar" @endif>{{ str_replace('.', ',', $x->hm) }} HM</span>@endif
                             </td>
@@ -162,6 +174,20 @@
         <form method="dialog" id="form-hari">
             <b id="ah-judul"></b>
             <div class="redup" id="ah-info" style="font-size: 12.5px; margin-top: 4px;"></div>
+            @if ($bolehJam)
+                {{-- Koreksi jam absen (owner 9 Nov 2026): absen asli tetap tersimpan; jam yang diubah ditandai ✎. Kosongkan = kembali ke absen asli. --}}
+                <div class="blok-jam">
+                    <label class="baris">Jam absen <span class="redup" style="font-weight: 400;">— isi yang bolong / salah; kosongkan = kembali ke jam asli</span></label>
+                    <div class="kisi-jam">
+                        @foreach (\App\Models\Absensi::JENIS as $j => $l)
+                            <label>{{ $l }}<input type="time" name="jam_{{ $j }}" data-jenis="{{ $j }}"><small id="ah-asli-{{ $j }}"></small></label>
+                        @endforeach
+                    </div>
+                    <input type="text" name="jam_catatan" maxlength="200" placeholder="Alasan koreksi jam, mis. lupa absen pulang — konfirmasi mandor" style="margin-top: 6px;">
+                </div>
+            @else
+                <div class="redup" id="ah-jam-info" style="font-size: 12.5px; margin-top: 6px;"></div>
+            @endif
             <label class="baris">Hari ini dibayar?</label>
             <div class="pilih3">
                 <label><input type="radio" name="hadir" value="auto"> Ikut absen</label>
@@ -215,6 +241,7 @@
     <script>
         (() => {
             const token = document.querySelector('meta[name=csrf-token]').content;
+            const BOLEH_JAM = @json($bolehJam);
             const kirim = (url, data) => fetch(url, {method: 'POST', headers: {'X-CSRF-TOKEN': token, 'Accept': 'application/json'}, body: data})
                 .then(async r => { if (!r.ok) throw new Error((await r.json().catch(() => ({}))).message || r.status); return r.json(); });
             // Muat ulang di posisi gulir yang sama.
@@ -290,6 +317,25 @@
                 form.hm.value = td.dataset.hm ? td.dataset.hm.replace('.', ',') : '';
                 document.getElementById('ah-hm-info').textContent = tarifHm
                     ? `× Rp${new Intl.NumberFormat('id-ID').format(tarifHm)} per HM — dibayar bila hari ini dibayar.` : 'Jabatan ini tidak bertarif HM (Master Jabatan).';
+                // Jam absen per jenis: jam berlaku + asli + penanda koreksi.
+                const jam = JSON.parse(td.dataset.jam || '{}');
+                if (BOLEH_JAM) {
+                    form.querySelectorAll('.kisi-jam input').forEach(inp => {
+                        const y = jam[inp.dataset.jenis], ket = document.getElementById('ah-asli-' + inp.dataset.jenis);
+                        inp.value = y ? y.jam : '';
+                        inp.dataset.awal = inp.value;
+                        inp.classList.toggle('diedit', !!(y && y.diedit));
+                        ket.className = y && y.diedit ? 'diedit' : '';
+                        ket.textContent = !y ? 'tidak ada absen' : (y.diedit ? '✎ ' + (y.ket || ('asli ' + (y.asli || 'tidak ada'))) : 'asli');
+                        ket.title = ket.textContent;
+                    });
+                    const catatanJam = Object.values(jam).find(y => y && y.diedit && y.catatan);
+                    form.jam_catatan.value = catatanJam ? catatanJam.catatan : '';
+                    form.jam_catatan.dataset.awal = form.jam_catatan.value;
+                } else {
+                    const edit = Object.values(jam).filter(y => y && y.diedit).map(y => '✎ ' + y.jam + ' — ' + y.ket);
+                    document.getElementById('ah-jam-info').textContent = edit.join(' | ');
+                }
                 document.getElementById('ah-simpan').disabled = false;
                 dlg.showModal();
             });
@@ -299,8 +345,24 @@
                 data.set('hm', (data.get('hm') || '').trim().replace(',', '.'));
                 data.append('karyawan_id', sel.dataset.k);
                 data.append('tanggal', sel.dataset.d);
+                ['jam_masuk', 'jam_pulang', 'jam_lembur_mulai', 'jam_lembur_selesai', 'jam_catatan'].forEach(n => data.delete(n));
+                // Jam absen yang berubah dikirim dulu (koreksi), baru keputusan hari.
+                let jamDulu = Promise.resolve();
+                if (BOLEH_JAM) {
+                    const semua = [...form.querySelectorAll('.kisi-jam input')];
+                    const ubah = semua.filter(i => i.value !== i.dataset.awal);
+                    const catatanUbah = form.jam_catatan.value !== form.jam_catatan.dataset.awal && semua.some(i => i.classList.contains('diedit'));
+                    if (ubah.length || catatanUbah) {
+                        const dj = new FormData();
+                        dj.append('karyawan_id', sel.dataset.k);
+                        dj.append('tanggal', sel.dataset.d);
+                        (ubah.length ? ubah : semua.filter(i => i.classList.contains('diedit'))).forEach(i => dj.append('jam[' + i.dataset.jenis + ']', i.value));
+                        dj.append('catatan', form.jam_catatan.value);
+                        jamDulu = kirim(@json(route('absen-jam.simpan')), dj);
+                    }
+                }
                 document.getElementById('ah-simpan').disabled = true;
-                kirim(@json(route('gaji-mingguan.hari')), data).then(muatUlang)
+                jamDulu.then(() => kirim(@json(route('gaji-mingguan.hari')), data)).then(muatUlang)
                     .catch(err => { alert('Gagal menyimpan: ' + err.message); document.getElementById('ah-simpan').disabled = false; });
             });
         })();

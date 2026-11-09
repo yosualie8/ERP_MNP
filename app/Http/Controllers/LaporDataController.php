@@ -28,7 +28,8 @@ class LaporDataController extends Controller
         $semua = Lapor::with(['foto', 'karyawan', 'tahap', 'lokasi.tahap', 'boq'])->whereDate('tanggal', $tanggal)->orderBy('waktu')->get();
         $kiriman = $tahapId ? $semua->where('proyek_tahap_id', $tahapId) : $semua;
         // Rekap absensi (dulu halaman Data Absensi): semua karyawan aktif + yang absen hari itu; saringan proyek → yang mengirim di proyek itu
-        $absen = Absensi::with(['lokasi.tahap', 'lapor'])->whereDate('tanggal', $tanggal)->orderBy('waktu')->get()->groupBy('karyawan_id');
+        $absen = Absensi::denganKoreksi(Absensi::with(['lokasi.tahap', 'lapor'])->whereDate('tanggal', $tanggal)->orderBy('waktu')->get(),
+            [$tanggal->toDateString(), $tanggal->toDateString()])->groupBy('karyawan_id'); // + jam koreksi admin (ditandai ✎)
         $karyawan = $tahapId ? Karyawan::whereIn('id', $kiriman->pluck('karyawan_id')->unique())->orderBy('nama')->get()
             // sopir DT (jabatan Supir yang membawa truk) tidak wajib absen → hanya tampil bila memang mengirim / absen
             : Karyawan::where(fn ($q) => $q->where('status', 'aktif')->where(fn ($w) => $w->whereNull('jabatan')->orWhere('jabatan', '!=', \App\Support\DaftarSopir::JABATAN)->orWhereNull('no_mobil')))

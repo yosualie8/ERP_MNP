@@ -121,6 +121,8 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::post('/gaji-mingguan/um', [\App\Http\Controllers\GajiMingguanController::class, 'um'])->name('gaji-mingguan.um');
     Route::post('/gaji-mingguan/tunjangan', [\App\Http\Controllers\GajiMingguanController::class, 'tunjangan'])->name('gaji-mingguan.tunjangan');
     Route::post('/gaji-mingguan/setujui', [\App\Http\Controllers\GajiMingguanController::class, 'setujuiSemua'])->name('gaji-mingguan.setujui');
+    // Koreksi jam absen oleh admin (owner 9 Nov 2026): absen asli tetap, koreksi ditandai ✎ — hak 'absen-ubah-jam'.
+    Route::post('/absen-jam', [\App\Http\Controllers\AbsenKoreksiController::class, 'simpan'])->name('absen-jam.simpan');
     Route::get('/potongan-muatan', [\App\Http\Controllers\PotonganMuatanController::class, 'index'])->name('potongan-muatan.index');
     Route::post('/potongan-muatan/aturan', [\App\Http\Controllers\PotonganMuatanController::class, 'aturan'])->name('potongan-muatan.aturan');
     Route::post('/potongan-muatan/catat', [\App\Http\Controllers\PotonganMuatanController::class, 'catat'])->name('potongan-muatan.catat');

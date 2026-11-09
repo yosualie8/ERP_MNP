@@ -52,8 +52,8 @@
                         <td>{{ $b->k->jabatan }}</td>
                         <td>{{ $b->k->site }}</td>
                         <td data-nilai="{{ $label }}"><span class="label {{ $warna }}">{{ $label }}</span></td>
-                        <td>{{ $b->masuk ?? '–' }}</td>
-                        <td>{{ $b->pulang ?? '–' }}</td>
+                        <td>{{ $b->masuk ?? '–' }}@if ($b->ket_masuk) <span class="tanda-edit" title="{{ $b->ket_masuk }}">✎</span>@endif</td>
+                        <td>{{ $b->pulang ?? '–' }}@if ($b->ket_pulang) <span class="tanda-edit" title="{{ $b->ket_pulang }}">✎</span>@endif</td>
                         <td class="angka" data-n="{{ $b->jam_kerja ?? '' }}">{{ $b->jam_kerja !== null ? intdiv($b->jam_kerja, 60).' j '.($b->jam_kerja % 60).' m' : '' }}</td>
                         <td>{{ $b->lokasi }}</td>
                         <td style="white-space: nowrap;">{{ $b->k->no_hp }}</td>

@@ -56,6 +56,8 @@ class MenuAkses
         'absensi' => ['Data Absensi & Lapor', 'lapor-data.index', ['absensi.*', 'lapor-data.*'], 'Rekap absensi per tanggal (masuk/pulang/lembur, yang tidak absen) + semua kiriman Lapor Lapangan: koreksi hasil pilah, kaitkan ke item BOQ, jam kerja standar & per proyek'],
         'review-absen' => ['Review Absen Harian', 'review-absen.index', ['review-absen.*'], 'Per karyawan wajib absen: absen masuk & pulang lengkap atau belum; kirim review lewat teks grup WhatsApp atau WA pribadi (No HP di Data Karyawan)'],
         'gaji-mingguan' => ['Rekap Absen & Gaji Mingguan', 'gaji-mingguan.index', ['gaji-mingguan.*'], 'Per minggu Senin–Minggu: hari hadir dari absensi & mandor × UM per orang (bawaan jabatan), lembur ½ UM, setujui absen belum lengkap, tahap kerja per hari, rekap per tahap, unduh Excel'],
+        // Koreksi jam absen (owner 9 Nov 2026, untuk Valen): tanpa menu sendiri — kolom Jam absen di dialog hari Rekap Absen & Gaji Mingguan.
+        'absen-ubah-jam' => ['Ubah jam absen karyawan', 'gaji-mingguan.index', ['absen-jam.*'], 'Isi / ubah jam masuk, pulang & lembur karyawan yang bolong di Rekap Absen & Gaji Mingguan (absen asli tetap tersimpan; jam yang diedit ditandai ✎ beserta jam aslinya & siapa yang mengedit)'],
         'absen-mandor' => ['Absen Tukang (Mandor)', 'absen-mandor.index', ['absen-mandor.*'], 'Mandor mencentang tukang / helper (tanpa akun absen HP) yang hadir & lembur per tanggal beserta tahap kerjanya; tambah tukang baru'],
         'lokasi-absen' => ['Lokasi Absen', 'lokasi-absen.index', ['lokasi-absen.*'], 'Titik GPS + radius per proyek tempat karyawan boleh absen'],
         'karyawan' => ['Data Karyawan', 'karyawan.index', ['karyawan.*'], 'Data induk karyawan (NIK, site, jabatan, rekening) — dasar modul absensi'],
@@ -77,7 +79,7 @@ class MenuAkses
         'uj' => ['Uang Jalan', '🚚', ['pengajuan-uj', 'ajukan-uj', 'input-uj', 'kas-uj', 'reimburse-uj', 'pengalihan-uj', 'rapikan-uj']],
         'ritasi' => ['Ritasi', '⛰️', ['input-ritasi', 'ritasi', 'buangan-truk', 'monitor-ritasi', 'bayar-tanah', 'performa-ritasi', 'potongan-muatan', 'kubikasi-kendaraan']],
         'bbm' => ['BBM & HM', '⛽', ['input-bbm', 'bbm']],
-        'karyawan' => ['Karyawan', '👷', ['absen', 'absen-mandor', 'absensi', 'review-absen', 'gaji-mingguan', 'karyawan', 'jabatan', 'lokasi-absen']],
+        'karyawan' => ['Karyawan', '👷', ['absen', 'absen-mandor', 'absensi', 'review-absen', 'gaji-mingguan', 'absen-ubah-jam', 'karyawan', 'jabatan', 'lokasi-absen']],
         'aset' => ['Aset', '🚛', ['aset']],
     ];
 
@@ -89,7 +91,7 @@ class MenuAkses
     public const KHUSUS_SUPER = ['dashboard-aktivitas'];
 
     /** Hak akses yang diatur per jabatan tetapi tidak tampil di sidebar (dibuka lewat tombol di halaman lain). */
-    public const TANPA_SIDEBAR = ['jago-catatan']; // 'ajukan-uj' tampil lagi di sidebar (owner 25 Okt 2026)
+    public const TANPA_SIDEBAR = ['jago-catatan', 'absen-ubah-jam']; // 'ajukan-uj' tampil lagi di sidebar (owner 25 Okt 2026)
 
     public static function boleh(?User $user, string $menu): bool
     {

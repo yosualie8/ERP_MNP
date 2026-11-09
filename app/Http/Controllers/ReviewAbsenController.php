@@ -29,7 +29,8 @@ class ReviewAbsenController extends Controller
         // Bawaan: hari ini bila sudah lewat 1 jam dari jam pulang standar, selain itu kemarin (hari ini masih berjalan).
         $bawaan = now()->format('H:i') >= Carbon::parse($jam['pulang'])->addHour()->format('H:i') ? today() : today()->subDay();
         $tanggal = (RitasiController::tanggal($request->query('tanggal')) ?? $bawaan)->copy()->startOfDay();
-        $absen = Absensi::with('lokasi.tahap')->whereDate('tanggal', $tanggal)->orderBy('waktu')->get()->groupBy('karyawan_id');
+        $absen = Absensi::denganKoreksi(Absensi::with('lokasi.tahap')->whereDate('tanggal', $tanggal)->orderBy('waktu')->get(),
+            [$tanggal->toDateString(), $tanggal->toDateString()])->groupBy('karyawan_id'); // + jam koreksi admin (ditandai ✎)
         // Sama dengan rekap Data Absensi: karyawan aktif kecuali sopir DT (jabatan Supir yang membawa truk) + siapa pun yang absen hari itu.
         $karyawan = Karyawan::where(fn ($q) => $q->where('status', 'aktif')->where(fn ($w) => $w->whereNull('jabatan')->orWhere('jabatan', '!=', DaftarSopir::JABATAN)->orWhereNull('no_mobil')))
             ->orWhereIn('id', $absen->keys())->orderBy('nama')->get();
@@ -42,8 +43,8 @@ class ReviewAbsenController extends Controller
             $jm = $masuk?->waktu->format('H:i');
             $jp = $pulang?->waktu->format('H:i');
             $pesan = "Halo {$k->nama}, review absen *{$hari}*:\n"
-                .'• Absen masuk: '.($jm ? "{$jm} ✅" : 'belum ada ❌')."\n"
-                .'• Absen pulang: '.($jp ? "{$jp} ✅" : 'belum ada ❌')."\n"
+                .'• Absen masuk: '.($jm ? "{$jm} ✅".($masuk->koreksiAdmin() ? ' (dikoreksi admin)' : '') : 'belum ada ❌')."\n"
+                .'• Absen pulang: '.($jp ? "{$jp} ✅".($pulang->koreksiAdmin() ? ' (dikoreksi admin)' : '') : 'belum ada ❌')."\n"
                 .match ($status) {
                     'lengkap' => 'Absen Anda lengkap. Terima kasih 🙏',
                     'tidak_absen' => 'Tidak ada absen hari itu. Mohon konfirmasi ke admin (izin / sakit / lupa absen).',
@@ -51,6 +52,7 @@ class ReviewAbsenController extends Controller
                 }."\n— Admin MNP";
 
             return (object) ['k' => $k, 'status' => $status, 'masuk' => $jm, 'pulang' => $jp,
+                'ket_masuk' => $masuk?->catatanKoreksi(), 'ket_pulang' => $pulang?->catatanKoreksi(),
                 'jam_kerja' => $masuk && $pulang ? $masuk->waktu->diffInMinutes($pulang->waktu) : null,
                 'lokasi' => ($masuk ?? $pulang)?->lokasi?->tahap?->nama ?? ($masuk ?? $pulang)?->lokasi?->nama,
                 'wa' => $k->nomorWa(), 'pesan' => $pesan];

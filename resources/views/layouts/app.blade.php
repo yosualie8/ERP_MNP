@@ -77,6 +77,8 @@
         .ringkas .kartu { margin: 0; padding: 14px 16px; }
         .ringkas b { display: block; font-size: 20px; margin-top: 2px; font-variant-numeric: tabular-nums; }
         .gulir { overflow-x: auto; }
+        /* Penanda jam absen dikoreksi admin (absen_koreksi): ✎ oranye, keterangan di title. */
+        .tanda-edit { color: #f0a35a; font-weight: 700; margin-left: 3px; cursor: help; }
         .label { display: inline-block; font-size: 11px; padding: 1px 6px; border-radius: 4px; background: var(--latar); color: var(--redup); }
         .label.merah { background: var(--merah-muda); color: var(--merah); }
         .label.hijau { background: var(--sukses-muda); color: var(--sukses); }
