@@ -35,6 +35,9 @@ class MutasiJago
 
     public const FOLDER = 'mutasi-jago';
 
+    /** Transfer kantong UJ tanpa keterangan yang dinyatakan owner sebagai dana talangan (9 Nov 2026): BCA Yosua masuk & keluar Rp5 jt 6 Nov 19:02 / 20:14. */
+    public const ID_TALANGAN = [4147, 4151];
+
     /** Kantong Kas MNP (Kas Harian) hanya untuk akun yang punya menu Kas Harian; kantong UJ untuk semua yang punya menu Mutasi Jago. */
     public static function bolehLihat(?User $u, string $kantong): bool
     {
@@ -246,6 +249,16 @@ class MutasiJago
         return [...$hasil, 'input' => $input, 'mutasi' => $m];
     }
 
+    /**
+     * Dana talangan (owner 9 Nov 2026): transfer kantong Uang Jalan DT yang keterangannya menyebut "talangan" (owner menuliskannya bila terjadi),
+     * plus ID_TALANGAN — bukan uang jalan: tidak diinput ke Kas UJ (tidak menjadi "Belum Reimburse") dan tidak dihitung masalah.
+     * Transfer lain dengan owner (reimburse, bayar tanah) adalah transaksi asli.
+     */
+    public static function talangan(JagoMutasi $m): bool
+    {
+        return $m->kantong === 'uj' && (in_array($m->id, self::ID_TALANGAN, true) || preg_match('/talang/i', (string) $m->catatan));
+    }
+
     /** Bunga / pajak bunga dari bank (tanpa rekening): "Interest", "Tax on Interest" (Inggris) / "Bunga", "Pajak Bunga" (Indonesia). */
     public static function bunga(JagoMutasi $m): bool
     {
@@ -428,7 +441,10 @@ class MutasiJago
             }
             $saran = null;
             $status = $b ? ($catatan ? 'catatan' : 'cocok') : ($m->biaya ? 'biaya' : (isset($kembali[$i]) ? 'kembali' : ($kantong === 'uj' && self::bunga($m) ? 'bunga' : 'belum')));
-            if (! $b && ! $m->biaya && ! isset($kembali[$i])) {
+            if (! $b && ! $m->biaya && self::talangan($m)) {
+                $status = 'talangan';
+            }
+            if (! $b && ! $m->biaya && ! isset($kembali[$i]) && $status !== 'talangan') {
                 // Nominal beda tetapi rekening / nama sama dekat tanggalnya → kemungkinan salah ketik nominal.
                 $mirip = collect($buku)->filter(fn ($x) => ! isset($dipakai[$x['kunci']]) && ($x['nominal'] < 0) === ($m->jumlah < 0)
                     && abs($x['tanggal']->diffInDays($m->waktu->copy()->startOfDay(), false)) <= 1 && (self::rekMirip($x['rek'], $m->rekening) || self::namaSama($x['nama'], $m->nama)))

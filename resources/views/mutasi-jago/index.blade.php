@@ -7,7 +7,7 @@
         $tgl = fn ($d) => $d ? $d->translatedFormat('d-M-y') : '';
         $info = \App\Support\MutasiJago::KANTONG[$kantong];
         $label = ['cocok' => ['✓ cocok', 'hijau'], 'catatan' => ['⚠ ada catatan', 'kuning'], 'belum' => ['❗ belum diinput', 'merah'], 'tidak-di-bank' => ['❗ tidak ada di bank', 'merah'],
-            'menunggu' => ['menunggu mutasi', ''], 'biaya' => ['biaya tanpa transfer', 'kuning'], 'kembali' => ['↩ transfer kembali', ''], 'bunga' => ['bunga kantong', ''],
+            'menunggu' => ['menunggu mutasi', ''], 'biaya' => ['biaya tanpa transfer', 'kuning'], 'kembali' => ['↩ transfer kembali', ''], 'bunga' => ['bunga kantong', ''], 'talangan' => ['↔ dana talangan', ''],
             'bukan-mutasi' => ['❗ bukan dari mutasi', 'merah']];
         $n = $hasil['baris']->countBy('status');
         [$awal, $akhir] = $hasil['cakupan'];
@@ -130,6 +130,7 @@
                             @if ($r['status'] === 'bukan-mutasi')Tidak dibuat dari mutasi Jago (diketik langsung di sheet?). Sejak {{ \Illuminate\Support\Carbon::parse(\App\Support\MutasiJago::KETAT)->translatedFormat('j M Y') }} master hanya dari Input {{ $kantong === 'uj' ? 'UJ' : 'Kas' }} dengan memilih transfer bank — hapus baris ini lalu input ulang dari mutasinya.@endif
                             @if ($r['status'] === 'biaya')Biaya transfer tanpa transfer di menit yang sama.@endif
                             @if ($r['status'] === 'bunga')Bunga / pajak bunga kantong — tidak dicatat di Kas UJ.@endif
+                            @if ($r['status'] === 'talangan')Dana talangan (keterangan "talangan") — tidak dicatat di Kas UJ, tidak perlu reimburse.@endif
                             @if ($r['status'] === 'kembali')Keluar lalu masuk kembali dengan jumlah & penerima sama — saling meniadakan.@endif
                             @if ($r['saran'])<div class="kecil" style="color: #93c5fd;">{{ $r['saran'] }}</div>@endif
                         </td>
