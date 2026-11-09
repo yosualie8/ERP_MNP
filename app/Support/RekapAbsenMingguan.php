@@ -20,6 +20,8 @@ use Illuminate\Support\Collection;
  *   Tukang tanpa absen HP diisi mandor (rekap_absen sumber "mandor"). Admin boleh menimpa hari mana pun (bayar / tidak).
  * - Lembur = ½ UM per hari (mulai & selesai lembur lengkap; yang belum lengkap menunggu persetujuan), hanya bila hari itu dibayar.
  * - Tahap kerja per hari: isian admin/mandor → tahap kiriman Lapor Lapangan / lokasi absen → tahap hari kerja sebelumnya.
+ * - Tukang tanpa absen HP (owner 9 Nov 2026): jam kehadirannya IKUT MANDOR — absen HP pengisi (bila Mandor / Pengawas), kalau tidak
+ *   Mandor lalu Pengawas yang bekerja di tahap yang sama hari itu (jam_mandor). Hanya keterangan; yang dibayar tetap isian mandor / admin.
  * - Operator alat berat (owner 3 Nov 2026): + basic, transport, uang kesehatan per minggu (tarif jabatan, dibayar bila minggu itu
  *   ada hari dibayar; admin boleh mengubahnya per orang per minggu (tunjangan_mingguan); dibebankan rata ke tahap hari-hari kerjanya)
  *   + HM × tarif HM jabatan (HM per hari diisi admin, hanya hari dibayar).
@@ -27,6 +29,9 @@ use Illuminate\Support\Collection;
 class RekapAbsenMingguan
 {
     public const BELUM_TAHAP = '(belum ada tahap)';
+
+    /** Jabatan yang jam absennya diikuti tukang yang diisi mandor (urut prioritas). */
+    public const JABATAN_MANDOR = ['Mandor', 'Pengawas'];
 
     /** Senin minggu itu; bawaan minggu lalu (minggu ini masih berjalan). */
     public static function senin(?string $tanggal): Carbon
@@ -99,7 +104,7 @@ class RekapAbsenMingguan
                     'lembur_mulai' => $lm?->waktu->format('H:i'), 'lembur_selesai' => $ls?->waktu->format('H:i'),
                     'absen' => $absenHadir, 'absen_lembur' => $absenLembur, 'hadir' => $hadir, 'lembur' => $lembur,
                     'tunggu' => $tungguHadir, 'tunggu_lembur' => $tungguLembur, 'putus_hadir' => $putusHadir ? $r->hadir : null,
-                    'putus_lembur' => $putusLembur ? $r->lembur : null, 'sumber' => $r?->sumber, 'catatan' => $r?->catatan,
+                    'putus_lembur' => $putusLembur ? $r->lembur : null, 'sumber' => $r?->sumber, 'catatan' => $r?->catatan, 'oleh' => $r?->user_id, 'jam_mandor' => null,
                     'tahap_id' => $tahap, 'tahap' => $tahap ? ($namaTahap[$tahap] ?? null) : null, 'tahap_diisi' => (bool) $r?->proyek_tahap_id,
                     'bayar' => $hadir ? (int) $um : 0, 'bayar_lembur' => $lembur ? (int) round($um / 2) : 0,
                     // Per jenis absen: jam berlaku, jam asli (null = tidak ada absen asli), penanda koreksi admin.
@@ -136,6 +141,7 @@ class RekapAbsenMingguan
             ];
         })->sortBy(fn ($b) => [$b->ada ? 0 : 1, $b->k->site ?? 'zzz', $b->k->nama])->values();
 
+        self::jamIkutMandor($baris);
         $semuaHari = $baris->flatMap(fn ($b) => array_values($b->hari));
         $perTahap = $semuaHari->filter(fn ($h) => $h->jumlah > 0)->groupBy(fn ($h) => $h->tahap ?? self::BELUM_TAHAP)
             ->map(fn ($g) => $g->sum('jumlah'))->sortDesc();
@@ -155,5 +161,52 @@ class RekapAbsenMingguan
                 'tanpa_tahap' => $semuaHari->filter(fn ($h) => $h->hadir && ! $h->tahap_id)->count(),
             ],
         ];
+    }
+
+    /**
+     * Isi jam_mandor ['nama', 'masuk', 'pulang'] untuk hari dibayar tanpa absen HP milik tukang (diisi mandor / tanpa akun absen):
+     * pengisi absen tukang bila ia Mandor / Pengawas yang absen hari itu, kalau tidak Mandor → Pengawas di tahap yang sama (absen lengkap didahulukan).
+     */
+    private static function jamIkutMandor(Collection $baris): void
+    {
+        $urutan = array_flip(self::JABATAN_MANDOR);
+        [$perOrang, $perTahap] = [[], []];
+        foreach ($baris as $b) {
+            if (! isset($urutan[$b->k->jabatan])) {
+                continue;
+            }
+            foreach ($b->hari as $d => $h) {
+                if (! $h->masuk && ! $h->pulang) {
+                    continue;
+                }
+                $calon = ['nama' => $b->k->nama, 'masuk' => $h->masuk, 'pulang' => $h->pulang, 'skor' => [$h->masuk && $h->pulang ? 0 : 1, $urutan[$b->k->jabatan]]];
+                $perOrang[$b->k->id][$d] = $calon;
+                if ($h->tahap_id && (! isset($perTahap[$d][$h->tahap_id]) || $calon['skor'] < $perTahap[$d][$h->tahap_id]['skor'])) {
+                    $perTahap[$d][$h->tahap_id] = $calon;
+                }
+            }
+        }
+        if (! $perOrang) {
+            return;
+        }
+        $pengisi = [];
+        $userIds = $baris->flatMap(fn ($b) => collect($b->hari)->pluck('oleh'))->filter()->unique();
+        foreach (\App\Models\User::whereIn('id', $userIds)->pluck('email', 'id') as $uid => $email) {
+            $pengisi[$uid] = Karyawan::where('email', strtolower((string) $email))->where('status', 'aktif')->value('id');
+        }
+        foreach ($baris as $b) {
+            if (isset($urutan[$b->k->jabatan])) {
+                continue;
+            }
+            $tanpaAkun = trim((string) $b->k->email) === '';
+            foreach ($b->hari as $d => $h) {
+                if (! $h->hadir || $h->masuk || $h->pulang || ($h->sumber !== 'mandor' && ! $tanpaAkun)) {
+                    continue;
+                }
+                $kp = $h->oleh ? ($pengisi[$h->oleh] ?? null) : null;
+                $ikut = ($kp ? ($perOrang[$kp][$d] ?? null) : null) ?? ($h->tahap_id ? ($perTahap[$d][$h->tahap_id] ?? null) : null);
+                $h->jam_mandor = $ikut ? ['nama' => $ikut['nama'], 'masuk' => $ikut['masuk'], 'pulang' => $ikut['pulang']] : null;
+            }
+        }
     }
 }

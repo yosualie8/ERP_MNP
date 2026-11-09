@@ -117,7 +117,10 @@
                                 $info = collect([$x->masuk || $x->pulang ? 'masuk '.$tj('masuk').' · pulang '.$tj('pulang') : null,
                                     $x->lembur_mulai || $x->lembur_selesai ? 'lembur '.$tj('lembur_mulai').'–'.$tj('lembur_selesai') : null,
                                     $x->diedit ? 'jam dikoreksi admin' : null,
-                                    $x->sumber === 'mandor' ? 'diisi mandor' : null, $x->catatan])->filter()->implode(' · ');
+                                    $x->sumber === 'mandor' ? 'diisi mandor' : null,
+                                    // Tukang tanpa absen HP: jam ikut mandor / pengawas tahapnya (owner 9 Nov 2026).
+                                    $x->jam_mandor ? 'jam ikut '.$x->jam_mandor['nama'].': masuk '.($x->jam_mandor['masuk'] ?? '–').' · pulang '.($x->jam_mandor['pulang'] ?? '–') : null,
+                                    $x->catatan])->filter()->implode(' · ');
                             @endphp
                             <td class="hr {{ $kelas }}" data-v="{{ $simbol }}" data-k="{{ $b->k->id }}" data-nama="{{ $b->k->nama }}" data-d="{{ $d }}"
                                 data-label="{{ $x->tanggal->translatedFormat('l, j M') }}" data-hadir="{{ $pilihan($x->putus_hadir) }}" data-lembur="{{ $pilihan($x->putus_lembur) }}"
