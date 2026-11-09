@@ -43,8 +43,8 @@ class ReviewAbsenController extends Controller
             $jm = $masuk?->waktu->format('H:i');
             $jp = $pulang?->waktu->format('H:i');
             $pesan = "Halo {$k->nama}, review absen *{$hari}*:\n"
-                .'• Absen masuk: '.($jm ? "{$jm} ✅".($masuk->koreksiAdmin() ? ' (dikoreksi admin)' : '') : 'belum ada ❌')."\n"
-                .'• Absen pulang: '.($jp ? "{$jp} ✅".($pulang->koreksiAdmin() ? ' (dikoreksi admin)' : '') : 'belum ada ❌')."\n"
+                .'• Absen masuk: '.($jm ? "{$jm} ✅" : 'belum ada ❌')."\n"
+                .'• Absen pulang: '.($jp ? "{$jp} ✅" : 'belum ada ❌')."\n"
                 .match ($status) {
                     'lengkap' => 'Absen Anda lengkap. Terima kasih 🙏',
                     'tidak_absen' => 'Tidak ada absen hari itu. Mohon konfirmasi ke admin (izin / sakit / lupa absen).',

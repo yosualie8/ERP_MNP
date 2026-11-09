@@ -165,7 +165,6 @@ class GajiMingguanController extends Controller
                 $label = $h->translatedFormat('l, j F Y');
                 foreach ($hariIni as [$b, $x]) {
                     $ket = $x->masuk || $x->pulang ? ($x->masuk ?? '?').' - '.($x->pulang ?? '?').($x->tunggu === false && $x->absen === 'kurang' ? ' (disetujui)' : '')
-                        .(($x->jam['masuk']['diedit'] ?? false) || ($x->jam['pulang']['diedit'] ?? false) ? ' (jam dikoreksi admin)' : '')
                         : ($x->sumber === 'mandor' ? 'diisi mandor' : 'disetujui admin');
                     $w->addRow(new Row([$angka(++$no), $teks($label), $teks($b->k->nama), $teks($b->k->jabatan), $angka($x->bayar, $rp), $teks($ket),
                         $teks($x->tahap ?? RekapAbsenMingguan::BELUM_TAHAP)]));
