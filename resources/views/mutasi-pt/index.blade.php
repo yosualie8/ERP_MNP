@@ -89,7 +89,7 @@
     </div>
     <p class="redup" style="font-size: 12px; margin: -4px 0 10px;">
         <b>Dihitung</b> = dibayar langsung dari BCA (transaksi besar / berpajak) → wajib isi <b>Cost Center = tahap detail</b> (nama persis dari Daftar Proyek); bila tahapnya pos biaya umum (mis. "ASG (biaya tanpa tahap)", "JKT (biaya lokasi)") biaya ikut dibagi di Alokasi Biaya Umum.
-        <b>Tidak dihitung</b> = uang masuk, reimburse Kas Harian/UJ, rekening internal (Barnabas, Yosua, Multi Transportasi), ke Hans Anderson, pelunasan pinjaman, ke rekening MNP sendiri, leasing, DP/beli unit, sparepart/overhaul/ban, HPP ritasi — ditandai otomatis (alasan tertulis di bawah status), boleh diubah. Tidak ada yang otomatis Dihitung.
+        <b>Tidak dihitung</b> = uang masuk, reimburse Kas Harian/UJ, rekening internal (Barnabas, Patra Jaya Lestari, Yosua, Multi Transportasi), ke Hans Anderson, pelunasan pinjaman, ke rekening MNP sendiri, leasing, DP/beli unit, sparepart/overhaul/ban, HPP ritasi — ditandai otomatis (alasan tertulis di bawah status), boleh diubah. Tidak ada yang otomatis Dihitung.
         @if ($unggahan->isNotEmpty())
             Sumber: <b>upload file mutasi KlikBCA Bisnis</b> (Informasi Rekening → Mutasi Rekening → unduh CSV). Upload periode yang sama / tumpang tindih aman — baris di periode itu diganti isi file; transaksi <b>PEND</b> (belum dibukukan bank) diganti saat diupload lagi.
             Data sebelum upload pertama dari file Drive "{{ $impor['nama'] ?? 'Mutasi Rek PT Gabungan MNP.xlsx' }}" (impor Drive kini dimatikan).

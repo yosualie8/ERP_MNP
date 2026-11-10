@@ -23,7 +23,8 @@ class TandaMutasiPt
     public const STATUS = ['dihitung' => 'Dihitung', 'tidak' => 'Tidak dihitung', 'belum' => 'Belum dicek'];
 
     /** Penerima reimburse / rekening internal — transfer ke sini otomatis tidak dihitung. */
-    public const PENERIMA_INTERNAL = '/BARNABAS MANAEN|YOSUA DWI ?PERMANA|MULTI TRANSPORTASI/i';
+    // PATRA JAYA LESTARI: rekening perantara gaji mingguan sejak Okt 2026, isinya sudah tercatat di Kas Harian (owner 10 Nov 2026).
+    public const PENERIMA_INTERNAL = '/BARNABAS MANAEN|YOSUA DWI ?PERMANA|MULTI TRANSPORTASI|PATRA JAYA LESTARI/i';
 
     /**
      * Aturan otomatis TIDAK dihitung (owner 16 Okt 2026): pendanaan / perpindahan uang & biaya yang sudah tertutup Harga Jual
