@@ -1,9 +1,9 @@
-{{-- Asal "Bagian biaya lain" satu item BOQ: biaya tahap yang belum berkode BOQ × bobot omset dihasilkan item (bukan transaksi item itu sendiri). --}}
+{{-- Asal "Bagian biaya umum" satu item BOQ: biaya tahap yang belum berkode BOQ × bobot omset dihasilkan item (bukan transaksi item itu sendiri). --}}
 @php
     $porsi = ($bobot ?? 0) / 100;
 @endphp
 <table class="rinci-trx" style="margin-top: 6px; max-width: 900px;">
-    <thead><tr><th>Bagian biaya lain {{ $kode }} = biaya belum ber-BOQ × bobot {{ ($omset ?? false) ? 'omset dihasilkan' : 'Total Harga' }} {{ number_format($bobot ?? 0, 2, ',', '.') }}%</th><th class="angka">Biaya total</th><th class="angka">Bagian {{ $kode }}</th></tr></thead>
+    <thead><tr><th>Bagian biaya umum {{ $kode }} = biaya umum tahap (tanpa kode BOQ) × bobot {{ ($omset ?? false) ? 'omset dihasilkan' : 'Total Harga' }} {{ number_format($bobot ?? 0, 2, ',', '.') }}%</th><th class="angka">Biaya total</th><th class="angka">Bagian {{ $kode }}</th></tr></thead>
     <tbody>
         @foreach ($lain['sendiri'] as [$nm, $v])
             <tr><td>{{ $nama }} — {{ $nm }}</td><td class="angka">{{ rp((int) round($v)) }}</td><td class="angka">{{ rp((int) round($v * $porsi)) }}</td></tr>
@@ -14,4 +14,4 @@
     </tbody>
     <tfoot><tr><td>Total</td><td class="angka">{{ rp((int) round($lain['total'])) }}</td><td class="angka">{{ rp((int) round($bag)) }}</td></tr></tfoot>
 </table>
-<div class="redup" style="font-size: 11.5px; margin-top: 4px;">Ini pembagian sementara, bukan transaksi item {{ $kode }}. Transaksi Kas/BCA yang belum berkode ada di baris "belum diberi kode BOQ" di bawah tabel; begitu diberi kode {{ $kode }} di Pilah Transaksi, biayanya pindah ke kolom "Biaya keluar".</div>
+<div class="redup" style="font-size: 11.5px; margin-top: 4px;">Ini pembagian sementara, bukan transaksi item {{ $kode }}. Transaksi biaya umum (tanpa kode BOQ) ada di baris "Biaya umum" di bawah tabel; begitu diberi kode {{ $kode }} di Pilah Transaksi, biayanya pindah ke kolom "Biaya keluar".</div>
