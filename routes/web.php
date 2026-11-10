@@ -152,6 +152,7 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::post('/mutasi-pt/catatan', [\App\Http\Controllers\MutasiPtController::class, 'catatan'])->name('mutasi-pt.catatan');
     Route::post('/mutasi-pt/tandai', [\App\Http\Controllers\MutasiPtController::class, 'tandai'])->name('mutasi-pt.tandai');
     Route::post('/mutasi-pt/perbarui', [\App\Http\Controllers\MutasiPtController::class, 'perbarui'])->name('mutasi-pt.perbarui');
+    Route::post('/mutasi-pt/unggah', [\App\Http\Controllers\MutasiPtController::class, 'unggah'])->middleware('throttle:20,1')->name('mutasi-pt.unggah');
     Route::get('/karyawan', [\App\Http\Controllers\KaryawanController::class, 'index'])->name('karyawan.index');
     Route::get('/karyawan/tambah', [\App\Http\Controllers\KaryawanController::class, 'create'])->name('karyawan.create');
     Route::post('/karyawan', [\App\Http\Controllers\KaryawanController::class, 'store'])->name('karyawan.store');

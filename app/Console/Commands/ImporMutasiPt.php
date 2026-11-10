@@ -15,6 +15,11 @@ class ImporMutasiPt extends Command
     public function handle(): int
     {
         $h = Impor::jalankan((bool) $this->option('paksa'));
+        if ($h['status'] === 'upload') {
+            $this->info('Dilewati: mutasi PT kini dari upload file KlikBCA Bisnis (menu Mutasi Rekening PT).');
+
+            return self::SUCCESS;
+        }
         $this->info($h['status'] === 'tetap' ? "File tidak berubah sejak impor terakhir ({$h['diubah']})." : "Diimpor {$h['baris']} baris (file diubah {$h['diubah']}).");
 
         return self::SUCCESS;

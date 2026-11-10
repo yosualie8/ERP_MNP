@@ -48,6 +48,7 @@ class MutasiPtController extends Controller
             'baris' => $baris, 'bulan' => $bulan, 'rentang' => $rentang, 'dari' => $dari, 'bulanAda' => $bulanAda, 'q' => $q, 'status' => $status, 'hitung' => $hitung,
             'rpDihitung' => TandaMutasiPt::dihitung()->sum('rp'),
             'impor' => Cache::get(ImporMutasiPt::KUNCI),
+            'unggahan' => \App\Models\MutasiPtUnggah::with('user')->latest('id')->take(5)->get(),
             'saldoAkhir' => MutasiPt::orderByDesc('tanggal')->orderByDesc('baris')->first(),
             // Pilihan Cost Center = semua tahap detail: yang berjalan dulu, lalu pos biaya umum, lalu lainnya.
             'tahap' => ProyekTahap::with('proyek')->get()->sortBy(fn ($t) => [$t->status === 'progress' && ! $t->pos_overhead ? 0 : ($t->pos_overhead ? 1 : 2), $t->nama])->values(),
@@ -109,10 +110,36 @@ class MutasiPtController extends Controller
         return response()->json(['ok' => true, 'catatan' => $teks]);
     }
 
+    /** Upload file mutasi KlikBCA Bisnis (CorpAcctTrxn*.csv / .xlsx) — owner 10 Nov 2026. */
+    public function unggah(Request $request): RedirectResponse
+    {
+        $request->validate(['file' => ['required', 'file', 'max:5120', 'mimetypes:text/plain,text/csv,application/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/zip,application/octet-stream']],
+            ['file.required' => 'Pilih file mutasi BCA dulu.', 'file.max' => 'File terlalu besar (maks. 5 MB).', 'file.mimetypes' => 'Format file harus .csv atau .xlsx unduhan KlikBCA Bisnis.']);
+        $f = $request->file('file');
+        if (! in_array(strtolower($f->getClientOriginalExtension()), ['csv', 'xlsx'], true)) {
+            return back()->with('error', 'Format file harus .csv atau .xlsx unduhan KlikBCA Bisnis.');
+        }
+        try {
+            $h = \App\Support\ImporMutasiBca::simpan($f->getRealPath(), $f->getClientOriginalName(), $request->user()->id);
+        } catch (\RuntimeException $e) {
+            return back()->with('error', 'Upload ditolak: '.$e->getMessage());
+        }
+        $u = $h['unggah'];
+        $pesan = "Mutasi BCA {$u->dari->translatedFormat('j M Y')} s/d {$u->sampai->translatedFormat('j M Y')} tersimpan: {$u->baris} transaksi ({$h['baru']} baru, {$h['sama']} sudah ada"
+            .($h['diganti'] ? ", {$h['diganti']} baris lama diganti" : '').'). Saldo akhir '.rp((int) round($u->saldo_akhir)).'.';
+
+        $r = redirect()->route('mutasi-pt.index', ['bulan' => $u->sampai->format('Y-m')])->with('success', $pesan);
+
+        return $h['peringatan'] ? $r->with('error', '⚠ '.implode(' ⚠ ', $h['peringatan'])) : $r;
+    }
+
     public function perbarui(): RedirectResponse
     {
         try {
             $h = ImporMutasiPt::jalankan(true);
+            if ($h['status'] === 'upload') {
+                return back()->with('error', 'Mutasi PT kini dari upload file KlikBCA Bisnis — perbarui dari Drive dimatikan supaya hasil upload tidak terhapus.');
+            }
         } catch (\Throwable $e) {
             report($e);
 

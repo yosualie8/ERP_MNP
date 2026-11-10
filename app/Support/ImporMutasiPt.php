@@ -24,6 +24,11 @@ class ImporMutasiPt
     /** @return array{status: string, baris?: int, diubah?: string} */
     public static function jalankan(bool $paksa = false): array
     {
+        // Sejak ada upload file KlikBCA Bisnis (owner 10 Nov 2026) tabel tidak lagi diganti dari Drive — impor Drive mengganti
+        // SELURUH tabel dan akan menghapus hasil upload.
+        if (\App\Models\MutasiPtUnggah::exists()) {
+            return ['status' => 'upload'];
+        }
         $id = config('mnp.mutasi_pt_file');
         // Akun pemilik file (integrasi foto, akses Drive penuh) atau akun Sheets (drive.readonly).
         $g = ($f = GoogleIntegrasi::foto()) ? new GoogleSheets($f) : GoogleSheets::terhubung();

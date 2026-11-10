@@ -23,6 +23,8 @@ return [
     // Spreadsheet "Progress ASG - Update": lembar "Cost Project" (asli) & "Cost Project ERP" (daftar proyek baku, data awal menu Daftar Proyek).
     // File xlsx Drive "Mutasi Rek PT Gabungan MNP" — Mutasi Rekening PT (BCA), hanya dilihat.
     'mutasi_pt_file' => env('MNP_MUTASI_PT_FILE', '1XrkJL-yONri_YLKXKd76eGqLr_-Wmy6Y'),
+    // Rekening BCA PT MNP — upload mutasi KlikBCA Bisnis hanya diterima untuk rekening ini (owner 10 Nov 2026).
+    'rekening_pt' => env('MNP_REKENING_PT', '2852568888'),
 
     'sheet_cost_project' => env('MNP_SHEET_COST_PROJECT', '1q2k6v3IRgGUktYCmptkgZCS22ZA4oVI5k7m0fRl_FqU'),
 

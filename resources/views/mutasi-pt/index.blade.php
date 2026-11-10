@@ -45,8 +45,33 @@
             <button type="submit" class="tombol polos" style="padding: 6px 12px;">Cari</button>
             @if ($q !== '' || $status)<a href="{{ route('mutasi-pt.index', ['bulan' => $bulan, 'rentang' => $rentang]) }}" style="font-size: 13px;">kembali per bulan</a>@endif
         </form>
-        <form method="POST" action="{{ route('mutasi-pt.perbarui') }}" style="margin-left: auto;">@csrf<button type="submit" class="tombol polos" style="padding: 6px 12px;">↻ Perbarui dari Drive</button></form>
+        @if ($bolehTandai)
+            {{-- Upload file mutasi KlikBCA Bisnis (owner 10 Nov 2026) --}}
+            <form method="POST" action="{{ route('mutasi-pt.unggah') }}" enctype="multipart/form-data" style="margin-left: auto; display: flex; gap: 6px; align-items: center;"
+                onsubmit="this.querySelector('button').disabled = true; this.querySelector('button').textContent = 'Memeriksa & menyimpan…';">@csrf
+                <input type="file" name="file" accept=".csv,.xlsx" required style="max-width: 230px; font-size: 12.5px;" title="File CorpAcctTrxn….csv dari KlikBCA Bisnis → Informasi Rekening → Mutasi Rekening">
+                <button type="submit" class="tombol" style="padding: 6px 12px;">⬆ Upload mutasi BCA</button>
+            </form>
+        @endif
     </div>
+    @if ($unggahan->isNotEmpty())
+        <details style="margin: -4px 0 10px; font-size: 12.5px;">
+            <summary class="redup" style="cursor: pointer;">Upload terakhir: {{ $unggahan[0]->dari->translatedFormat('j M') }} – {{ $unggahan[0]->sampai->translatedFormat('j M Y') }}
+                ({{ $unggahan[0]->baris }} transaksi{{ $unggahan[0]->pending ? ', '.$unggahan[0]->pending.' PEND' : '' }}) oleh {{ $unggahan[0]->user?->name ?? '–' }}, {{ $unggahan[0]->created_at->translatedFormat('j M H:i') }}</summary>
+            <table class="kas" style="margin-top: 6px; width: auto;">
+                <thead><tr><th>Waktu upload</th><th>File</th><th>Periode</th><th class="angka">Transaksi</th><th class="angka">Baru</th><th class="angka">Saldo akhir</th><th>Oleh</th><th>Peringatan</th></tr></thead>
+                <tbody>
+                    @foreach ($unggahan as $u)
+                        <tr><td>{{ $u->created_at->translatedFormat('j M Y H:i') }}</td><td>{{ $u->nama_file }}</td>
+                            <td>{{ $u->dari->translatedFormat('j M') }} – {{ $u->sampai->translatedFormat('j M Y') }}</td>
+                            <td class="angka">{{ $u->baris }}{{ $u->pending ? ' ('.$u->pending.' PEND)' : '' }}</td><td class="angka">{{ $u->ringkasan['baru'] ?? '–' }}</td>
+                            <td class="angka">{{ rp((int) round($u->saldo_akhir)) }}</td><td>{{ $u->user?->name }}</td>
+                            <td style="max-width: 420px; white-space: normal;">{{ implode(' · ', $u->ringkasan['peringatan'] ?? []) }}</td></tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </details>
+    @endif
 
     <div style="display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin-bottom: 10px;">
         <span class="redup" style="font-size: 13px;">Sejak 1 Jan 2026:</span>
@@ -65,7 +90,12 @@
     <p class="redup" style="font-size: 12px; margin: -4px 0 10px;">
         <b>Dihitung</b> = dibayar langsung dari BCA (transaksi besar / berpajak) → wajib isi <b>Cost Center = tahap detail</b> (nama persis dari Daftar Proyek); bila tahapnya pos biaya umum (mis. "ASG (biaya tanpa tahap)", "JKT (biaya lokasi)") biaya ikut dibagi di Alokasi Biaya Umum.
         <b>Tidak dihitung</b> = uang masuk, reimburse Kas Harian/UJ, rekening internal (Barnabas, Yosua, Multi Transportasi), ke Hans Anderson, pelunasan pinjaman, ke rekening MNP sendiri, leasing, DP/beli unit, sparepart/overhaul/ban, HPP ritasi — ditandai otomatis (alasan tertulis di bawah status), boleh diubah. Tidak ada yang otomatis Dihitung.
-        Sumber: file Drive "{{ $impor['nama'] ?? 'Mutasi Rek PT Gabungan MNP.xlsx' }}"@if ($impor), diimpor {{ \Illuminate\Support\Carbon::parse($impor['waktu'])->translatedFormat('d-M H:i') }}, diperiksa tiap 30 menit @endif.</p>
+        @if ($unggahan->isNotEmpty())
+            Sumber: <b>upload file mutasi KlikBCA Bisnis</b> (Informasi Rekening → Mutasi Rekening → unduh CSV). Upload periode yang sama / tumpang tindih aman — baris di periode itu diganti isi file; transaksi <b>PEND</b> (belum dibukukan bank) diganti saat diupload lagi.
+            Data sebelum upload pertama dari file Drive "{{ $impor['nama'] ?? 'Mutasi Rek PT Gabungan MNP.xlsx' }}" (impor Drive kini dimatikan).
+        @else
+            Sumber: file Drive "{{ $impor['nama'] ?? 'Mutasi Rek PT Gabungan MNP.xlsx' }}"@if ($impor), diimpor {{ \Illuminate\Support\Carbon::parse($impor['waktu'])->translatedFormat('d-M H:i') }}, diperiksa tiap 30 menit @endif — atau upload file mutasi KlikBCA Bisnis (.csv).
+        @endif</p>
 
     <div class="kartu gulir" style="padding: 0;">
         <table class="kas" data-saring-kolom>
@@ -77,7 +107,7 @@
                     @php($t = $x->t)
                     <tr class="t" @if ($t) data-kunci="{{ $t->kunci }}" @endif>
                         <td data-n="{{ $m->tanggal?->toDateString() }}" data-v="{{ $m->tanggal?->toDateString() }} {{ $tgl($m->tanggal) }}" style="white-space: nowrap;">{{ $tgl($m->tanggal) }}</td>
-                        <td data-v="{{ $m->keterangan }} {{ $t?->tanda?->catatan }}">{{ $m->keterangan }}
+                        <td data-v="{{ $m->keterangan }} {{ $t?->tanda?->catatan }}">@if ($m->pending)<span class="chip" style="padding: 0 6px; font-size: 10.5px; margin-right: 4px;" title="Belum dibukukan bank — diganti saat mutasi hari ini diupload lagi">PEND</span>@endif{{ $m->keterangan }}
                             @if ($t && $bolehTandai)
                                 <input data-f="catatan" value="{{ $t->tanda?->catatan }}" maxlength="500" placeholder="+ keterangan tambahan" autocomplete="off" class="catatan-admin">
                             @elseif ($t?->tanda?->catatan)
