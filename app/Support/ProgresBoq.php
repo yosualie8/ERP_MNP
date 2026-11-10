@@ -108,8 +108,7 @@ class ProgresBoq
      */
     public static function bacaSheet(string $id, string $lembar): array
     {
-        $r = "'".str_replace("'", "''", $lembar)."'!A1:N300";
-        $v = GoogleSheets::wajib()->nilaiMentah($id, [$r])[$r] ?? [];
+        $v = self::isiLembar($id, $lembar);
         $angka = fn ($x) => is_numeric($x) ? (float) $x : (is_string($x) && preg_match('/^-?[\d.]+(,\d+)?$/', trim($x)) ? (float) str_replace(['.', ','], ['', '.'], trim($x)) : null);
         $hasil = [];
         foreach ($v as $x) {
@@ -122,5 +121,39 @@ class ProgresBoq
         }
 
         return $hasil;
+    }
+
+    /**
+     * Judul bagian dari lembar penawaran (owner 10 Nov 2026): baris berkode satu huruf di kolom A, mis. "A | PEKERJAAN PERSIAPAN".
+     *
+     * @return array<string, string> huruf => judul
+     */
+    public static function bacaBagian(string $id, string $lembar): array
+    {
+        $hasil = [];
+        foreach (self::isiLembar($id, $lembar) as $x) {
+            $huruf = strtoupper(trim((string) ($x[0] ?? '')));
+            $judul = trim(preg_replace('/\s+/', ' ', (string) ($x[1] ?? '')));
+            if (preg_match('/^[A-Z]$/', $huruf) && $judul !== '' && ! preg_match('/^sub ?total/i', $judul)) {
+                $hasil[$huruf] ??= mb_substr($judul, 0, 150);
+            }
+        }
+
+        return $hasil;
+    }
+
+    /** Huruf bagian dari kode item ("B12" → "B"). */
+    public static function huruf(string $kode): string
+    {
+        return preg_replace('/\d.*$/', '', strtoupper(trim($kode))) ?: '?';
+    }
+
+    private static array $isi = [];
+
+    private static function isiLembar(string $id, string $lembar): array
+    {
+        $r = "'".str_replace("'", "''", $lembar)."'!A1:N300";
+
+        return self::$isi[$id.'|'.$lembar] ??= GoogleSheets::wajib()->nilaiMentah($id, [$r])[$r] ?? [];
     }
 }

@@ -50,6 +50,8 @@ class BoqController extends Controller
             'item.*.harga' => ['nullable', 'numeric'],
             'item.*.modal_material' => ['nullable', 'numeric'],
             'item.*.modal_jasa' => ['nullable', 'numeric'],
+            'bagian' => ['array'],
+            'bagian.*' => ['nullable', 'string', 'max:150'],
         ]);
         $baris = collect($d['item'] ?? [])->filter(fn ($x) => trim((string) ($x['kode'] ?? '')) !== '' || trim((string) ($x['uraian'] ?? '')) !== '')->values();
         $kode = $baris->map(fn ($x) => strtoupper(trim((string) ($x['kode'] ?? ''))));
@@ -60,7 +62,7 @@ class BoqController extends Controller
             return back()->withInput()->with('error', 'Kode BOQ dobel: '.$kode->duplicates()->unique()->implode(', '));
         }
         $lama = BoqItem::where('proyek_tahap_id', $tahap->id)->get()->keyBy('id');
-        DB::transaction(function () use ($baris, $lama, $tahap) {
+        DB::transaction(function () use ($baris, $lama, $tahap, $d) {
             $simpan = [];
             // kode sementara dulu supaya tukar kode antar baris tidak bentrok unik
             BoqItem::where('proyek_tahap_id', $tahap->id)->update(['kode' => DB::raw("CONCAT('~', id)")]);
@@ -71,6 +73,11 @@ class BoqController extends Controller
                 $simpan[] = $item->id;
             }
             BoqItem::where('proyek_tahap_id', $tahap->id)->whereNotIn('id', $simpan)->delete();
+            // Judul bagian (A = Pekerjaan Persiapan, …) — hanya huruf yang masih dipakai item.
+            $dipakai = $baris->map(fn ($x) => ProgresBoq::huruf((string) $x['kode']))->unique()->flip();
+            $judul = collect($d['bagian'] ?? [])->mapWithKeys(fn ($v, $k) => [strtoupper(trim((string) $k)) => trim((string) $v)])
+                ->filter(fn ($v, $k) => $v !== '' && isset($dipakai[$k]))->sortKeys()->all();
+            $tahap->update(['boq_bagian' => $judul ?: null]);
         });
         KasRiwayat::create(['aksi' => 'boq-simpan', 'lembar' => 'BOQ', 'baris_awal' => 0, 'baris_akhir' => 0,
             'ringkasan' => "BOQ {$tahap->nama} disimpan: ".$baris->count().' item (sebelumnya '.$lama->count().')',
@@ -90,6 +97,10 @@ class BoqController extends Controller
         }
         if (! $baru) {
             return back()->with('error', 'Tidak ada baris berkode BOQ (A1, B12, …) di kolom A lembar "'.$d['lembar'].'".');
+        }
+        $bagian = ProgresBoq::bacaBagian(GoogleSheets::idDari($d['link']), $d['lembar']);
+        if ($bagian) {
+            $tahap->update(['boq_bagian' => array_merge($tahap->boq_bagian ?? [], $bagian)]);
         }
         $ada = BoqItem::where('proyek_tahap_id', $tahap->id)->get()->keyBy('kode');
         $urut = (int) $ada->max('urutan');

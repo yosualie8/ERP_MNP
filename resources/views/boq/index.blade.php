@@ -16,6 +16,8 @@
         $laba = $p ? $p['omset'] - $totalBiaya : 0;
     @endphp
     <style>
+        table.kas tr.judul-bagian td { background: var(--kartu-2, rgba(255,255,255,.04)); font-weight: 700; font-size: 13px; letter-spacing: .2px; padding-top: 9px; padding-bottom: 7px; }
+        table.kas tr.judul-bagian .rinci { display: block; font-weight: 400; font-size: 11.5px; color: var(--redup); margin-top: 2px; }
         .ringkas { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin-bottom: 12px; }
         .ringkas .kartu { margin: 0; padding: 10px 14px; }
         .ringkas b { display: block; font-size: 19px; margin-top: 2px; }
@@ -106,6 +108,14 @@
 
         @if ($ubah)
             <form method="POST" action="{{ route('boq.simpan', $tahap) }}" class="kartu gulir" style="padding: 0;">@csrf
+                @php($hurufAda = collect($p['baris'])->map(fn ($b) => \App\Support\ProgresBoq::huruf($b->item->kode))->unique()->values())
+                <div style="padding: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 6px 12px;">
+                    <b style="grid-column: 1 / -1; font-size: 13px;">Judul bagian <span class="redup" style="font-weight: 400;">(mis. A = Pekerjaan Persiapan, B = Pekerjaan Jalan, D = Tanggul — tampil sebagai judul kelompok di tabel)</span></b>
+                    @foreach ($hurufAda as $h)
+                        <label style="display: flex; gap: 6px; align-items: center; font-size: 13px;"><b style="width: 18px;">{{ $h }}</b>
+                            <input name="bagian[{{ $h }}]" value="{{ old('bagian.'.$h, $tahap->boq_bagian[$h] ?? '') }}" maxlength="150" placeholder="judul bagian {{ $h }}" style="flex: 1;"></label>
+                    @endforeach
+                </div>
                 <table class="kas" id="tabel-ubah" data-tanpa-saring-kolom>
                     <thead><tr><th style="width: 70px;">Kode</th><th>Uraian</th><th style="width: 110px;">Volume</th><th style="width: 70px;">Satuan</th><th style="width: 130px;">Harga Satuan</th>
                         <th style="width: 140px;">Modal material (total)</th><th style="width: 140px;">Modal jasa (total)</th><th style="width: 90px;">Transaksi</th><th style="width: 40px;"></th></tr></thead>
@@ -150,8 +160,14 @@
                     <thead><tr><th class="sempit" data-saring-sempit>Kode</th><th>Uraian</th><th class="angka">Volume</th><th class="sempit" data-saring-sempit>Satuan</th><th class="angka">Harga Satuan</th><th class="angka" title="Volume × Harga Satuan">Total Harga</th><th class="angka">Bobot</th>
                         <th class="angka">Modal</th><th class="angka" title="Transaksi Kas/BCA berkode item + rit material &amp; Uang Material Kas UJ sesuai jenis">Biaya keluar</th>@if ($lainTot)<th class="angka" title="Biaya belum masuk item BOQ × bobot omset dihasilkan item">Bagian biaya lain</th>@endif<th style="width: 110px;">% modal</th>
                         <th style="width: 120px;">Terpasang (kumulatif)</th><th style="width: 110px;">% terpasang</th><th class="angka">Tertagih</th><th style="width: 110px;">% tertagih</th><th class="angka" title="Biaya keluar + bagian biaya lain">Total biaya</th><th class="angka" title="Total Harga × % terpasang">Omset dihasilkan</th><th class="angka" title="Omset dihasilkan − total biaya">Laba</th></tr></thead>
+                    @php($judulBagian = $tahap->boq_bagian ?? [])
+                    @foreach (collect($p['baris'])->groupBy(fn ($b) => \App\Support\ProgresBoq::huruf($b->item->kode)) as $huruf => $grp)
+                    @php($subBag = $lainTot * $grp->sum(fn ($b) => $b->bobot_bagi ?? 0) / 100)
                     <tbody>
-                        @foreach ($p['baris'] as $b)
+                        {{-- Judul bagian BOQ (owner 10 Nov 2026): A = Pekerjaan Persiapan, B = …, dari lembar penawaran / diisi di Ubah BOQ --}}
+                        <tr class="judul-bagian"><td colspan="{{ $kol }}"><b>{{ $huruf }}</b> · {{ $judulBagian[$huruf] ?? 'Bagian '.$huruf }}@if (! isset($judulBagian[$huruf]))<span class="redup" style="font-weight: 400;"> (judul belum diisi — isi di Ubah BOQ)</span>@endif
+                            <span class="rinci">{{ $grp->count() }} item · nilai {{ rp((int) round($grp->sum('nilai'))) }} · modal {{ rp((int) round($grp->sum('modal'))) }} · biaya keluar {{ rp((int) round($grp->sum('biaya') + $subBag)) }} · omset dihasilkan {{ rp((int) round($grp->sum('omset'))) }}</span></td></tr>
+                        @foreach ($grp as $b)
                             @php($it = $b->item)
                             @php($bag = $lainTot * ($b->bobot_bagi ?? 0) / 100)
                             @php($totItem = $b->biaya + $bag)
@@ -191,6 +207,7 @@
                             @endif
                         @endforeach
                     </tbody>
+                    @endforeach
                     <tfoot>
                         <tr class="sub"><td colspan="5">Total</td><td class="angka">{{ rp((int) round($p['nilai'])) }}</td><td class="angka">100%</td><td class="angka">{{ rp((int) round($p['modal'])) }}</td>
                             <td class="angka">{{ rp((int) round($p['biaya_boq'])) }}</td>@if ($lainTot)<td class="angka">{{ rp((int) round($lainTot)) }}</td>@endif<td class="p">{{ $p['modal'] > 0 ? $pr(($p['biaya_boq'] + $lainTot) / $p['modal'] * 100) : '–' }}</td><td></td><td class="p">{{ $pr($p['p_pasang']) }}</td><td class="angka">{{ rp((int) round($p['rp_tagih'])) }}</td><td class="p">{{ $pr($p['p_tagih']) }}</td>
