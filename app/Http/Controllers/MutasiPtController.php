@@ -36,10 +36,10 @@ class MutasiPtController extends Controller
             ->when($status, fn ($w) => $w->where('tanggal', '>=', TandaMutasiPt::MULAI))
             // rentang 1 / 3 / 6 bulan berakhir di bulan terpilih (bawaan 1 bulan)
             ->when($q === '' && ! $status && $bulan, fn ($w) => $w->whereBetween('tanggal', [$dari, \Illuminate\Support\Carbon::createFromFormat('Y-m-d', $bulan.'-01')->endOfMonth()->toDateString()]))
-            ->orderBy('tanggal')->orderBy('baris')->limit(5000)->get()
+            ->orderByDesc('tanggal')->orderByDesc('baris')->limit(5000)->get()
             // cari juga di keterangan tambahan admin (tersimpan terpisah)
             ->when($q !== '', fn ($c) => $c->concat(TandaMutasiPt::baris()->filter(fn ($b) => $b->tanda?->catatan
-                && collect(preg_split('/\s+/', $q))->every(fn ($kata) => mb_stripos($b->tanda->catatan, $kata) !== false))->pluck('m'))->unique('id')->sortBy(fn ($m) => [$m->tanggal, $m->baris])->values())
+                && collect(preg_split('/\s+/', $q))->every(fn ($kata) => mb_stripos($b->tanda->catatan, $kata) !== false))->pluck('m'))->unique('id')->sortByDesc(fn ($m) => [$m->tanggal, $m->baris])->values())
             ->map(fn ($m) => (object) ['m' => $m, 't' => $tanda[TandaMutasiPt::kunci($m)] ?? null])
             ->when($status, fn ($c) => $c->filter(fn ($x) => $x->t?->status === $status))->values();
         $hitung = TandaMutasiPt::baris()->groupBy('status')->map->count();
