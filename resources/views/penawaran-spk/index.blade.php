@@ -45,6 +45,13 @@
         .ps-catatan-box { font-size: 13px; line-height: 1.5; padding: 10px 12px; border-radius: 8px; background: var(--kartu-2); border-left: 3px solid var(--garis-kuat); color: var(--teks); }
         .ps-catatan-box:empty { display: none; }
         .ps-catatan-box.saran { border-left-color: var(--aksen); }
+        .ps-usul { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 14px; padding: 12px 14px; border-left-width: 4px; }
+        .ps-usul .isi { flex: 1; min-width: 260px; }
+        .ps-usul .nama { font-size: 16px; font-weight: 700; }
+        .ps-usul .tombol { height: 40px; padding: 0 16px; border-radius: 8px; font-weight: 600; flex-shrink: 0; }
+        .ps-form input.salah { border-color: var(--merah); }
+        /* tempat tetap: peringatan tahap tidak menggeser tombol saat kotak ditinggalkan */
+        #f-tahap-info, #f-tahap-info:empty { display: block; min-height: 18px; margin-top: -6px; }
         .ps-tombol { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding-top: 16px; border-top: 1px solid var(--garis); }
         .ps-tombol .tombol { font-size: 14px; height: 40px; padding: 0 16px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
         .ps-tombol .tombol.polos { font-weight: 500; }
@@ -76,6 +83,14 @@
                 <form method="POST" id="ps-form" class="ps-form">
                     @csrf @method('PATCH')
                     <input type="hidden" name="tampil" value="{{ $tampil }}">
+                    <div class="ps-bagian" id="f-bagian-tahap">
+                        <h4>Tautan ke tahap (omset)</h4>
+                        <div class="ps-catatan-box saran ps-usul l6" id="f-saran"></div>
+                        <div class="ps-medan l6"><label for="f-tahap-cari">Tahap proyek — ketik nama / lokasi, pilih dari daftar</label>
+                            <input id="f-tahap-cari" list="daftar-tahap" autocomplete="off" placeholder="mis. ASG Tahap 103 atau nama lapangan">
+                            <input type="hidden" id="f-tahap" name="proyek_tahap_id"></div>
+                        <div class="ps-info l6" id="f-tahap-info"></div>
+                    </div>
                     <div class="ps-bagian">
                         <h4>Dokumen</h4>
                         <div class="ps-medan l2"><label for="f-kode">Kode</label><input id="f-kode" name="kode" maxlength="60" autocomplete="off"></div>
@@ -94,23 +109,8 @@
                         <div class="ps-catatan-box l6" id="f-penawaran"></div>
                     </div>
                     <div class="ps-bagian">
-                        <h4 id="f-bagian-tahap">Tautan ke tahap</h4>
-                        <div class="ps-medan l4" id="f-tahap-w"><label for="f-tahap">Tahap proyek</label>
-                        <select id="f-tahap" name="proyek_tahap_id">
-                            <option value="">— pilih tahap —</option>
-                            <optgroup label="Sedang berjalan">
-                                @foreach ($tahap->where('status', 'progress') as $t)
-                                    <option value="{{ $t['id'] }}">{{ $t['nama'] }}{{ $t['lokasi'] ? ' — '.$t['lokasi'] : '' }} · omset kini {{ $t['omset'] ? rp($t['omset']) : 'kosong' }}</option>
-                                @endforeach
-                            </optgroup>
-                            <optgroup label="Lainnya (ada ritasi 12 bulan terakhir)">
-                                @foreach ($tahap->where('status', '!=', 'progress') as $t)
-                                    <option value="{{ $t['id'] }}">{{ $t['nama'] }}{{ $t['lokasi'] ? ' — '.$t['lokasi'] : '' }} · {{ $t['status'] }} · omset {{ $t['omset'] ? rp($t['omset']) : 'kosong' }}</option>
-                                @endforeach
-                            </optgroup>
-                        </select></div>
-                        <div class="ps-medan l2"><label for="f-catatan">Catatan</label><input id="f-catatan" name="catatan" maxlength="500" autocomplete="off"></div>
-                        <div class="ps-catatan-box saran l6" id="f-saran"></div>
+                        <h4>Catatan</h4>
+                        <div class="ps-medan l6"><label for="f-catatan">Catatan</label><input id="f-catatan" name="catatan" maxlength="500" autocomplete="off"></div>
                     </div>
                     <div class="ps-tombol">
                         <button type="submit" name="aksi" value="tautkan" class="tombol" id="b-tautkan">✔ Tautkan ke tahap &amp; isi omset</button>
@@ -150,12 +150,18 @@
     </div>
 
     @php
+        // Nama tahap untuk autocomplete; nama kembar diberi #id supaya tetap satu tahap per isian
+        $kembar = $tahap->countBy('nama');
+        $tahapKlien = $tahap->mapWithKeys(fn ($t) => [$t['id'] => ['nama' => $kembar[$t['nama']] > 1 ? $t['nama'].' #'.$t['id'] : $t['nama'], 'lokasi' => $t['lokasi'], 'status' => $t['status'], 'omset' => $t['omset']]]);
+    @endphp
+    <datalist id="daftar-tahap">@foreach ($tahapKlien as $t)<option value="{{ $t['nama'] }}">{{ $t['lokasi'] ? $t['lokasi'].' · ' : '' }}{{ $t['status'] === 'progress' ? 'berjalan' : $t['status'] }} · omset {{ $t['omset'] ? rp($t['omset']) : 'kosong' }}</option>@endforeach</datalist>
+    @php
         $data = $baris->mapWithKeys(fn ($d) => [$d->id => [
             'id' => $d->id, 'jenis' => $d->jenis, 'kode' => $d->kode, 'nomor' => $d->nomor, 'tanggal' => $d->tanggal?->toDateString(),
             'pihak' => $d->pihak, 'lokasi' => $d->lokasi, 'pekerjaan' => $d->pekerjaan,
             'volume' => $d->volume !== null ? number_format($d->volume, 2, ',', '.') : '', 'harga' => $d->harga !== null ? rp($d->harga) : '', 'nilai' => $d->nilai !== null ? rp($d->nilai) : '',
             'catatan' => $d->catatan, 'status' => $d->status, 'tahap' => $d->proyek_tahap_id ?? $d->saran_tahap_id, 'tertaut' => (bool) $d->proyek_tahap_id,
-            'saran' => $d->saranTahap ? 'Usulan: '.$d->saranTahap->nama.($d->saran_alasan ? ' ('.$d->saran_alasan.')' : '') : null,
+            'saran_id' => $d->saran_tahap_id, 'saran_alasan' => $d->saran_alasan,
             'email' => trim(($d->waktu_email?->translatedFormat('j M Y H:i') ?? '').' · '.$d->subjek),
             'dicek' => $d->dicek_at ? 'Terakhir dicek '.$d->dicek_at->translatedFormat('j M Y H:i').($d->user ? ' oleh '.$d->user->name : '') : 'Angka hasil baca otomatis — belum dicek',
             'pdf' => route('penawaran-spk.pdf', $d), 'ubah' => route('penawaran-spk.ubah', $d),
@@ -166,7 +172,7 @@
     @endphp
     <script>
         (() => {
-            const data = @json($data), pilihAwal = {{ $pilih ?: 'null' }};
+            const data = @json($data), TAHAP = @json($tahapKlien), pilihAwal = {{ $pilih ?: 'null' }};
             const $ = id => document.getElementById(id);
             const form = $('ps-form');
             const angka = s => { s = String(s || '').replace(/[^\d.,]/g, ''); if (!s) return null;
@@ -182,6 +188,27 @@
                 el.textContent = `Volume × harga = Rp ${rp(k)}` + (beda ? ` — tidak sama dengan nilai (selisih Rp ${rp(n - k)})` : ' ✓ sama dengan nilai');
             };
             ['f-volume', 'f-harga', 'f-nilai'].forEach(id => $(id).addEventListener('input', kali));
+            // Autocomplete tahap: nama di kotak ketik → id di isian tersembunyi
+            const idDariNama = {}; for (const [id, t] of Object.entries(TAHAP)) idDariNama[t.nama.toLowerCase()] = id;
+            const cari = $('f-tahap-cari');
+            const esc = t => String(t ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+            const infoTahap = id => { const t = TAHAP[id]; return t ? `${t.lokasi ? t.lokasi + ' · ' : ''}${t.status === 'progress' ? 'berjalan' : t.status} · omset kini ${t.omset ? 'Rp ' + rp(t.omset) : 'kosong'}` : ''; };
+            const setTahap = id => { $('f-tahap').value = id || ''; cari.value = id && TAHAP[id] ? TAHAP[id].nama : ''; cari.classList.remove('salah'); $('f-tahap-info').textContent = infoTahap(id); };
+            cari.addEventListener('input', () => {
+                const id = idDariNama[cari.value.trim().toLowerCase()];
+                $('f-tahap').value = id || '';
+                if (id) cari.classList.remove('salah');
+                $('f-tahap-info').textContent = id ? infoTahap(id) : '';
+            });
+            // Peringatan baru muncul setelah selesai mengetik (keluar dari kotak), bukan tiap huruf
+            cari.addEventListener('change', () => {
+                const salah = !$('f-tahap').value && cari.value.trim() !== '';
+                cari.classList.toggle('salah', salah);
+                if (salah) $('f-tahap-info').textContent = 'Belum cocok — pilih salah satu dari daftar yang muncul.';
+            });
+            form.addEventListener('submit', e => {
+                if (cari.value.trim() && !$('f-tahap').value) { e.preventDefault(); alert('Tahap "' + cari.value + '" tidak ada di daftar. Pilih dari daftar yang muncul saat mengetik.'); cari.focus(); }
+            });
             const pilih = id => {
                 const d = data[id]; if (!d) return;
                 document.querySelectorAll('#ps-tabel tr.dipilih').forEach(r => r.classList.remove('dipilih'));
@@ -192,12 +219,17 @@
                 $('f-email').textContent = d.email;
                 $('f-pihak-l').textContent = d.jenis === 'spk' ? 'Pemberi kerja' : 'Kepada';
                 for (const k of ['kode', 'nomor', 'tanggal', 'pihak', 'lokasi', 'pekerjaan', 'volume', 'harga', 'nilai', 'catatan']) $('f-' + k).value = d[k] ?? '';
-                $('f-tahap').value = d.tahap ?? '';
-                $('f-saran').textContent = d.tertaut ? 'Sudah ditautkan.' : (d.saran || 'Belum ada usulan tahap — pilih sendiri.');
+                setTahap(d.tahap);
                 const spk = d.jenis === 'spk';
-                $('f-tahap-w').hidden = !spk; $('f-saran').hidden = !spk; $('b-tautkan').hidden = !spk;
-                $('f-bagian-tahap').textContent = spk ? 'Tautan ke tahap' : 'Catatan';
-                $('f-catatan').closest('.ps-medan').className = 'ps-medan ' + (spk ? 'l2' : 'l6');
+                $('f-bagian-tahap').hidden = !spk; $('b-tautkan').hidden = !spk;
+                // Usulan di paling atas form + tombol sekali klik
+                const usul = $('f-saran'), tu = d.saran_id && TAHAP[d.saran_id];
+                if (d.tertaut) usul.innerHTML = `<div class="isi">✔ Sudah ditautkan ke <span class="nama">${esc(TAHAP[d.tahap]?.nama || '')}</span></div>`;
+                else if (tu) {
+                    usul.innerHTML = `<div class="isi">💡 Usulan: <span class="nama">${esc(tu.nama)}</span><div class="redup" style="font-size: 12px; margin-top: 3px;">${esc(infoTahap(d.saran_id))}${d.saran_alasan ? ' · ' + esc(d.saran_alasan) : ''}</div></div>`
+                        + `<button type="submit" name="aksi" value="tautkan" class="tombol" id="b-tautkan-usul">✔ Tautkan ke ${esc(tu.nama)}</button>`;
+                    $('b-tautkan-usul').addEventListener('click', () => setTahap(d.saran_id));
+                } else usul.innerHTML = '<div class="isi redup">Belum ada usulan tahap — ketik nama tahap di bawah.</div>';
                 $('f-jenis').classList.toggle('pen', !spk);
                 $('b-tautkan').textContent = d.tertaut ? '✔ Simpan & hitung ulang omset tahap' : '✔ Tautkan ke tahap & isi omset';
                 $('b-abaikan').hidden = d.status === 'diabaikan'; $('b-kembali').hidden = d.status === 'baru';
