@@ -46,6 +46,27 @@
         dialog.atur-hari .kisi-jam input.diedit { border-color: #f0a35a; }
         dialog.atur-hari .kisi-jam small { font-size: 11.5px; min-height: 14px; }
         dialog.atur-hari .kisi-jam small.diedit { color: #f0a35a; }
+        /* Isian pop-up (owner 11 Nov 2026): label terang tebal di atas, kotak berlatar gelap dengan garis tepi jelas (kontras ≥3:1),
+           teks contoh di dalam kotak lebih redup dari label; satu font/ukuran/tinggi untuk semua jenis isian. */
+        dialog.atur-hari { width: min(480px, 94vw); padding: 18px 20px; }
+        dialog.atur-hari label.baris { font-size: 13px; font-weight: 700; color: var(--teks); margin: 14px 0 6px; }
+        dialog.atur-hari .kisi-jam label { font-size: 12.5px; font-weight: 600; color: #c3c8d0; gap: 5px; }
+        dialog.atur-hari input:not([type=radio]):not([type=checkbox]), dialog.atur-hari select {
+            width: 100%; box-sizing: border-box; font: inherit; font-size: 14px; line-height: 1.4; height: 40px; padding: 8px 12px;
+            color: #f1f2f4; background: #0d0f12; border: 1px solid #5d6472; border-radius: 8px; color-scheme: dark;
+            transition: border-color .15s, box-shadow .15s;
+        }
+        dialog.atur-hari input::placeholder { color: #5f6570; }
+        dialog.atur-hari input:not([type=radio]):not([type=checkbox]):hover, dialog.atur-hari select:hover { border-color: #7d8594; }
+        dialog.atur-hari input:not([type=radio]):not([type=checkbox]):focus, dialog.atur-hari select:focus { outline: none; border-color: var(--aksen); box-shadow: 0 0 0 3px var(--aksen-muda); }
+        dialog.atur-hari input.rupiah-hari, dialog.atur-hari input.rupiah-tj, dialog.atur-hari #ah-hm { font-variant-numeric: tabular-nums; }
+        dialog.atur-hari .kisi-jam input.diedit { border-color: #f0a35a; }
+        dialog.atur-hari .kisi-jam small { font-weight: 400; color: var(--redup); }
+        dialog.atur-hari .kisi-jam small.diedit { color: #f0a35a; }
+        dialog.atur-hari .blok-jam { background: var(--kartu-2); border-color: var(--garis-kuat); padding: 12px 14px 14px; margin-top: 14px; }
+        dialog.atur-hari .blok-jam > label.baris { margin-top: 0; }
+        dialog.atur-hari .pilih3 label { padding: 7px 12px; color: var(--redup); border-color: var(--garis-kuat); }
+        dialog.atur-hari .pilih3 label:has(input:checked) { color: var(--teks); border-color: var(--aksen); background: var(--aksen-muda); font-weight: 600; }
     </style>
 
     <form method="GET" style="display: flex; gap: 8px; align-items: center; margin-bottom: 12px; flex-wrap: wrap;">
