@@ -21,7 +21,7 @@
         .ringkas-alih b { display: block; font-size: 19px; margin-top: 2px; }
         .ringkas-alih small { font-size: 12px; color: var(--redup); }
         .baris-isian { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
-        .baris-isian label { display: block; font-size: 12px; color: var(--redup); margin-bottom: 3px; }
+        .baris-isian label { display: block; margin-bottom: 6px; }
         table.kas td.angka, table.kas th.angka { white-space: nowrap; }
         tr.pilih td { background: var(--aksen-muda); }
     </style>
@@ -90,7 +90,7 @@
                 .grid-utang th.angka { text-align: right; }
                 .grid-utang td { padding: 4px; vertical-align: top; border-bottom: 0; }
                 .grid-utang input[type=text], .grid-utang input[type=date], .grid-utang select {
-                    width: 100%; box-sizing: border-box; padding: 7px 8px; border: 1px solid var(--isian-garis, var(--garis)); border-radius: 7px; font-size: 13.5px; background: var(--isian); color: var(--teks); }
+                    width: 100%; padding: 7px 8px; border-radius: 7px; font-size: 13.5px; }
                 .grid-utang input:focus, .grid-utang select:focus { outline: none; border-color: var(--aksen); box-shadow: 0 0 0 2px var(--aksen); background: var(--isian-fokus, var(--isian)); }
                 .grid-utang input.angka-input { text-align: right; font-variant-numeric: tabular-nums; }
                 .grid-utang input[readonly] { background: transparent; border-color: transparent; color: var(--redup); }

@@ -4,14 +4,12 @@
 
 @section('isi')
     <style>
-        .form-kas label { display: block; font-size: 13px; color: var(--redup); margin-bottom: 4px; }
-        .form-kas input[type=text], .form-kas input[type=date], .form-kas input[type=number] {
-            width: 100%; padding: 8px 10px; border: 1px solid var(--garis); border-radius: 7px; font-size: 14px; background: var(--isian); color: var(--teks); }
+        .form-kas label { display: block; margin-bottom: 6px; }
+        .form-kas input[type=text], .form-kas input[type=date], .form-kas input[type=number] { width: 100%; }
         .form-kas input.angka-input { text-align: right; font-variant-numeric: tabular-nums; }
         /* Sel transaksi detail: garis lebih gelap, dan sel yang sedang aktif ditandai tegas (garis hijau tebal + latar terang) seperti Excel. */
-        table.bon input[data-nama] { border-color: var(--isian-garis); }
-        .form-kas input[type=text]:focus, .form-kas input[type=date]:focus { outline: none; border-color: var(--aksen); box-shadow: 0 0 0 2px var(--aksen); }
-        table.bon input[data-nama]:focus { background: var(--isian-fokus); }
+        table.bon input[data-nama] { padding: 8px 10px; border-radius: 7px; }
+        table.bon input[data-nama]:focus { background: var(--isian-fokus); box-shadow: 0 0 0 2px var(--aksen); }
         .baris2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 12px; }
         .pilihan { display: inline-flex; border: 1px solid var(--garis); border-radius: 8px; overflow: hidden; }
         .pilihan input { display: none; }
@@ -21,7 +19,7 @@
         table.bon th { padding: 4px; }
         .tambah-detail { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 6px; }
         .tambah-detail label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--teks); }
-        .tambah-detail #jumlah-detail { width: 56px; text-align: center; padding: 6px; border: 1px solid var(--garis); border-radius: 6px; font-size: 14px; }
+        .tambah-detail #jumlah-detail { width: 56px; text-align: center; padding: 6px; }
         .tambah-detail .redup { font-size: 12px; }
         .biaya-transfer { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 16px; font-size: 14px; }
         .biaya-transfer label { display: flex; align-items: center; gap: 8px; color: var(--teks); }

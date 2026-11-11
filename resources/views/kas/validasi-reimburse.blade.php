@@ -5,8 +5,8 @@
 @section('isi')
     <style>
         .panel-unggah { display: grid; grid-template-columns: minmax(240px, 1.6fr) minmax(180px, 1fr) 90px 90px auto; gap: 12px; align-items: end; }
-        .panel-unggah label { display: block; font-size: 13px; color: var(--redup); margin-bottom: 4px; }
-        .panel-unggah input[type=text] { width: 100%; padding: 9px 10px; border-radius: 7px; font-size: 15px; }
+        .panel-unggah label { display: block; margin-bottom: 6px; }
+        .panel-unggah input[type=text] { width: 100%; }
         .panel-unggah input.kolom { text-align: center; text-transform: uppercase; font-weight: 600; }
         .panel-unggah input[type=file] { width: 100%; font-size: 14px; }
         .hasil-valid { border: 1px solid rgba(76, 195, 138, .45); background: var(--sukses-muda); }

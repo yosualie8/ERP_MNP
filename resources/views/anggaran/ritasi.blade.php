@@ -20,7 +20,7 @@
         table.kas td.angka, table.kas th.angka { white-space: nowrap; }
         tr.total td { font-weight: 700; background: rgba(255, 255, 255, .03); }
         .setelan { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
-        .setelan label { display: block; font-size: 12px; color: var(--redup); margin-bottom: 3px; }
+        .setelan label { display: block; margin-bottom: 6px; }
     </style>
 
     <div class="kartu">

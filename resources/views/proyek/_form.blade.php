@@ -3,8 +3,8 @@
         $des = fn ($f) => ($v = old($f, $tahap->{$f})) !== null && $v !== '' && is_numeric($v) ? rtrim(rtrim(number_format((float) $v, 2, ',', '.'), '0'), ',') : old($f, $tahap->{$f});
     @endphp
     <style>
-        .form-p label { display: block; font-size: 13px; color: var(--redup); margin-bottom: 4px; }
-        .form-p input, .form-p select, .form-p textarea { width: 100%; padding: 8px 10px; border-radius: 7px; font-size: 14px; box-sizing: border-box; }
+        .form-p label { display: block; margin-bottom: 6px; }
+        .form-p input, .form-p select, .form-p textarea { width: 100%; }
         .form-p .baris { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; margin-bottom: 12px; }
         .form-p h4 { margin: 18px 0 8px; color: var(--aksen-terang); }
         .tanggal-id { display: flex; align-items: center; gap: 4px; }

@@ -15,7 +15,6 @@
         .stok-minus { color: var(--merah); }
         tr.minus td.stok { color: var(--merah); }
         .opname { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-        .opname input { padding: 7px 9px; border-radius: 7px; }
     </style>
 
     <div style="margin-bottom: 10px; display: flex; gap: 6px; flex-wrap: wrap; align-items: center;">

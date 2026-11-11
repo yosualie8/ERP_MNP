@@ -6,7 +6,7 @@
     <style>
         #dialog-jabatan { border: 1px solid var(--garis); border-radius: 12px; background: var(--kartu); color: var(--teks); padding: 18px; width: min(420px, 92vw); }
         #dialog-jabatan::backdrop { background: rgba(0, 0, 0, .55); }
-        #dialog-jabatan input { width: 100%; box-sizing: border-box; padding: 8px 10px; font-size: 14px; }
+        #dialog-jabatan input { width: 100%; }
     </style>
     @if ($errors->any())
         <div class="pesan galat">{{ $errors->first() }}</div>

@@ -23,14 +23,33 @@
             --merah: #ff7b7f; --merah-muda: rgba(255, 92, 97, .14);
             --sukses: #4cc38a; --sukses-muda: rgba(76, 195, 138, .14);
             --hijau-muda: var(--aksen-muda);
-            --isian: #121418; --isian-garis: #444a56; --isian-fokus: #1c1416;
+            --isian: #0d0f12; --isian-garis: #5d6472; --isian-garis-sorot: #7d8594; --isian-fokus: #1c1416; --label: #c3c8d0;
             --otomatis-latar: #1d1830; --otomatis-garis: #5b4c9c; --tanda: rgba(255, 107, 112, .35);
             --baris-detail: #111317; --baris-detail-sorot: #1a1d23; --baris-masuk: #13201a;
         }
         * { box-sizing: border-box; }
         body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; background: var(--latar); color: var(--teks); font-size: 15px; }
-        input, select, textarea { background: var(--isian); color: var(--teks); border: 1px solid var(--isian-garis); }
-        input::placeholder { color: #6b717c; }
+        /* Standar form (percontohan Penawaran & SPK + pop-up Gaji Mingguan): semua kotak isian satu font/ukuran/tinggi (14px, ±40px),
+           garis tepi kontras ≥3:1, fokus bercincin aksen; label terang tebal di atas kotak, teks contoh lebih redup dari label.
+           Dibungkus :where() (prioritas 0) supaya aturan halaman — mis. isian kecil di dalam grid — tetap menang. */
+        :where(input:not([type=checkbox], [type=radio], [type=hidden], [type=file], [type=range], [type=color], [type=submit], [type=button], [type=reset], [type=image]), select, textarea) {
+            font: inherit; font-size: 14px; font-weight: 400; line-height: 1.4; color: var(--teks); background: var(--isian);
+            border: 1px solid var(--isian-garis); border-radius: 8px; padding: 9px 12px; max-width: 100%;
+            transition: border-color .15s, box-shadow .15s, background-color .15s;
+        }
+        :where(td, th) :where(input:not([type=checkbox], [type=radio], [type=hidden], [type=file], [type=range], [type=color], [type=submit], [type=button], [type=reset], [type=image]), select, textarea) {
+            font-size: 13px; padding: 5px 8px; border-radius: 6px; transition: none;
+        }
+        :where(textarea) { resize: vertical; }
+        :where(input, select, textarea):where(:hover:not(:focus, :disabled, [readonly])) { border-color: var(--isian-garis-sorot); }
+        :where(input, select, textarea):where(:focus) { outline: none; border-color: var(--aksen); box-shadow: 0 0 0 3px var(--aksen-muda); }
+        :where(input, select, textarea):where(:disabled) { opacity: .55; cursor: not-allowed; }
+        :where(input[type=checkbox], input[type=radio]):where(:focus) { box-shadow: none; }
+        :where(input[type=checkbox], input[type=radio]):where(:focus-visible) { outline: 2px solid var(--aksen); outline-offset: 2px; }
+        ::placeholder { color: #666c77; opacity: 1; }
+        :where(label:not(:has(input[type=checkbox], input[type=radio])):not(input[type=checkbox] + label, input[type=radio] + label)) {
+            font-size: 13px; font-weight: 600; color: var(--label); letter-spacing: .01em;
+        }
         input[type=checkbox], input[type=radio] { accent-color: var(--aksen); }
         ::selection { background: rgba(229, 72, 77, .45); }
         header { background: #121317; border-bottom: 2px solid var(--aksen); padding: 10px 20px; display: flex; align-items: center; justify-content: space-between; gap: 12px; position: sticky; top: 0; z-index: 30; }
@@ -65,9 +84,8 @@
         .chip.aktif { background: var(--aksen); border-color: var(--aksen); color: #fff; }
         /* Pemilih periode: Tahun · Jan–Des · Bulan mulai/akhir (partials/periode). */
         .periode { display: flex; align-items: flex-end; gap: 10px 14px; flex-wrap: wrap; margin-bottom: 12px; }
-        .periode-isian { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: var(--redup); }
-        .periode select { padding: 7px 10px; border-radius: 7px; font-size: 14px; min-width: 120px; border: 1px solid var(--garis-kuat); }
-        .periode select:focus { outline: none; border-color: var(--aksen); }
+        .periode-isian { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: var(--label); }
+        .periode select { min-width: 120px; }
         .periode-bulan { display: flex; flex-wrap: wrap; gap: 4px; }
         .periode-bulan .chip { margin: 0; min-width: 46px; text-align: center; }
         .periode-bulan .chip.dalam { background: var(--aksen-muda); border-color: var(--aksen); color: var(--aksen-terang); }
@@ -119,8 +137,7 @@
         table.kas td.i { color: var(--redup); font-size: 11px; white-space: nowrap; }
         table.kas i { font-style: normal; display: inline-block; font-size: 11px; padding: 0 5px; border-radius: 4px; background: var(--latar); color: var(--redup); }
         table.kas i.x { background: var(--merah-muda); color: var(--merah); }
-        input[type=search] { padding: 8px 10px; border: 1px solid var(--isian-garis); border-radius: 8px; font-size: 14px; min-width: 260px; }
-        input[type=search]:focus { outline: none; border-color: var(--aksen); box-shadow: 0 0 0 2px var(--aksen-muda); }
+        input[type=search] { min-width: 260px; }
         /* Penampil foto bon (public/js/penampil-foto.js): zoom & geser seperti Photoshop. */
         .penampil { display: flex; flex-direction: column; border: 1px solid var(--garis); border-radius: 10px; overflow: hidden; background: #0a0b0d; height: 70vh; min-height: 320px; }
         .penampil:fullscreen { height: 100vh; border-radius: 0; }
@@ -149,10 +166,10 @@
         .pesan { padding: 10px 14px; border-radius: 8px; margin-bottom: 16px; border: 1px solid transparent; }
         .pesan.sukses { background: var(--sukses-muda); color: var(--sukses); border-color: rgba(76, 195, 138, .3); }
         .pesan.galat { background: var(--merah-muda); color: var(--merah); border-color: rgba(255, 92, 97, .3); }
-        .tombol { display: inline-block; background: var(--aksen); color: #fff; border: 0; border-radius: 8px; padding: 10px 18px; font-size: 15px; text-decoration: none; cursor: pointer; }
+        .tombol { display: inline-block; background: var(--aksen); color: #fff; border: 0; border-radius: 8px; padding: 10px 18px; font: inherit; font-size: 14px; font-weight: 600; line-height: 20px; text-decoration: none; cursor: pointer; }
         .tombol:hover { background: #f05358; }
         .tombol:disabled { background: #4a2a2c; color: #a8a0a1; cursor: not-allowed; }
-        .tombol.polos { background: none; color: var(--teks); border: 1px solid var(--garis-kuat); padding: 6px 12px; font-size: 13px; }
+        .tombol.polos { background: none; color: var(--teks); border: 1px solid var(--garis-kuat); padding: 6px 12px; font-size: 13px; font-weight: 400; line-height: 1.3; }
         .tombol.polos:hover { border-color: var(--aksen); color: var(--aksen-terang); }
         table { width: 100%; border-collapse: collapse; }
         th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--garis); }

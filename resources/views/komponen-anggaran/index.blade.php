@@ -6,8 +6,8 @@
     <style>
         #dialog-komponen { border: 1px solid var(--garis); border-radius: 12px; background: var(--kartu); color: var(--teks); padding: 18px; width: min(560px, 94vw); }
         #dialog-komponen::backdrop { background: rgba(0, 0, 0, .55); }
-        #dialog-komponen label.isian { display: block; font-size: 13px; color: var(--redup); margin: 10px 0 4px; }
-        #dialog-komponen input[type=text], #dialog-komponen select { width: 100%; box-sizing: border-box; padding: 7px 9px; font-size: 14px; }
+        #dialog-komponen label.isian { display: block; margin: 12px 0 6px; }
+        #dialog-komponen input[type=text], #dialog-komponen select { width: 100%; }
         #dialog-komponen .cek { display: inline-flex; gap: 5px; align-items: center; margin-right: 14px; font-size: 14px; color: var(--teks); }
     </style>
     @if ($errors->any())

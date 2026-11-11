@@ -19,7 +19,7 @@
         .ringkas-jago b { display: block; font-size: 19px; margin-top: 2px; }
         .ringkas-jago small { font-size: 12px; color: var(--redup); }
         .baris-isian { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; }
-        .baris-isian label { display: block; font-size: 12px; color: var(--redup); margin-bottom: 3px; }
+        .baris-isian label { display: block; margin-bottom: 6px; }
         table.kas td.angka, table.kas th.angka { white-space: nowrap; }
         table.kas .kecil { font-size: 11.5px; color: var(--redup); }
         table.kas ul.selisih { margin: 3px 0 0; padding-left: 16px; font-size: 12px; color: #f0c05a; }

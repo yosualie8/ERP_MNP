@@ -20,13 +20,11 @@
         .rui-detail table { font-size: 12.5px; width: 100%; }
         .rui-detail td, .rui-detail th { padding: 4px 6px; text-align: left; }
         .rui-detail .angka { text-align: right; }
-        .form-kas label { display: block; font-size: 13px; color: var(--redup); margin-bottom: 4px; }
-        .form-kas input[type=text], .form-kas input[type=date] {
-            width: 100%; padding: 8px 10px; border: 1px solid var(--garis); border-radius: 7px; font-size: 14px; background: var(--isian); color: var(--teks); }
+        .form-kas label { display: block; margin-bottom: 6px; }
+        .form-kas input[type=text], .form-kas input[type=date] { width: 100%; }
         .form-kas input.angka-input { text-align: right; font-variant-numeric: tabular-nums; }
-        table.bon input[data-nama] { border-color: var(--isian-garis); }
-        .form-kas input[type=text]:focus, .form-kas input[type=date]:focus { outline: none; border-color: var(--aksen); box-shadow: 0 0 0 2px var(--aksen); }
-        table.bon input[data-nama]:focus { background: var(--isian-fokus); }
+        table.bon input[data-nama] { padding: 8px 10px; border-radius: 7px; }
+        table.bon input[data-nama]:focus { background: var(--isian-fokus); box-shadow: 0 0 0 2px var(--aksen); }
         .form-kas input.otomatis { background: var(--otomatis-latar); border-color: var(--otomatis-garis); }
         /* Saran Kategori dari Keterangan (seperti saran Kode GL di Input Kas). */
         /* Pilihan No DO = DO uang jalan DT itu (aturan 19: transaksi lanjutan memakai DO uang jalannya, tidak diketik ulang). */

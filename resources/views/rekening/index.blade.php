@@ -8,14 +8,14 @@
         .pil-tampil a { padding: 5px 12px; border-radius: 999px; border: 1px solid var(--garis-kuat); color: var(--teks); text-decoration: none; font-size: 13px; }
         .pil-tampil a.aktif { background: var(--aksen); border-color: var(--aksen); color: #fff; }
         .form-tambah { display: grid; grid-template-columns: 170px 150px 1fr 1fr auto; gap: 8px; align-items: end; }
-        .form-tambah label { font-size: 12px; margin: 0 0 3px; display: block; }
+        .form-tambah label { margin: 0 0 6px; display: block; }
         .form-tambah input { width: 100%; box-sizing: border-box; }
         @media (max-width: 900px) { .form-tambah { grid-template-columns: 1fr; } }
         table.kas td.daftar-nama { font-size: 12px; min-width: 160px; max-width: 280px; white-space: normal; }
         #dialog-rek { border: 1px solid var(--garis); border-radius: 12px; background: var(--kartu); color: var(--teks); padding: 18px; width: min(480px, 92vw); }
         #dialog-rek::backdrop { background: rgba(0, 0, 0, .55); }
-        #dialog-rek input { width: 100%; box-sizing: border-box; padding: 8px 10px; font-size: 14px; }
-        #dialog-rek label { display: block; margin: 10px 0 4px; font-size: 13px; }
+        #dialog-rek input { width: 100%; }
+        #dialog-rek label { display: block; margin: 12px 0 6px; }
         .saran-nama { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
         .saran-nama button { font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--garis-kuat); background: var(--kartu-2); color: var(--teks); cursor: pointer; }
     </style>

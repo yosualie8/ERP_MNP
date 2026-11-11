@@ -4,8 +4,8 @@
 
 @section('isi')
     <style>
-        .form-l label { display: block; font-size: 13px; color: var(--redup); margin-bottom: 4px; }
-        .form-l input, .form-l select { width: 100%; padding: 8px 10px; border-radius: 7px; font-size: 14px; box-sizing: border-box; }
+        .form-l label { display: block; margin-bottom: 6px; }
+        .form-l input, .form-l select { width: 100%; }
         .form-l .baris { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 12px; }
     </style>
     @if ($errors->any())

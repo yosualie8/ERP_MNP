@@ -28,16 +28,10 @@
         .ps-bagian:last-of-type { border-bottom: 0; }
         .ps-bagian > h4 { grid-column: span 6; margin: 0 0 -4px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--aksen-terang); }
         .ps-medan { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-        .ps-form label { font-size: 12px; font-weight: 600; color: var(--redup); letter-spacing: .02em; margin: 0; }
-        .ps-form input:not([type=hidden]), .ps-form select, .ps-form textarea {
-            width: 100%; font: inherit; font-size: 14px; line-height: 1.4; color: var(--teks);
-            background: var(--isian); border: 1px solid var(--isian-garis); border-radius: 8px; padding: 9px 12px; height: 40px;
-            transition: border-color .15s, box-shadow .15s; color-scheme: dark;
-        }
-        .ps-form textarea { height: auto; min-height: 64px; resize: vertical; }
+        .ps-form label { margin: 0; }
+        .ps-form input:not([type=hidden]), .ps-form select, .ps-form textarea { width: 100%; }
+        .ps-form textarea { min-height: 64px; }
         .ps-form select { padding-right: 30px; text-overflow: ellipsis; }
-        .ps-form input:hover, .ps-form select:hover, .ps-form textarea:hover { border-color: #5a616f; }
-        .ps-form input:focus, .ps-form select:focus, .ps-form textarea:focus { outline: none; border-color: var(--aksen); box-shadow: 0 0 0 3px var(--aksen-muda); background: var(--isian-fokus); }
         .ps-form input.angka { text-align: right; font-variant-numeric: tabular-nums; }
         .ps-form .l2 { grid-column: span 2; } .ps-form .l3 { grid-column: span 3; } .ps-form .l4 { grid-column: span 4; } .ps-form .l6 { grid-column: span 6; }
         @media (max-width: 700px) { .ps-form .l2, .ps-form .l3, .ps-form .l4 { grid-column: span 6; } }

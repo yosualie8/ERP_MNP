@@ -4,19 +4,18 @@
 
 @section('isi')
     <style>
-        .form-kas label { display: block; font-size: 13px; color: var(--redup); margin-bottom: 4px; }
-        .form-kas input[type=text], .form-kas input[type=date] { width: 100%; padding: 8px 10px; border-radius: 7px; font-size: 14px; }
-        .form-kas input[type=text]:focus, .form-kas input[type=date]:focus { outline: none; border-color: var(--aksen); box-shadow: 0 0 0 2px var(--aksen); }
+        .form-kas label { display: block; margin-bottom: 6px; }
+        .form-kas input[type=text], .form-kas input[type=date] { width: 100%; }
         .form-kas input.angka-input { text-align: right; font-variant-numeric: tabular-nums; }
         .form-kas input.otomatis { background: var(--otomatis-latar); border-color: var(--otomatis-garis); }
         table.bon td { padding: 3px; vertical-align: top; border-bottom: 0; }
         table.bon th { padding: 4px 3px; font-size: 12px; }
-        table.bon input[data-nama] { padding: 7px 7px; font-size: 13px; border-color: var(--isian-garis); }
-        table.bon input[data-nama]:focus { background: var(--isian-fokus); }
+        table.bon input[data-nama] { padding: 7px 7px; font-size: 13px; border-radius: 7px; }
+        table.bon input[data-nama]:focus { background: var(--isian-fokus); box-shadow: 0 0 0 2px var(--aksen); }
         .hapus { background: none; border: 0; color: var(--merah); cursor: pointer; font-size: 18px; line-height: 1; padding: 7px 4px; }
         .tambah-detail { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 6px; }
         .tambah-detail label { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--teks); margin: 0; }
-        .tambah-detail #jumlah-detail { width: 56px; text-align: center; padding: 6px; border-radius: 6px; font-size: 14px; }
+        .tambah-detail #jumlah-detail { width: 56px; text-align: center; padding: 6px; }
         .tambah-detail .redup { font-size: 12px; }
         .form-kas input.wajib-kosong { border-color: var(--aksen) !important; box-shadow: 0 0 0 2px var(--aksen-muda); background: var(--isian-fokus); }
         table.bon tr.temuan-baris td, table.bon tr.kurang-baris td { padding: 0 3px 10px; }
