@@ -29,7 +29,6 @@
         .grid-absen td.tj { cursor: pointer; }
         .grid-absen td.tj:hover { outline: 1px solid var(--aksen); outline-offset: -1px; }
         .grid-absen tr.tanpa td { opacity: .5; }
-        .grid-absen td.ket-hitung { min-width: 280px; max-width: 420px; white-space: normal; font-size: 11.5px; color: var(--redup); }
         .legenda-absen { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12.5px; color: var(--redup); margin: 0 0 10px; }
         .legenda-absen b { font-size: 13px; }
         dialog.atur-hari { border: 1px solid var(--garis-kuat); border-radius: 10px; background: var(--kartu); color: var(--teks); width: min(440px, 94vw); padding: 16px; }
@@ -88,7 +87,7 @@
         <span><b style="color: var(--merah);">✗</b> tidak dibayar</span>
         <span><b>+L</b> lembur ½ UM (<b>+L?</b> menunggu)</span>
         <span><b style="color: #8ab4f8;">7 HM</b> jam kerja alat operator (× tarif HM jabatan)</span>
-        <span><b style="color: #f0a35a;">Rp75.000</b> pembayaran hari itu (UM + lembur) diubah admin — alasan di tooltip & kolom Keterangan</span>
+        <span><b style="color: #f0a35a;">Rp75.000</b> pembayaran hari itu (UM + lembur) diubah admin — arahkan kursor untuk melihat alasan</span>
         <span><b class="tanda-edit" style="margin: 0;">✎</b> jam absen dikoreksi admin (arahkan kursor / klik sel untuk melihat jam asli)</span>
         <span>Klik sel hari untuk menyetujui / menolak / mengubah pembayaran hari itu / mengisi tahap / HM · klik UM untuk mengubah UM orang itu · klik Tunjangan mingguan operator untuk mengubahnya minggu ini (biru = diubah admin).</span>
     </div>
@@ -98,9 +97,8 @@
             <thead><tr>
                 <th>Karyawan</th><th>Jabatan</th><th>Site</th><th class="angka">UM / hari</th>
                 @foreach ($hari as $h)<th style="text-align: center;">{{ $h->translatedFormat('D') }} {{ $h->format('j/n') }}</th>@endforeach
-                <th class="angka">Hari</th><th class="angka">UM</th><th class="angka">Lembur</th><th class="angka">Lemburan</th>
+                <th class="angka">Hari</th><th class="angka">Lembur</th>
                 <th class="angka" title="Operator: basic + transport + uang kesehatan per minggu (Master Jabatan)">Tunjangan mingguan</th><th class="angka">HM</th><th class="angka">Total</th>
-                <th>Keterangan perhitungan</th>
             </tr></thead>
             <tbody>
                 @forelse ($baris as $b)
@@ -144,9 +142,7 @@
                             </td>
                         @endforeach
                         <td class="angka" data-n="{{ $b->hadir }}">{{ $b->hadir ?: '' }}</td>
-                        <td class="angka" data-n="{{ $b->total_um }}">{{ $b->total_um ? rp($b->total_um) : '' }}</td>
                         <td class="angka" data-n="{{ $b->lembur }}">{{ $b->lembur ?: '' }}</td>
-                        <td class="angka" data-n="{{ $b->total_lembur }}">{{ $b->total_lembur ? rp($b->total_lembur) : '' }}</td>
                         @if ($b->operator)
                             @php $tu = $b->tunjangan_ubah; @endphp
                             <td @class(['angka', 'tj', 'sendiri' => $tu]) data-n="{{ $b->total_mingguan }}" data-k="{{ $b->k->id }}" data-nama="{{ $b->k->nama }}"
@@ -160,16 +156,14 @@
                         <td class="angka" data-n="{{ $b->total_hm }}" @if ($b->tarif_hm) title="{{ str_replace('.', ',', $b->jam_hm) }} jam × {{ rp($b->tarif_hm) }}" @endif>
                             @if ($b->total_hm){{ rp($b->total_hm) }}<span class="redup" style="display: block; font-size: 11px;">{{ str_replace('.', ',', $b->jam_hm) }} jam</span>@endif</td>
                         <td class="angka" data-n="{{ $b->total }}"><b>{{ $b->total ? rp($b->total) : '' }}</b></td>
-                        <td class="ket-hitung">{{ $b->keterangan }}</td>
                     </tr>
                 @empty
-                    <tr><td colspan="19" class="redup" style="padding: 20px 14px;">Belum ada karyawan.</td></tr>
+                    <tr><td colspan="16" class="redup" style="padding: 20px 14px;">Belum ada karyawan.</td></tr>
                 @endforelse
             </tbody>
             <tfoot><tr>
-                <th colspan="11">Total</th><th class="angka">{{ $ringkas['hari'] }}</th><th class="angka">{{ rp($ringkas['total_um']) }}</th>
-                <th class="angka">{{ $ringkas['lembur'] }}</th><th class="angka">{{ rp($ringkas['total_lembur']) }}</th>
-                <th class="angka">{{ $ringkas['total_mingguan'] ? rp($ringkas['total_mingguan']) : '' }}</th><th class="angka">{{ $ringkas['total_hm'] ? rp($ringkas['total_hm']) : '' }}</th><th class="angka">{{ rp($ringkas['total']) }}</th><th></th>
+                <th colspan="11">Total</th><th class="angka">{{ $ringkas['hari'] }}</th><th class="angka">{{ $ringkas['lembur'] }}</th>
+                <th class="angka">{{ $ringkas['total_mingguan'] ? rp($ringkas['total_mingguan']) : '' }}</th><th class="angka">{{ $ringkas['total_hm'] ? rp($ringkas['total_hm']) : '' }}</th><th class="angka">{{ rp($ringkas['total']) }}</th>
             </tr></tfoot>
         </table>
     </div>

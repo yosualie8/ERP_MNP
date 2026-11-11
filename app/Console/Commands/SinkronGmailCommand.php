@@ -6,6 +6,7 @@ use App\Models\PenawaranSpk;
 use App\Support\GmailMnp;
 use App\Support\SinkronGmail;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 
 /** Ambil penawaran terkirim & SPK masuk baru dari Gmail MNP (terjadwal tiap 15 menit). */
 class SinkronGmailCommand extends Command
@@ -36,7 +37,18 @@ class SinkronGmailCommand extends Command
 
             return self::SUCCESS;
         }
-        $hasil = SinkronGmail::jalankan($gmail, $this->option('sejak') ?: SinkronGmail::terakhir(), fn ($s) => $this->line($s));
+        // Jalan manual (--sejak) dan terjadwal tidak boleh bersamaan: dua OCR berebut CPU sampai tesseract timeout.
+        $kunci = Cache::lock('mnp-sinkron-gmail', 3600);
+        if (! $kunci->get()) {
+            $this->warn('Sinkron Gmail sedang berjalan — coba lagi nanti.');
+
+            return self::SUCCESS;
+        }
+        try {
+            $hasil = SinkronGmail::jalankan($gmail, $this->option('sejak') ?: SinkronGmail::terakhir(), fn ($s) => $this->line($s));
+        } finally {
+            $kunci->release();
+        }
         $this->info("Baru: {$hasil['penawaran']} penawaran, {$hasil['spk']} SPK.");
 
         return self::SUCCESS;

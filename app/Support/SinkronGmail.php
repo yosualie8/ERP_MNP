@@ -8,6 +8,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use Symfony\Component\Process\Exception\ProcessTimedOutException;
 use Symfony\Component\Process\Process;
 
 /**
@@ -110,9 +111,15 @@ class SinkronGmail
             (new Process(['pdftoppm', '-r', '250', '-f', '1', '-l', '2', '-gray', '-png', $file, "{$dir}/h"]))->setTimeout(120)->run();
             $hasil = [];
             foreach (glob("{$dir}/h*.png") ?: [] as $png) {
-                $p = new Process(['tesseract', $png, '-', '-l', 'ind+eng', '--psm', '6']);
-                $p->setTimeout(180)->run();
-                $hasil[] = $p->getOutput();
+                // 1 thread: server produksi tetap lega untuk web; halaman yang macet tidak menggagalkan seluruh sinkron
+                // (isian SPK itu kosong → owner mengetik sendiri dari PDF di menu Penawaran & SPK).
+                $p = new Process(['tesseract', $png, '-', '-l', 'ind+eng', '--psm', '6'], null, ['OMP_THREAD_LIMIT' => '1']);
+                try {
+                    $p->setTimeout(300)->run();
+                    $hasil[] = $p->getOutput();
+                } catch (ProcessTimedOutException) {
+                    $hasil[] = '[OCR halaman '.basename($png, '.png').' terlalu lama — isi dari PDF]';
+                }
             }
 
             return trim(implode("\n\f\n", $hasil));

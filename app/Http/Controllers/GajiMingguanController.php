@@ -154,56 +154,63 @@ class GajiMingguanController extends Controller
             $w = new Writer;
             $w->openToFile('php://output');
 
-            // 1. Harian (seperti file UM admin): per hari yang dibayar + baris lembur, subtotal per hari.
+            // 1. Harian (seperti file UM admin): per hari yang dibayar — UM, Lemburan, Total, keterangan jam & keterangan perhitungan
+            // (owner 11 Nov 2026: termasuk UM / lembur yang diubah admin + alasannya), subtotal per hari.
             $s = $w->getCurrentSheet();
             $s->setName('Harian');
-            foreach ([5, 26, 26, 22, 12, 18, 26] as $i => $l) {
+            foreach ([5, 26, 26, 22, 12, 12, 13, 26, 60, 26] as $i => $l) {
                 $s->setColumnWidth($l, $i + 1);
             }
             $w->addRow(Row::fromValues(['UANG MAKAN KARYAWAN'], $tebal));
             $w->addRow(Row::fromValues(['Periode '.$senin->translatedFormat('j M').' – '.$minggu->translatedFormat('j M Y')]));
             $w->addRow(Row::fromValues([]));
-            $w->addRow(Row::fromValues(['No', 'Hari, Tanggal', 'Nama Karyawan', 'Jabatan', 'UM', 'Keterangan', 'Proyek'], $kepala));
-            $no = 0;
+            $w->addRow(Row::fromValues(['No', 'Hari, Tanggal', 'Nama Karyawan', 'Jabatan', 'UM', 'Lemburan', 'Total', 'Keterangan', 'Keterangan perhitungan', 'Proyek'], $kepala));
+            $rpTeks = fn ($n) => 'Rp'.number_format((int) $n, 0, ',', '.');
+            [$no, $n] = [0, 4];
             foreach ($d['hari'] as $h) {
                 $tgl = $h->toDateString();
-                $hariIni = $dibayar->map(fn ($b) => [$b, $b->hari[$tgl]])->filter(fn ($x) => $x[1]->bayar > 0)->values();
+                $hariIni = $dibayar->map(fn ($b) => [$b, $b->hari[$tgl]])->filter(fn ($x) => $x[1]->hadir && $x[1]->bayar + $x[1]->bayar_lembur > 0)->values();
                 if ($hariIni->isEmpty()) {
                     continue;
                 }
                 $label = $h->translatedFormat('l, j F Y');
+                $awal = $n + 1;
                 foreach ($hariIni as [$b, $x]) {
+                    $n++;
                     $ket = $x->masuk || $x->pulang ? ($x->masuk ?? '?').' - '.($x->pulang ?? '?').($x->tunggu === false && $x->absen === 'kurang' ? ' (disetujui)' : '')
                         : ($x->jam_mandor ? ($x->jam_mandor['masuk'] ?? '?').' - '.($x->jam_mandor['pulang'] ?? '?').' (ikut '.$x->jam_mandor['nama'].')'
                             : ($x->sumber === 'mandor' ? 'diisi mandor (tidak ada yang absen di lokasi)' : 'disetujui admin'));
-                    if ($x->bayar_ubah !== null) {
-                        $ket .= ' · UM diubah admin (biasa '.number_format((int) $b->um, 0, ',', '.').'): '.$x->bayar_alasan;
+                    if ($x->lembur_mulai || $x->lembur_selesai) {
+                        $ket .= ' · lembur '.($x->lembur_mulai ?? '?').' - '.($x->lembur_selesai ?? '?');
                     }
-                    $w->addRow(new Row([$angka(++$no), $teks($label), $teks($b->k->nama), $teks($b->k->jabatan), $angka($x->bayar, $rp), $teks($ket),
+                    // Asal hitungan: UM per hari (jabatan / khusus orang) + lembur ½ UM, atau nominal ubahan admin + alasan.
+                    $hitung = collect([
+                        $x->bayar_ubah !== null ? 'UM diubah admin '.$rpTeks($x->bayar_ubah).' (biasa '.$rpTeks($x->um_biasa).')'
+                            : 'UM '.$rpTeks($x->bayar).'/hari ('.($b->um_sendiri ? 'khusus orang ini' : 'tarif jabatan').')',
+                        $x->bayar_lembur_ubah !== null ? 'lembur diubah admin '.$rpTeks($x->bayar_lembur_ubah).($x->lembur_biasa ? ' (biasa '.$rpTeks($x->lembur_biasa).')' : ' (biasanya tidak lembur)')
+                            : ($x->bayar_lembur ? 'lembur ½ UM '.$rpTeks($x->bayar_lembur) : null),
+                    ])->filter()->implode(' + ').($x->diubah && $x->bayar_alasan ? ' — alasan: '.$x->bayar_alasan : '');
+                    $w->addRow(new Row([$angka(++$no), $teks($label), $teks($b->k->nama), $teks($b->k->jabatan), $angka($x->bayar, $rp), $angka($x->bayar_lembur ?: null, $rp),
+                        new Cell\FormulaCell("=SUM(E{$n}:F{$n})", $rp, $x->bayar + $x->bayar_lembur), $teks($ket), $teks($hitung),
                         $teks($x->tahap ?? RekapAbsenMingguan::BELUM_TAHAP)]));
                 }
-                foreach ($hariIni->filter(fn ($x) => $x[1]->bayar_lembur > 0) as [$b, $x]) {
-                    $jam = $x->lembur_mulai || $x->lembur_selesai ? ($x->lembur_mulai ?? '?').' - '.($x->lembur_selesai ?? '?') : '';
-                    if ($x->bayar_lembur_ubah !== null) {
-                        $jam = trim($jam.' · lembur diubah admin (biasa '.number_format($x->lembur_biasa, 0, ',', '.').'): '.$x->bayar_alasan, ' ·');
-                    }
-                    $w->addRow(new Row([$teks(''), $teks($label), $teks($b->k->nama), $teks($x->bayar_lembur_ubah !== null ? 'Lembur' : 'Lembur (½ UM)'), $angka($x->bayar_lembur, $rp), $teks($jam),
-                        $teks($x->tahap ?? RekapAbsenMingguan::BELUM_TAHAP)]));
-                }
+                $n++;
+                $jumlahHari = fn (string $kol, $nilai) => new Cell\FormulaCell("=SUM({$kol}{$awal}:{$kol}".($n - 1).')', $rpTebal, $nilai);
                 $w->addRow(new Row([$teks(''), $teks(''), $teks(''), $teks('Subtotal '.$h->translatedFormat('D j/n'), $tebal),
-                    $angka($hariIni->sum(fn ($x) => $x[1]->bayar + $x[1]->bayar_lembur), $rpTebal)]));
+                    $jumlahHari('E', $hariIni->sum(fn ($x) => $x[1]->bayar)), $jumlahHari('F', $hariIni->sum(fn ($x) => $x[1]->bayar_lembur)),
+                    $jumlahHari('G', $hariIni->sum(fn ($x) => $x[1]->bayar + $x[1]->bayar_lembur))]));
             }
 
             // 2. Rekap per orang.
             $s = $w->addNewSheetAndMakeItCurrent();
             $s->setName('Rekap per orang');
             $s->setSheetView((new SheetView)->setFreezeRow(2));
-            foreach ([5, 26, 22, 10, 12, 8, 8, 14, 14, 12, 12, 14, 9, 9, 12, 14, 36, 70] as $i => $l) {
+            foreach ([5, 26, 22, 10, 12, 8, 8, 14, 14, 12, 12, 14, 9, 9, 12, 14, 36] as $i => $l) {
                 $s->setColumnWidth($l, $i + 1);
             }
             // Basic / transport / kesehatan / HM: operator alat berat (tarif di Master Jabatan); Uang HM = HM × tarif HM.
             $w->addRow(Row::fromValues(['No', 'Nama Karyawan', 'Jabatan', 'Site', 'UM / hari', 'Hari', 'Lembur', 'Total UM', 'Total lembur',
-                'Basic', 'Transport', 'Uang kesehatan', 'HM (jam)', 'Tarif HM', 'Uang HM', 'Total', 'Rekening', 'Keterangan perhitungan'], $kepala));
+                'Basic', 'Transport', 'Uang kesehatan', 'HM (jam)', 'Tarif HM', 'Uang HM', 'Total', 'Rekening'], $kepala));
             foreach ($dibayar as $i => $b) {
                 $n = $i + 2;
                 $m = $b->mingguan;
@@ -212,7 +219,7 @@ class GajiMingguanController extends Controller
                     $angka($m['kesehatan_mingguan'] ?: null, $rp), $angka($b->jam_hm ?: null), $angka($b->tarif_hm ?: null, $rp),
                     $b->tarif_hm ? new Cell\FormulaCell("=M{$n}*N{$n}", $rp, $b->total_hm) : $teks(''),
                     new Cell\FormulaCell("=SUM(H{$n}:L{$n})+O{$n}", $rpTebal, $b->total),
-                    $teks(trim(implode(' ', array_filter([$b->k->bank, $b->k->no_rekening, $b->k->nama_rekening ? 'a.n. '.$b->k->nama_rekening : null])))), $teks($b->keterangan)]));
+                    $teks(trim(implode(' ', array_filter([$b->k->bank, $b->k->no_rekening, $b->k->nama_rekening ? 'a.n. '.$b->k->nama_rekening : null]))))]));
             }
             $akhir = max($dibayar->count() + 1, 2);
             $jumlah = fn (string $kol, $nilai, Style $g) => new Cell\FormulaCell("=SUM({$kol}2:{$kol}{$akhir})", $g, $nilai);
