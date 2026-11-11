@@ -12,6 +12,11 @@
             @endif
             <a href="{{ route('rumah.index') }}">Buka Rumah</a></div>
     @endif
+    @if ($spkBaru->isNotEmpty())
+        <div class="pesan galat"><b>📄 {{ $spkBaru->count() }} SPK baru belum ditautkan ke tahap</b>
+            ({{ $spkBaru->take(4)->map(fn ($s) => $s->kode.($s->nilai ? ' Rp'.rp($s->nilai) : ''))->implode(', ') }}{{ $spkBaru->count() > 4 ? ', …' : '' }})
+            — cek angkanya & tautkan di <a href="{{ route('penawaran-spk.index') }}">Penawaran &amp; SPK</a>.</div>
+    @endif
     @if ($gajiTanpaTahap->isNotEmpty())
         <div class="pesan galat"><b>⚠ {{ $gajiTanpaTahap->count() }} transaksi gaji ({{ rp($gajiTanpaTahap->sum('nominal')) }}) belum jelas tahap proyeknya</b>
             — pilih tahapnya di <a href="{{ route('pilah.index', ['proyek' => $gajiTanpaTahap->pluck('proyek_id')->filter()->unique()->values()->all(), 'dari' => $gajiTanpaTahap->min('tanggal')]) }}">Pilah Transaksi</a>

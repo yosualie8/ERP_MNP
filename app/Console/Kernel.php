@@ -37,6 +37,8 @@ class Kernel extends ConsoleKernel
         $schedule->command('mnp:isi-rekening')->hourlyAt(20)->withoutOverlapping();
         // Sisa disk & foto yang tertahan (unggahan Drive macet) — peringatan di Beranda Super Admin + riwayat.
         $schedule->command('mnp:cek-server')->hourlyAt(40)->withoutOverlapping();
+        // Penawaran terkirim & SPK masuk baru dari Gmail MNP (SPK di-OCR) → menu Penawaran & SPK + banner Beranda.
+        $schedule->command('mnp:sinkron-gmail')->everyFifteenMinutes()->withoutOverlapping(30);
     }
 
     /**

@@ -44,6 +44,7 @@ class MenuAkses
         'anggaran-proyek' => ['Anggaran Proyek', 'anggaran.index', ['anggaran.*'], 'Rencana omset & HPP per tahap (komponen, baseline), dibanding biaya aktual & progres fisik dari kubikasi'],
         'pilah-transaksi' => ['Pilah Transaksi Proyek', 'pilah.index', ['pilah.*'], 'Transaksi Kas & BCA per proyek induk dipilah ke tahap detail (mis. PM2 Infra Regatta / Marina / PIK) & kode BOQ, dengan rekomendasi sistem; unduh Excel'],
         'boq-proyek' => ['BOQ & Progres Proyek', 'boq.index', ['boq.*'], 'Item BOQ per tahap (impor dari sheet penawaran), progres modal vs terpasang vs tertagih per item, opname volume terpasang & tagihan progres'],
+        'penawaran-spk' => ['Penawaran & SPK', 'penawaran-spk.index', ['penawaran-spk.*'], 'Penawaran terkirim & SPK masuk dari Gmail MNP (dibaca otomatis, SPK di-OCR): cek angka di samping PDF-nya, koreksi, tautkan SPK ke tahap → omset tahap terisi'],
         'alokasi-overhead' => ['Alokasi Biaya Umum', 'alokasi-overhead.index', ['alokasi-overhead.*'], 'Bagi biaya umum Kas (pos tanpa tahap, kantor) per bulan ke tahap yang berjalan — pilih manual dari rekomendasi, proporsional omset / rata'],
         'komponen-anggaran' => ['Master Komponen Anggaran', 'komponen-anggaran.index', ['komponen-anggaran.*'], 'Komponen HPP & omset: sumber realisasi, cara hitung, nilai bawaan, template per tipe tahap'],
         'pengaturan-proyek' => ['Pengaturan Daftar Proyek', 'pengaturan-proyek', ['pengaturan-proyek', 'pengaturan-proyek.*'], 'Filter bawaan grid Daftar Proyek (periode, status, cost center, tipe) untuk semua pengguna'],
@@ -74,7 +75,7 @@ class MenuAkses
     public const KATEGORI = [
         'asisten' => ['Asisten AI', '🤖', ['tanya-ai']],
         'dashboard' => ['Dashboard', '📊', ['dashboard-proyek', 'dashboard-biaya-dt', 'dashboard-performa-dt', 'dashboard-bbm', 'dashboard-aktivitas']],
-        'proyek' => ['Proyek', '🏗️', ['daftar-proyek', 'anggaran-proyek', 'pilah-transaksi', 'boq-proyek', 'alokasi-overhead', 'komponen-anggaran', 'pengaturan-proyek']],
+        'proyek' => ['Proyek', '🏗️', ['daftar-proyek', 'penawaran-spk', 'anggaran-proyek', 'pilah-transaksi', 'boq-proyek', 'alokasi-overhead', 'komponen-anggaran', 'pengaturan-proyek']],
         'kas' => ['Kas Harian', '🏦', ['input-kas', 'kas-harian', 'validasi-reimburse', 'riwayat-reimburse', 'kas-belum-reimburse', 'rekap', 'mutasi-jago', 'jago-catatan', 'mutasi-pt', 'kode-gl', 'daftar-rekening']],
         'uj' => ['Uang Jalan', '🚚', ['pengajuan-uj', 'ajukan-uj', 'input-uj', 'kas-uj', 'reimburse-uj', 'pengalihan-uj', 'rapikan-uj']],
         'ritasi' => ['Ritasi', '⛰️', ['input-ritasi', 'ritasi', 'buangan-truk', 'monitor-ritasi', 'bayar-tanah', 'performa-ritasi', 'potongan-muatan', 'kubikasi-kendaraan']],

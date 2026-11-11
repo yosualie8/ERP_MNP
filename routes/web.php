@@ -173,6 +173,10 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/kas/belum-reimburse.xlsx', [ReimburseKasController::class, 'unduhBelum'])->name('kas.belum-reimburse');
     Route::get('/kas/kode-gl', [KasController::class, 'kodeGl'])->name('kas.kode-gl');
     // Kas uang jalan dump truck (lembar "Kas Seabank").
+    // Penawaran & SPK dari Gmail MNP: cek angka di samping PDF, tautkan SPK ke tahap → omset tahap.
+    Route::get('/penawaran-spk', [\App\Http\Controllers\PenawaranSpkController::class, 'index'])->name('penawaran-spk.index');
+    Route::get('/penawaran-spk/{dok}/pdf', [\App\Http\Controllers\PenawaranSpkController::class, 'pdf'])->whereNumber('dok')->name('penawaran-spk.pdf');
+    Route::patch('/penawaran-spk/{dok}', [\App\Http\Controllers\PenawaranSpkController::class, 'ubah'])->whereNumber('dok')->name('penawaran-spk.ubah');
     // Daftar Rekening: database rekening bersama Kas Harian & Kas UJ (satu nomor = satu nama pemilik).
     Route::get('/rekening', [\App\Http\Controllers\RekeningController::class, 'index'])->name('rekening.index');
     Route::post('/rekening', [\App\Http\Controllers\RekeningController::class, 'simpan'])->name('rekening.simpan');

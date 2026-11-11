@@ -46,7 +46,7 @@ class GmailMnp
         return $ids;
     }
 
-    /** Ringkasan satu pesan: tanggal, dari, ke, subjek, label, cuplikan, nama lampiran. */
+    /** Ringkasan satu pesan: tanggal, dari, ke, subjek, label, cuplikan, nama lampiran (+ id lampiran di 'berkas'). */
     public function ringkas(string $id): array
     {
         $res = $this->google->http(60)->get(self::API."/messages/{$id}", ['format' => 'full']);
@@ -54,9 +54,13 @@ class GmailMnp
         $p = $res->json();
         $h = collect($p['payload']['headers'] ?? [])->mapWithKeys(fn ($x) => [strtolower($x['name']) => $x['value']]);
         $lampiran = [];
-        $jelajah = function (array $bagian) use (&$jelajah, &$lampiran) {
+        $berkas = [];
+        $jelajah = function (array $bagian) use (&$jelajah, &$lampiran, &$berkas) {
             if (($bagian['filename'] ?? '') !== '') {
                 $lampiran[] = $bagian['filename'];
+                if (isset($bagian['body']['attachmentId'])) {
+                    $berkas[] = ['nama' => $bagian['filename'], 'id' => $bagian['body']['attachmentId']];
+                }
             }
             foreach ($bagian['parts'] ?? [] as $anak) {
                 $jelajah($anak);
@@ -65,6 +69,7 @@ class GmailMnp
         $jelajah($p['payload'] ?? []);
 
         return [
+            'berkas' => $berkas,
             'id' => $id,
             'thread' => $p['threadId'] ?? null,
             'waktu' => isset($p['internalDate']) ? date('Y-m-d H:i', intdiv((int) $p['internalDate'], 1000)) : null,
@@ -75,6 +80,15 @@ class GmailMnp
             'cuplikan' => html_entity_decode($p['snippet'] ?? '', ENT_QUOTES),
             'lampiran' => $lampiran,
         ];
+    }
+
+    /** Isi biner satu lampiran. */
+    public function lampiran(string $pesanId, string $lampiranId): string
+    {
+        $res = $this->google->http(120)->get(self::API."/messages/{$pesanId}/attachments/{$lampiranId}");
+        $this->pastikan($res, 'mengambil lampiran');
+
+        return base64_decode(strtr((string) $res->json('data'), '-_', '+/'));
     }
 
     private function pastikan(Response $res, string $aksi): void
