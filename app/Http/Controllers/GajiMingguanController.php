@@ -37,10 +37,12 @@ class GajiMingguanController extends Controller
             'karyawan_id' => ['required', 'integer', 'exists:karyawan,id'], 'tanggal' => ['required', 'date'],
             'hadir' => ['required', 'in:auto,1,0'], 'lembur' => ['required', 'in:auto,1,0'], 'hm' => ['nullable', 'numeric', 'min:0', 'max:24'],
             'tahap' => ['nullable', 'integer', 'exists:proyek_tahap,id'], 'semua_minggu' => ['nullable', 'boolean'], 'catatan' => ['nullable', 'string', 'max:300'],
-            // Pembayaran hari itu = UM + lembur (owner 11 Nov 2026): kosong = hitungan biasa; wajib beralasan; terisi = hari itu dibayar.
-            'bayar' => ['nullable', 'integer', 'min:0', 'max:5000000'], 'bayar_alasan' => ['nullable', 'required_with:bayar', 'string', 'max:300'],
+            // Pembayaran hari itu (owner 11 Nov 2026): UM & lembur terpisah, kosong = hitungan biasa; wajib beralasan; terisi = hari itu dibayar.
+            'bayar' => ['nullable', 'integer', 'min:0', 'max:5000000'], 'bayar_lembur' => ['nullable', 'integer', 'min:0', 'max:5000000'],
+            'bayar_alasan' => ['nullable', 'required_with:bayar,bayar_lembur', 'string', 'max:300'],
         ], ['bayar_alasan.required_with' => 'Alasan wajib diisi bila pembayaran hari ini diubah.']);
-        if (isset($v['bayar']) && $v['hadir'] === '0') {
+        $diubah = isset($v['bayar']) || isset($v['bayar_lembur']);
+        if ($diubah && $v['hadir'] === '0') {
             throw \Illuminate\Validation\ValidationException::withMessages(['bayar' => 'Hari ini dipilih "Tidak dibayar" — pilih Bayar / Ikut absen, atau kosongkan pembayaran hari ini.']);
         }
         $tanggal = \Carbon\Carbon::parse($v['tanggal'])->toDateString();
@@ -48,7 +50,8 @@ class GajiMingguanController extends Controller
             'hadir' => $v['hadir'] === 'auto' ? null : (bool) $v['hadir'], 'lembur' => $v['lembur'] === 'auto' ? null : (bool) $v['lembur'],
             'proyek_tahap_id' => $v['tahap'] ?? null, 'catatan' => trim((string) ($v['catatan'] ?? '')) ?: null,
             'hm' => isset($v['hm']) && (float) $v['hm'] > 0 ? round((float) $v['hm'], 1) : null,
-            'bayar_ubah' => isset($v['bayar']) ? (int) $v['bayar'] : null, 'bayar_alasan' => isset($v['bayar']) ? trim($v['bayar_alasan']) : null,
+            'bayar_ubah' => isset($v['bayar']) ? (int) $v['bayar'] : null, 'bayar_lembur_ubah' => isset($v['bayar_lembur']) ? (int) $v['bayar_lembur'] : null,
+            'bayar_alasan' => $diubah ? trim($v['bayar_alasan']) : null,
         ], $request->user()->id);
 
         // Tahap yang sama untuk semua hari kerja orang itu minggu ini.
@@ -117,13 +120,13 @@ class GajiMingguanController extends Controller
     private function simpan(int $karyawan, string $tanggal, array $isi, int $user, bool $sebagian = false): void
     {
         $r = RekapAbsen::firstOrNew(['karyawan_id' => $karyawan, 'tanggal' => $tanggal]);
-        $r->fill($sebagian ? $isi : $isi + ['hadir' => null, 'lembur' => null, 'hm' => null, 'bayar_ubah' => null, 'bayar_alasan' => null, 'proyek_tahap_id' => null, 'catatan' => null]);
+        $r->fill($sebagian ? $isi : $isi + ['hadir' => null, 'lembur' => null, 'hm' => null, 'bayar_ubah' => null, 'bayar_lembur_ubah' => null, 'bayar_alasan' => null, 'proyek_tahap_id' => null, 'catatan' => null]);
         // Mandor tetap tercatat sebagai pengisi bila admin hanya mengubah tahap / catatan.
-        if (! $r->exists || $r->isDirty(['hadir', 'lembur', 'bayar_ubah'])) {
+        if (! $r->exists || $r->isDirty(['hadir', 'lembur', 'bayar_ubah', 'bayar_lembur_ubah'])) {
             $r->sumber = 'admin';
         }
         $r->user_id = $user;
-        if ($r->hadir === null && $r->lembur === null && ! $r->hm && $r->bayar_ubah === null && ! $r->proyek_tahap_id && ! $r->catatan) {
+        if ($r->hadir === null && $r->lembur === null && ! $r->hm && $r->bayar_ubah === null && $r->bayar_lembur_ubah === null && ! $r->proyek_tahap_id && ! $r->catatan) {
             if ($r->exists) {
                 $r->delete();
             }
@@ -174,14 +177,17 @@ class GajiMingguanController extends Controller
                         : ($x->jam_mandor ? ($x->jam_mandor['masuk'] ?? '?').' - '.($x->jam_mandor['pulang'] ?? '?').' (ikut '.$x->jam_mandor['nama'].')'
                             : ($x->sumber === 'mandor' ? 'diisi mandor (tidak ada yang absen di lokasi)' : 'disetujui admin'));
                     if ($x->bayar_ubah !== null) {
-                        $ket .= ' · UM + lembur diubah admin (biasa '.number_format($x->bayar_biasa, 0, ',', '.').'): '.$x->bayar_alasan;
+                        $ket .= ' · UM diubah admin (biasa '.number_format((int) $b->um, 0, ',', '.').'): '.$x->bayar_alasan;
                     }
                     $w->addRow(new Row([$angka(++$no), $teks($label), $teks($b->k->nama), $teks($b->k->jabatan), $angka($x->bayar, $rp), $teks($ket),
                         $teks($x->tahap ?? RekapAbsenMingguan::BELUM_TAHAP)]));
                 }
                 foreach ($hariIni->filter(fn ($x) => $x[1]->bayar_lembur > 0) as [$b, $x]) {
                     $jam = $x->lembur_mulai || $x->lembur_selesai ? ($x->lembur_mulai ?? '?').' - '.($x->lembur_selesai ?? '?') : '';
-                    $w->addRow(new Row([$teks(''), $teks($label), $teks($b->k->nama), $teks('Lembur (½ UM)'), $angka($x->bayar_lembur, $rp), $teks($jam),
+                    if ($x->bayar_lembur_ubah !== null) {
+                        $jam = trim($jam.' · lembur diubah admin (biasa '.number_format($x->lembur_biasa, 0, ',', '.').'): '.$x->bayar_alasan, ' ·');
+                    }
+                    $w->addRow(new Row([$teks(''), $teks($label), $teks($b->k->nama), $teks($x->bayar_lembur_ubah !== null ? 'Lembur' : 'Lembur (½ UM)'), $angka($x->bayar_lembur, $rp), $teks($jam),
                         $teks($x->tahap ?? RekapAbsenMingguan::BELUM_TAHAP)]));
                 }
                 $w->addRow(new Row([$teks(''), $teks(''), $teks(''), $teks('Subtotal '.$h->translatedFormat('D j/n'), $tebal),
@@ -192,12 +198,12 @@ class GajiMingguanController extends Controller
             $s = $w->addNewSheetAndMakeItCurrent();
             $s->setName('Rekap per orang');
             $s->setSheetView((new SheetView)->setFreezeRow(2));
-            foreach ([5, 26, 22, 10, 12, 8, 8, 14, 14, 12, 12, 14, 9, 9, 12, 14, 36] as $i => $l) {
+            foreach ([5, 26, 22, 10, 12, 8, 8, 14, 14, 12, 12, 14, 9, 9, 12, 14, 36, 70] as $i => $l) {
                 $s->setColumnWidth($l, $i + 1);
             }
             // Basic / transport / kesehatan / HM: operator alat berat (tarif di Master Jabatan); Uang HM = HM × tarif HM.
             $w->addRow(Row::fromValues(['No', 'Nama Karyawan', 'Jabatan', 'Site', 'UM / hari', 'Hari', 'Lembur', 'Total UM', 'Total lembur',
-                'Basic', 'Transport', 'Uang kesehatan', 'HM (jam)', 'Tarif HM', 'Uang HM', 'Total', 'Rekening'], $kepala));
+                'Basic', 'Transport', 'Uang kesehatan', 'HM (jam)', 'Tarif HM', 'Uang HM', 'Total', 'Rekening', 'Keterangan perhitungan'], $kepala));
             foreach ($dibayar as $i => $b) {
                 $n = $i + 2;
                 $m = $b->mingguan;
@@ -206,7 +212,7 @@ class GajiMingguanController extends Controller
                     $angka($m['kesehatan_mingguan'] ?: null, $rp), $angka($b->jam_hm ?: null), $angka($b->tarif_hm ?: null, $rp),
                     $b->tarif_hm ? new Cell\FormulaCell("=M{$n}*N{$n}", $rp, $b->total_hm) : $teks(''),
                     new Cell\FormulaCell("=SUM(H{$n}:L{$n})+O{$n}", $rpTebal, $b->total),
-                    $teks(trim(implode(' ', array_filter([$b->k->bank, $b->k->no_rekening, $b->k->nama_rekening ? 'a.n. '.$b->k->nama_rekening : null]))))]));
+                    $teks(trim(implode(' ', array_filter([$b->k->bank, $b->k->no_rekening, $b->k->nama_rekening ? 'a.n. '.$b->k->nama_rekening : null])))), $teks($b->keterangan)]));
             }
             $akhir = max($dibayar->count() + 1, 2);
             $jumlah = fn (string $kol, $nilai, Style $g) => new Cell\FormulaCell("=SUM({$kol}2:{$kol}{$akhir})", $g, $nilai);

@@ -18,8 +18,9 @@ use Illuminate\Support\Collection;
  * - UM per hari = karyawan.um_harian, bila kosong tarif UM jabatannya (Master Jabatan) — jabatan sama bisa beda UM.
  * - Hari dibayar = absen masuk & pulang lengkap. Absen belum lengkap MENUNGGU persetujuan admin (rekap_absen.hadir).
  *   Tukang tanpa absen HP diisi mandor (rekap_absen sumber "mandor"). Admin boleh menimpa hari mana pun (bayar / tidak).
- * - Pembayaran satu hari boleh diubah admin dengan alasan (owner 11 Nov 2026, rekap_absen.bayar_ubah): nominal = TOTAL UM + lembur
- *   hari itu (menimpa keduanya) dan membuat hari itu dibayar; HM & tunjangan mingguan tetap ikut aturannya.
+ * - Pembayaran satu hari boleh diubah admin dengan alasan (owner 11 Nov 2026): UM (rekap_absen.bayar_ubah) dan lembur
+ *   (bayar_lembur_ubah) diisi terpisah, kosong = hitungan biasa; isian mana pun membuat hari itu dibayar. HM & tunjangan mingguan
+ *   tetap ikut aturannya. Tiap orang punya keterangan asal hitungan (UM x hari, lembur, ubahan admin, tunjangan, HM).
  * - Lembur = ½ UM per hari (mulai & selesai lembur lengkap; yang belum lengkap menunggu persetujuan), hanya bila hari itu dibayar.
  * - Tahap kerja per hari: isian admin/mandor → tahap kiriman Lapor Lapangan / lokasi absen → tahap hari kerja sebelumnya.
  * - Tukang TANPA AKUN absen (owner 9 Nov 2026): jam kehadirannya IKUT MANDOR — absen HP pengisi (bila Mandor / Pengawas), kalau tidak
@@ -93,11 +94,12 @@ class RekapAbsenMingguan
                 $absenLembur = $lm && $ls ? 'lengkap' : ($lm || $ls ? 'kurang' : null);
                 $putusHadir = $r && $r->hadir !== null;
                 $putusLembur = $r && $r->lembur !== null;
-                $ubahBayar = $r?->bayar_ubah;
-                $hadir = $putusHadir ? $r->hadir : ($absenHadir === 'lengkap' || $ubahBayar !== null);
+                [$ubahBayar, $ubahLembur] = [$r?->bayar_ubah, $r?->bayar_lembur_ubah];
+                $diubah = $ubahBayar !== null || $ubahLembur !== null;
+                $hadir = $putusHadir ? $r->hadir : ($absenHadir === 'lengkap' || $diubah);
                 $lembur = $hadir && ($putusLembur ? $r->lembur : $absenLembur === 'lengkap');
-                $tungguHadir = ! $putusHadir && $ubahBayar === null && $absenHadir === 'kurang';
-                $tungguLembur = ! $putusLembur && $absenLembur === 'kurang' && ($hadir || $tungguHadir);
+                $tungguHadir = ! $putusHadir && ! $diubah && $absenHadir === 'kurang';
+                $tungguLembur = ! $putusLembur && $ubahLembur === null && $absenLembur === 'kurang' && ($hadir || $tungguHadir);
                 $tahapAbsen = collect([$m, $p])->filter()->map(fn ($x) => ($x->lapor_id ? $tahapLapor[$x->lapor_id] ?? null : null) ?? ($x->lokasi_absen_id ? $tahapLokasi[$x->lokasi_absen_id] ?? null : null))->filter()->first();
                 $tahap = $r?->proyek_tahap_id ?? $tahapAbsen ?? (($hadir || $tungguHadir) ? $jalan : null);
                 if (($hadir || $tungguHadir) && $tahap) {
@@ -110,9 +112,11 @@ class RekapAbsenMingguan
                     'tunggu' => $tungguHadir, 'tunggu_lembur' => $tungguLembur, 'putus_hadir' => $putusHadir ? $r->hadir : null,
                     'putus_lembur' => $putusLembur ? $r->lembur : null, 'sumber' => $r?->sumber, 'catatan' => $r?->catatan, 'oleh' => $r?->user_id, 'jam_mandor' => null,
                     'tahap_id' => $tahap, 'tahap' => $tahap ? ($namaTahap[$tahap] ?? null) : null, 'tahap_diisi' => (bool) $r?->proyek_tahap_id,
-                    // Diubah admin: nominal = UM + lembur hari itu (lembur tidak dihitung terpisah).
-                    'bayar' => $hadir ? (int) ($ubahBayar ?? $um) : 0, 'bayar_lembur' => $lembur && $ubahBayar === null ? (int) round($um / 2) : 0,
-                    'bayar_biasa' => (int) $um + ($lembur ? (int) round($um / 2) : 0), 'bayar_ubah' => $ubahBayar, 'bayar_alasan' => $r?->bayar_alasan,
+                    // Diubah admin: UM dan lembur masing-masing menimpa hitungan biasa (½ UM bila lembur).
+                    'bayar' => $hadir ? (int) ($ubahBayar ?? $um) : 0,
+                    'bayar_lembur' => $hadir ? (int) ($ubahLembur ?? ($lembur ? round($um / 2) : 0)) : 0,
+                    'lembur_biasa' => $lembur ? (int) round($um / 2) : 0, 'bayar_ubah' => $ubahBayar, 'bayar_lembur_ubah' => $ubahLembur,
+                    'diubah' => $hadir && $diubah, 'bayar_alasan' => $r?->bayar_alasan,
                     // Per jenis absen: jam berlaku, jam asli (null = tidak ada absen asli), penanda koreksi admin.
                     'jam' => collect(Absensi::JENIS)->map(fn ($l, $j) => ($x = $a->get($j)) ? ['jam' => $x->waktu->format('H:i'), 'asli' => $x->koreksiAdmin()
                         ? $x->getAttribute('waktu_asli')?->format('H:i') : $x->waktu->format('H:i'), 'diedit' => (bool) $x->koreksiAdmin(), 'ket' => $x->catatanKoreksi(),
@@ -137,6 +141,7 @@ class RekapAbsenMingguan
             }
 
             return (object) [
+                'keterangan' => self::keterangan($k, $um, $perHari, $mingguan, $dibayar->isNotEmpty(), $ubah, $tarifHm),
                 'k' => $k, 'um' => $um, 'um_sendiri' => (bool) $k->um_harian, 'hari' => $perHari, 'tarif_hm' => $tarifHm,
                 'operator' => $tarifHm > 0 || $bawaan->filter()->isNotEmpty() || $ubah, 'tunjangan_ubah' => $ubah, 'tunjangan_bawaan' => $bawaan->all(), 'mingguan' => $dibayar->isNotEmpty() ? $mingguan->all() : array_fill_keys($mingguan->keys()->all(), 0),
                 'total_mingguan' => $totalMingguan, 'jam_hm' => $tarifHm ? round($x->where('hadir', true)->sum('hm'), 1) : 0, 'total_hm' => $x->sum('bayar_hm'),
@@ -165,10 +170,42 @@ class RekapAbsenMingguan
                 // HM diisi pada hari yang tidak dibayar → tidak ikut dihitung (perlu dicek admin).
                 'hm_tak_dibayar' => $semuaHari->filter(fn ($h) => $h->hm && ! $h->hadir)->count(),
                 'tunggu' => $baris->sum('tunggu'), 'tanpa_um' => $baris->where('tanpa_um', true)->count(),
-                'bayar_diubah' => $semuaHari->filter(fn ($h) => $h->hadir && $h->bayar_ubah !== null)->count(),
+                'bayar_diubah' => $semuaHari->where('diubah', true)->count(),
                 'tanpa_tahap' => $semuaHari->filter(fn ($h) => $h->hadir && ! $h->tahap_id)->count(),
             ],
         ];
+    }
+
+    /**
+     * Keterangan asal hitungan gaji satu orang seminggu (owner 11 Nov 2026), mis.
+     * "UM Rp100.000/hari (jabatan) × 4 hari = Rp400.000 · lembur ½ UM Rp50.000 × 2 = Rp100.000 · diubah admin Sel 4/11: UM Rp50.000 + lembur Rp0 (pulang siang)".
+     */
+    private static function keterangan(Karyawan $k, ?int $um, array $perHari, Collection $mingguan, bool $adaBayar, $tunjanganUbah, int $tarifHm): string
+    {
+        $rp = fn ($n) => 'Rp'.number_format((int) $n, 0, ',', '.');
+        $hari = collect($perHari)->where('hadir', true);
+        $biasaUm = $hari->whereNull('bayar_ubah');
+        $biasaLembur = $hari->filter(fn ($h) => $h->bayar_lembur_ubah === null && $h->bayar_lembur > 0);
+        $bagian = [];
+        if ($biasaUm->isNotEmpty()) {
+            $bagian[] = 'UM '.$rp($um).'/hari ('.($k->um_harian ? 'khusus orang ini' : 'jabatan').') × '.$biasaUm->count().' hari = '.$rp($biasaUm->sum('bayar'));
+        }
+        if ($biasaLembur->isNotEmpty()) {
+            $bagian[] = 'lembur ½ UM '.$rp(round($um / 2)).' × '.$biasaLembur->count().' = '.$rp($biasaLembur->sum('bayar_lembur'));
+        }
+        foreach ($hari->where('diubah', true) as $h) {
+            $isi = collect([$h->bayar_ubah !== null ? 'UM '.$rp($h->bayar_ubah) : null, $h->bayar_lembur_ubah !== null ? 'lembur '.$rp($h->bayar_lembur_ubah) : null])->filter()->implode(' + ');
+            $bagian[] = 'diubah admin '.$h->tanggal->translatedFormat('D j/n').': '.$isi.($h->bayar_alasan ? ' ('.$h->bayar_alasan.')' : '');
+        }
+        if ($adaBayar && $mingguan->sum()) {
+            $bagian[] = 'tunjangan mingguan '.$rp($mingguan->sum()).($tunjanganUbah ? ' (diubah admin)' : '');
+        }
+        $jamHm = $hari->sum('hm');
+        if ($tarifHm && $jamHm) {
+            $bagian[] = 'HM '.str_replace('.', ',', (string) round($jamHm, 1)).' jam × '.$rp($tarifHm);
+        }
+
+        return implode(' · ', $bagian);
     }
 
     /**
