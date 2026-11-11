@@ -15,6 +15,7 @@ class DashboardController extends Controller
         return view('dashboard', [
             'emailGoogle' => GoogleSheets::terhubung()?->email(),
             'emailDriveFoto' => GoogleIntegrasi::foto()?->email,
+            'emailGmail' => GoogleIntegrasi::gmail()?->email,
             'fotoStatus' => KasFoto::selectRaw('status_drive, COUNT(*) as n')->groupBy('status_drive')->pluck('n', 'status_drive'),
             'bulanTerakhir' => KasBulan::orderByDesc('bulan')->first(),
             'jumlahBulan' => KasBulan::count(),

@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Koneksi Google yang disimpan aplikasi:
  * - sheets: akun pemilik sheet Kas Harian (izin Sheets + Drive baca-saja)
  * - foto: akun perusahaan untuk menyimpan foto bon di Google Drive (izin Drive)
+ * - gmail: Gmail perusahaan, baca saja (penawaran terkirim & SPK masuk)
  */
 class GoogleIntegrasi extends Model
 {
@@ -38,5 +39,10 @@ class GoogleIntegrasi extends Model
     public static function foto(): ?self
     {
         return self::where('keperluan', 'foto')->latest('id')->first();
+    }
+
+    public static function gmail(): ?self
+    {
+        return self::where('keperluan', 'gmail')->latest('id')->first();
     }
 }

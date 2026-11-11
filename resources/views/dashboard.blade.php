@@ -90,4 +90,19 @@
             </p>
         @endcan
     </div>
+
+    <div class="kartu">
+        <h3 style="margin-top: 0;">Gmail penawaran &amp; SPK</h3>
+        @if ($emailGmail)
+            <p style="margin-bottom: 0;">Terhubung ke <strong>{{ $emailGmail }}</strong> (baca saja) — untuk mengenali penawaran terkirim &amp; SPK masuk.</p>
+        @else
+            <p class="redup" style="margin-bottom: 0;">Belum terhubung.</p>
+        @endif
+        @can('super-admin')
+            <p style="margin-bottom: 0;">
+                <a href="{{ route('google.hubungkan-gmail') }}" class="tombol polos">{{ $emailGmail ? 'Hubungkan ulang Gmail' : 'Hubungkan Gmail' }}</a>
+                <span class="redup">Login sebagai {{ config('mnp.gmail_email') }} dan centang izin membaca email.</span>
+            </p>
+        @endcan
+    </div>
 @endsection

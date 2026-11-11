@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\GoogleIntegrasi;
 use App\Models\User;
 use App\Support\DriveFoto;
+use App\Support\GmailMnp;
 use App\Support\GoogleSheets;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -55,6 +56,9 @@ class GoogleController extends Controller
         }
 
         $googleUser = Socialite::driver('google')->user();
+        if ($hubungkan === 'gmail' && $request->user()?->isSuperAdmin()) {
+            return $this->simpanIntegrasiGmail($request, $googleUser);
+        }
         if ($hubungkan === 'foto' && $request->user()?->isSuperAdmin()) {
             return $this->simpanIntegrasiFoto($request, $googleUser);
         }
@@ -126,6 +130,48 @@ class GoogleController extends Controller
             ->scopes([DriveFoto::SCOPE])
             ->with(['access_type' => 'offline', 'prompt' => 'select_account consent', 'login_hint' => config('mnp.drive_foto_email')])
             ->redirect();
+    }
+
+    /** Super admin: hubungkan Gmail perusahaan (baca saja) untuk mengenali penawaran terkirim & SPK masuk. */
+    public function hubungkanGmail(Request $request): RedirectResponse
+    {
+        abort_unless($request->user()->isSuperAdmin(), 403);
+        $request->session()->put(self::SESI_HUBUNGKAN, 'gmail');
+
+        return Socialite::driver('google')
+            ->scopes([GmailMnp::SCOPE])
+            ->with(['access_type' => 'offline', 'prompt' => 'select_account consent', 'login_hint' => config('mnp.gmail_email')])
+            ->redirect();
+    }
+
+    private function simpanIntegrasiGmail(Request $request, GoogleUser $googleUser): RedirectResponse
+    {
+        $email = strtolower((string) $googleUser->getEmail());
+        $wajib = strtolower(config('mnp.gmail_email'));
+        if ($email !== $wajib) {
+            Http::asForm()->timeout(15)->post('https://oauth2.googleapis.com/revoke', ['token' => $googleUser->refreshToken ?: $googleUser->token]);
+
+            return redirect()->route('dashboard')->with('error', "Gmail yang dibaca adalah {$wajib}, tetapi yang dipilih {$email}. Klik \"Hubungkan Gmail\" lagi dan pilih akun {$wajib}.");
+        }
+        if (! in_array(GmailMnp::SCOPE, $googleUser->approvedScopes ?? [], true)) {
+            return redirect()->route('dashboard')->with('error', 'Izin membaca Gmail tidak dicentang. Klik "Hubungkan Gmail" lagi dan centang izinnya.');
+        }
+        if (! $googleUser->refreshToken) {
+            return redirect()->route('dashboard')->with('error', "Google tidak memberikan izin jangka panjang. Login ke {$wajib}, cabut akses \"MNP ERP\" di myaccount.google.com/permissions, lalu hubungkan ulang.");
+        }
+
+        GoogleIntegrasi::where('keperluan', 'gmail')->delete();
+        GoogleIntegrasi::create([
+            'keperluan' => 'gmail',
+            'email' => $email,
+            'refresh_token' => $googleUser->refreshToken,
+            'access_token' => $googleUser->token,
+            'access_token_kedaluwarsa' => now()->addSeconds(max(60, (int) $googleUser->expiresIn - 120)),
+            'izin' => array_values($googleUser->approvedScopes ?? []),
+            'user_id' => $request->user()->id,
+        ]);
+
+        return redirect()->route('dashboard')->with('success', "Gmail {$email} terhubung (baca saja).");
     }
 
     private function simpanIntegrasiFoto(Request $request, GoogleUser $googleUser): RedirectResponse

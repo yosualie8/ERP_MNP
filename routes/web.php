@@ -261,6 +261,7 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::middleware('can:super-admin')->group(function () {
         Route::get('/auth/google/hubungkan-sheets', [GoogleController::class, 'hubungkanSheets'])->name('google.hubungkan-sheets');
         Route::get('/auth/google/hubungkan-drive-foto', [GoogleController::class, 'hubungkanDriveFoto'])->name('google.hubungkan-drive-foto');
+        Route::get('/auth/google/hubungkan-gmail', [GoogleController::class, 'hubungkanGmail'])->name('google.hubungkan-gmail');
         Route::get('/login-perangkat', [\App\Http\Controllers\LoginPerangkatController::class, 'index'])->name('login-perangkat.index');
         Route::post('/login-perangkat', [\App\Http\Controllers\LoginPerangkatController::class, 'buat'])->name('login-perangkat.buat');
         Route::get('/login-perangkat/{login}/status', [\App\Http\Controllers\LoginPerangkatController::class, 'status'])->whereNumber('login')->name('login-perangkat.status');
