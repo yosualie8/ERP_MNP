@@ -37,7 +37,11 @@ class ValidasiUj
      *                             pengajuan mana pun → tanya "sudah terjadi duluan?" (kode D). Ya = detail.duluan berisi ID UJ itu
      *                             (tertaut, bukan dobel); tanpa jawaban Ya pengajuan ditolak.
      */
-    public static function periksa(array $input, ?int $kecualiTransaksi = null, array $kecualiPengajuan = [], bool $tawarkanTautan = false, bool $tanyaDuluan = false): array
+    /**
+     * @param  ?\App\Models\JagoMutasi  $mutasi  Input UJ: transfer Jago yang dipilih → isian dibandingkan dengan catatannya (aturan J, CocokCatatanJago).
+     */
+    public static function periksa(array $input, ?int $kecualiTransaksi = null, array $kecualiPengajuan = [], bool $tawarkanTautan = false, bool $tanyaDuluan = false,
+        ?\App\Models\JagoMutasi $mutasi = null): array
     {
         $tgl = $input['tanggal'];
         $rentang = [$tgl->copy()->subDays(self::HARI)->toDateString(), $tgl->copy()->addDays(self::HARI)->toDateString()];
@@ -164,6 +168,9 @@ class ValidasiUj
             }
             $temuan[$i] = [...$tautan, ...self::aturan($r, $pembanding, $jenisDt, $pembuka, $dariUtang), ...($tanyaDuluan ? self::ujTerbuka($r) : [])];
             $sebelumnya->push($r);
+        }
+        foreach (CocokCatatanJago::periksa($mutasi, $input) as $i => $daftar) {
+            $temuan[$i] = [...$daftar, ...($temuan[$i] ?? [])];
         }
 
         return array_filter($temuan);

@@ -447,7 +447,12 @@ class UjController extends Controller
             }
         }
 
-        return response()->json(['temuan' => (object) ValidasiUj::periksa($input, $kecuali, $this->kecualiPengajuan($request), $this->tawarkanTautan() && ! $kecuali, $this->tanyaDuluan()),
+        // Transfer Jago: yang tertaut ke transaksi yang diedit, atau yang dipilih di atas form (aturan J: isian vs catatan transfer).
+        $mutasi = $this->tanyaDuluan() ? null : ($request->filled('no_uj')
+            ? \App\Models\JagoMutasi::where('kantong', 'uj')->where('dipakai', 'uj:'.$request->integer('no_uj'))->first()
+            : ($request->integer('jago_mutasi_id') ? \App\Models\JagoMutasi::where('kantong', 'uj')->find($request->integer('jago_mutasi_id')) : null));
+
+        return response()->json(['temuan' => (object) ValidasiUj::periksa($input, $kecuali, $this->kecualiPengajuan($request), $this->tawarkanTautan() && ! $kecuali, $this->tanyaDuluan(), $mutasi),
             'pengajuan' => (object) $pengajuan]);
     }
 
@@ -505,9 +510,9 @@ class UjController extends Controller
      *
      * @return array|RedirectResponse temuan per indeks detail, atau penolakan bila ada yang belum dikonfirmasi
      */
-    protected function wajibKonfirmasi(array $input, ?int $kecuali, array $kecualiPengajuan = []): array|RedirectResponse
+    protected function wajibKonfirmasi(array $input, ?int $kecuali, array $kecualiPengajuan = [], ?\App\Models\JagoMutasi $mutasi = null): array|RedirectResponse
     {
-        $temuan = ValidasiUj::periksa($input, $kecuali, $kecualiPengajuan, $this->tawarkanTautan() && ! $kecuali, $this->tanyaDuluan());
+        $temuan = ValidasiUj::periksa($input, $kecuali, $kecualiPengajuan, $this->tawarkanTautan() && ! $kecuali, $this->tanyaDuluan(), $mutasi);
         $pesan = [];
         foreach ($temuan as $i => $daftar) {
             // Pertanyaan "sudah terjadi duluan?" belum dijawab Ya = ditolak (konfirmasi teks tidak cukup).
@@ -614,7 +619,7 @@ class UjController extends Controller
         }
         // Rekap bayar tanah = catatan saja: tidak memblokir; setelah tersimpan diberi keterangan "dibayar" + nomor UJ-nya.
         $rekapTanah = $input['bayar_tanah_id'] ? \App\Models\BayarTanahRekap::where('status', '!=', 'batal')->find($input['bayar_tanah_id']) : null;
-        $temuan = $this->wajibKonfirmasi($input, null, $idPengajuan->all());
+        $temuan = $this->wajibKonfirmasi($input, null, $idPengajuan->all(), $mj['mutasi']);
         if ($temuan instanceof RedirectResponse) {
             return $temuan;
         }
@@ -720,7 +725,7 @@ class UjController extends Controller
             return $mj;
         }
         $input = $mj['input'];
-        $temuan = $this->wajibKonfirmasi($input, $t->id);
+        $temuan = $this->wajibKonfirmasi($input, $t->id, [], $mj['mutasi']);
         if ($temuan instanceof RedirectResponse) {
             return $temuan;
         }
