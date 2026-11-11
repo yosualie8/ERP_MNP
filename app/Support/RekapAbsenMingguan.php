@@ -18,6 +18,8 @@ use Illuminate\Support\Collection;
  * - UM per hari = karyawan.um_harian, bila kosong tarif UM jabatannya (Master Jabatan) — jabatan sama bisa beda UM.
  * - Hari dibayar = absen masuk & pulang lengkap. Absen belum lengkap MENUNGGU persetujuan admin (rekap_absen.hadir).
  *   Tukang tanpa absen HP diisi mandor (rekap_absen sumber "mandor"). Admin boleh menimpa hari mana pun (bayar / tidak).
+ * - UM satu hari boleh diubah admin dengan alasan (owner 11 Nov 2026, rekap_absen.bayar_ubah): menimpa UM orang itu khusus hari itu
+ *   dan membuat hari itu dibayar; lembur tetap ½ UM biasa, HM & tunjangan mingguan ikut aturannya.
  * - Lembur = ½ UM per hari (mulai & selesai lembur lengkap; yang belum lengkap menunggu persetujuan), hanya bila hari itu dibayar.
  * - Tahap kerja per hari: isian admin/mandor → tahap kiriman Lapor Lapangan / lokasi absen → tahap hari kerja sebelumnya.
  * - Tukang TANPA AKUN absen (owner 9 Nov 2026): jam kehadirannya IKUT MANDOR — absen HP pengisi (bila Mandor / Pengawas), kalau tidak
@@ -91,9 +93,10 @@ class RekapAbsenMingguan
                 $absenLembur = $lm && $ls ? 'lengkap' : ($lm || $ls ? 'kurang' : null);
                 $putusHadir = $r && $r->hadir !== null;
                 $putusLembur = $r && $r->lembur !== null;
-                $hadir = $putusHadir ? $r->hadir : $absenHadir === 'lengkap';
+                $ubahBayar = $r?->bayar_ubah;
+                $hadir = $putusHadir ? $r->hadir : ($absenHadir === 'lengkap' || $ubahBayar !== null);
                 $lembur = $hadir && ($putusLembur ? $r->lembur : $absenLembur === 'lengkap');
-                $tungguHadir = ! $putusHadir && $absenHadir === 'kurang';
+                $tungguHadir = ! $putusHadir && $ubahBayar === null && $absenHadir === 'kurang';
                 $tungguLembur = ! $putusLembur && $absenLembur === 'kurang' && ($hadir || $tungguHadir);
                 $tahapAbsen = collect([$m, $p])->filter()->map(fn ($x) => ($x->lapor_id ? $tahapLapor[$x->lapor_id] ?? null : null) ?? ($x->lokasi_absen_id ? $tahapLokasi[$x->lokasi_absen_id] ?? null : null))->filter()->first();
                 $tahap = $r?->proyek_tahap_id ?? $tahapAbsen ?? (($hadir || $tungguHadir) ? $jalan : null);
@@ -107,7 +110,8 @@ class RekapAbsenMingguan
                     'tunggu' => $tungguHadir, 'tunggu_lembur' => $tungguLembur, 'putus_hadir' => $putusHadir ? $r->hadir : null,
                     'putus_lembur' => $putusLembur ? $r->lembur : null, 'sumber' => $r?->sumber, 'catatan' => $r?->catatan, 'oleh' => $r?->user_id, 'jam_mandor' => null,
                     'tahap_id' => $tahap, 'tahap' => $tahap ? ($namaTahap[$tahap] ?? null) : null, 'tahap_diisi' => (bool) $r?->proyek_tahap_id,
-                    'bayar' => $hadir ? (int) $um : 0, 'bayar_lembur' => $lembur ? (int) round($um / 2) : 0,
+                    'bayar' => $hadir ? (int) ($ubahBayar ?? $um) : 0, 'bayar_lembur' => $lembur ? (int) round($um / 2) : 0,
+                    'bayar_ubah' => $ubahBayar, 'bayar_alasan' => $r?->bayar_alasan,
                     // Per jenis absen: jam berlaku, jam asli (null = tidak ada absen asli), penanda koreksi admin.
                     'jam' => collect(Absensi::JENIS)->map(fn ($l, $j) => ($x = $a->get($j)) ? ['jam' => $x->waktu->format('H:i'), 'asli' => $x->koreksiAdmin()
                         ? $x->getAttribute('waktu_asli')?->format('H:i') : $x->waktu->format('H:i'), 'diedit' => (bool) $x->koreksiAdmin(), 'ket' => $x->catatanKoreksi(),
@@ -139,6 +143,7 @@ class RekapAbsenMingguan
                 'tunggu' => $x->where('tunggu', true)->count() + $x->where('tunggu_lembur', true)->count(),
                 'total_um' => $x->sum('bayar'), 'total_lembur' => $x->sum('bayar_lembur'), 'total' => $x->sum('jumlah'),
                 'ada' => $x->contains(fn ($h) => $h->absen || $h->absen_lembur || $h->sumber || $h->hadir || $h->hm),
+                'tanpa_um' => ! $um && $x->contains(fn ($h) => $h->hadir && $h->bayar_ubah === null),
             ];
         })->sortBy(fn ($b) => [$b->ada ? 0 : 1, $b->k->site ?? 'zzz', $b->k->nama])->values();
 
@@ -158,7 +163,8 @@ class RekapAbsenMingguan
                 'operator' => $baris->filter(fn ($b) => $b->total_mingguan || $b->total_hm)->count(),
                 // HM diisi pada hari yang tidak dibayar → tidak ikut dihitung (perlu dicek admin).
                 'hm_tak_dibayar' => $semuaHari->filter(fn ($h) => $h->hm && ! $h->hadir)->count(),
-                'tunggu' => $baris->sum('tunggu'), 'tanpa_um' => $baris->filter(fn ($b) => $b->hadir && ! $b->um)->count(),
+                'tunggu' => $baris->sum('tunggu'), 'tanpa_um' => $baris->where('tanpa_um', true)->count(),
+                'bayar_diubah' => $semuaHari->filter(fn ($h) => $h->hadir && $h->bayar_ubah !== null)->count(),
                 'tanpa_tahap' => $semuaHari->filter(fn ($h) => $h->hadir && ! $h->tahap_id)->count(),
             ],
         ];

@@ -30,19 +30,25 @@ class GajiMingguanController extends Controller
             + ['bolehJam' => \App\Support\MenuAkses::boleh($request->user(), 'absen-ubah-jam')]);
     }
 
-    /** Simpan keputusan satu karyawan satu hari (bayar / tidak / ikut absen, lembur, HM operator, tahap). */
+    /** Simpan keputusan satu karyawan satu hari (bayar / tidak / ikut absen, lembur, HM operator, UM hari itu + alasan, tahap). */
     public function hari(Request $request): JsonResponse
     {
         $v = $request->validate([
             'karyawan_id' => ['required', 'integer', 'exists:karyawan,id'], 'tanggal' => ['required', 'date'],
             'hadir' => ['required', 'in:auto,1,0'], 'lembur' => ['required', 'in:auto,1,0'], 'hm' => ['nullable', 'numeric', 'min:0', 'max:24'],
             'tahap' => ['nullable', 'integer', 'exists:proyek_tahap,id'], 'semua_minggu' => ['nullable', 'boolean'], 'catatan' => ['nullable', 'string', 'max:300'],
-        ]);
+            // UM khusus hari itu (owner 11 Nov 2026): kosong = UM biasa; wajib beralasan; terisi = hari itu dibayar.
+            'bayar' => ['nullable', 'integer', 'min:0', 'max:5000000'], 'bayar_alasan' => ['nullable', 'required_with:bayar', 'string', 'max:300'],
+        ], ['bayar_alasan.required_with' => 'Alasan wajib diisi bila pembayaran hari ini diubah.']);
+        if (isset($v['bayar']) && $v['hadir'] === '0') {
+            throw \Illuminate\Validation\ValidationException::withMessages(['bayar' => 'Hari ini dipilih "Tidak dibayar" — pilih Bayar / Ikut absen, atau kosongkan pembayaran hari ini.']);
+        }
         $tanggal = \Carbon\Carbon::parse($v['tanggal'])->toDateString();
         $this->simpan((int) $v['karyawan_id'], $tanggal, [
             'hadir' => $v['hadir'] === 'auto' ? null : (bool) $v['hadir'], 'lembur' => $v['lembur'] === 'auto' ? null : (bool) $v['lembur'],
             'proyek_tahap_id' => $v['tahap'] ?? null, 'catatan' => trim((string) ($v['catatan'] ?? '')) ?: null,
             'hm' => isset($v['hm']) && (float) $v['hm'] > 0 ? round((float) $v['hm'], 1) : null,
+            'bayar_ubah' => isset($v['bayar']) ? (int) $v['bayar'] : null, 'bayar_alasan' => isset($v['bayar']) ? trim($v['bayar_alasan']) : null,
         ], $request->user()->id);
 
         // Tahap yang sama untuk semua hari kerja orang itu minggu ini.
@@ -111,13 +117,13 @@ class GajiMingguanController extends Controller
     private function simpan(int $karyawan, string $tanggal, array $isi, int $user, bool $sebagian = false): void
     {
         $r = RekapAbsen::firstOrNew(['karyawan_id' => $karyawan, 'tanggal' => $tanggal]);
-        $r->fill($sebagian ? $isi : $isi + ['hadir' => null, 'lembur' => null, 'hm' => null, 'proyek_tahap_id' => null, 'catatan' => null]);
+        $r->fill($sebagian ? $isi : $isi + ['hadir' => null, 'lembur' => null, 'hm' => null, 'bayar_ubah' => null, 'bayar_alasan' => null, 'proyek_tahap_id' => null, 'catatan' => null]);
         // Mandor tetap tercatat sebagai pengisi bila admin hanya mengubah tahap / catatan.
-        if (! $r->exists || $r->isDirty(['hadir', 'lembur'])) {
+        if (! $r->exists || $r->isDirty(['hadir', 'lembur', 'bayar_ubah'])) {
             $r->sumber = 'admin';
         }
         $r->user_id = $user;
-        if ($r->hadir === null && $r->lembur === null && ! $r->hm && ! $r->proyek_tahap_id && ! $r->catatan) {
+        if ($r->hadir === null && $r->lembur === null && ! $r->hm && $r->bayar_ubah === null && ! $r->proyek_tahap_id && ! $r->catatan) {
             if ($r->exists) {
                 $r->delete();
             }
@@ -167,6 +173,9 @@ class GajiMingguanController extends Controller
                     $ket = $x->masuk || $x->pulang ? ($x->masuk ?? '?').' - '.($x->pulang ?? '?').($x->tunggu === false && $x->absen === 'kurang' ? ' (disetujui)' : '')
                         : ($x->jam_mandor ? ($x->jam_mandor['masuk'] ?? '?').' - '.($x->jam_mandor['pulang'] ?? '?').' (ikut '.$x->jam_mandor['nama'].')'
                             : ($x->sumber === 'mandor' ? 'diisi mandor (tidak ada yang absen di lokasi)' : 'disetujui admin'));
+                    if ($x->bayar_ubah !== null) {
+                        $ket .= ' · UM diubah admin (biasa '.number_format((int) $b->um, 0, ',', '.').'): '.$x->bayar_alasan;
+                    }
                     $w->addRow(new Row([$angka(++$no), $teks($label), $teks($b->k->nama), $teks($b->k->jabatan), $angka($x->bayar, $rp), $teks($ket),
                         $teks($x->tahap ?? RekapAbsenMingguan::BELUM_TAHAP)]));
                 }
