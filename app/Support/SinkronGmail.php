@@ -141,7 +141,10 @@ class SinkronGmail
         if ($s === '') {
             return null;
         }
-        if (preg_match('/,\d{1,3}$/', $s)) {
+        if (preg_match('/^\d{1,3}([.,]\d{3})*\.\d{3}$/', $s)) {
+            // ribuan (pemisah terakhir titik), termasuk salah baca OCR "176,128.000"
+            $s = str_replace(['.', ','], '', $s);
+        } elseif (preg_match('/,\d{1,3}$/', $s)) {
             $s = str_replace(',', '.', str_replace('.', '', $s));
         } elseif (preg_match('/^\d{1,3}(\.\d{3})+$/', $s) || preg_match('/^\d{1,3}(,\d{3})+$/', $s)) {
             $s = str_replace(['.', ','], '', $s);
@@ -221,13 +224,30 @@ class SinkronGmail
         if (preg_match('/Lokasi\s+pekerjaan\s*[:;]?\s*(.+)/i', $t, $m)) {
             $d['lokasi'] = Str::limit(self::satuBaris($m[1]), 245, '');
         }
-        if (preg_match('/Biaya\s+pekerjaan\s*[:;]?\s*Rp\.?\s*([\d.,]+)/i', $t, $m) || preg_match('/DIBULATKAN\s+Rp\.?\s*([\d.,]+)/i', $t, $m)) {
+        if (preg_match('/Biaya\s*pekerjaan\s*\W{0,6}\s*Rp\.?\s*([\d.,]{7,})/i', $t, $m) || preg_match('/DIBULATKAN\s+Rp\.?\s*([\d.,]{7,})/i', $t, $m)) {
             $d['nilai'] = (int) round((float) self::angka($m[1]));
         }
-        // Baris tabel: "m³ 3.644,60 139.000 Rp 506.599.400" (OCR bisa membaca m³ sebagai m3/m?/rn3)
-        if (preg_match('/\b(?:m3|m³|m\?|rn3|m°)\s*\|?\s*([\d.,]+)\s*\|?\s*([\d.,]+)\s*\|?\s*Rp/i', $t, $m)) {
-            $d['volume'] = self::angka($m[1]);
-            $d['harga'] = self::angka($m[2]);
+        // Baris tabel: "m³ 3.644,60 139.000 Rp 506.599.400" (OCR bisa membaca m³ sebagai m3/m?/rn3).
+        // OCR sering membuang koma desimal volume ("21485" = 214,85) → volume = jumlah baris ÷ harga,
+        // dipakai hanya bila jumlah semua baris = nilai SPK.
+        if (preg_match_all('/(?:m3|m³|m\?|rn3|m°)\s*\|?\s*[\d.,]+\)?\s*\|?\s*([\d.,]+)\]?\s*\|?\s*Rp\.?\s*([\d.,]+)/i', $t, $mm, PREG_SET_ORDER)) {
+            $vol = 0;
+            $jumlah = 0;
+            $harga = [];
+            foreach ($mm as $m) {
+                $h = self::angka($m[1]);
+                $a = self::angka($m[2]);
+                if ($h >= 50000 && $h <= 300000 && $a > 0) {
+                    $vol += round($a / $h, 2);
+                    $jumlah += $a;
+                    $harga[] = $h;
+                }
+            }
+            $nilai = $d['nilai'] ?? 0;
+            if ($jumlah && $nilai && abs($jumlah - $nilai) <= max(1000, $nilai * 0.001)) {
+                $d['volume'] = $vol;
+                $d['harga'] = count(array_unique($harga)) === 1 ? $harga[0] : null;
+            }
         }
         if (preg_match('/Penawaran\s+Harga\s+No\.?\s*[:.]?\s*(\d{2,4})\s*\//i', $t, $m)) {
             $d['kode_penawaran'] = (string) (int) $m[1];
@@ -242,7 +262,13 @@ class SinkronGmail
         foreach (PenawaranSpk::where('jenis', 'spk')->whereNotNull('kode_penawaran')->whereNull('penawaran_id')->get() as $spk) {
             $p = PenawaranSpk::where('jenis', 'penawaran')->where('kode', $spk->kode_penawaran)->first();
             if ($p) {
-                $spk->update(['penawaran_id' => $p->id]);
+                // OCR SPK sering gagal membaca lokasi/pekerjaan → ambil dari penawaran (PDF teks).
+                $spk->update(['penawaran_id' => $p->id]
+                    + (trim((string) $spk->lokasi) === '' ? ['lokasi' => $p->lokasi] : [])
+                    + (trim((string) $spk->pekerjaan) === '' ? ['pekerjaan' => $p->pekerjaan] : []));
+                if ($spk->status === 'baru' && ! $spk->saran_tahap_id) {
+                    self::sarankan($spk);
+                }
             }
         }
     }
