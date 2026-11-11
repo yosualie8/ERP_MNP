@@ -104,7 +104,7 @@ class PenawaranSpkController extends Controller
 
             return $pesan;
         });
-        KasRiwayat::create(['aksi' => 'penawaran-spk', 'lembar' => 'Penawaran & SPK', 'baris_awal' => 0, 'baris_akhir' => 0, 'user_id' => $request->user()->id,
+        KasRiwayat::create(['aksi' => 'penawaran-spk', 'lembar' => 'Pen & SPK', 'baris_awal' => 0, 'baris_akhir' => 0, 'user_id' => $request->user()->id,
             'ringkasan' => mb_strimwidth("{$aksi} {$dok->jenis} {$dok->kode}: {$pesan}", 0, 490, '…'),
             'isi' => ['dok' => $dok->id, 'sebelum' => $sebelum, 'sesudah' => $dok->only(array_keys($sebelum))]]);
 
