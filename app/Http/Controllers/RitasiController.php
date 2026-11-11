@@ -214,17 +214,20 @@ class RitasiController extends Controller
                 ->with('error', 'Excel belum bisa dipakai — perbaiki dulu baris berikut lalu upload lagi.');
         }
         $nama = $request->file('berkas')->getClientOriginalName();
+        $menunggu = collect($hasil['per_dt'])->sum(fn ($d) => count($d['menunggu']));
         KasRiwayat::create(['aksi' => 'rit-unggah', 'lembar' => 'Ritasi', 'baris_awal' => 0, 'baris_akhir' => 0, 'user_id' => $request->user()->id,
             'ringkasan' => mb_strimwidth("Upload surat jalan \"{$nama}\": ".count($sj).' surat jalan, '.count($hasil['isian']).' DO terisi'
+                .($menunggu ? ", {$menunggu} menunggu uang jalan" : '')
                 .($hasil['mitra'] ? ', '.count($hasil['mitra']).' rit truk mitra' : '').' (belum disimpan)', 0, 490, '…'),
             'isi' => ['file' => $nama, 'per_dt' => collect($hasil['per_dt'])->map(fn ($d) => ['dt' => $d['dt'], 'sj' => $d['sj'], 'do_belum' => $d['do_belum'],
-                'galat' => $d['galat'], 'pasangan' => collect($d['pasangan'])->map(fn ($p) => $p['no_seri'].' → DO '.$p['do'])->all()])->all()]]);
+                'galat' => $d['galat'], 'pasangan' => collect($d['pasangan'])->map(fn ($p) => $p['no_seri'].' → DO '.$p['do'])->all(),
+                'menunggu' => collect($d['menunggu'])->pluck('no_seri')->all()])->all()]]);
 
         // Isian dikirim sebagai old input form bongkar; laporan per DT untuk ditinjau.
         return redirect()->route('ritasi.monitor', ['unggah' => 1])
             ->withInput(['bongkar' => $hasil['isian'], 'mitra' => $hasil['mitra']])
             ->with('unggah_bongkar', ['file' => $nama, 'jumlah' => count($sj), 'per_dt' => $hasil['per_dt'], 'do' => array_map('strval', array_keys($hasil['isian'])),
-                'mitra' => count($hasil['mitra'])]);
+                'mitra' => count($hasil['mitra']), 'menunggu' => $menunggu]);
     }
 
     /**

@@ -12,8 +12,8 @@ use RuntimeException;
 
 /**
  * Upload Excel surat jalan di Monitor Ritasi: tiap baris = satu surat jalan (No Mobil/DT, tanggal & jam bongkar, tujuan,
- * jenis tanah, No Surat Jalan). Surat jalan dipasangkan ke DO belum bongkar milik DT yang sama; jumlah surat jalan suatu DT
- * tidak boleh melebihi jumlah DO belum bongkarnya. Hasilnya hanya mengisi form — admin tetap meninjau lalu Simpan bongkar.
+ * jenis tanah, No Surat Jalan). Surat jalan dipasangkan ke DO belum bongkar milik DT yang sama; surat jalan yang melebihi jumlah
+ * DO belum bongkarnya (paling akhir) ditandai "menunggu uang jalan" dan tidak diisi. Hasilnya hanya mengisi form — admin tetap meninjau lalu Simpan bongkar.
  * Kolom Pemilik (owner 31 Okt 2026): baris truk mitra (pemilik selain MNP, mis. "Mbah Ranto") tidak punya DO / uang jalan MNP —
  * No Mobil-nya plat nomor, tidak dipasangkan ke DO, langsung menjadi rit tanpa DO dengan pemilik itu.
  */
@@ -113,7 +113,8 @@ class UnggahBongkar
     }
 
     /**
-     * Pasangkan surat jalan ke DO belum bongkar per DT. Per DT: bila surat jalan > DO belum bongkar → DT itu ditolak.
+     * Pasangkan surat jalan ke DO belum bongkar per DT. Per DT: bila surat jalan > DO belum bongkar → surat jalan paling akhir
+     * yang tidak kebagian DO masuk "menunggu" (menunggu uang jalan), sisanya tetap dipasangkan.
      * Bila DO lebih banyak, dipakai urut antrean: DO paling lama dulu (FIFO), hanya DO yang UJ-nya tidak sesudah bongkar terakhir
      * dan tidak lebih dari HARI_LAMA (30) hari sebelum bongkar pertama; DO yang lebih tua baru dipakai bila kurang (ditandai).
      * Lalu dipasangkan urut waktu: surat jalan paling awal ↔ DO paling awal.
@@ -179,20 +180,28 @@ class UnggahBongkar
             $semuaDt = $belum->filter(fn ($d) => in_array($dt, $d['mobil'], true) && ! isset($terpakai[$d['do']]));
             $doDt = $semuaDt->filter(fn ($d) => ! $galianSj || self::galianSama($galianSj, $d))
                 ->sortBy(fn ($d) => ($d['pertama']?->format('Ymd') ?? '0').str_pad($d['do'], 10, '0', STR_PAD_LEFT))->values();
-            $info = ['dt' => $dt, 'galian' => $galianSj, 'sj' => $daftarSj->count(), 'do_belum' => $doDt->count(), 'pasangan' => [], 'galat' => null, 'catatan' => []];
+            $info = ['dt' => $dt, 'galian' => $galianSj, 'sj' => $daftarSj->count(), 'do_belum' => $doDt->count(), 'pasangan' => [], 'menunggu' => [], 'galat' => null, 'catatan' => []];
 
             $lain = $semuaDt->reject(fn ($d) => $doDt->contains('do', $d['do']));
             $sebutLain = fn () => $lain->map(fn ($d) => $d['do'].' ('.(self::galianDo($d) ?? 'galian tidak diketahui').')')->implode(', ');
             if (! $galianSj) {
                 $info['catatan'][] = 'Galian kosong di Excel — dicocokkan ke semua DO belum bongkar DT ini.';
             }
+            // Surat jalan lebih banyak dari DO belum bongkar (owner 11 Nov 2026): uang jalan biasanya ditransfer sore/malam sesudah rit
+            // hari itu jalan, jadi rit terakhir bisa belum punya DO. Surat jalan paling awal tetap dipasangkan; kelebihannya (paling akhir)
+            // ditandai "menunggu uang jalan" — tidak diisi, diupload lagi setelah uang jalannya diinput di Kas UJ.
             if ($daftarSj->count() > $doDt->count()) {
-                $info['galat'] = "{$daftarSj->count()} surat jalan, padahal DO belum bongkar {$dt}".($galianSj ? " galian {$galianSj}" : '')." hanya {$doDt->count()}"
-                    .($doDt->isNotEmpty() ? ' (DO '.$doDt->pluck('do')->implode(', ').')' : '').' — periksa lagi No Mobil / galian / surat jalannya. Tidak ada yang diisi untuk kelompok ini.'
-                    .($lain->isNotEmpty() ? ' DO '.$dt.' lain yang belum bongkar: '.$sebutLain().'.' : '');
-                $perDt[] = $info;
+                $tunggu = $daftarSj->slice($doDt->count())->values();
+                $daftarSj = $daftarSj->take($doDt->count())->values();
+                $info['menunggu'] = $tunggu->map(fn ($s) => ['baris' => $s['baris'], 'no_seri' => $s['no_seri'], 'tanggal' => $s['tanggal'], 'jam' => $s['jam']])->all();
+                $info['catatan'][] = "{$tunggu->count()} surat jalan menunggu uang jalan — DO belum bongkar {$dt}".($galianSj ? " galian {$galianSj}" : '')
+                    ." hanya {$doDt->count()}. Upload lagi setelah uang jalannya diinput di Kas UJ."
+                    .($lain->isNotEmpty() ? ' DO '.$dt.' lain yang belum bongkar (galian berbeda): '.$sebutLain().' — periksa galiannya bila seharusnya cocok.' : '');
+                if ($daftarSj->isEmpty()) {
+                    $perDt[] = $info;
 
-                continue;
+                    continue;
+                }
             }
             // Urut antrean (FIFO): DO paling lama dibongkar duluan. DO yang UJ-nya sesudah bongkar terakhir tidak mungkin dipakai;
             // DO yang UJ-nya jauh sebelum bongkar pertama (tertinggal lama) baru dipakai bila DO yang wajar tidak cukup.

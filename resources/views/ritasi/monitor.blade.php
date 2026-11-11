@@ -114,7 +114,7 @@
             </form>
             <div class="redup" style="font-size: 12.5px; margin-top: 6px;">Kolom: No Mobil (<b>nomor DT</b>, mis. DT 027 — bukan plat nomor), Tanggal Bongkar, Jam Bongkar, Tujuan Bongkar, Jenis Tanah, No Surat Jalan, Galian (bila kosong ditebak dari keterangan UJ), <b>Kubikasi</b> (m³; bila kosong = kubikasi standar jenis kendaraan), <b>Pemilik</b> (kosong / MNP = truk sendiri; nama pemilik lain = truk mitra, No Mobil diisi plat nomor) &amp; Keterangan.
                 Truk mitra tidak dipasangkan ke DO — langsung menjadi rit tanpa DO dengan pemilik itu.
-                Surat jalan tiap DT dipasangkan ke DO belum bongkar DT itu sesuai urutan waktu; jumlah surat jalan tidak boleh melebihi jumlah DO belum bongkarnya. Hasilnya hanya mengisi form di bawah — periksa dulu, lalu klik <b>Simpan bongkar</b>.</div>
+                Surat jalan tiap DT dipasangkan ke DO belum bongkar DT itu sesuai urutan waktu; bila surat jalan lebih banyak dari DO belum bongkarnya, yang paling akhir ditandai <b>menunggu uang jalan</b> (tidak diisi — upload lagi setelah uang jalannya diinput di Kas UJ). Hasilnya hanya mengisi form di bawah — periksa dulu, lalu klik <b>Simpan bongkar</b>.</div>
             @if ($errors->unggah->any())
                 <div class="pesan galat" style="margin-top: 8px;"><b>Excel belum bisa dipakai:</b>
                     <ul style="margin: 6px 0 0; padding-left: 18px;">@foreach ($errors->unggah->all() as $e)<li>{{ $e }}</li>@endforeach</ul></div>
@@ -123,6 +123,7 @@
                 <div style="margin-top: 10px;">
                     <b>Hasil upload "{{ $unggah['file'] }}"</b>: {{ $unggah['jumlah'] }} surat jalan, {{ count($unggah['do']) }} DO terisi otomatis{{ ($unggah['mitra'] ?? 0) ? ', '.$unggah['mitra'].' rit truk mitra (lihat tabel Truk mitra di bawah)' : '' }} — <b>belum disimpan</b>.
                     @if ($doUnggah !== null)<a href="{{ route('ritasi.monitor') }}" style="font-size: 13px;">Tampilkan semua DO</a>@endif
+                    @include('ritasi.partials.menunggu-uj', ['perDt' => $unggah['per_dt']])
                     <table class="kas" style="margin-top: 6px; font-size: 13px;">
                         <thead><tr><th>DT · Galian</th><th class="angka">Surat jalan</th><th class="angka" title="DO belum bongkar DT itu dengan galian yang sama (galian DO dari keterangan UJ-nya)">DO belum bongkar (galian sama)</th><th>Pasangan (urut waktu)</th></tr></thead>
                         @foreach ($unggah['per_dt'] as $p)
@@ -137,6 +138,9 @@
                                             <div>SJ <b>{{ $x['no_seri'] }}</b> · bongkar {{ \Illuminate\Support\Carbon::parse($x['tanggal'])->translatedFormat('j M') }}{{ $x['jam'] ? ' '.$x['jam'] : '' }} → DO <b>{{ $x['do'] }}</b>
                                                 <span class="redup">({{ ($x['id_uj'] ?? '') ?: 'tanpa ID UJ' }})</span>
                                                 @if ($x['catatan'])<span style="color: #f0c05a;"> ⚠ {{ $x['catatan'] }}</span>@endif</div>
+                                        @endforeach
+                                        @foreach ($p['menunggu'] ?? [] as $x)
+                                            <div style="color: #f0c05a;">⏳ SJ <b>{{ $x['no_seri'] }}</b> · bongkar {{ \Illuminate\Support\Carbon::parse($x['tanggal'])->translatedFormat('j M') }}{{ $x['jam'] ? ' '.$x['jam'] : '' }} → <b>menunggu uang jalan</b> (belum ada DO)</div>
                                         @endforeach
                                         @foreach ($p['catatan'] as $c)<div class="redup">{{ $c }}</div>@endforeach
                                     @endif
@@ -288,6 +292,9 @@
             <datalist id="saran-tahap">@foreach ($saran['tahap'] as $s)<option value="{{ $s }}">@endforeach</datalist>
             <datalist id="saran-tanah">@foreach ($saran['jenis_tanah'] as $s)<option value="{{ $s }}">@endforeach</datalist>
             <datalist id="saran-galian">@foreach ($saran['galian'] as $s)<option value="{{ $s }}">@endforeach</datalist>
+            @if ($unggah)
+                @include('ritasi.partials.menunggu-uj', ['perDt' => $unggah['per_dt']])
+            @endif
             <div class="simpan-bongkar">
                 <button class="tombol" type="submit" id="simpan-bongkar" disabled>Simpan bongkar</button>
                 <span class="redup" id="info-bongkar">Isi Tanggal Bongkar, Tujuan Bongkar, Jenis Tanah & No Surat Jalan dari surat jalan untuk DO yang sudah bongkar.</span>
