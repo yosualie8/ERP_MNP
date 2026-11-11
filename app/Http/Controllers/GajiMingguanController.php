@@ -37,7 +37,7 @@ class GajiMingguanController extends Controller
             'karyawan_id' => ['required', 'integer', 'exists:karyawan,id'], 'tanggal' => ['required', 'date'],
             'hadir' => ['required', 'in:auto,1,0'], 'lembur' => ['required', 'in:auto,1,0'], 'hm' => ['nullable', 'numeric', 'min:0', 'max:24'],
             'tahap' => ['nullable', 'integer', 'exists:proyek_tahap,id'], 'semua_minggu' => ['nullable', 'boolean'], 'catatan' => ['nullable', 'string', 'max:300'],
-            // UM khusus hari itu (owner 11 Nov 2026): kosong = UM biasa; wajib beralasan; terisi = hari itu dibayar.
+            // Pembayaran hari itu = UM + lembur (owner 11 Nov 2026): kosong = hitungan biasa; wajib beralasan; terisi = hari itu dibayar.
             'bayar' => ['nullable', 'integer', 'min:0', 'max:5000000'], 'bayar_alasan' => ['nullable', 'required_with:bayar', 'string', 'max:300'],
         ], ['bayar_alasan.required_with' => 'Alasan wajib diisi bila pembayaran hari ini diubah.']);
         if (isset($v['bayar']) && $v['hadir'] === '0') {
@@ -174,7 +174,7 @@ class GajiMingguanController extends Controller
                         : ($x->jam_mandor ? ($x->jam_mandor['masuk'] ?? '?').' - '.($x->jam_mandor['pulang'] ?? '?').' (ikut '.$x->jam_mandor['nama'].')'
                             : ($x->sumber === 'mandor' ? 'diisi mandor (tidak ada yang absen di lokasi)' : 'disetujui admin'));
                     if ($x->bayar_ubah !== null) {
-                        $ket .= ' · UM diubah admin (biasa '.number_format((int) $b->um, 0, ',', '.').'): '.$x->bayar_alasan;
+                        $ket .= ' · UM + lembur diubah admin (biasa '.number_format($x->bayar_biasa, 0, ',', '.').'): '.$x->bayar_alasan;
                     }
                     $w->addRow(new Row([$angka(++$no), $teks($label), $teks($b->k->nama), $teks($b->k->jabatan), $angka($x->bayar, $rp), $teks($ket),
                         $teks($x->tahap ?? RekapAbsenMingguan::BELUM_TAHAP)]));

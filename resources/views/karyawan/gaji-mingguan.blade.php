@@ -64,7 +64,7 @@
         <div class="kartu"><span class="redup">Karyawan dibayar</span><b>{{ $ringkas['orang'] }}</b></div>
         <div class="kartu"><span class="redup">Hari kerja dibayar</span><b>{{ $ringkas['hari'] }}</b></div>
         <div class="kartu"><span class="redup">UM</span><b>{{ rp($ringkas['total_um']) }}</b>
-            @if ($ringkas['bayar_diubah'])<span style="font-size: 12px; color: #f0a35a;">{{ $ringkas['bayar_diubah'] }} hari UM diubah admin</span>@endif</div>
+            @if ($ringkas['bayar_diubah'])<span style="font-size: 12px; color: #f0a35a;">{{ $ringkas['bayar_diubah'] }} hari UM + lembur diubah admin</span>@endif</div>
         <div class="kartu"><span class="redup">Lembur ({{ $ringkas['lembur'] }} × ½ UM)</span><b>{{ rp($ringkas['total_lembur']) }}</b></div>
         @if ($ringkas['operator'])
             <div class="kartu"><span class="redup">Operator: basic + transport + kesehatan</span><b>{{ rp($ringkas['total_mingguan']) }}</b>
@@ -87,7 +87,7 @@
         <span><b style="color: var(--merah);">✗</b> tidak dibayar</span>
         <span><b>+L</b> lembur ½ UM (<b>+L?</b> menunggu)</span>
         <span><b style="color: #8ab4f8;">7 HM</b> jam kerja alat operator (× tarif HM jabatan)</span>
-        <span><b style="color: #f0a35a;">Rp75.000</b> UM hari itu diubah admin (arahkan kursor untuk melihat alasan)</span>
+        <span><b style="color: #f0a35a;">Rp75.000</b> pembayaran UM + lembur hari itu diubah admin (arahkan kursor untuk melihat alasan)</span>
         <span><b class="tanda-edit" style="margin: 0;">✎</b> jam absen dikoreksi admin (arahkan kursor / klik sel untuk melihat jam asli)</span>
         <span>Klik sel hari untuk menyetujui / menolak / mengubah pembayaran hari itu / mengisi tahap / HM · klik UM untuk mengubah UM orang itu · klik Tunjangan mingguan operator untuk mengubahnya minggu ini (biru = diubah admin).</span>
     </div>
@@ -123,17 +123,17 @@
                                     $x->sumber === 'mandor' ? 'diisi mandor' : null,
                                     // Tukang tanpa absen HP: jam ikut mandor / pengawas tahapnya (owner 9 Nov 2026).
                                     $x->jam_mandor ? 'jam ikut '.$x->jam_mandor['nama'].': masuk '.($x->jam_mandor['masuk'] ?? '–').' · pulang '.($x->jam_mandor['pulang'] ?? '–') : null,
-                                    // UM hari itu diubah admin + alasannya (owner 11 Nov 2026).
-                                    $x->bayar_ubah !== null ? 'UM hari ini diubah '.rp($x->bayar_ubah).' (biasa '.rp((int) $b->um).'): '.$x->bayar_alasan : null,
+                                    // UM + lembur hari itu diubah admin + alasannya (owner 11 Nov 2026).
+                                    $x->bayar_ubah !== null ? 'UM + lembur hari ini diubah '.rp($x->bayar_ubah).' (biasa '.rp($x->bayar_biasa).'): '.$x->bayar_alasan : null,
                                     $x->catatan])->filter()->implode(' · ');
-                                $rincian = $x->hadir ? collect(['UM '.rp($x->bayar), $x->bayar_lembur ? 'lembur '.rp($x->bayar_lembur) : null, $x->bayar_hm ? 'HM '.rp($x->bayar_hm) : null])
+                                $rincian = $x->hadir ? collect([($x->bayar_ubah !== null ? 'UM + lembur (diubah) ' : 'UM ').rp($x->bayar), $x->bayar_lembur ? 'lembur '.rp($x->bayar_lembur) : null, $x->bayar_hm ? 'HM '.rp($x->bayar_hm) : null])
                                     ->filter()->implode(' + ').($x->bayar_lembur || $x->bayar_hm ? ' = '.rp($x->bayar + $x->bayar_lembur + $x->bayar_hm) : '') : 'tidak dibayar';
                             @endphp
                             <td class="hr {{ $kelas }}" data-v="{{ $simbol }}" data-k="{{ $b->k->id }}" data-nama="{{ $b->k->nama }}" data-d="{{ $d }}"
                                 data-label="{{ $x->tanggal->translatedFormat('l, j M') }}" data-hadir="{{ $pilihan($x->putus_hadir) }}" data-lembur="{{ $pilihan($x->putus_lembur) }}"
                                 data-tahap="{{ $x->tahap_diisi ? $x->tahap_id : '' }}" data-tahap-tebak="{{ $x->tahap }}" data-catatan="{{ $x->catatan }}" data-info="{{ $info }}"
                                 data-hm="{{ $x->hm }}" data-tarif-hm="{{ $b->tarif_hm }}" data-bayar="{{ $x->bayar_ubah }}" data-alasan="{{ $x->bayar_alasan }}"
-                                data-um="{{ (int) $b->um }}" data-rincian="{{ $rincian }}" data-jam="{{ json_encode($x->jam) }}" title="{{ $info }}{{ $x->tahap ? ' · '.$x->tahap : '' }}">
+                                data-biasa="{{ $x->bayar_biasa }}" data-rincian="{{ $rincian }}" data-jam="{{ json_encode($x->jam) }}" title="{{ $info }}{{ $x->tahap ? ' · '.$x->tahap : '' }}">
                                 <span class="s">{{ $simbol }}{{ $x->lembur ? '+L' : ($x->tunggu_lembur ? '+L?' : '') }}@if ($x->diedit)<span class="tanda-edit" style="font-size: 11px;">✎</span>@endif</span>
                                 @if ($x->hadir || $x->tunggu)<span class="t">{{ $pendek($x->tahap) ?? 'tahap ?' }}</span>@endif
                                 @if ($x->hadir && $x->bayar_ubah !== null)<span class="ub">{{ rp($x->bayar_ubah) }}</span>@endif
@@ -206,9 +206,9 @@
                 <label><input type="radio" name="hadir" value="1"> Bayar</label>
                 <label><input type="radio" name="hadir" value="0"> Tidak dibayar</label>
             </div>
-            {{-- Pembayaran hari ini (owner 11 Nov 2026): UM khusus hari ini, wajib alasan; lembur / HM / tunjangan mingguan tetap ikut aturannya. --}}
+            {{-- Pembayaran hari ini (owner 11 Nov 2026): total UM + lembur khusus hari ini, wajib alasan; HM / tunjangan mingguan tetap ikut aturannya. --}}
             <div class="blok-jam">
-                <label class="baris" for="ah-bayar">UM hari ini <span class="redup" id="ah-bayar-biasa" style="font-weight: 400;"></span></label>
+                <label class="baris" for="ah-bayar">Pembayaran hari ini (UM + lembur) <span class="redup" id="ah-bayar-biasa" style="font-weight: 400;"></span></label>
                 <input type="text" id="ah-bayar" name="bayar" inputmode="numeric" autocomplete="off" style="width: 100%; box-sizing: border-box;">
                 <input type="text" id="ah-alasan" name="bayar_alasan" maxlength="300" placeholder="Alasan ubah pembayaran, mis. pulang siang — dibayar setengah" style="width: 100%; box-sizing: border-box; margin-top: 6px;">
                 <div class="redup" id="ah-rincian" style="font-size: 12px; margin-top: 4px;"></div>
@@ -334,13 +334,13 @@
                 const tarifHm = +td.dataset.tarifHm;
                 document.getElementById('ah-blok-hm').hidden = !tarifHm && !td.dataset.hm;
                 form.hm.value = td.dataset.hm ? td.dataset.hm.replace('.', ',') : '';
-                // UM khusus hari ini + alasan.
-                const um = +td.dataset.um;
+                // Total UM + lembur khusus hari ini + alasan.
+                const biasa = +td.dataset.biasa;
                 form.bayar.value = td.dataset.bayar === '' ? '' : rupiah(td.dataset.bayar);
-                form.bayar.placeholder = um ? `Rp${rupiah(um)} (UM biasa) — kosongkan = UM biasa` : 'UM biasa kosong — isi nominal hari ini';
+                form.bayar.placeholder = biasa ? `Rp${rupiah(biasa)} (hitungan biasa) — kosongkan = hitungan biasa` : 'UM biasa kosong — isi nominal hari ini';
                 form.bayar_alasan.value = td.dataset.alasan || '';
                 form.bayar_alasan.required = td.dataset.bayar !== '';
-                document.getElementById('ah-bayar-biasa').textContent = `— UM biasa ${um ? 'Rp' + rupiah(um) : 'kosong'}; lembur tetap ½ UM biasa`;
+                document.getElementById('ah-bayar-biasa').textContent = `— biasanya ${biasa ? 'Rp' + rupiah(biasa) : 'kosong'}; HM & tunjangan tetap terpisah`;
                 document.getElementById('ah-rincian').textContent = 'Dibayar saat ini: ' + td.dataset.rincian;
                 document.getElementById('ah-hm-info').textContent = tarifHm
                     ? `× Rp${new Intl.NumberFormat('id-ID').format(tarifHm)} per HM — dibayar bila hari ini dibayar.` : 'Jabatan ini tidak bertarif HM (Master Jabatan).';
