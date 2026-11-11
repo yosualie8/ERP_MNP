@@ -83,14 +83,6 @@
                 <form method="POST" id="ps-form" class="ps-form">
                     @csrf @method('PATCH')
                     <input type="hidden" name="tampil" value="{{ $tampil }}">
-                    <div class="ps-bagian" id="f-bagian-tahap">
-                        <h4>Tautan ke tahap (omset)</h4>
-                        <div class="ps-catatan-box saran ps-usul l6" id="f-saran"></div>
-                        <div class="ps-medan l6"><label for="f-tahap-cari">Tahap proyek — ketik nama / lokasi, pilih dari daftar</label>
-                            <input id="f-tahap-cari" list="daftar-tahap" autocomplete="off" placeholder="mis. ASG Tahap 103 atau nama lapangan">
-                            <input type="hidden" id="f-tahap" name="proyek_tahap_id"></div>
-                        <div class="ps-info l6" id="f-tahap-info"></div>
-                    </div>
                     <div class="ps-bagian">
                         <h4>Dokumen</h4>
                         <div class="ps-medan l2"><label for="f-kode">Kode</label><input id="f-kode" name="kode" maxlength="60" autocomplete="off"></div>
@@ -109,8 +101,13 @@
                         <div class="ps-catatan-box l6" id="f-penawaran"></div>
                     </div>
                     <div class="ps-bagian">
-                        <h4>Catatan</h4>
-                        <div class="ps-medan l6"><label for="f-catatan">Catatan</label><input id="f-catatan" name="catatan" maxlength="500" autocomplete="off"></div>
+                        <h4 id="f-bagian-tahap">Tautan ke tahap</h4>
+                        <div class="ps-medan l4" id="f-tahap-w"><label for="f-tahap-cari">Tahap proyek</label>
+                            <input id="f-tahap-cari" list="daftar-tahap" autocomplete="off" placeholder="ketik nama tahap / lokasi">
+                            <input type="hidden" id="f-tahap" name="proyek_tahap_id"></div>
+                        <div class="ps-medan l2"><label for="f-catatan">Catatan</label><input id="f-catatan" name="catatan" maxlength="500" autocomplete="off"></div>
+                        <div class="ps-info l6" id="f-tahap-info"></div>
+                        <div class="ps-catatan-box saran ps-usul l6" id="f-saran"></div>
                     </div>
                     <div class="ps-tombol">
                         <button type="submit" name="aksi" value="tautkan" class="tombol" id="b-tautkan">✔ Tautkan ke tahap &amp; isi omset</button>
@@ -221,15 +218,20 @@
                 for (const k of ['kode', 'nomor', 'tanggal', 'pihak', 'lokasi', 'pekerjaan', 'volume', 'harga', 'nilai', 'catatan']) $('f-' + k).value = d[k] ?? '';
                 setTahap(d.tahap);
                 const spk = d.jenis === 'spk';
-                $('f-bagian-tahap').hidden = !spk; $('b-tautkan').hidden = !spk;
+                $('f-tahap-w').hidden = !spk; $('f-tahap-info').hidden = !spk; $('f-saran').hidden = !spk; $('b-tautkan').hidden = !spk;
+                $('f-bagian-tahap').textContent = spk ? 'Tautan ke tahap' : 'Catatan';
+                $('f-catatan').closest('.ps-medan').className = 'ps-medan ' + (spk ? 'l2' : 'l6');
+                // Tahap usulan ditaruh paling atas di daftar ketik
+                const dl = $('daftar-tahap');
+                for (const o of dl.options) if (o.dataset.asli !== undefined) { o.label = o.dataset.asli; delete o.dataset.asli; }
+                const ou = d.saran_id && TAHAP[d.saran_id] && [...dl.options].find(o => o.value === TAHAP[d.saran_id].nama);
+                if (ou) { ou.dataset.asli = ou.label; ou.label = '💡 usulan · ' + ou.label; dl.prepend(ou); }
                 // Usulan di paling atas form + tombol sekali klik
                 const usul = $('f-saran'), tu = d.saran_id && TAHAP[d.saran_id];
                 if (d.tertaut) usul.innerHTML = `<div class="isi">✔ Sudah ditautkan ke <span class="nama">${esc(TAHAP[d.tahap]?.nama || '')}</span></div>`;
                 else if (tu) {
-                    usul.innerHTML = `<div class="isi">💡 Usulan: <span class="nama">${esc(tu.nama)}</span><div class="redup" style="font-size: 12px; margin-top: 3px;">${esc(infoTahap(d.saran_id))}${d.saran_alasan ? ' · ' + esc(d.saran_alasan) : ''}</div></div>`
-                        + `<button type="submit" name="aksi" value="tautkan" class="tombol" id="b-tautkan-usul">✔ Tautkan ke ${esc(tu.nama)}</button>`;
-                    $('b-tautkan-usul').addEventListener('click', () => setTahap(d.saran_id));
-                } else usul.innerHTML = '<div class="isi redup">Belum ada usulan tahap — ketik nama tahap di bawah.</div>';
+                    usul.innerHTML = `<div class="isi">💡 Usulan: <span class="nama">${esc(tu.nama)}</span> — sudah diisikan ke kotak Tahap proyek<div class="redup" style="font-size: 12px; margin-top: 3px;">${d.saran_alasan ? esc(d.saran_alasan) : ''}</div></div>`;
+                } else usul.innerHTML = '<div class="isi redup">Belum ada usulan tahap — ketik nama tahap di kotak Tahap proyek.</div>';
                 $('f-jenis').classList.toggle('pen', !spk);
                 $('b-tautkan').textContent = d.tertaut ? '✔ Simpan & hitung ulang omset tahap' : '✔ Tautkan ke tahap & isi omset';
                 $('b-abaikan').hidden = d.status === 'diabaikan'; $('b-kembali').hidden = d.status === 'baru';
