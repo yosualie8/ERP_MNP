@@ -35,22 +35,37 @@ class BayarTanahRekap extends Model
         return $this->belongsTo(User::class);
     }
 
-    /** @return array<string, string> DO → kode RBT yang masih menunggu (DO itu tidak boleh direkap lagi). */
+    /**
+     * Kunci satu isi rekap: nomor DO, atau "SJ<id>" untuk rit tanpa DO yang dibayar lewat No Surat Jalan (owner 11 Nov 2026;
+     * isi: sj = id ritasi_menunggu, no_seri, no_mobil, do = null).
+     */
+    public static function kunciIsi(array $x): string
+    {
+        return ! empty($x['sj']) ? 'SJ'.$x['sj'] : (string) $x['do'];
+    }
+
+    /** @return string[] kunci isi rekap ini (DO / SJ<id>) */
+    public function kunci(): array
+    {
+        return array_map(fn ($x) => self::kunciIsi($x), $this->isi);
+    }
+
+    /** @return array<string, string> DO / SJ<id> → kode RBT yang masih menunggu (tidak boleh direkap lagi). */
     public static function doMenunggu(): array
     {
         $hasil = [];
         foreach (self::whereIn('status', ['menunggu', 'diajukan'])->get() as $r) {
             foreach ($r->isi as $x) {
-                $hasil[(string) $x['do']] = $r->kode();
+                $hasil[self::kunciIsi($x)] = $r->kode();
             }
         }
 
         return $hasil;
     }
 
-    /** @return array<string, int> DO → harga */
+    /** @return array<string, int> DO / SJ<id> → harga */
     public function harga(): array
     {
-        return collect($this->isi)->mapWithKeys(fn ($x) => [(string) $x['do'] => (int) $x['harga']])->all();
+        return collect($this->isi)->mapWithKeys(fn ($x) => [self::kunciIsi($x) => (int) $x['harga']])->all();
     }
 }

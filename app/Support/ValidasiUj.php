@@ -208,7 +208,9 @@ class ValidasiUj
         $samaDo = $r['do'] !== null ? $lain->where('do', $r['do']) : collect();
 
         // 17 · Kelengkapan & format data master
-        if ($terkaitTruk && $r['do'] === null && $kat !== 'um' && $kat !== 'sp') {
+        // Uang tanah rit yang belum punya DO dibayar lewat No Surat Jalan (penanda "[SJ …]", owner 11 Nov 2026) — tertelusur lewat surat jalannya.
+        $lewatSj = $kat === 'ut' && \App\Models\RitasiMenunggu::seriDariKeterangan($r['ket']) !== null;
+        if ($terkaitTruk && $r['do'] === null && $kat !== 'um' && $kat !== 'sp' && ! $lewatSj) {
             $flag('17', 'sedang', 'No DO kosong untuk kategori '.$r['kategori'].' — transaksi tidak bisa ditelusuri ke DO/UJ utamanya.');
         }
         if ($terkaitTruk && $r['mobil'] === null) {

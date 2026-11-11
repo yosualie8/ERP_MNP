@@ -60,8 +60,10 @@ class MonitorRitasi
     public static function belumBayarTanah(): array
     {
         $jenis = fn (Collection $baris, string $k) => $baris->contains(fn ($d) => ValidasiUj::jenisKategori($d->kategori) === $k);
+        // Uang tanah yang dibayar lebih dulu lewat No Surat Jalan (rit menunggu uang jalan, owner 11 Nov 2026) menutup DO rit itu.
+        $lewatSj = \App\Models\RitasiMenunggu::doDibayarLewatSj();
 
-        return self::kelompok(fn (string $do, Collection $baris) => $jenis($baris, 'uj') && ! $jenis($baris, 'ut'), null, self::dariSaldo());
+        return self::kelompok(fn (string $do, Collection $baris) => $jenis($baris, 'uj') && ! $jenis($baris, 'ut') && ! isset($lewatSj[$do]), null, self::dariSaldo());
     }
 
     /** @return array<string, string> kunci DO → kode pengajuan yang Uang Tanah-nya masih menunggu realisasi (mis. "PUJ-0052"). */

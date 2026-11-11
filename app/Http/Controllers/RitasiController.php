@@ -215,6 +215,8 @@ class RitasiController extends Controller
         }
         $nama = $request->file('berkas')->getClientOriginalName();
         $menunggu = collect($hasil['per_dt'])->sum(fn ($d) => count($d['menunggu']));
+        // Rit menunggu uang jalan disimpan → tampil di menu Bayar Tanah (uang tanahnya bisa dibayar lewat No Surat Jalan).
+        \App\Models\RitasiMenunggu::simpanDariUnggah($hasil['per_dt'], $sj, $request->user()->id);
         $sudah = collect($hasil['per_dt'])->sum(fn ($d) => count($d['sudah_ada'])) + count($hasil['sudah_mitra']);
         KasRiwayat::create(['aksi' => 'rit-unggah', 'lembar' => 'Ritasi', 'baris_awal' => 0, 'baris_akhir' => 0, 'user_id' => $request->user()->id,
             'ringkasan' => mb_strimwidth("Upload surat jalan \"{$nama}\": ".count($sj).' surat jalan, '.count($hasil['isian']).' DO terisi'
@@ -365,6 +367,8 @@ class RitasiController extends Controller
             // Owner 2 Nov 2026: cukup 5 rekap bayar tanah terakhir.
             'rekapTanah' => $mode === 'tanah' ? \App\Models\BayarTanahRekap::with(['user', 'pengajuan'])->orderByDesc('id')->limit(5)->get() : collect(),
             'doDirekap' => $mode === 'tanah' ? \App\Models\BayarTanahRekap::doMenunggu() : [],
+            // Rit sudah bongkar tanpa DO (menunggu uang jalan) yang uang tanahnya belum dibayar — dibayar lewat No Surat Jalan (owner 11 Nov 2026).
+            'ritMenunggu' => $mode === 'tanah' ? \App\Models\RitasiMenunggu::aktif()->reject(fn ($r) => $r->dibayar)->values() : collect(),
             // DO yang Uang Tanah-nya sudah diajukan (belum ditransfer): tetap tampil, diberi label kode pengajuannya.
             'doDiajukan' => $mode === 'tanah' && \App\Support\Fitur::pengajuanUj() ? MonitorRitasi::uangTanahDiajukan() : [],
             'mode' => $mode, 'rute' => $mode === 'tanah' ? 'ritasi.bayar-tanah' : 'ritasi.monitor', 'saran' => $saran,

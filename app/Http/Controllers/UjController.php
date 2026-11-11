@@ -148,24 +148,38 @@ class UjController extends Controller
             ->groupBy(fn ($d) => (string) $d->no_do)
             ->map(fn ($g) => $g->first(fn ($d) => \App\Support\ValidasiUj::jenisKategori($d->kategori) === 'uj') ?? $g->first());
         $belum = \App\Support\MonitorRitasi::belumBayarTanah()['do']->keyBy('do');
+        $menunggu = \App\Models\RitasiMenunggu::aktif()->keyBy(fn ($m) => $m->kode());
 
         return response()->json(['rekap' => $rekap->map(fn ($r) => [
             'id' => $r->id, 'kode' => $r->kode(), 'judul' => $r->created_at->translatedFormat('l, j M Y'), 'jam' => $r->created_at->format('H:i'),
             'jumlah' => $r->jumlah, 'total' => (int) $r->total, 'status' => $r->status, 'no_uj' => $r->no_uj, 'catatan' => $r->catatan, 'pengajuan' => $r->pengajuan?->kode(),
             // Sudah direalisasikan = pernah dibayar lewat Input UJ, atau semua DO-nya sudah punya Uang Tanah di Kas UJ.
-            'terealisasi' => self::rekapTerealisasi($r, $belum),
+            'terealisasi' => self::rekapTerealisasi($r, $belum, $menunggu),
             'oleh' => $r->user?->name,
-            'detail' => collect($r->isi)->map(fn ($x) => [
-                'do' => (string) $x['do'], 'harga' => (int) $x['harga'], 'mobil' => $uj[(string) $x['do']]->no_mobil ?? null,
-                'driver' => $uj[(string) $x['do']]->nama ?? null, 'keterangan' => $uj[(string) $x['do']]->keterangan ?? null,
-            ])->values(),
+            'detail' => collect($r->isi)->map(fn ($x) => ! empty($x['sj'])
+                // Rit tanpa DO: dibayar lewat No Surat Jalan.
+                ? ['do' => 'SJ '.($x['no_seri'] ?? '?').' (tanpa DO)', 'harga' => (int) $x['harga'], 'mobil' => $x['no_mobil'] ?? null,
+                    'driver' => $menunggu['SJ'.$x['sj']]->sopir ?? null, 'keterangan' => 'Menunggu uang jalan']
+                : ['do' => (string) $x['do'], 'harga' => (int) $x['harga'], 'mobil' => $uj[(string) $x['do']]->no_mobil ?? null,
+                    'driver' => $uj[(string) $x['do']]->nama ?? null, 'keterangan' => $uj[(string) $x['do']]->keterangan ?? null,
+                ])->values(),
         ])->values()]);
     }
 
-    /** Rekap bayar tanah sudah direalisasikan: dibayar lewat Input UJ, atau tidak ada lagi DO-nya yang belum punya Uang Tanah di Kas UJ. */
-    private static function rekapTerealisasi(\App\Models\BayarTanahRekap $r, \Illuminate\Support\Collection $belum): bool
+    /**
+     * Rekap bayar tanah sudah direalisasikan: dibayar lewat Input UJ, atau tidak ada lagi DO-nya yang belum punya Uang Tanah di Kas UJ
+     * (rit tanpa DO: sudah dibayar lewat No Surat Jalan, atau sudah tidak menunggu lagi).
+     */
+    private static function rekapTerealisasi(\App\Models\BayarTanahRekap $r, \Illuminate\Support\Collection $belum, ?\Illuminate\Support\Collection $menunggu = null): bool
     {
-        return $r->status === 'dibayar' || collect($r->isi)->every(fn ($x) => ! isset($belum[(string) $x['do']]));
+        if ($r->status === 'dibayar') {
+            return true;
+        }
+        $menunggu ??= \App\Models\RitasiMenunggu::aktif()->keyBy(fn ($m) => $m->kode());
+
+        return collect($r->isi)->every(fn ($x) => ! empty($x['sj'])
+            ? (! isset($menunggu['SJ'.$x['sj']]) || $menunggu['SJ'.$x['sj']]->dibayar)
+            : ! isset($belum[(string) $x['do']]));
     }
 
     /**
@@ -188,14 +202,14 @@ class UjController extends Controller
                     'catatan' => [$rekap->kode().' sudah direalisasikan'.($rekap->no_uj ? ' (UJ-'.$rekap->no_uj.')' : '').' — tidak bisa dipakai lagi untuk pengajuan.'], 'rekap' => null]];
             }
 
-            return ['dariBayarTanah' => [...\App\Support\BayarTanah::untukForm(array_column($rekap->isi, 'do'), $rekap->harga()), 'rekap' => ['id' => $rekap->id, 'kode' => $rekap->kode()]]];
+            return ['dariBayarTanah' => [...\App\Support\BayarTanah::untukForm($rekap->kunci(), $rekap->harga()), 'rekap' => ['id' => $rekap->id, 'kode' => $rekap->kode()]]];
         }
-        // Format: DO atau DO:harga (harga tanah yang diisi admin di menu Bayar Tanah).
+        // Format: DO atau DO:harga (harga tanah yang diisi admin di menu Bayar Tanah); rit tanpa DO = SJ<id>.
         $do = [];
         $harga = [];
         foreach (explode(',', (string) request()->query('bayar_tanah')) as $x) {
             [$no, $h] = array_pad(explode(':', trim($x), 2), 2, null);
-            if (ctype_digit((string) $no)) {
+            if (ctype_digit((string) $no) || \App\Models\RitasiMenunggu::idDariKode($no) !== null) {
                 $do[] = $no;
                 if ($h !== null && ctype_digit($h) && (int) $h > 0) {
                     $harga[$no] = (int) $h;

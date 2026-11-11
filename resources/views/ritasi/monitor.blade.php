@@ -50,6 +50,9 @@
         <div class="kartu"><span class="redup">Lebih dari 30 hari</span><b>{{ $jumlahUmur['lama'] }}</b></div>
         @if ($tanah)
             <div class="kartu"><span class="redup">Sudah bongkar (ada di Ritasi)</span><b>{{ $semua->whereNotNull('bongkar')->count() }}</b></div>
+            @if ($ritMenunggu->isNotEmpty())
+                <div class="kartu" title="Rit sudah bongkar tetapi belum ada uang jalan / DO-nya — uang tanahnya bisa dibayar lewat No Surat Jalan"><span class="redup">Rit tanpa DO (menunggu UJ)</span><b style="color: #f0c05a;">{{ $ritMenunggu->count() }}</b></div>
+            @endif
         @endif
         <div class="kartu"><span class="redup">Data Ritasi terakhir</span><b>{{ $ritasiTerakhir ? \Illuminate\Support\Carbon::parse($ritasiTerakhir)->translatedFormat('j M Y') : '–' }}</b></div>
         @unless ($tanah)
@@ -60,7 +63,8 @@
         @endunless
     </div>
 
-    <p class="redup" style="margin: 0 0 12px; font-size: 13px;">@if ($tanah)Daftar No DO yang sudah ada Uang Jalan-nya di Kas UJ tetapi belum ada transaksi Uang Tanah-nya. Galian yang memang tidak bayar tanah (mis. ambil material) bisa disaring lewat baris Galian.@else DO yang sudah ada uang jalannya di Kas UJ tetapi belum bongkar (belum ada di data Ritasi). Begitu surat jalannya masuk, isi Tanggal Bongkar, Tujuan Bongkar,
+    <p class="redup" style="margin: 0 0 12px; font-size: 13px;">@if ($tanah)Daftar No DO yang sudah ada Uang Jalan-nya di Kas UJ tetapi belum ada transaksi Uang Tanah-nya. Galian yang memang tidak bayar tanah (mis. ambil material) bisa disaring lewat baris Galian.
+            Baris <b>tanpa DO · ⏳ menunggu UJ</b> = rit yang sudah bongkar (dari upload surat jalan) tetapi uang jalannya belum diinput — uang tanahnya tetap bisa direkap &amp; dibayar; dicatat lewat No Surat Jalan, dan DO-nya nanti otomatis dianggap sudah bayar tanah.@else DO yang sudah ada uang jalannya di Kas UJ tetapi belum bongkar (belum ada di data Ritasi). Begitu surat jalannya masuk, isi Tanggal Bongkar, Tujuan Bongkar,
             Jenis Tanah & No Surat Jalan lalu klik <b>Simpan bongkar</b> — rit tercatat di Ritasi (aplikasi & sheet) dan DO hilang dari daftar ini.@endif
         Umur dihitung dari tanggal uang jalan pertama DO itu. Klik {{ $tanah ? 'baris' : 'No DO' }} untuk melihat transaksi uang jalannya.</p>
 
@@ -359,6 +363,30 @@
     <div class="kartu gulir" style="padding: 0;">
         <table class="kas" data-saring-kolom="grup">
             <thead><tr><th>@if ($bolehBayar)<input type="checkbox" id="pilih-semua" title="Pilih semua DO yang sedang tampil (hasil saringan)" style="margin-right: 6px; vertical-align: middle;">@endif No DO</th><th>UJ pertama</th><th>Umur</th><th>No Mobil</th><th>Proyek DO</th><th>Driver</th><th>Galian</th>@if ($tanah)<th>Bongkar</th><th>No Surat Jalan</th>@endif<th>Kategori</th><th class="angka">Transaksi</th><th class="angka">Total UJ</th>@if ($bolehBayar)<th class="angka" data-tanpa-saring>Harga tanah</th>@endif</tr></thead>
+            {{-- Rit sudah bongkar tanpa DO (menunggu uang jalan, owner 11 Nov 2026): dipilih dengan kode SJ<id>, uang tanahnya dibayar lewat No Surat Jalan. --}}
+            @foreach ($ritMenunggu as $m)
+                <tbody class="grup rit-menunggu">
+                    <tr class="t">
+                        <td style="white-space: nowrap;">@if ($rbt = $doDirekap[$m->kode()] ?? null)<span class="label kuning" title="Sudah ada di rekap yang menunggu dibayar" style="margin-right: 6px;">{{ $rbt }}</span>@else<input type="checkbox" class="pilih-do" value="{{ $m->kode() }}" data-galian="{{ $m->galian }}" data-total="0" style="margin-right: 6px; vertical-align: middle;">@endif<b style="color: #f0c05a;">tanpa DO</b>
+                            <span class="label kuning" title="Sudah bongkar, uang jalannya belum diinput di Kas UJ — uang tanah dibayar lewat No Surat Jalan">⏳ menunggu UJ</span></td>
+                        <td>–</td>
+                        <td>–</td>
+                        <td>{{ $m->no_mobil }}</td>
+                        <td>{{ $m->tahap }}</td>
+                        <td>{{ $m->sopir ?: '–' }}</td>
+                        <td>{{ $m->galian ?: '–' }}</td>
+                        <td>✓ {{ $m->tanggal->translatedFormat('j M') }}{{ $m->jam ? ' '.$m->jam : '' }}</td>
+                        <td class="i">{{ $m->no_seri }}</td>
+                        <td class="redup">belum ada UJ
+                            <form method="POST" action="{{ route('ritasi.bayar-tanah.menunggu.hapus', $m) }}" style="display: inline;" onsubmit="event.stopPropagation(); return confirm('Hapus rit tanpa DO SJ {{ $m->no_seri }} ({{ $m->no_mobil }}) dari daftar? Pakai ini hanya bila surat jalannya salah / tidak jadi.')">@csrf<button class="tombol-hapus" style="margin-left: 6px;" onclick="event.stopPropagation()">Hapus</button></form></td>
+                        <td class="angka">0</td>
+                        <td class="angka redup">–</td>
+                        @php($tarif = \App\Support\BayarTanah::tarifGalian($m->galian))
+                        <td class="angka"><input type="text" class="harga-tanah angka-input" inputmode="numeric" autocomplete="off" data-do="{{ $m->kode() }}"
+                            value="{{ $tarif ? number_format($tarif, 0, ',', '.') : '' }}" placeholder="isi harga" title="Harga tanah rit ini (isi awal: tarif terakhir galiannya)" style="width: 110px; text-align: right;"></td>
+                    </tr>
+                </tbody>
+            @endforeach
             @forelse ($daftar as $d)
                 <tbody class="grup">
                     <tr class="t ada-bon">
@@ -473,7 +501,7 @@
                 document.getElementById('form-rekap').addEventListener('submit', e => {
                     const dipilih = pilih.filter(c => c.checked);
                     const tanpa = dipilih.filter(c => !harga(c));
-                    if (tanpa.length) { e.preventDefault(); alert(`Harga tanah belum diisi untuk DO ${tanpa.map(c => c.value).join(', ')}.`); return; }
+                    if (tanpa.length) { e.preventDefault(); alert(`Harga tanah belum diisi untuk ${tanpa.map(c => c.value.startsWith('SJ') ? 'rit tanpa DO ' + (c.closest('tr').querySelector('td.i')?.textContent.trim() || c.value) : 'DO ' + c.value).join(', ')}.`); return; }
                     if (!confirm(`Buat rekap bayar tanah ${dipilih.length} DO, total Rp ${dipilih.reduce((s, c) => s + (+harga(c) || 0), 0).toLocaleString('id-ID')}?`)) e.preventDefault();
                 });
                 // Saringan kolom mengubah baris yang tampil → status "pilih semua" ikut diperbarui.

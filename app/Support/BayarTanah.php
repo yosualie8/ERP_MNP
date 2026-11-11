@@ -29,7 +29,29 @@ class BayarTanah
         $catatan = [];
         $galianDipakai = [];
         $kunciAda = array_keys($riwayat);
+        // Rit tanpa DO (menunggu uang jalan) dipilih dengan kode "SJ<id>": dibayar lewat No Surat Jalan (owner 11 Nov 2026).
+        $menunggu = \App\Models\RitasiMenunggu::aktif()->keyBy(fn ($r) => $r->kode());
         foreach (array_unique(array_map('strval', $daftarDo)) as $do) {
+            if (\App\Models\RitasiMenunggu::idDariKode($do) !== null) {
+                $m = $menunggu[$do] ?? null;
+                if (! $m || $m->dibayar) {
+                    $catatan[] = 'Rit tanpa DO '.($m ? "SJ {$m->no_seri} sudah dibayar uang tanahnya ({$m->dibayar})" : "{$do} sudah tercatat di Ritasi atau dihapus").' — dilewati.';
+
+                    continue;
+                }
+                $tempat = $m->galian ? mb_strtolower(trim($m->galian)) : null;
+                $r = $tempat ? ($riwayat[$tempat] ?? null) : null;
+                $detail[] = [
+                    'nama' => $m->sopir, 'keterangan' => trim(($r['keterangan'] ?? ('Uang tanah '.($m->galian ?? ''))).' '.\App\Models\RitasiMenunggu::penanda($m->no_seri)),
+                    'nominal' => ($harga[$do] ?? 0) ?: ($r['nominal'] ?? ''), 'kategori' => 'Uang Tanah',
+                    'jenis_kendaraan' => $m->jenis_kendaraan, 'no_mobil' => $m->no_mobil, 'no_do' => '',
+                ];
+                $catatan[] = "SJ {$m->no_seri} ({$m->no_mobil}, bongkar ".$m->tanggal->translatedFormat('j M').') belum punya DO — uang tanahnya dicatat tanpa No DO dengan penanda '
+                    .\App\Models\RitasiMenunggu::penanda($m->no_seri).' (jangan dihapus); DO-nya nanti otomatis dianggap sudah bayar tanah.';
+                $galianDipakai[$tempat ?? '?'] = $r;
+
+                continue;
+            }
             $d = $belum[$do] ?? null;
             if (! $d) {
                 $catatan[] = "DO {$do} sudah punya transaksi uang tanah (atau tidak ada di Kas UJ) — dilewati.";
@@ -62,6 +84,15 @@ class BayarTanah
             'galian' => $galian,
             'catatan' => $catatan,
         ];
+    }
+
+    /** Tarif uang tanah terakhir galian rit tanpa DO (isi awal kolom Harga tanah), null bila belum ada riwayat. */
+    public static function tarifGalian(?string $galian): ?int
+    {
+        static $riwayat;
+        $riwayat ??= self::riwayat();
+
+        return $galian ? ($riwayat[mb_strtolower(trim($galian))]['nominal'] ?? null) : null;
     }
 
     /** Tarif uang tanah terakhir galian DO itu (isi awal kolom Harga tanah), null bila belum ada riwayat. */
