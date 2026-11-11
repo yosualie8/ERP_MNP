@@ -8,6 +8,9 @@
         .pil-tampil a { padding: 5px 12px; border-radius: 999px; border: 1px solid var(--garis-kuat); color: var(--teks); text-decoration: none; font-size: 13px; }
         .pil-tampil a.aktif { background: var(--aksen); border-color: var(--aksen); color: #fff; }
         a.ps-buka-pdf { white-space: nowrap; text-decoration: none; }
+        .ps-kepala .tombol.mati { opacity: .45; cursor: not-allowed; }
+        td.ps-pdf-sel { white-space: nowrap; font-size: 12px; }
+        td.ps-pdf-sel a + a { margin-left: 8px; }
         table.kas tr.dipilih td { background: color-mix(in srgb, var(--aksen) 18%, transparent); }
         table.kas tbody tr { cursor: pointer; }
         table.kas td.teks { white-space: normal; min-width: 180px; max-width: 320px; font-size: 12px; }
@@ -50,7 +53,7 @@
 
     <p class="redup" style="margin-top: 0;">Dibaca otomatis dari Gmail {{ config('mnp.gmail_email') }} tiap 15 menit: <b>penawaran</b> = lampiran penawaran di email terkirim,
         <b>SPK</b> = lampiran email dari {{ \App\Support\SinkronGmail::DARI_SPK }} (scan, dibaca OCR — <b>cek angkanya</b> dengan PDF-nya).
-        Klik baris → form terisi; <b>📄 Buka PDF</b> membuka dokumennya di tab baru; koreksi bila salah, pilih tahap, lalu <b>Tautkan</b>: omset tahap = jumlah nilai SPK yang ditautkan ke tahap itu.</p>
+        Klik baris → form terisi; tombol <b>📄 PDF SPK</b> dan <b>📄 PDF Penawaran</b> membuka masing-masing PDF di tab baru; koreksi bila salah, pilih tahap, lalu <b>Tautkan</b>: omset tahap = jumlah nilai SPK yang ditautkan ke tahap itu.</p>
 
     @if ($errors->any())
         <div class="pesan galat">{{ $errors->first() }}</div>
@@ -67,7 +70,8 @@
                 <div class="ps-kepala">
                     <h3><span class="ps-lencana" id="f-jenis"></span> <span id="f-judul"></span></h3>
                     <div class="kanan"><span class="meta" id="f-email"></span>
-                        <a class="tombol polos ps-buka-pdf" id="f-pdf" target="_blank" rel="noopener">📄 Buka PDF ↗</a></div>
+                        <a class="tombol polos ps-buka-pdf" id="f-pdf-spk" target="_blank" rel="noopener">📄 PDF SPK ↗</a>
+                        <a class="tombol polos ps-buka-pdf" id="f-pdf-pen" target="_blank" rel="noopener">📄 PDF Penawaran ↗</a></div>
                 </div>
                 <form method="POST" id="ps-form" class="ps-form">
                     @csrf @method('PATCH')
@@ -134,7 +138,8 @@
                                 <td class="teks">@if ($d->tahap)<b>{{ $d->tahap->nama }}</b>@elseif ($d->saranTahap)<span class="redup">usul: {{ $d->saranTahap->nama }}</span>@endif</td>
                                 <td>@if ($d->status === 'ditautkan')<span class="label hijau">Ditautkan</span>@elseif ($d->status === 'diabaikan')<span class="label">Diabaikan</span>@elseif ($d->jenis === 'spk')<span class="label kuning">Belum dicek</span>@else<span class="label">Penawaran</span>@endif
                                     @if ($d->dicek_at && $d->status === 'baru')<div class="redup" style="font-size: 11px;">dikoreksi</div>@endif</td>
-                                <td><a class="ps-buka-pdf" href="{{ route('penawaran-spk.pdf', $d) }}" target="_blank" rel="noopener" title="Buka PDF di tab baru">📄 ↗</a></td>
+                                <td class="ps-pdf-sel">@if ($d->jenis === 'spk')<a class="ps-buka-pdf" href="{{ route('penawaran-spk.pdf', $d) }}" target="_blank" rel="noopener" title="Buka PDF SPK di tab baru">📄 SPK</a>@if ($d->penawaran)<a class="ps-buka-pdf" href="{{ route('penawaran-spk.pdf', $d->penawaran->id) }}" target="_blank" rel="noopener" title="Buka PDF penawaran {{ $d->penawaran->kode }} di tab baru">📄 Pen</a>@endif
+                                    @else<a class="ps-buka-pdf" href="{{ route('penawaran-spk.pdf', $d) }}" target="_blank" rel="noopener" title="Buka PDF penawaran di tab baru">📄 Pen</a>@endif</td>
                             </tr>
                         @empty
                             <tr><td colspan="10" class="redup" style="padding: 20px 14px;">Tidak ada dokumen di tampilan ini.</td></tr>
@@ -199,11 +204,19 @@
                 $('f-dicek').textContent = d.dicek;
                 const p = d.penawaran;
                 $('f-penawaran').innerHTML = p
-                    ? `Merujuk penawaran ${p.kode}: ${p.volume != null ? p.volume.toLocaleString('id-ID') + ' m³ × Rp ' + rp(p.harga) + ' = ' : ''}Rp ${rp(p.nilai)} · <a href="${p.pdf}" target="_blank" rel="noopener" class="ps-buka-pdf">📄 PDF penawaran ↗</a>`
+                    ? `Merujuk penawaran ${p.kode}: ${p.volume != null ? p.volume.toLocaleString('id-ID') + ' m³ × Rp ' + rp(p.harga) + ' = ' : ''}Rp ${rp(p.nilai)}`
                     : (d.kode_penawaran ? `<span class="redup">Merujuk penawaran no. ${d.kode_penawaran} (belum ada di Gmail yang terbaca)</span>` : '');
                 $('ps-kartu-form').hidden = false;
                 kali();
-                $('f-pdf').href = d.pdf;
+                // Dua tombol terpisah: PDF SPK & PDF Penawaran (penawaran yang dirujuk SPK, atau dokumen ini sendiri bila penawaran)
+                const atur = (el, url, judulMati) => {
+                    el.hidden = url === undefined;
+                    if (url) { el.href = url; el.classList.remove('mati'); el.title = 'Buka di tab baru'; }
+                    else { el.removeAttribute('href'); el.classList.add('mati'); el.title = judulMati || ''; }
+                };
+                atur($('f-pdf-spk'), spk ? d.pdf : undefined);
+                atur($('f-pdf-pen'), spk ? (p ? p.pdf : null) : d.pdf,
+                    d.kode_penawaran ? `Penawaran no. ${d.kode_penawaran} belum ada di Gmail yang terbaca` : 'SPK ini belum terhubung ke penawaran');
                 history.replaceState(null, '', location.pathname + '?tampil={{ $tampil }}&pilih=' + id);
             };
             document.querySelectorAll('#ps-tabel tbody tr[data-id]').forEach(r => r.addEventListener('click', () => pilih(r.dataset.id)));
