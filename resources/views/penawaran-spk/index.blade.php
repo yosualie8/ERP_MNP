@@ -7,11 +7,7 @@
         .pil-tampil { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
         .pil-tampil a { padding: 5px 12px; border-radius: 999px; border: 1px solid var(--garis-kuat); color: var(--teks); text-decoration: none; font-size: 13px; }
         .pil-tampil a.aktif { background: var(--aksen); border-color: var(--aksen); color: #fff; }
-        .ps-wadah { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; align-items: start; }
-        @media (max-width: 1100px) { .ps-wadah { grid-template-columns: 1fr; } }
-        .ps-pdf { position: sticky; top: 10px; height: calc(100vh - 30px); padding: 0; overflow: hidden; }
-        .ps-pdf iframe { width: 100%; height: 100%; border: 0; display: block; }
-        .ps-pdf .kosong { padding: 30px; }
+        a.ps-buka-pdf { white-space: nowrap; text-decoration: none; }
         table.kas tr.dipilih td { background: color-mix(in srgb, var(--aksen) 18%, transparent); }
         table.kas tbody tr { cursor: pointer; }
         table.kas td.teks { white-space: normal; min-width: 180px; max-width: 320px; font-size: 12px; }
@@ -22,7 +18,9 @@
         .ps-kepala h3 { margin: 0; font-size: 17px; font-weight: 650; display: flex; align-items: center; gap: 10px; }
         .ps-lencana { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 6px; background: var(--aksen-muda); color: var(--aksen-terang); }
         .ps-lencana.pen { background: rgba(120, 160, 255, .14); color: #9db8ff; }
-        .ps-kepala .meta { font-size: 12px; color: var(--redup); text-align: right; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ps-kepala .meta { font-size: 12px; color: var(--redup); text-align: right; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ps-kepala .kanan { display: flex; align-items: center; gap: 12px; min-width: 0; max-width: 65%; }
+        .ps-kepala .tombol { height: 36px; padding: 0 14px; display: inline-flex; align-items: center; flex-shrink: 0; }
         .ps-form { padding: 6px 20px 18px; }
         .ps-bagian { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px 14px; padding: 14px 0 16px; border-bottom: 1px solid var(--garis); }
         .ps-bagian:last-of-type { border-bottom: 0; }
@@ -51,8 +49,8 @@
     </style>
 
     <p class="redup" style="margin-top: 0;">Dibaca otomatis dari Gmail {{ config('mnp.gmail_email') }} tiap 15 menit: <b>penawaran</b> = lampiran penawaran di email terkirim,
-        <b>SPK</b> = lampiran email dari {{ \App\Support\SinkronGmail::DARI_SPK }} (scan, dibaca OCR — <b>cek angkanya</b> dengan PDF di kanan).
-        Klik baris → PDF tampil di kanan; koreksi bila salah, pilih tahap, lalu <b>Tautkan</b>: omset tahap = jumlah nilai SPK yang ditautkan ke tahap itu.</p>
+        <b>SPK</b> = lampiran email dari {{ \App\Support\SinkronGmail::DARI_SPK }} (scan, dibaca OCR — <b>cek angkanya</b> dengan PDF-nya).
+        Klik baris → form terisi; <b>📄 Buka PDF</b> membuka dokumennya di tab baru; koreksi bila salah, pilih tahap, lalu <b>Tautkan</b>: omset tahap = jumlah nilai SPK yang ditautkan ke tahap itu.</p>
 
     @if ($errors->any())
         <div class="pesan galat">{{ $errors->first() }}</div>
@@ -64,12 +62,12 @@
         @endforeach
     </div>
 
-    <div class="ps-wadah">
-        <div>
+    <div>
             <div class="kartu" id="ps-kartu-form" @if (! $baris->count()) hidden @endif>
                 <div class="ps-kepala">
                     <h3><span class="ps-lencana" id="f-jenis"></span> <span id="f-judul"></span></h3>
-                    <span class="meta" id="f-email"></span>
+                    <div class="kanan"><span class="meta" id="f-email"></span>
+                        <a class="tombol polos ps-buka-pdf" id="f-pdf" target="_blank" rel="noopener">📄 Buka PDF ↗</a></div>
                 </div>
                 <form method="POST" id="ps-form" class="ps-form">
                     @csrf @method('PATCH')
@@ -122,7 +120,7 @@
 
             <div class="kartu gulir" style="padding: 0;">
                 <table class="kas" id="ps-tabel">
-                    <thead><tr><th>Jenis</th><th>Kode</th><th>Tanggal</th><th>Pekerjaan / lokasi</th><th class="angka">Volume</th><th class="angka">Harga</th><th class="angka">Nilai</th><th>Tahap</th><th>Status</th></tr></thead>
+                    <thead><tr><th>Jenis</th><th>Kode</th><th>Tanggal</th><th>Pekerjaan / lokasi</th><th class="angka">Volume</th><th class="angka">Harga</th><th class="angka">Nilai</th><th>Tahap</th><th>Status</th><th>PDF</th></tr></thead>
                     <tbody>
                         @forelse ($baris as $d)
                             <tr data-id="{{ $d->id }}">
@@ -136,19 +134,14 @@
                                 <td class="teks">@if ($d->tahap)<b>{{ $d->tahap->nama }}</b>@elseif ($d->saranTahap)<span class="redup">usul: {{ $d->saranTahap->nama }}</span>@endif</td>
                                 <td>@if ($d->status === 'ditautkan')<span class="label hijau">Ditautkan</span>@elseif ($d->status === 'diabaikan')<span class="label">Diabaikan</span>@elseif ($d->jenis === 'spk')<span class="label kuning">Belum dicek</span>@else<span class="label">Penawaran</span>@endif
                                     @if ($d->dicek_at && $d->status === 'baru')<div class="redup" style="font-size: 11px;">dikoreksi</div>@endif</td>
+                                <td><a class="ps-buka-pdf" href="{{ route('penawaran-spk.pdf', $d) }}" target="_blank" rel="noopener" title="Buka PDF di tab baru">📄 ↗</a></td>
                             </tr>
                         @empty
-                            <tr><td colspan="9" class="redup" style="padding: 20px 14px;">Tidak ada dokumen di tampilan ini.</td></tr>
+                            <tr><td colspan="10" class="redup" style="padding: 20px 14px;">Tidak ada dokumen di tampilan ini.</td></tr>
                         @endforelse
                     </tbody>
                 </table>
             </div>
-        </div>
-
-        <div class="kartu ps-pdf">
-            <iframe id="ps-iframe" title="PDF dokumen" hidden></iframe>
-            <p class="redup kosong" id="ps-kosong">Klik salah satu baris untuk melihat PDF-nya di sini.</p>
-        </div>
     </div>
 
     @php
@@ -170,7 +163,7 @@
         (() => {
             const data = @json($data), pilihAwal = {{ $pilih ?: 'null' }};
             const $ = id => document.getElementById(id);
-            const form = $('ps-form'), iframe = $('ps-iframe');
+            const form = $('ps-form');
             const angka = s => { s = String(s || '').replace(/[^\d.,]/g, ''); if (!s) return null;
                 if (/,\d{1,3}$/.test(s)) s = s.replace(/\./g, '').replace(',', '.'); else if (/^\d{1,3}([.,]\d{3})+$/.test(s)) s = s.replace(/[.,]/g, ''); else s = s.replace(',', '.');
                 const n = parseFloat(s); return isNaN(n) ? null : n; };
@@ -184,7 +177,6 @@
                 el.textContent = `Volume × harga = Rp ${rp(k)}` + (beda ? ` — tidak sama dengan nilai (selisih Rp ${rp(n - k)})` : ' ✓ sama dengan nilai');
             };
             ['f-volume', 'f-harga', 'f-nilai'].forEach(id => $(id).addEventListener('input', kali));
-            const tampilPdf = url => { iframe.hidden = false; $('ps-kosong').hidden = true; if (iframe.dataset.url !== url) { iframe.src = url + '#view=FitH'; iframe.dataset.url = url; } };
             const pilih = id => {
                 const d = data[id]; if (!d) return;
                 document.querySelectorAll('#ps-tabel tr.dipilih').forEach(r => r.classList.remove('dipilih'));
@@ -207,13 +199,11 @@
                 $('f-dicek').textContent = d.dicek;
                 const p = d.penawaran;
                 $('f-penawaran').innerHTML = p
-                    ? `Merujuk <a href="#" id="f-buka-pen">penawaran ${p.kode}</a>: ${p.volume != null ? p.volume.toLocaleString('id-ID') + ' m³ × Rp ' + rp(p.harga) + ' = ' : ''}Rp ${rp(p.nilai)} · <a href="#" id="f-buka-spk">kembali ke PDF SPK</a>`
+                    ? `Merujuk penawaran ${p.kode}: ${p.volume != null ? p.volume.toLocaleString('id-ID') + ' m³ × Rp ' + rp(p.harga) + ' = ' : ''}Rp ${rp(p.nilai)} · <a href="${p.pdf}" target="_blank" rel="noopener" class="ps-buka-pdf">📄 PDF penawaran ↗</a>`
                     : (d.kode_penawaran ? `<span class="redup">Merujuk penawaran no. ${d.kode_penawaran} (belum ada di Gmail yang terbaca)</span>` : '');
-                $('f-buka-pen')?.addEventListener('click', e => { e.preventDefault(); tampilPdf(p.pdf); });
-                $('f-buka-spk')?.addEventListener('click', e => { e.preventDefault(); tampilPdf(d.pdf); });
                 $('ps-kartu-form').hidden = false;
                 kali();
-                tampilPdf(d.pdf);
+                $('f-pdf').href = d.pdf;
                 history.replaceState(null, '', location.pathname + '?tampil={{ $tampil }}&pilih=' + id);
             };
             document.querySelectorAll('#ps-tabel tbody tr[data-id]').forEach(r => r.addEventListener('click', () => pilih(r.dataset.id)));
