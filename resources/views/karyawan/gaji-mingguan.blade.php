@@ -42,6 +42,7 @@
         dialog.atur-hari .kisi-jam { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
         dialog.atur-hari .kisi-jam label { display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; color: var(--redup); }
         dialog.atur-hari .kisi-jam input { width: 100%; box-sizing: border-box; }
+        dialog.atur-hari .kisi-bayar { margin-top: 2px; }
         dialog.atur-hari .kisi-jam input.diedit { border-color: #f0a35a; }
         dialog.atur-hari .kisi-jam small { font-size: 11.5px; min-height: 14px; }
         dialog.atur-hari .kisi-jam small.diedit { color: #f0a35a; }
@@ -210,7 +211,7 @@
             {{-- Pembayaran hari ini (owner 11 Nov 2026): UM & lembur diisi terpisah (kosong = hitungan biasa) + total, wajib alasan; HM / tunjangan mingguan tetap ikut aturannya. --}}
             <div class="blok-jam">
                 <label class="baris">Pembayaran hari ini <span class="redup" style="font-weight: 400;">— kosongkan = hitungan biasa</span></label>
-                <div class="kisi-jam">
+                <div class="kisi-jam kisi-bayar">
                     <label>UM<input type="text" id="ah-bayar" name="bayar" inputmode="numeric" autocomplete="off" class="rupiah-hari"></label>
                     <label>Lembur<input type="text" id="ah-bayar-lembur" name="bayar_lembur" inputmode="numeric" autocomplete="off" class="rupiah-hari"></label>
                 </div>
@@ -352,7 +353,7 @@
                 // Jam absen per jenis: jam berlaku + asli + penanda koreksi.
                 const jam = JSON.parse(td.dataset.jam || '{}');
                 if (BOLEH_JAM) {
-                    form.querySelectorAll('.kisi-jam input').forEach(inp => {
+                    form.querySelectorAll('.kisi-jam input[data-jenis]').forEach(inp => {
                         const y = jam[inp.dataset.jenis], ket = document.getElementById('ah-asli-' + inp.dataset.jenis);
                         inp.value = y ? y.jam : '';
                         inp.dataset.awal = inp.value;
@@ -397,7 +398,7 @@
                 // Jam absen yang berubah dikirim dulu (koreksi), baru keputusan hari.
                 let jamDulu = Promise.resolve();
                 if (BOLEH_JAM) {
-                    const semua = [...form.querySelectorAll('.kisi-jam input')];
+                    const semua = [...form.querySelectorAll('.kisi-jam input[data-jenis]')];
                     const ubah = semua.filter(i => i.value !== i.dataset.awal);
                     const catatanUbah = form.jam_catatan.value !== form.jam_catatan.dataset.awal && semua.some(i => i.classList.contains('diedit'));
                     if (ubah.length || catatanUbah) {
