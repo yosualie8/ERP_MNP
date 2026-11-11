@@ -15,15 +15,45 @@
         table.kas tr.dipilih td { background: color-mix(in srgb, var(--aksen) 18%, transparent); }
         table.kas tbody tr { cursor: pointer; }
         table.kas td.teks { white-space: normal; min-width: 180px; max-width: 320px; font-size: 12px; }
-        .ps-form { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px 10px; }
-        .ps-form label { font-size: 12px; margin: 0 0 3px; display: block; }
-        .ps-form input, .ps-form select, .ps-form textarea { width: 100%; box-sizing: border-box; }
-        .ps-form textarea { min-height: 52px; resize: vertical; font: inherit; font-size: 13px; }
+        /* Form: label kecil abu tebal di atas, kotak isian seragam (satu font, satu ukuran, satu tinggi) */
+        #ps-kartu-form { padding: 0; overflow: hidden; }
+        #ps-kartu-form [hidden] { display: none !important; }
+        .ps-kepala { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid var(--garis); background: var(--kartu-2); }
+        .ps-kepala h3 { margin: 0; font-size: 17px; font-weight: 650; display: flex; align-items: center; gap: 10px; }
+        .ps-lencana { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 6px; background: var(--aksen-muda); color: var(--aksen-terang); }
+        .ps-lencana.pen { background: rgba(120, 160, 255, .14); color: #9db8ff; }
+        .ps-kepala .meta { font-size: 12px; color: var(--redup); text-align: right; max-width: 55%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ps-form { padding: 6px 20px 18px; }
+        .ps-bagian { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px 14px; padding: 14px 0 16px; border-bottom: 1px solid var(--garis); }
+        .ps-bagian:last-of-type { border-bottom: 0; }
+        .ps-bagian > h4 { grid-column: span 6; margin: 0 0 -4px; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--aksen-terang); }
+        .ps-medan { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+        .ps-form label { font-size: 12px; font-weight: 600; color: var(--redup); letter-spacing: .02em; margin: 0; }
+        .ps-form input:not([type=hidden]), .ps-form select, .ps-form textarea {
+            width: 100%; font: inherit; font-size: 14px; line-height: 1.4; color: var(--teks);
+            background: var(--isian); border: 1px solid var(--isian-garis); border-radius: 8px; padding: 9px 12px; height: 40px;
+            transition: border-color .15s, box-shadow .15s; color-scheme: dark;
+        }
+        .ps-form textarea { height: auto; min-height: 64px; resize: vertical; }
+        .ps-form select { padding-right: 30px; text-overflow: ellipsis; }
+        .ps-form input:hover, .ps-form select:hover, .ps-form textarea:hover { border-color: #5a616f; }
+        .ps-form input:focus, .ps-form select:focus, .ps-form textarea:focus { outline: none; border-color: var(--aksen); box-shadow: 0 0 0 3px var(--aksen-muda); background: var(--isian-fokus); }
+        .ps-form input.angka { text-align: right; font-variant-numeric: tabular-nums; }
         .ps-form .l2 { grid-column: span 2; } .ps-form .l3 { grid-column: span 3; } .ps-form .l4 { grid-column: span 4; } .ps-form .l6 { grid-column: span 6; }
-        .ps-form input.angka { text-align: right; }
-        .ps-info { font-size: 12px; margin-top: 3px; }
-        .ps-tombol { grid-column: span 6; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-        .ps-beda { color: var(--merah, #d33); font-weight: 600; }
+        @media (max-width: 700px) { .ps-form .l2, .ps-form .l3, .ps-form .l4 { grid-column: span 6; } }
+        .ps-info { font-size: 12px; color: var(--redup); line-height: 1.45; }
+        .ps-info:empty { display: none; }
+        .ps-cek { font-size: 12px; font-variant-numeric: tabular-nums; padding: 6px 10px; border-radius: 8px; background: var(--kartu-2); color: var(--redup); }
+        .ps-cek:empty { display: none; }
+        .ps-cek.cocok { background: var(--sukses-muda); color: var(--sukses); }
+        .ps-cek.beda { background: var(--merah-muda); color: var(--merah); font-weight: 600; }
+        .ps-catatan-box { font-size: 13px; line-height: 1.5; padding: 10px 12px; border-radius: 8px; background: var(--kartu-2); border-left: 3px solid var(--garis-kuat); color: var(--teks); }
+        .ps-catatan-box:empty { display: none; }
+        .ps-catatan-box.saran { border-left-color: var(--aksen); }
+        .ps-tombol { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; padding-top: 16px; border-top: 1px solid var(--garis); }
+        .ps-tombol .tombol { font-size: 14px; height: 40px; padding: 0 16px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; font-weight: 600; }
+        .ps-tombol .tombol.polos { font-weight: 500; }
+        .ps-tombol .status { margin-left: auto; font-size: 12px; color: var(--redup); }
     </style>
 
     <p class="redup" style="margin-top: 0;">Dibaca otomatis dari Gmail {{ config('mnp.gmail_email') }} tiap 15 menit: <b>penawaran</b> = lampiran penawaran di email terkirim,
@@ -43,25 +73,33 @@
     <div class="ps-wadah">
         <div>
             <div class="kartu" id="ps-kartu-form" @if (! $baris->count()) hidden @endif>
+                <div class="ps-kepala">
+                    <h3><span class="ps-lencana" id="f-jenis"></span> <span id="f-judul"></span></h3>
+                    <span class="meta" id="f-email"></span>
+                </div>
                 <form method="POST" id="ps-form" class="ps-form">
                     @csrf @method('PATCH')
                     <input type="hidden" name="tampil" value="{{ $tampil }}">
-                    <div class="l6" style="display: flex; justify-content: space-between; gap: 10px; align-items: baseline;">
-                        <h3 style="margin: 0;"><span id="f-jenis"></span> <span id="f-judul"></span></h3>
-                        <span class="redup" style="font-size: 12px;" id="f-email"></span>
+                    <div class="ps-bagian">
+                        <h4>Dokumen</h4>
+                        <div class="ps-medan l2"><label for="f-kode">Kode</label><input id="f-kode" name="kode" maxlength="60" autocomplete="off"></div>
+                        <div class="ps-medan l2"><label for="f-nomor">Nomor dokumen</label><input id="f-nomor" name="nomor" maxlength="100" autocomplete="off"></div>
+                        <div class="ps-medan l2"><label for="f-tanggal">Tanggal</label><input id="f-tanggal" name="tanggal" type="date"></div>
+                        <div class="ps-medan l3"><label for="f-pihak" id="f-pihak-l">Pihak</label><input id="f-pihak" name="pihak" maxlength="200" autocomplete="off"></div>
+                        <div class="ps-medan l3"><label for="f-lokasi">Lokasi</label><input id="f-lokasi" name="lokasi" maxlength="250" autocomplete="off"></div>
+                        <div class="ps-medan l6"><label for="f-pekerjaan">Pekerjaan</label><textarea id="f-pekerjaan" name="pekerjaan" maxlength="2000" rows="2"></textarea></div>
                     </div>
-                    <div class="l2"><label for="f-kode">Kode</label><input id="f-kode" name="kode" maxlength="60" autocomplete="off"></div>
-                    <div class="l3"><label for="f-nomor">Nomor dokumen</label><input id="f-nomor" name="nomor" maxlength="100" autocomplete="off"></div>
-                    <div><label for="f-tanggal">Tanggal</label><input id="f-tanggal" name="tanggal" type="date"></div>
-                    <div class="l3"><label for="f-pihak" id="f-pihak-l">Pihak</label><input id="f-pihak" name="pihak" maxlength="200" autocomplete="off"></div>
-                    <div class="l3"><label for="f-lokasi">Lokasi</label><input id="f-lokasi" name="lokasi" maxlength="250" autocomplete="off"></div>
-                    <div class="l6"><label for="f-pekerjaan">Pekerjaan</label><textarea id="f-pekerjaan" name="pekerjaan" maxlength="2000"></textarea></div>
-                    <div class="l2"><label for="f-volume">Volume (m³)</label><input id="f-volume" name="volume" class="angka" inputmode="decimal" autocomplete="off"></div>
-                    <div class="l2"><label for="f-harga">Harga / m³ (Rp)</label><input id="f-harga" name="harga" class="angka" inputmode="numeric" autocomplete="off"></div>
-                    <div class="l2"><label for="f-nilai">Nilai (Rp, belum PPN)</label><input id="f-nilai" name="nilai" class="angka" inputmode="numeric" autocomplete="off">
-                        <div class="ps-info redup" id="f-kali"></div></div>
-                    <div class="l6 ps-info" id="f-penawaran"></div>
-                    <div class="l4" id="f-tahap-w"><label for="f-tahap">Tahap proyek</label>
+                    <div class="ps-bagian">
+                        <h4>Nilai</h4>
+                        <div class="ps-medan l2"><label for="f-volume">Volume (m³)</label><input id="f-volume" name="volume" class="angka" inputmode="decimal" autocomplete="off"></div>
+                        <div class="ps-medan l2"><label for="f-harga">Harga per m³ (Rp)</label><input id="f-harga" name="harga" class="angka" inputmode="numeric" autocomplete="off"></div>
+                        <div class="ps-medan l2"><label for="f-nilai">Nilai (Rp, belum PPN)</label><input id="f-nilai" name="nilai" class="angka" inputmode="numeric" autocomplete="off"></div>
+                        <div class="ps-cek l6" id="f-kali"></div>
+                        <div class="ps-catatan-box l6" id="f-penawaran"></div>
+                    </div>
+                    <div class="ps-bagian">
+                        <h4 id="f-bagian-tahap">Tautan ke tahap</h4>
+                        <div class="ps-medan l4" id="f-tahap-w"><label for="f-tahap">Tahap proyek</label>
                         <select id="f-tahap" name="proyek_tahap_id">
                             <option value="">— pilih tahap —</option>
                             <optgroup label="Sedang berjalan">
@@ -74,15 +112,16 @@
                                     <option value="{{ $t['id'] }}">{{ $t['nama'] }}{{ $t['lokasi'] ? ' — '.$t['lokasi'] : '' }} · {{ $t['status'] }} · omset {{ $t['omset'] ? rp($t['omset']) : 'kosong' }}</option>
                                 @endforeach
                             </optgroup>
-                        </select>
-                        <div class="ps-info redup" id="f-saran"></div></div>
-                    <div class="l2"><label for="f-catatan">Catatan</label><input id="f-catatan" name="catatan" maxlength="500" autocomplete="off"></div>
+                        </select></div>
+                        <div class="ps-medan l2"><label for="f-catatan">Catatan</label><input id="f-catatan" name="catatan" maxlength="500" autocomplete="off"></div>
+                        <div class="ps-catatan-box saran l6" id="f-saran"></div>
+                    </div>
                     <div class="ps-tombol">
                         <button type="submit" name="aksi" value="tautkan" class="tombol" id="b-tautkan">✔ Tautkan ke tahap &amp; isi omset</button>
                         <button type="submit" name="aksi" value="simpan" class="tombol polos">Simpan koreksi</button>
                         <button type="submit" name="aksi" value="abaikan" class="tombol polos" id="b-abaikan" onclick="return confirm('Abaikan dokumen ini? (tidak dihitung ke omset)')">Abaikan</button>
                         <button type="submit" name="aksi" value="kembalikan" class="tombol polos" id="b-kembali">↩ Lepas tautan / kembalikan</button>
-                        <span class="redup" style="font-size: 12px;" id="f-dicek"></span>
+                        <span class="status" id="f-dicek"></span>
                     </div>
                 </form>
             </div>
@@ -144,9 +183,11 @@
             const rp = n => n == null ? '' : Math.round(n).toLocaleString('id-ID');
             const kali = () => {
                 const v = angka($('f-volume').value), h = angka($('f-harga').value), n = angka($('f-nilai').value);
-                if (v == null || h == null) { $('f-kali').textContent = ''; return; }
+                const el = $('f-kali');
+                if (v == null || h == null) { el.textContent = ''; el.className = 'ps-cek l6'; return; }
                 const k = v * h, beda = n != null && Math.abs(k - n) > 1000;
-                $('f-kali').innerHTML = `volume × harga = Rp ${rp(k)}` + (beda ? ` <span class="ps-beda">≠ nilai (selisih ${rp(n - k)})</span>` : ' ✓');
+                el.className = 'ps-cek l6 ' + (beda ? 'beda' : 'cocok');
+                el.textContent = `Volume × harga = Rp ${rp(k)}` + (beda ? ` — tidak sama dengan nilai (selisih Rp ${rp(n - k)})` : ' ✓ sama dengan nilai');
             };
             ['f-volume', 'f-harga', 'f-nilai'].forEach(id => $(id).addEventListener('input', kali));
             const tampilPdf = url => { iframe.hidden = false; $('ps-kosong').hidden = true; if (iframe.dataset.url !== url) { iframe.src = url + '#view=FitH'; iframe.dataset.url = url; } };
@@ -163,7 +204,10 @@
                 $('f-tahap').value = d.tahap ?? '';
                 $('f-saran').textContent = d.tertaut ? 'Sudah ditautkan.' : (d.saran || 'Belum ada usulan tahap — pilih sendiri.');
                 const spk = d.jenis === 'spk';
-                $('f-tahap-w').hidden = !spk; $('b-tautkan').hidden = !spk;
+                $('f-tahap-w').hidden = !spk; $('f-saran').hidden = !spk; $('b-tautkan').hidden = !spk;
+                $('f-bagian-tahap').textContent = spk ? 'Tautan ke tahap' : 'Catatan';
+                $('f-catatan').closest('.ps-medan').className = 'ps-medan ' + (spk ? 'l2' : 'l6');
+                $('f-jenis').classList.toggle('pen', !spk);
                 $('b-tautkan').textContent = d.tertaut ? '✔ Simpan & hitung ulang omset tahap' : '✔ Tautkan ke tahap & isi omset';
                 $('b-abaikan').hidden = d.status === 'diabaikan'; $('b-kembali').hidden = d.status === 'baru';
                 $('f-dicek').textContent = d.dicek;
