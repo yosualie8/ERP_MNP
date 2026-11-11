@@ -114,7 +114,7 @@
             </form>
             <div class="redup" style="font-size: 12.5px; margin-top: 6px;">Kolom: No Mobil (<b>nomor DT</b>, mis. DT 027 — bukan plat nomor), Tanggal Bongkar, Jam Bongkar, Tujuan Bongkar, Jenis Tanah, No Surat Jalan, Galian (bila kosong ditebak dari keterangan UJ), <b>Kubikasi</b> (m³; bila kosong = kubikasi standar jenis kendaraan), <b>Pemilik</b> (kosong / MNP = truk sendiri; nama pemilik lain = truk mitra, No Mobil diisi plat nomor) &amp; Keterangan.
                 Truk mitra tidak dipasangkan ke DO — langsung menjadi rit tanpa DO dengan pemilik itu.
-                Surat jalan tiap DT dipasangkan ke DO belum bongkar DT itu sesuai urutan waktu; bila surat jalan lebih banyak dari DO belum bongkarnya, yang paling akhir ditandai <b>menunggu uang jalan</b> (tidak diisi — upload lagi setelah uang jalannya diinput di Kas UJ). Hasilnya hanya mengisi form di bawah — periksa dulu, lalu klik <b>Simpan bongkar</b>.</div>
+                Surat jalan tiap DT dipasangkan ke DO belum bongkar DT itu sesuai urutan waktu; bila surat jalan lebih banyak dari DO belum bongkarnya, yang paling akhir ditandai <b>menunggu uang jalan</b> (tidak diisi — upload lagi setelah uang jalannya diinput di Kas UJ). Surat jalan yang No Surat Jalan-nya <b>sudah tercatat</b> di Ritasi otomatis dilewati, jadi Excel yang sama boleh diupload ulang. Hasilnya hanya mengisi form di bawah — periksa dulu, lalu klik <b>Simpan bongkar</b>.</div>
             @if ($errors->unggah->any())
                 <div class="pesan galat" style="margin-top: 8px;"><b>Excel belum bisa dipakai:</b>
                     <ul style="margin: 6px 0 0; padding-left: 18px;">@foreach ($errors->unggah->all() as $e)<li>{{ $e }}</li>@endforeach</ul></div>
@@ -122,6 +122,10 @@
             @if ($unggah)
                 <div style="margin-top: 10px;">
                     <b>Hasil upload "{{ $unggah['file'] }}"</b>: {{ $unggah['jumlah'] }} surat jalan, {{ count($unggah['do']) }} DO terisi otomatis{{ ($unggah['mitra'] ?? 0) ? ', '.$unggah['mitra'].' rit truk mitra (lihat tabel Truk mitra di bawah)' : '' }} — <b>belum disimpan</b>.
+                    @if ($unggah['sudah'] ?? 0)
+                        <div style="margin-top: 4px; color: var(--sukses);">✓ <b>{{ $unggah['sudah'] }} surat jalan sudah tercatat di Ritasi — dilewati</b> (dikenali dari No Surat Jalan), hanya surat jalan baru yang diproses.
+                            @if ($unggah['sudah_mitra'] ?? [])<span class="redup">Truk mitra: {{ collect($unggah['sudah_mitra'])->map(fn ($x) => $x['no_seri'].' ('.$x['dt'].')')->implode(', ') }}.</span>@endif</div>
+                    @endif
                     @if ($doUnggah !== null)<a href="{{ route('ritasi.monitor') }}" style="font-size: 13px;">Tampilkan semua DO</a>@endif
                     @include('ritasi.partials.menunggu-uj', ['perDt' => $unggah['per_dt']])
                     <table class="kas" style="margin-top: 6px; font-size: 13px;">
@@ -138,6 +142,11 @@
                                             <div>SJ <b>{{ $x['no_seri'] }}</b> · bongkar {{ \Illuminate\Support\Carbon::parse($x['tanggal'])->translatedFormat('j M') }}{{ $x['jam'] ? ' '.$x['jam'] : '' }} → DO <b>{{ $x['do'] }}</b>
                                                 <span class="redup">({{ ($x['id_uj'] ?? '') ?: 'tanpa ID UJ' }})</span>
                                                 @if ($x['catatan'])<span style="color: #f0c05a;"> ⚠ {{ $x['catatan'] }}</span>@endif</div>
+                                        @endforeach
+                                        @foreach ($p['sudah_ada'] ?? [] as $x)
+                                            <div class="redup">✓ SJ <b>{{ $x['no_seri'] }}</b> · bongkar {{ \Illuminate\Support\Carbon::parse($x['tanggal'])->translatedFormat('j M') }}{{ $x['jam'] ? ' '.$x['jam'] : '' }} → sudah tercatat
+                                                ({{ $x['seri_lama'] !== $x['no_seri'] ? $x['seri_lama'].', ' : '' }}DO {{ $x['do_lama'] ?: '-' }}, {{ $x['tanggal_lama'] ? \Illuminate\Support\Carbon::parse($x['tanggal_lama'])->translatedFormat('j M') : '' }}) — dilewati
+                                                @if ($x['dt_lama'] && $x['dt_lama'] !== $x['dt'])<span style="color: #f0c05a;"> ⚠ tercatat untuk {{ $x['dt_lama'] }}, bukan {{ $x['dt'] }} — periksa nomor surat jalannya</span>@endif</div>
                                         @endforeach
                                         @foreach ($p['menunggu'] ?? [] as $x)
                                             <div style="color: #f0c05a;">⏳ SJ <b>{{ $x['no_seri'] }}</b> · bongkar {{ \Illuminate\Support\Carbon::parse($x['tanggal'])->translatedFormat('j M') }}{{ $x['jam'] ? ' '.$x['jam'] : '' }} → <b>menunggu uang jalan</b> (belum ada DO)</div>

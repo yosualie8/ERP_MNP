@@ -159,9 +159,17 @@ class UnggahBongkar
             return ['isian' => [], 'mitra' => [], 'per_dt' => [], 'galat' => $galat];
         }
 
+        // Surat jalan yang sudah tercatat di Ritasi (owner 11 Nov 2026: Excel yang sama diupload ulang) dilewati — tidak dipasangkan / diisi.
+        foreach (self::sudahAda($sj) as $i => $lama) {
+            $sj[$i]['sudah'] = $lama;
+        }
+        $ringkasSudah = fn ($s) => ['baris' => $s['baris'], 'no_seri' => $s['no_seri'], 'tanggal' => $s['tanggal'], 'jam' => $s['jam'], 'dt' => $s['dt'],
+            'seri_lama' => $s['sudah']->no_seri, 'do_lama' => $s['sudah']->no_do, 'dt_lama' => $s['sudah']->no_lambung, 'tanggal_lama' => $s['sudah']->tanggal];
+        $sudahMitra = collect($sj)->filter(fn ($s) => ! empty($s['sudah']) && ! ValidasiRitasi::milikMnp($s['pemilik'] ?? null))->map($ringkasSudah)->values()->all();
+
         // Truk mitra langsung jadi rit tanpa DO; sisanya (MNP) dipasangkan ke DO.
         $kubikTeks = fn (?float $v) => $v === null ? null : rtrim(rtrim(number_format($v, 2, ',', ''), '0'), ',');
-        $mitra = collect($sj)->reject(fn ($s) => ValidasiRitasi::milikMnp($s['pemilik'] ?? null))
+        $mitra = collect($sj)->reject(fn ($s) => ValidasiRitasi::milikMnp($s['pemilik'] ?? null) || ! empty($s['sudah']))
             ->sortBy(fn ($s) => $s['tanggal']->format('Ymd').($s['jam'] ? str_pad($s['jam'], 8, '0', STR_PAD_LEFT) : '99:99').$s['no_seri'])
             ->map(fn ($s) => ['plat' => $s['dt'], 'pemilik' => $s['pemilik'], 'tanggal' => $s['tanggal']->toDateString(), 'jam' => $s['jam'], 'tahap' => $s['tahap'],
                 'galian' => $s['galian'], 'jenis_tanah' => $s['jenis_tanah'], 'no_seri' => $s['no_seri'], 'keterangan' => $s['keterangan'], 'kubikasi' => $kubikTeks($s['kubikasi'])])
@@ -180,7 +188,19 @@ class UnggahBongkar
             $semuaDt = $belum->filter(fn ($d) => in_array($dt, $d['mobil'], true) && ! isset($terpakai[$d['do']]));
             $doDt = $semuaDt->filter(fn ($d) => ! $galianSj || self::galianSama($galianSj, $d))
                 ->sortBy(fn ($d) => ($d['pertama']?->format('Ymd') ?? '0').str_pad($d['do'], 10, '0', STR_PAD_LEFT))->values();
-            $info = ['dt' => $dt, 'galian' => $galianSj, 'sj' => $daftarSj->count(), 'do_belum' => $doDt->count(), 'pasangan' => [], 'menunggu' => [], 'galat' => null, 'catatan' => []];
+            // 'sj' tetap jumlah semua surat jalan DT itu di Excel (termasuk yang sudah tercatat) — dipakai Sinkron dengan pengajuan.
+            $info = ['dt' => $dt, 'galian' => $galianSj, 'sj' => $daftarSj->count(), 'do_belum' => $doDt->count(), 'pasangan' => [], 'menunggu' => [], 'sudah_ada' => [],
+                'galat' => null, 'catatan' => []];
+            $sudahSj = $daftarSj->filter(fn ($s) => ! empty($s['sudah']))->values();
+            if ($sudahSj->isNotEmpty()) {
+                $daftarSj = $daftarSj->reject(fn ($s) => ! empty($s['sudah']))->values();
+                $info['sudah_ada'] = $sudahSj->map($ringkasSudah)->all();
+                if ($daftarSj->isEmpty()) {
+                    $perDt[] = $info;
+
+                    continue;
+                }
+            }
 
             $lain = $semuaDt->reject(fn ($d) => $doDt->contains('do', $d['do']));
             $sebutLain = fn () => $lain->map(fn ($d) => $d['do'].' ('.(self::galianDo($d) ?? 'galian tidak diketahui').')')->implode(', ');
@@ -243,7 +263,55 @@ class UnggahBongkar
             $perDt[] = $info;
         }
 
-        return ['isian' => $isian, 'mitra' => $mitra, 'per_dt' => $perDt, 'galat' => []];
+        return ['isian' => $isian, 'mitra' => $mitra, 'per_dt' => $perDt, 'sudah_mitra' => $sudahMitra, 'galat' => []];
+    }
+
+    /**
+     * Surat jalan Excel yang sudah tercatat di Ritasi (owner 11 Nov 2026), dikenali dari No Surat Jalan: No Seri sama (tanpa spasi /
+     * nol di depan), atau No Seri itu + akhiran ("LS-2610-1494-Kendal" otomatis, "LS-2611-0407-DT056" ketikan admin) dengan tujuan bongkar
+     * yang sama. Tujuan yang No Seri-nya boleh sama dengan proyek lain (LembarRitasi::SERI_BERAKHIRAN, mis. Kendal) hanya dianggap
+     * sudah ada bila rit lamanya bertujuan sama — nomor tiket Kendal bisa kebetulan sama dengan Jogja. Bila beberapa cocok, rit DT yang sama didahulukan.
+     *
+     * @return array<int, \App\Models\Ritasi> indeks surat jalan → rit lama
+     */
+    public static function sudahAda(array $sj): array
+    {
+        $dasar = collect($sj)->pluck('no_seri')->map(fn ($s) => trim((string) $s))->filter()->unique()->values();
+        if ($dasar->isEmpty()) {
+            return [];
+        }
+        $tahapKunci = fn ($t) => mb_strtolower(trim((string) LembarRitasi::tahapBaku($t)));
+        $lama = collect();
+        foreach ($dasar->chunk(200) as $potong) {
+            $lama = $lama->concat(\App\Models\Ritasi::where(function ($q) use ($potong) {
+                $q->whereIn(\Illuminate\Support\Facades\DB::raw("TRIM(LEADING '0' FROM REPLACE(no_seri, ' ', ''))"), $potong->map(fn ($s) => LembarRitasi::kunciAngka($s))->values()->all());
+                foreach ($potong as $s) {
+                    $q->orWhere('no_seri', 'like', str_replace(['\\', '%', '_'], ['\\\\', '\%', '\_'], $s).'-%');
+                }
+            })->get(['baris', 'tahap', 'no_seri', 'no_do', 'no_lambung', 'tanggal']));
+        }
+        $lama = $lama->map(function ($r) use ($tahapKunci) {
+            $r->kunci_seri = LembarRitasi::kunciAngka($r->no_seri);
+            $r->kunci_tahap = $tahapKunci($r->tahap);
+
+            return $r;
+        });
+
+        $hasil = [];
+        foreach ($sj as $i => $s) {
+            if (! ($k = LembarRitasi::kunciAngka($s['no_seri'] ?? null))) {
+                continue;
+            }
+            $t = $tahapKunci($s['tahap'] ?? null);
+            $bebasLain = isset(LembarRitasi::SERI_BERAKHIRAN[$t]);
+            $calon = $lama->filter(fn ($r) => ($r->kunci_seri === $k && (! $bebasLain || $r->kunci_tahap === $t))
+                || (str_starts_with((string) $r->kunci_seri, $k.'-') && $r->kunci_tahap === $t));
+            if ($calon->isNotEmpty()) {
+                $hasil[$i] = $calon->sortBy(fn ($r) => ($r->no_lambung === ($s['dt'] ?? null) ? 0 : 1).($r->kunci_seri === $k ? 0 : 1))->first();
+            }
+        }
+
+        return $hasil;
     }
 
     /** Angka kubikasi dari sel Excel (22 / 22,5 / "22.5" / "22 m3"); null bila kosong / bukan angka / di luar 0–100. */
