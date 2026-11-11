@@ -2,6 +2,8 @@
     Potongan hutang sopir di Input UJ (owner 4 Nov 2026, App\Support\PotongHutangUj): catatan transfer bank / catatan biaya transfer / keterangan
     yang menyebut "potong" atau "MK" → Valen memilih potongannya masuk ke sopir mana, dari uang jalan DO mana, berapa. Wajib diisi bila ada pemicu,
     atau dicentang "Bukan potongan hutang sopir".
+    MK yang sudah ditandai per surat jalan (owner 11 Nov 2026, App\Models\MuatanKurang): bila sopirnya ada di detail, MK-nya ditampilkan dan —
+    bila ada uang jalan sopir itu yang kurang sebesar MK dari uang jalan biasanya — baris potongan diusulkan otomatis (potong[i][mk]).
 --}}
 @php
     $catatanMutasi = collect($calonMutasi ?? [])->mapWithKeys(fn ($c) => [$c['id'] => trim(($c['catatan'] ?? '').' '.($c['catatan_biaya'] ?? ''))])->filter();
@@ -19,6 +21,7 @@
         <button type="button" class="tombol polos" id="tambah-potong" style="padding: 5px 12px; font-size: 13px;">+ Tambah potongan</button>
     </div>
     <div class="pesan" id="pemicu-potong" style="margin: 8px 0 0; padding: 8px 12px;" hidden></div>
+    <div class="pesan" id="mk-terbuka" style="margin: 8px 0 0; padding: 8px 12px;" hidden></div>
     <p class="redup" style="margin: 6px 0 8px; font-size: 13px;">
         <b>Potong hutang</b> = hutang sopir berkurang, jadi bagian uang jalan DO itu. <b>Muatan kurang (MK)</b> = hutang sopir bertambah karena muatan kurang
         dan langsung lunas karena uang jalan DO itu sudah ditransfer kurang. Tercatat di menu Hutang Supir; ikut terhapus bila transaksi ini dihapus.
@@ -38,9 +41,10 @@
         const CATATAN = @json($catatanMutasi);
         const LAMA = @json($lamaPotong);
         const JENIS = @json(\App\Support\PotongHutangUj::JENIS);
+        const MK = @json($mkTerbuka ?? []);
         const PEMICU = /potong|\bMK\b/i;
         const kartu = document.getElementById('potong-hutang'), daftar = document.getElementById('daftar-potong');
-        const pemicuEl = document.getElementById('pemicu-potong'), labelBukan = document.getElementById('label-bukan');
+        const pemicuEl = document.getElementById('pemicu-potong'), labelBukan = document.getElementById('label-bukan'), mkEl = document.getElementById('mk-terbuka');
         const fmt = n => n ? new Intl.NumberFormat('id-ID').format(+n) : '';
         const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
         let nomor = 0;
@@ -62,7 +66,8 @@
             const tr = document.createElement('tr');
             tr.innerHTML = `<td><select name="potong[${i}][no_do]"></select></td>
                 <td><select name="potong[${i}][jenis]">${Object.entries(JENIS).map(([k, l]) => `<option value="${k}">${esc(l)}</option>`).join('')}</select></td>
-                <td><input type="text" name="potong[${i}][sopir]" list="daftar-nama" autocomplete="off" placeholder="nama sopir (bawaan: nama di baris DO)"></td>
+                <td><input type="text" name="potong[${i}][sopir]" list="daftar-nama" autocomplete="off" placeholder="nama sopir (bawaan: nama di baris DO)">
+                    <input type="hidden" name="potong[${i}][mk]"><div class="redup ket-mk" style="font-size: 12px; margin-top: 2px;" hidden></div></td>
                 <td><input type="text" name="potong[${i}][nominal]" class="angka-input rupiah" inputmode="numeric" autocomplete="off"></td>
                 <td><button type="button" class="hapus" title="Hapus potongan">×</button></td>`;
             daftar.appendChild(tr);
@@ -71,17 +76,85 @@
             tr.querySelector('[name$="[jenis]"]').value = isi.jenis || 'hutang';
             sopir.value = isi.sopir || '';
             nominal.value = fmt(String(isi.nominal ?? '').replace(/\D/g, ''));
+            pasangMk(tr, isi.mk);
             sel.addEventListener('focus', () => isiPilihan(sel));
             sel.addEventListener('change', () => { if (!sopir.value) sopir.value = sel.selectedOptions[0]?.dataset.nama || ''; });
             nominal.addEventListener('input', () => { const d = nominal.value.replace(/\D/g, ''); nominal.value = fmt(d); });
-            tr.querySelector('.hapus').addEventListener('click', () => { tr.remove(); periksa(); });
+            tr.querySelector('.hapus').addEventListener('click', () => {
+                // MK yang barisnya dihapus Valen tidak diusulkan otomatis lagi (tetap tampil di daftar MK + tombol).
+                idMk(tr).forEach(id => mkDitolak.add(id));
+                tr.remove(); periksa();
+            });
             return tr;
         };
+
+        // ── MK belum dipotong (owner 11 Nov 2026) ──
+        const mkDitolak = new Set();
+        const kunciNama = n => String(n || '').trim().replace(/\s+/g, ' ').toUpperCase();
+        const idMk = tr => (tr.querySelector('[name$="[mk]"]')?.value || '').split(',').filter(Boolean).map(Number);
+        const mkTerpasang = () => new Set([...daftar.querySelectorAll('[name$="[mk]"]')].flatMap(x => x.value.split(',').filter(Boolean).map(Number)));
+        function pasangMk(tr, ids) {
+            const daftarId = String(ids || '').split(',').filter(Boolean).map(Number);
+            tr.querySelector('[name$="[mk]"]').value = daftarId.join(',');
+            const ket = tr.querySelector('.ket-mk'), pilih = MK.filter(m => daftarId.includes(m.id));
+            ket.hidden = !pilih.length;
+            ket.textContent = pilih.length ? 'MK surat jalan ' + pilih.map(m => `${m.no_seri} (${m.tanggal})`).join(', ') : '';
+            if (pilih.length) tr.querySelector('[name$="[jenis]"]').value = 'muatan';
+        }
+        const usulMk = () => {
+            const uj = barisUj(), sudah = mkTerpasang();
+            const perSopir = {};
+            MK.forEach(m => {
+                const baris = uj.filter(b => m.alias.includes(kunciNama(b.nama)));
+                if (baris.length) (perSopir[m.sopir] ??= {mk: [], baris}).mk.push(m);
+            });
+            let html = '';
+            Object.entries(perSopir).forEach(([sopir, {mk, baris}]) => {
+                const buka = mk.filter(m => !sudah.has(m.id));
+                // Usulan otomatis: uang jalan sopir ini yang kurang sebesar MK (satu MK, atau semua MK-nya sekaligus) dari uang jalan biasanya.
+                const calon = buka.filter(m => !mkDitolak.has(m.id));
+                const maks = Math.max(...baris.map(b => +b.nominal || 0));
+                const tarif = mk[0].tarif || (baris.length > 1 ? maks : 0);
+                const paket = [...calon.map(m => [m]), ...(calon.length > 1 ? [calon] : [])];
+                for (const p of paket) {
+                    const jml = p.reduce((a, m) => a + m.nominal, 0);
+                    const b = tarif ? baris.find(x => +x.nominal === tarif - jml && ![...daftar.children].some(tr => tr.querySelector('select').value === x.do && idMk(tr).length)) : null;
+                    if (!b) continue;
+                    // Baris potongan MK tanpa tautan untuk DO itu (mis. dari catatan "potong MK") dipakai; selain itu baris baru.
+                    const ada = [...daftar.children].find(tr => tr.querySelector('select').value === b.do && !idMk(tr).length && tr.querySelector('[name$="[jenis]"]').value === 'muatan');
+                    const tr = ada || tambah({no_do: b.do, jenis: 'muatan', sopir: b.nama, nominal: jml});
+                    tr.querySelector('[name$="[nominal]"]').value = fmt(jml);
+                    pasangMk(tr, p.map(m => m.id).join(','));
+                    p.forEach(m => sudah.add(m.id));
+                    break;
+                }
+                const sisa = mk.filter(m => !sudah.has(m.id));
+                html += `<div>✂️ <b>${esc(sopir)}</b> punya MK belum dipotong: ` + mk.map(m => sudah.has(m.id)
+                    ? `<span style="color: var(--sukses);">✓ SJ ${esc(m.no_seri)} (${esc(m.tanggal)}) Rp${fmt(m.nominal)} — dipotong di baris potongan</span>`
+                    : `SJ ${esc(m.no_seri)} (${esc(m.tanggal)}) Rp${fmt(m.nominal)} <button type="button" class="tombol polos" data-mk="${m.id}" style="padding: 1px 8px; font-size: 12px;">Potong di uang jalan ini</button>`).join(' · ')
+                    + (sisa.length ? ' <span class="redup">— bila transfer kali ini tidak dipotong, biarkan; MK tetap di hutang & diusulkan lagi berikutnya.</span>' : '') + '</div>';
+            });
+            mkEl.hidden = !html;
+            mkEl.innerHTML = html;
+        };
+        mkEl.addEventListener('click', e => {
+            const id = +e.target.closest('[data-mk]')?.dataset.mk;
+            const m = MK.find(x => x.id === id);
+            if (!m) return;
+            const b = barisUj().filter(x => m.alias.includes(kunciNama(x.nama)));
+            // DO bawaan: satu-satunya uang jalan sopir itu, atau satu-satunya yang kurang dari uang jalan biasanya; selain itu Valen memilih.
+            const kurang = b.filter(x => m.tarif && +x.nominal < m.tarif);
+            const tr = tambah({no_do: b.length === 1 ? b[0].do : (kurang.length === 1 ? kurang[0].do : ''), jenis: 'muatan', sopir: b[0]?.nama || m.sopir, nominal: m.nominal});
+            pasangMk(tr, String(id));
+            periksa();
+            tr.querySelector('select').focus();
+        });
         document.getElementById('tambah-potong').addEventListener('click', () => tambah().querySelector('select').focus());
 
         // Pemicu: catatan transfer bank (+ biaya transfer) yang dipilih + keterangan detail.
         let saranDipakai = false;
         const periksa = () => {
+            usulMk();
             const idM = document.getElementById('jago_mutasi_id')?.value;
             const teks = [CATATAN[idM] || '', ...[...document.querySelectorAll('#daftar-bon [data-nama=keterangan]')].map(x => x.value)].filter(t => PEMICU.test(t));
             const ada = teks.length > 0;

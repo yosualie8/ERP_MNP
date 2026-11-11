@@ -126,6 +126,11 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/potongan-muatan', [\App\Http\Controllers\PotonganMuatanController::class, 'index'])->name('potongan-muatan.index');
     Route::post('/potongan-muatan/aturan', [\App\Http\Controllers\PotonganMuatanController::class, 'aturan'])->name('potongan-muatan.aturan');
     Route::post('/potongan-muatan/catat', [\App\Http\Controllers\PotonganMuatanController::class, 'catat'])->name('potongan-muatan.catat');
+    // Muatan kurang (MK) per surat jalan (owner 11 Nov 2026) — nominal hanya bisa diubah hak 'mk-ubah-nominal' (Valen, Eddy) & Super Admin.
+    Route::get('/muatan-kurang', [\App\Http\Controllers\MuatanKurangController::class, 'index'])->name('mk.index');
+    Route::post('/muatan-kurang', [\App\Http\Controllers\MuatanKurangController::class, 'tandai'])->name('mk.tandai');
+    Route::post('/muatan-kurang/{mk}/nominal', [\App\Http\Controllers\MuatanKurangController::class, 'ubah'])->name('mk.ubah');
+    Route::post('/muatan-kurang/{mk}/hapus', [\App\Http\Controllers\MuatanKurangController::class, 'hapus'])->name('mk.hapus');
     Route::get('/absen-mandor', [\App\Http\Controllers\AbsenMandorController::class, 'index'])->name('absen-mandor.index');
     Route::post('/absen-mandor', [\App\Http\Controllers\AbsenMandorController::class, 'simpan'])->name('absen-mandor.simpan');
     Route::post('/absen-mandor/tambah', [\App\Http\Controllers\AbsenMandorController::class, 'tambah'])->name('absen-mandor.tambah');

@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\DB;
  *  - Potong hutang: hutang sopir berkurang, menjadi bagian uang jalan DO itu (buku: jenis "pakai" peruntukan "uj").
  *  - Muatan kurang (MK, sopir dinilai lalai muatan kurang): hutang sopir bertambah (jenis "muatan") dan langsung lunas karena uang jalan
  *    DO itu sudah ditransfer kurang sebesar potongannya (jenis "pakai" "uj") — uang jalan DO tetap utuh, sopir menanggung potongannya.
+ *    MK yang sudah ditandai per surat jalan (owner 11 Nov 2026, App\Models\MuatanKurang — hutangnya sudah bertambah saat ditandai)
+ *    cukup dilunasi: hanya "pakai" "uj", MK-nya tertaut (pakai_id). Form mengusulkannya otomatis (MK belum dipotong + transfer kurang).
  * Catatan buku ditandai "[UJ-xxxxx]" (ID UJ baris uang jalannya) → ikut terhapus bila transaksi UJ-nya dihapus.
  * Catatan bank / keterangan yang menyebut "potong" / "MK" wajib diisi potongannya, atau dinyatakan bukan potongan hutang.
  */
@@ -52,6 +54,7 @@ class PotongHutangUj
         $siap = [];
         $perSopir = [];
         $perDo = [];
+        $mkDipakai = [];
         foreach ($baris as $i => $p) {
             $no = 'Potongan hutang baris '.($i + 1).': ';
             $jenis = $p['jenis'] ?? '';
@@ -86,7 +89,15 @@ class PotongHutangUj
             if ($jenis === 'hutang') {
                 $perSopir[$sopir] = ($perSopir[$sopir] ?? 0) + $nominal;
             }
-            $siap[] = ['detail' => $idx, 'jenis' => $jenis, 'sopir' => $sopir, 'nominal' => $nominal, 'no_do' => ltrim(trim((string) $d['no_do']), "`'"), 'no_mobil' => $d['no_mobil']];
+            $mk = [];
+            if ($jenis === 'muatan') {
+                $mk = self::pilihMk($p['mk'] ?? null, $sopir, $nominal, $mkDipakai);
+                if (is_string($mk)) {
+                    return $no.$mk;
+                }
+                $mkDipakai = [...$mkDipakai, ...$mk];
+            }
+            $siap[] = ['detail' => $idx, 'jenis' => $jenis, 'sopir' => $sopir, 'nominal' => $nominal, 'no_do' => ltrim(trim((string) $d['no_do']), "`'"), 'no_mobil' => $d['no_mobil'], 'mk' => $mk];
         }
         foreach ($perSopir as $s => $n) {
             $sisa = SaldoSopir::sisa($s);
@@ -96,6 +107,36 @@ class PotongHutangUj
         }
 
         return $siap;
+    }
+
+    /**
+     * MK yang dilunasi potongan muatan ini (owner 11 Nov 2026, App\Models\MuatanKurang): MK pilihan Valen (id dipisah koma), atau otomatis
+     * MK belum dipotong sopir itu yang nominalnya sama (paling lama dulu) / semua MK-nya bila jumlahnya sama. Tidak ada yang cocok = MK tanpa
+     * tanda di Monitor Ritasi — dicatat seperti sebelumnya (hutang bertambah + langsung lunas).
+     *
+     * @param  int[]  $sudah  MK yang sudah dipakai baris potongan lain di transaksi ini
+     * @return int[]|string
+     */
+    private static function pilihMk(?string $pilihan, string $sopir, int $nominal, array $sudah): array|string
+    {
+        $buka = \App\Models\MuatanKurang::whereNull('pakai_id')->where('sopir', $sopir)->whereNotIn('id', $sudah ?: [0])->orderBy('tanggal')->orderBy('id')->get();
+        $id = array_values(array_unique(array_filter(array_map('intval', explode(',', (string) $pilihan)))));
+        if ($id) {
+            $pilih = $buka->whereIn('id', $id);
+            if ($pilih->count() !== count($id)) {
+                return 'MK yang dipilih sudah dipotong atau bukan milik '.$sopir.'. Muat ulang halaman lalu pilih lagi.';
+            }
+            if ((int) $pilih->sum('nominal') !== $nominal) {
+                return 'nominal potongan '.rp($nominal).' tidak sama dengan MK yang dipilih ('.rp((int) $pilih->sum('nominal')).', surat jalan '.$pilih->pluck('no_seri')->implode(', ').').';
+            }
+
+            return $pilih->pluck('id')->all();
+        }
+        if ($satu = $buka->firstWhere('nominal', $nominal)) {
+            return [$satu->id];
+        }
+
+        return $buka->isNotEmpty() && (int) $buka->sum('nominal') === $nominal ? $buka->pluck('id')->all() : [];
     }
 
     /**
@@ -115,7 +156,13 @@ class PotongHutangUj
                 $dasar = ['no_do' => $x['no_do'], 'no_mobil' => $x['no_mobil'], 'nama' => $x['sopir'], 'sopir' => $x['sopir'], 'tanggal' => $input['tanggal']->toDateString(),
                     'nominal' => $x['nominal'], 'user_id' => $user];
                 $buat = [];
-                if ($x['jenis'] === 'muatan') {
+                $mk = collect();
+                if ($x['jenis'] === 'muatan' && $x['mk']) {
+                    // MK sudah ditandai (hutang sudah bertambah saat ditandai) → cukup dilunasi dari uang jalan DO ini.
+                    $mk = \App\Models\MuatanKurang::whereIn('id', $x['mk'])->get();
+                    $buat[] = [...$dasar, 'jenis' => 'pakai', 'peruntukan' => 'uj', 'keterangan' => "[{$idUj}] Potongan muatan kurang (MK) surat jalan ".$mk->pluck('no_seri')->implode(', ')
+                        ." lunas: uang jalan DO {$x['no_do']} ditransfer kurang ".rp($x['nominal'])];
+                } elseif ($x['jenis'] === 'muatan') {
                     $buat[] = [...$dasar, 'jenis' => 'muatan', 'no_do' => null, 'keterangan' => "[{$idUj}] Muatan kurang (MK) — dipotong dari uang jalan DO {$x['no_do']}"];
                     $buat[] = [...$dasar, 'jenis' => 'pakai', 'peruntukan' => 'uj', 'keterangan' => "[{$idUj}] Potongan muatan kurang (MK) lunas: uang jalan DO {$x['no_do']} ditransfer kurang ".rp($x['nominal'])];
                 } else {
@@ -126,8 +173,11 @@ class PotongHutangUj
                     KasRiwayat::create(['aksi' => 'uj-alih-pakai', 'lembar' => 'Kas UJ', 'baris_awal' => 0, 'baris_akhir' => 0,
                         'ringkasan' => mb_strimwidth("Hutang sopir {$x['sopir']} (Input UJ): {$isi['keterangan']} Rp ".number_format($x['nominal'], 0, ',', '.'), 0, 490, '…'),
                         'isi' => $p->toArray(), 'user_id' => $user]);
+                    if ($mk->isNotEmpty()) {
+                        \App\Models\MuatanKurang::whereIn('id', $mk->pluck('id'))->update(['pakai_id' => $p->id, 'id_uj' => $idUj]);
+                    }
                 }
-                $teks[] = self::JENIS[$x['jenis']].' '.$x['sopir'].' '.rp($x['nominal']).' (DO '.$x['no_do'].')';
+                $teks[] = self::JENIS[$x['jenis']].' '.$x['sopir'].' '.rp($x['nominal']).' (DO '.$x['no_do'].')'.($mk->isNotEmpty() ? ' — MK surat jalan '.$mk->pluck('no_seri')->implode(', ').' lunas' : '');
             }
         });
         SaldoSopir::lupakan();
@@ -142,8 +192,11 @@ class PotongHutangUj
         if (! $idUj) {
             return 0;
         }
-        $n = UjPengalihan::whereIn('jenis', ['pakai', 'muatan'])
-            ->where(fn ($q) => collect($idUj)->each(fn ($id) => $q->orWhere('keterangan', 'like', '['.$id.']%')))->delete();
+        $milik = UjPengalihan::whereIn('jenis', ['pakai', 'muatan'])
+            ->where(fn ($q) => collect($idUj)->each(fn ($id) => $q->orWhere('keterangan', 'like', '['.$id.']%')))->pluck('id')->all();
+        // MK (Monitor Ritasi) yang dilunasi transaksi ini kembali "belum dipotong".
+        \App\Models\MuatanKurang::whereIn('pakai_id', $milik ?: [0])->update(['pakai_id' => null, 'id_uj' => null]);
+        $n = UjPengalihan::whereIn('id', $milik ?: [0])->delete();
         SaldoSopir::lupakan();
 
         return $n;

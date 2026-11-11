@@ -180,6 +180,8 @@ class RitasiController extends Controller
             return back()->withInput()->with('error', 'Gagal menulis ke sheet: '.$e->getMessage());
         }
         $this->catatTemuan($temuan, $rit, $request->user()->id);
+        // Muatan kurang (owner 11 Nov 2026): DO yang dicentang MK → hutang sopir bertambah (MuatanKurang).
+        $pesanMk = $this->tandaiMkBongkar($data['bongkar'] ?? [], $urutDo, $rit, $request->user()->id);
         $ringkas = count($rit).' rit dari Monitor Ritasi'.($urutDo ? ' · DO '.implode(', ', $urutDo) : '')
             .($mitra->isNotEmpty() ? ' · '.$mitra->count().' rit truk mitra ('.$mitra->pluck('pemilik')->unique()->implode(', ').')' : '')
             .($akhiran ? ' · No Seri dobel diberi akhiran: '.collect($akhiran)->map(fn ($x) => "{$x[0]} → {$x[1]}")->implode(', ') : '');
@@ -188,7 +190,50 @@ class RitasiController extends Controller
         $tanpaHarga = collect($rit)->keys()->filter(fn ($i) => ! $rit[$i]['harga_jual'])->map($keDo);
 
         return back()->with('success', 'Tercatat bongkar & ditulis ke sheet Ritasi baris '.$hasil['baris_awal'].'–'.$hasil['baris_akhir'].': '.$ringkas.'.'
-            .($tanpaHarga->isNotEmpty() ? ' Harga jual belum ditemukan dari riwayat untuk '.$tanpaHarga->implode(', ').' — lengkapi lewat menu Ritasi → Edit.' : ''));
+            .($tanpaHarga->isNotEmpty() ? ' Harga jual belum ditemukan dari riwayat untuk '.$tanpaHarga->implode(', ').' — lengkapi lewat menu Ritasi → Edit.' : '').$pesanMk);
+    }
+
+    /**
+     * Tanda MK dari Simpan bongkar: rit DO yang dicentang MK (sesudah tertulis di Ritasi) → MuatanKurang nominal bawaan.
+     *
+     * @param  array<string, array>  $bongkar  isian form (bongkar[DO][mk])
+     * @param  string[]  $urutDo  DO sesuai urutan $rit
+     */
+    private function tandaiMkBongkar(array $bongkar, array $urutDo, array $rit, int $userId): string
+    {
+        $ok = [];
+        $gagal = [];
+        foreach ($urutDo as $i => $do) {
+            if (empty($bongkar[$do]['mk']) || ! isset($rit[$i])) {
+                continue;
+            }
+            $r = $rit[$i];
+            $mk = \App\Models\MuatanKurang::tandai(['no_seri' => $r['no_seri'], 'no_do' => $do, 'no_mobil' => $r['no_lambung'], 'sopir' => $r['driver'],
+                'tanggal' => $r['tanggal'], 'tahap' => $r['tahap'], 'galian' => $r['galian']], \App\Models\MuatanKurang::NOMINAL, null, $userId);
+            is_string($mk) ? $gagal[] = "DO {$do}: {$mk}" : $ok[] = "{$mk->no_seri} ({$mk->sopir})";
+        }
+
+        return ($ok ? ' MK Rp'.rp(\App\Models\MuatanKurang::NOMINAL).' tercatat ke Hutang Supir: '.implode(', ', $ok).'.' : '')
+            .($gagal ? ' MK gagal — '.implode('; ', $gagal).' (tandai lewat menu Muatan Kurang).' : '');
+    }
+
+    /**
+     * Tanda MK dari upload Excel untuk surat jalan yang tidak lewat Simpan bongkar: sudah tercatat di Ritasi, atau menunggu uang jalan
+     * (sudah disimpan di ritasi_menunggu). Surat jalan yang dipasangkan ke DO cukup tercentang di form (dicatat saat Simpan bongkar).
+     */
+    private function tandaiMkUnggah(array $perDt, array $sj, int $userId): string
+    {
+        $baris = collect($perDt)->flatMap(fn ($d) => collect([...($d['menunggu'] ?? []), ...($d['sudah_ada'] ?? [])])->pluck('baris'))->filter()->all();
+        $ok = [];
+        foreach (collect($sj)->filter(fn ($s) => ! empty($s['mk']) && in_array($s['baris'], $baris, true)) as $s) {
+            $rit = \App\Models\MuatanKurang::cariRit((string) $s['no_seri'])
+                ->first(fn ($r) => \App\Models\MuatanKurang::kunciSeri($r['no_seri']) === \App\Models\MuatanKurang::kunciSeri($s['no_seri']) && (! $r['no_mobil'] || $r['no_mobil'] === $s['dt']));
+            if ($rit && ! $rit['mk'] && ($mk = \App\Models\MuatanKurang::tandai($rit, \App\Models\MuatanKurang::NOMINAL, null, $userId)) instanceof \App\Models\MuatanKurang) {
+                $ok[] = "{$mk->no_seri} ({$mk->sopir})";
+            }
+        }
+
+        return $ok ? ' MK tercatat ke Hutang Supir: '.implode(', ', $ok).'.' : '';
     }
 
     /**
@@ -217,6 +262,7 @@ class RitasiController extends Controller
         $menunggu = collect($hasil['per_dt'])->sum(fn ($d) => count($d['menunggu']));
         // Rit menunggu uang jalan disimpan → tampil di menu Bayar Tanah (uang tanahnya bisa dibayar lewat No Surat Jalan).
         \App\Models\RitasiMenunggu::simpanDariUnggah($hasil['per_dt'], $sj, $request->user()->id);
+        $pesanMk = $this->tandaiMkUnggah($hasil['per_dt'], $sj, $request->user()->id);
         $sudah = collect($hasil['per_dt'])->sum(fn ($d) => count($d['sudah_ada'])) + count($hasil['sudah_mitra']);
         KasRiwayat::create(['aksi' => 'rit-unggah', 'lembar' => 'Ritasi', 'baris_awal' => 0, 'baris_akhir' => 0, 'user_id' => $request->user()->id,
             'ringkasan' => mb_strimwidth("Upload surat jalan \"{$nama}\": ".count($sj).' surat jalan, '.count($hasil['isian']).' DO terisi'
@@ -231,7 +277,8 @@ class RitasiController extends Controller
         return redirect()->route('ritasi.monitor', ['unggah' => 1])
             ->withInput(['bongkar' => $hasil['isian'], 'mitra' => $hasil['mitra']])
             ->with('unggah_bongkar', ['file' => $nama, 'jumlah' => count($sj), 'per_dt' => $hasil['per_dt'], 'do' => array_map('strval', array_keys($hasil['isian'])),
-                'mitra' => count($hasil['mitra']), 'menunggu' => $menunggu, 'sudah' => $sudah, 'sudah_mitra' => $hasil['sudah_mitra']]);
+                'mitra' => count($hasil['mitra']), 'menunggu' => $menunggu, 'sudah' => $sudah, 'sudah_mitra' => $hasil['sudah_mitra']])
+            ->with('success', trim($pesanMk) ?: null);
     }
 
     /**

@@ -123,6 +123,8 @@ class UjController extends Controller
             // Pengajuan UJ: saldo per SOPIR (UJ yang dijadikan saldo, belum terpakai) dipotong otomatis; DO lama tidak boleh dipotong lagi
             'saldoSopir' => \App\Support\SaldoSopir::perSopir()->map(fn ($s) => (int) round($s['saldo']))->filter(fn ($v) => $v > 0)->all(),
             'doLamaSopir' => \App\Support\SaldoSopir::doLama(),
+            // MK belum dipotong (owner 11 Nov 2026): diusulkan otomatis di Potongan hutang sopir bila uang jalan sopir itu ditransfer kurang.
+            'mkTerbuka' => \App\Models\MuatanKurang::terbukaUntukForm(),
             // DO uang jalan per DT 14 hari terakhir: pilihan sekali klik di kolom No DO, supaya DO tidak diketik ulang (owner 27 Okt 2026).
             'doDt' => $this->doPerDt(),
             // Master dari mutasi Jago (owner 28 Okt 2026): transfer bank kantong Uang Jalan DT yang belum diinput.

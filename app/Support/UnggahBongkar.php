@@ -31,12 +31,14 @@ class UnggahBongkar
         'kubikasi' => ['kubikasi', 'kubikasi (m3)', 'kubikasi (m³)', 'kubikasi m3', 'kubik', 'volume', 'm3', 'm³'],
         'pemilik' => ['pemilik', 'nama pemilik', 'pemilik truk', 'pemilik kendaraan'],
         'keterangan' => ['keterangan', 'catatan'],
+        // Muatan kurang (owner 11 Nov 2026): isi "MK" / "ya" / "v" / "1" bila surat jalan dinyatakan MK.
+        'mk' => ['mk', 'muatan kurang', 'mk (muatan kurang)'],
     ];
 
     /** DO yang UJ-nya lebih dari sekian hari sebelum bongkar dianggap tertinggal lama (dipakai terakhir, ditandai). */
     public const HARI_LAMA = 30;
 
-    public const JUDUL_TEMPLAT = ['No Mobil', 'Tanggal Bongkar', 'Jam Bongkar', 'Tujuan Bongkar', 'Jenis Tanah', 'No Surat Jalan', 'Galian', 'Kubikasi', 'Pemilik', 'Keterangan'];
+    public const JUDUL_TEMPLAT = ['No Mobil', 'Tanggal Bongkar', 'Jam Bongkar', 'Tujuan Bongkar', 'Jenis Tanah', 'No Surat Jalan', 'Galian', 'Kubikasi', 'Pemilik', 'Keterangan', 'MK'];
 
     /** @return array<int, array> baris surat jalan (baris = nomor baris Excel) */
     public static function baca(UploadedFile $file): array
@@ -106,6 +108,7 @@ class UnggahBongkar
                 'kubikasi' => self::kubik($sel('kubikasi')), 'kubikasi_asli' => $teks('kubikasi'),
                 // Kosong = MNP (truk sendiri).
                 'pemilik' => $teks('pemilik'),
+                'mk' => self::yaMk($teks('mk')),
             ];
         }
 
@@ -242,7 +245,7 @@ class UnggahBongkar
                 $isian[$d['do']] = [
                     'tanggal' => $s['tanggal']->toDateString(), 'jam' => $s['jam'], 'tahap' => $s['tahap'], 'galian' => $s['galian'],
                     'jenis_tanah' => $s['jenis_tanah'], 'no_seri' => $s['no_seri'], 'keterangan' => $s['keterangan'],
-                    'kubikasi' => $kubikTeks($s['kubikasi']), 'pemilik' => $s['pemilik'],
+                    'kubikasi' => $kubikTeks($s['kubikasi']), 'pemilik' => $s['pemilik'], 'mk' => ! empty($s['mk']) ? '1' : null,
                 ];
                 // Galian wajib saat simpan: dari Excel, atau tebakan dari keterangan UJ DO itu.
                 $galian = $s['galian'] ?? self::galianDo($d);
@@ -315,6 +318,12 @@ class UnggahBongkar
     }
 
     /** Angka kubikasi dari sel Excel (22 / 22,5 / "22.5" / "22 m3"); null bila kosong / bukan angka / di luar 0–100. */
+    /** Kolom MK Excel: "MK", "ya", "y", "v", "x", "1", "✓" = muatan kurang. */
+    public static function yaMk(?string $v): bool
+    {
+        return (bool) preg_match('/^(mk|ya|y|v|x|1|✓|✔|true)$/iu', trim((string) $v));
+    }
+
     public static function kubik(mixed $v): ?float
     {
         if (is_int($v) || is_float($v)) {

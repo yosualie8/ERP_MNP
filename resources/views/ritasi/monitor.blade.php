@@ -116,7 +116,7 @@
                 {{-- Sesudah upload: batalkan baris Pengajuan UJ yang DO-nya tidak ada di data bongkar (owner 22 Okt 2026). --}}
                 @if (\App\Support\Fitur::pengajuanUj())<a href="{{ route('ritasi.monitor.sinkron') }}" class="tombol polos" style="padding: 6px 12px; margin-left: auto;" title="Bandingkan upload surat jalan dengan satu Pengajuan UJ, batalkan DO yang tidak bongkar">🔄 Sinkron dengan pengajuan</a>@endif
             </form>
-            <div class="redup" style="font-size: 12.5px; margin-top: 6px;">Kolom: No Mobil (<b>nomor DT</b>, mis. DT 027 — bukan plat nomor), Tanggal Bongkar, Jam Bongkar, Tujuan Bongkar, Jenis Tanah, No Surat Jalan, Galian (bila kosong ditebak dari keterangan UJ), <b>Kubikasi</b> (m³; bila kosong = kubikasi standar jenis kendaraan), <b>Pemilik</b> (kosong / MNP = truk sendiri; nama pemilik lain = truk mitra, No Mobil diisi plat nomor) &amp; Keterangan.
+            <div class="redup" style="font-size: 12.5px; margin-top: 6px;">Kolom: No Mobil (<b>nomor DT</b>, mis. DT 027 — bukan plat nomor), Tanggal Bongkar, Jam Bongkar, Tujuan Bongkar, Jenis Tanah, No Surat Jalan, Galian (bila kosong ditebak dari keterangan UJ), <b>Kubikasi</b> (m³; bila kosong = kubikasi standar jenis kendaraan), <b>Pemilik</b> (kosong / MNP = truk sendiri; nama pemilik lain = truk mitra, No Mobil diisi plat nomor), Keterangan &amp; <b>MK</b> (isi "MK" bila muatan kurang → hutang sopir Rp{{ rp(\App\Models\MuatanKurang::NOMINAL) }}).
                 Truk mitra tidak dipasangkan ke DO — langsung menjadi rit tanpa DO dengan pemilik itu.
                 Surat jalan tiap DT dipasangkan ke DO belum bongkar DT itu sesuai urutan waktu; bila surat jalan lebih banyak dari DO belum bongkarnya, yang paling akhir ditandai <b>menunggu uang jalan</b> (tidak diisi — upload lagi setelah uang jalannya diinput di Kas UJ). Surat jalan yang No Surat Jalan-nya <b>sudah tercatat</b> di Ritasi otomatis dilewati, jadi Excel yang sama boleh diupload ulang. Hasilnya hanya mengisi form di bawah — periksa dulu, lalu klik <b>Simpan bongkar</b>.</div>
             @if ($errors->unggah->any())
@@ -205,7 +205,7 @@
             <div class="kartu gulir" style="padding: 0;">
                 <table class="kas bongkar" data-saring-kolom="grup">
                     <thead><tr><th>No DO</th><th>Nomor Mobil</th><th>Jenis Mobil</th><th>Nama Supir</th><th>Tanggal UJ</th><th>Galian</th>
-                        <th>Tanggal Bongkar</th><th>Jam Bongkar</th><th>Tujuan Bongkar</th><th>Jenis Tanah / Barang</th><th>No Surat Jalan</th><th title="Kosong = kubikasi standar jenis kendaraan (Kubikasi Kendaraan)">Kubikasi (m³)</th><th>Keterangan</th></tr></thead>
+                        <th>Tanggal Bongkar</th><th>Jam Bongkar</th><th>Tujuan Bongkar</th><th>Jenis Tanah / Barang</th><th>No Surat Jalan</th><th title="Kosong = kubikasi standar jenis kendaraan (Kubikasi Kendaraan)">Kubikasi (m³)</th><th title="Muatan kurang: hutang sopir bertambah Rp{{ rp(\App\Models\MuatanKurang::NOMINAL) }}, dipotong dari uang jalan berikutnya" data-tanpa-saring>MK</th><th>Keterangan</th></tr></thead>
                     @php($petaKubik = \App\Models\KubikasiKendaraan::peta())
                     @forelse ($daftar as $d)
                         @php($n = 'bongkar['.$d['do'].']')
@@ -232,6 +232,7 @@
                                 @php($kubikStd = \App\Models\KubikasiKendaraan::untuk($d['jenis'][0] ?? null, $petaKubik))
                                 <td><input type="text" name="{{ $n }}[kubikasi]" value="{{ $lama['kubikasi'] ?? '' }}" autocomplete="off" class="isi-bongkar" inputmode="decimal" style="min-width: 64px; text-align: right;"
                                     placeholder="{{ $kubikStd !== null ? rtrim(rtrim(number_format($kubikStd, 2, ',', ''), '0'), ',') : '' }}" title="Kosong = standar {{ $d['jenis'][0] ?? 'tanpa jenis' }}"></td>
+                                <td style="text-align: center;"><input type="checkbox" name="{{ $n }}[mk]" value="1" @checked($lama['mk'] ?? false) title="Muatan kurang (MK) — hutang sopir bertambah Rp{{ rp(\App\Models\MuatanKurang::NOMINAL) }} saat Simpan bongkar"></td>
                                 <td><input type="text" name="{{ $n }}[keterangan]" value="{{ $lama['keterangan'] ?? '' }}" autocomplete="off" class="isi-bongkar" maxlength="300" placeholder="catatan admin">
                                     @if ($errors->has('konfirmasi.'.$d['do']) || ($lama['konfirmasi'] ?? ''))
                                         <input type="text" name="{{ $n }}[konfirmasi]" value="{{ $lama['konfirmasi'] ?? '' }}" autocomplete="off" class="isi-bongkar" maxlength="1000"
@@ -240,7 +241,7 @@
                                 </td>
                             </tr>
                             <template class="rinci-uj">
-                            <tr class="bh"><td>ID UJ</td><td>Tanggal</td><td>Status</td><td>No Mobil · Jenis</td><td>Supir</td><td colspan="6">Keterangan UJ</td><td>Kategori</td><td class="angka">Nominal</td></tr>
+                            <tr class="bh"><td>ID UJ</td><td>Tanggal</td><td>Status</td><td>No Mobil · Jenis</td><td>Supir</td><td colspan="7">Keterangan UJ</td><td>Kategori</td><td class="angka">Nominal</td></tr>
                             @foreach ($d['detail'] as $x)
                                 <tr class="b">
                                     <td class="i">{{ $x->id_uj ?: 'baris '.$x->baris }}</td>
@@ -248,14 +249,14 @@
                                     <td class="redup" style="font-size: 12px;">{{ $x->status }}</td>
                                     <td>{{ $x->no_mobil }}@if ($x->jenis_kendaraan) <span class="redup">· {{ $x->jenis_kendaraan }}</span>@endif</td>
                                     <td class="p">{{ $x->nama }}</td>
-                                    <td colspan="6">{{ $x->keterangan }}</td>
+                                    <td colspan="7">{{ $x->keterangan }}</td>
                                     <td>{{ $x->kategori }}</td>
                                     <td class="angka">{{ rp((int) $x->nominal) }}</td>
                                 </tr>
                             @endforeach
                             @php($idTutup = collect($d['detail'])->filter(fn ($x) => in_array($x->kategori, \App\Support\KontrolUj::KATEGORI, true) && $x->id_uj && ! str_starts_with($x->id_uj, 'SALDO-'))->pluck('id_uj'))
                             @if ($idTutup->isNotEmpty())
-                                <tr class="b"><td colspan="13" style="padding: 6px 10px;">
+                                <tr class="b"><td colspan="14" style="padding: 6px 10px;">
                                     <b style="font-size: 12px;">Tidak akan bongkar?</b>
                                     @if ($k['tahap_id'] ?? null)<a href="{{ route('pengalihan-uj.index', ['tab' => 'pilih', 'asal' => $k['tahap_id'], 'mobil' => implode(',', $d['mobil'])]) }}" class="tombol polos" style="padding: 2px 10px; font-size: 12px;" title="Truk pindah proyek sebelum bongkar — UJ jadi saldo sopir">↪ Jadikan saldo sopir</a>@endif
                                     <button type="button" class="tombol polos" data-tutup="kembali" data-uj="{{ $idTutup->implode(',') }}" data-do="{{ $d['do'] }}" style="padding: 2px 10px; font-size: 12px;">↩ Uang dikembalikan sopir</button>
@@ -266,7 +267,7 @@
                             </template>
                         </tbody>
                     @empty
-                        <tbody><tr><td colspan="13" class="redup" style="padding: 20px 14px;">{{ $q || $umur || $tujuan !== '' || $galian !== '' ? 'Tidak ada DO yang cocok dengan saringan ini.' : 'Semua DO di Kas UJ sudah ada di data Ritasi.' }}</td></tr></tbody>
+                        <tbody><tr><td colspan="14" class="redup" style="padding: 20px 14px;">{{ $q || $umur || $tujuan !== '' || $galian !== '' ? 'Tidak ada DO yang cocok dengan saringan ini.' : 'Semua DO di Kas UJ sudah ada di data Ritasi.' }}</td></tr></tbody>
                     @endforelse
                 </table>
             </div>

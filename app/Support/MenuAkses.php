@@ -30,6 +30,8 @@ class MenuAkses
         'pengalihan-uj' => ['Hutang Supir', 'pengalihan-uj.index', ['pengalihan-uj.*'], 'Buku hutang per sopir (uang PT di tangan sopir): UJ belum bongkar, kasbon, dan potongannya (uang jalan, MOB, gaji, dikembalikan)'],
         'rapikan-uj' => ['Rapikan Kas UJ', 'uj.rapikan', ['uj.rapikan', 'uj.rapikan.*'], 'Mengisi No Mobil yang kosong di Kas UJ (ditulis ke sheet)'],
         'input-ritasi' => ['Input Ritasi', 'ritasi.input', ['ritasi.input', 'ritasi.store', 'ritasi.periksa', 'ritasi.edit', 'ritasi.update', 'ritasi.hapus'], 'Input, edit & hapus ritasi dump truck'],
+        'muatan-kurang' => ['Muatan Kurang (MK)', 'mk.index', ['mk.*'], 'Tandai surat jalan muatan kurang (MK, bawaan Rp25.000) → hutang sopir bertambah, dipotong dari uang jalan berikutnya (diusulkan otomatis di Input UJ); juga lewat centang MK di Monitor Ritasi'],
+        'mk-ubah-nominal' => ['Ubah nominal MK', 'mk.index', ['mk-nominal.*'], 'Mengubah nominal MK (bawaan Rp25.000) saat menandai / sesudahnya selama belum dipotong'],
         'potongan-muatan' => ['Potongan Muatan', 'potongan-muatan.index', ['potongan-muatan.*'], 'Rit Kendal/Jogja ber-LS di bawah standar volume jenis truk (Faw/Mercy): potongan per sopir per hari, dicatat ke Hutang Supir (dipotong dari uang jalan besoknya)'],
         'ritasi' => ['Ritasi', 'ritasi.index', ['ritasi.index', 'ritasi.unduh', 'ritasi.unduh.*'], 'Melihat daftar ritasi dump truck'],
         'buangan-truk' => ['Buangan Truck', 'ritasi.buangan', ['ritasi.buangan', 'ritasi.buangan.*'], 'Truk aktif 30 hari terakhir & tujuan buangannya; ubah tujuan buangan'],
@@ -78,7 +80,7 @@ class MenuAkses
         'proyek' => ['Proyek', '🏗️', ['daftar-proyek', 'penawaran-spk', 'anggaran-proyek', 'pilah-transaksi', 'boq-proyek', 'alokasi-overhead', 'komponen-anggaran', 'pengaturan-proyek']],
         'kas' => ['Kas Harian', '🏦', ['input-kas', 'kas-harian', 'validasi-reimburse', 'riwayat-reimburse', 'kas-belum-reimburse', 'rekap', 'mutasi-jago', 'jago-catatan', 'mutasi-pt', 'kode-gl', 'daftar-rekening']],
         'uj' => ['Uang Jalan', '🚚', ['pengajuan-uj', 'ajukan-uj', 'input-uj', 'kas-uj', 'reimburse-uj', 'pengalihan-uj', 'rapikan-uj']],
-        'ritasi' => ['Ritasi', '⛰️', ['input-ritasi', 'ritasi', 'buangan-truk', 'monitor-ritasi', 'bayar-tanah', 'performa-ritasi', 'potongan-muatan', 'kubikasi-kendaraan']],
+        'ritasi' => ['Ritasi', '⛰️', ['input-ritasi', 'ritasi', 'buangan-truk', 'monitor-ritasi', 'muatan-kurang', 'mk-ubah-nominal', 'bayar-tanah', 'performa-ritasi', 'potongan-muatan', 'kubikasi-kendaraan']],
         'bbm' => ['BBM & HM', '⛽', ['input-bbm', 'bbm']],
         'karyawan' => ['Karyawan', '👷', ['absen', 'absen-mandor', 'absensi', 'review-absen', 'gaji-mingguan', 'absen-ubah-jam', 'karyawan', 'jabatan', 'lokasi-absen']],
         'aset' => ['Aset', '🚛', ['aset']],
@@ -92,7 +94,7 @@ class MenuAkses
     public const KHUSUS_SUPER = ['dashboard-aktivitas'];
 
     /** Hak akses yang diatur per jabatan tetapi tidak tampil di sidebar (dibuka lewat tombol di halaman lain). */
-    public const TANPA_SIDEBAR = ['jago-catatan', 'absen-ubah-jam']; // 'ajukan-uj' tampil lagi di sidebar (owner 25 Okt 2026)
+    public const TANPA_SIDEBAR = ['jago-catatan', 'absen-ubah-jam', 'mk-ubah-nominal']; // 'ajukan-uj' tampil lagi di sidebar (owner 25 Okt 2026)
 
     public static function boleh(?User $user, string $menu): bool
     {
