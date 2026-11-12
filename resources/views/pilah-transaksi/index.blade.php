@@ -58,7 +58,7 @@
     <p class="redup" style="font-size: 12px; margin: -4px 0 10px;">
         Pilih <b>tahap detail</b> tiap transaksi (Kas = mengalahkan Kode GL; BCA = otomatis jadi <b>Dihitung</b>) atau <b>— bukan biaya —</b>; lalu <b>kode BOQ</b> (pilihan mengikuti BOQ tahap itu — isi di menu BOQ & Progres Proyek).
         Rekomendasi dari: tag Proyek/BOQ di sheet monitoring Infra → transaksi serupa yang sudah dipilah → kata di keterangan. Tersimpan otomatis tiap kali diubah.
-        Tahap tipe <b>Infra</b>: Kas akun HPP (material) & BBM non alat berat ikut dihitung.
+        Tahap tipe <b>Infra</b>: Kas akun HPP (material) & BBM kendaraan/genset ikut dihitung; BBM alat berat & stok solar lokasi tidak (sudah dihitung dari Data BBM & HM).
     </p>
 
     <div class="kartu gulir" style="padding: 0;">

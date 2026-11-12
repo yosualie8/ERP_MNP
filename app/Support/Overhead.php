@@ -72,12 +72,14 @@ class Overhead
      * - sparepart (DT & alat berat) & keperluan DT → tertutup Harga Jual per rit dan tarif rental per jam HM.
      * Tahap tipe INFRA (owner 16 Okt 2026): akun HPP = material → DIHITUNG; BBM di luar alat berat (carry, pickup, genset)
      * → DIHITUNG; BBM alat berat (lihat ALAT_BERAT di keterangan) tetap dari Data BBM & HM; sparepart/DT tetap diabaikan.
+     * Pembelian stok solar lokasi ("400 lt Solar PM") juga diabaikan (owner 12 Nov 2026): pemakaiannya sudah dihitung di
+     * Data BBM & HM (alat berat, DT, molen, dll.) → tidak dobel. Solar untuk kendaraan/genset (lihat KENDARAAN) tetap dihitung.
      */
     public static function diabaikan(?string $kelompok, ?string $akun, ?string $tipe = null, ?string $keterangan = null): bool
     {
         if ($tipe === 'infra') {
             return (bool) preg_match('/spare\s*part|\bDT\b/i', (string) $akun)
-                || (self::akunBbm($akun) && preg_match(self::ALAT_BERAT, (string) $keterangan));
+                || (self::akunBbm($akun) && self::bbmDariDataBbm($keterangan));
         }
 
         return $kelompok === 'HPP' || self::akunBbm($akun) || (bool) preg_match('/spare\s*part|\bDT\b/i', (string) $akun);
@@ -85,6 +87,25 @@ class Overhead
 
     /** Keterangan Kas yang menunjukkan BBM untuk alat berat (solarnya tercatat di Data BBM & HM). */
     public const ALAT_BERAT = '/exca|excavator|beko|vibro|dozer|loader|grader|alat berat|\bPC ?\d{2,3}\b|\bDT\b|dump/i';
+
+    /** Kendaraan/mesin yang solarnya TIDAK tercatat di Data BBM & HM (solar Kas-nya tetap dihitung). */
+    public const KENDARAAN = '/carry|pick ?up|mobil|xenia|avanza|genset/i';
+
+    /** BBM Kas yang biayanya sudah dihitung dari Data BBM & HM: BBM alat berat, atau solar yang bukan untuk kendaraan/genset. */
+    public static function bbmDariDataBbm(?string $keterangan): bool
+    {
+        $k = (string) $keterangan;
+
+        return (bool) preg_match(self::ALAT_BERAT, $k) || (preg_match('/solar/i', $k) && ! preg_match(self::KENDARAAN, $k));
+    }
+
+    /** SQL setara bbmDariDataBbm() untuk kolom keterangan $kolom (pakai binding regexBbmSql()). */
+    public const SQL_BBM_DARI_DATA = '(%1$s REGEXP ? OR (%1$s LIKE \'%%solar%%\' AND NOT %1$s REGEXP ?))';
+
+    public static function regexBbmSql(): array
+    {
+        return [trim(self::ALAT_BERAT, '/i'), trim(self::KENDARAAN, '/i')];
+    }
 
     public static function akunBbm(?string $akun): bool
     {

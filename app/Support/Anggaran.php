@@ -155,7 +155,7 @@ class Anggaran
         return self::kasHitung()['total'];
     }
 
-    /** Kas dihitung per tahap per grup: gaji (Gaji & Tunjangan), komisi, ops (lainnya), dan untuk tahap Infra material (akun HPP) & bbm (non alat berat). */
+    /** Kas dihitung per tahap per grup: gaji (Gaji & Tunjangan), komisi, ops (lainnya), dan untuk tahap Infra material (akun HPP) & bbm (kendaraan/genset). */
     public static function kasGrup(int $id): array
     {
         return self::kasHitung()['grup'][$id] ?? [];
@@ -167,9 +167,9 @@ class Anggaran
             return self::$kasDihitung;
         }
         $total = $grup = [];
-        // ab = keterangan menyebut alat berat (BBM alat berat tahap Infra tetap dari Data BBM & HM)
-        $ab = trim(Overhead::ALAT_BERAT, '/i');
-        foreach (DaftarProyek::queryKas()->selectRaw('c.kode cc, k.ref, a.nama akun, a.kelompok kel, b.tanggal, al.proyek_tahap_id alokasi, (b.keterangan REGEXP ?) ab, sum(b.nominal) s', [$ab])
+        // ab = BBM yang sudah dihitung dari Data BBM & HM (alat berat / stok solar lokasi) — lihat Overhead::bbmDariDataBbm()
+        $sqlAb = sprintf(Overhead::SQL_BBM_DARI_DATA, 'b.keterangan');
+        foreach (DaftarProyek::queryKas()->selectRaw("c.kode cc, k.ref, a.nama akun, a.kelompok kel, b.tanggal, al.proyek_tahap_id alokasi, COALESCE({$sqlAb}, 0) ab, sum(b.nominal) s", Overhead::regexBbmSql())
             ->groupBy('c.kode', 'k.ref', 'a.nama', 'a.kelompok', 'b.tanggal', 'al.proyek_tahap_id', 'ab')->get() as $r) {
             $id = $r->alokasi ?: DaftarProyek::tahapKas($r->cc, $r->ref, $r->akun, substr((string) $r->tanggal, 0, 10));
             $tipe = self::tipe($id);
