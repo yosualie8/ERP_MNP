@@ -105,6 +105,26 @@
     </div>
 
     @unless ($tanah)
+        {{-- Rit menunggu uang jalan (owner 12 Nov 2026): yang DO-nya kini sudah ada jangan sampai terlewat — tombol mengisikan pasangannya ke form. --}}
+        @if ($menunggu && $menunggu['rit']->isNotEmpty() && $doUnggah === null)
+            @php($nSiap = count($menunggu['do']))
+            <div class="pesan" id="banner-menunggu" @style(['margin: 0 0 12px;', 'background: rgba(240, 192, 90, .1); color: #f0c05a; border-color: rgba(240, 192, 90, .35);' => ! $nSiap,
+                'background: rgba(80, 200, 120, .1); border-color: rgba(80, 200, 120, .45);' => $nSiap])>
+                <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                    <b>⏳ {{ $menunggu['rit']->count() }} rit sudah bongkar tetapi belum masuk Ritasi (menunggu uang jalan)@if ($nSiap) — {{ $nSiap }} sudah ada DO-nya, tinggal disimpan @endif</b>
+                    @if ($nSiap)<a href="{{ route('ritasi.monitor', ['menunggu' => 1]) }}" class="tombol" style="padding: 6px 12px; margin-left: auto;">Isi {{ $nSiap }} rit ke form</a>@endif
+                </div>
+                <ul style="margin: 6px 0 0; padding-left: 18px;">
+                    @foreach ($menunggu['rit'] as $r)
+                        <li>SJ <b>{{ $r->no_seri }}</b> · {{ $r->no_mobil }}{{ $r->sopir ? ' '.$r->sopir : '' }} · bongkar {{ $r->tanggal->translatedFormat('j M') }}{{ $r->jam ? ' '.$r->jam : '' }} · {{ $r->tahap }}
+                            @if ($do = $menunggu['do'][$r->id] ?? null) → <b style="color: var(--sukses);">DO {{ $do }} sudah tersedia</b>
+                            @else → <span class="redup">uang jalannya belum diinput di Kas UJ</span>@endif</li>
+                    @endforeach
+                </ul>
+                <div class="redup" style="font-size: 12.5px; margin-top: 4px;">Uang jalan rit ini belum ada saat surat jalannya diupload. Begitu uang jalannya diinput di Kas UJ, klik <b>Isi ke form</b>, periksa, lalu <b>Simpan bongkar</b> — hutang sopir baru berkurang setelah rit tersimpan. Surat jalan yang salah dihapus di menu Bayar Tanah.</div>
+            </div>
+        @endif
+
         {{-- Upload Excel surat jalan → isi otomatis form bongkar (belum disimpan). --}}
         <div class="kartu unggah-sj">
             <form method="POST" action="{{ route('ritasi.monitor.unggah') }}" enctype="multipart/form-data" style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
@@ -118,14 +138,14 @@
             </form>
             <div class="redup" style="font-size: 12.5px; margin-top: 6px;">Kolom: No Mobil (<b>nomor DT</b>, mis. DT 027 — bukan plat nomor), Tanggal Bongkar, Jam Bongkar, Tujuan Bongkar, Jenis Tanah, No Surat Jalan, Galian (bila kosong ditebak dari keterangan UJ), <b>Kubikasi</b> (m³; bila kosong = kubikasi standar jenis kendaraan), <b>Pemilik</b> (kosong / MNP = truk sendiri; nama pemilik lain = truk mitra, No Mobil diisi plat nomor), Keterangan &amp; <b>MK</b> (isi "MK" bila muatan kurang → hutang sopir Rp{{ rp(\App\Models\MuatanKurang::NOMINAL) }}).
                 Truk mitra tidak dipasangkan ke DO — langsung menjadi rit tanpa DO dengan pemilik itu.
-                Surat jalan tiap DT dipasangkan ke DO belum bongkar DT itu sesuai urutan waktu; bila surat jalan lebih banyak dari DO belum bongkarnya, yang paling akhir ditandai <b>menunggu uang jalan</b> (tidak diisi — upload lagi setelah uang jalannya diinput di Kas UJ). Surat jalan yang No Surat Jalan-nya <b>sudah tercatat</b> di Ritasi otomatis dilewati, jadi Excel yang sama boleh diupload ulang. Hasilnya hanya mengisi form di bawah — periksa dulu, lalu klik <b>Simpan bongkar</b>.</div>
+                Surat jalan tiap DT dipasangkan ke DO belum bongkar DT itu sesuai urutan waktu; bila surat jalan lebih banyak dari DO belum bongkarnya, yang paling akhir ditandai <b>menunggu uang jalan</b> (tidak diisi — setelah uang jalannya diinput di Kas UJ, muncul di banner rit menunggu di atas untuk diisikan ke form). Surat jalan yang No Surat Jalan-nya <b>sudah tercatat</b> di Ritasi otomatis dilewati, jadi Excel yang sama boleh diupload ulang. Hasilnya hanya mengisi form di bawah — periksa dulu, lalu klik <b>Simpan bongkar</b>.</div>
             @if ($errors->unggah->any())
                 <div class="pesan galat" style="margin-top: 8px;"><b>Excel belum bisa dipakai:</b>
                     <ul style="margin: 6px 0 0; padding-left: 18px;">@foreach ($errors->unggah->all() as $e)<li>{{ $e }}</li>@endforeach</ul></div>
             @endif
             @if ($unggah)
                 <div style="margin-top: 10px;">
-                    <b>Hasil upload "{{ $unggah['file'] }}"</b>: {{ $unggah['jumlah'] }} surat jalan, {{ count($unggah['do']) }} DO terisi otomatis{{ ($unggah['mitra'] ?? 0) ? ', '.$unggah['mitra'].' rit truk mitra (lihat tabel Truk mitra di bawah)' : '' }} — <b>belum disimpan</b>.
+                    @if (($unggah['sumber'] ?? null) === 'menunggu')<b>Rit menunggu uang jalan</b>@else<b>Hasil upload "{{ $unggah['file'] }}"</b>@endif: {{ $unggah['jumlah'] }} surat jalan, {{ count($unggah['do']) }} DO terisi otomatis{{ ($unggah['mitra'] ?? 0) ? ', '.$unggah['mitra'].' rit truk mitra (lihat tabel Truk mitra di bawah)' : '' }} — <b>belum disimpan</b>.
                     @if ($unggah['sudah'] ?? 0)
                         <div style="margin-top: 4px; color: var(--sukses);">✓ <b>{{ $unggah['sudah'] }} surat jalan sudah tercatat di Ritasi — dilewati</b> (dikenali dari No Surat Jalan), hanya surat jalan baru yang diproses.
                             @if ($unggah['sudah_mitra'] ?? [])<span class="redup">Truk mitra: {{ collect($unggah['sudah_mitra'])->map(fn ($x) => $x['no_seri'].' ('.$x['dt'].')')->implode(', ') }}.</span>@endif</div>

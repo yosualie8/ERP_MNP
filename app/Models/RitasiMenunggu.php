@@ -116,6 +116,37 @@ class RitasiMenunggu extends Model
     }
 
     /**
+     * Pasangkan rit menunggu ke DO yang kini sudah ada (owner 12 Nov 2026 — kasus Aris DT 056 LS-2611-0730: uang jalannya masuk
+     * sesudah upload, lalu tidak ada yang memasangkan ulang sehingga rit tidak pernah masuk Ritasi). Aturan pemasangan sama dengan
+     * upload Excel (UnggahBongkar::cocokkan: per DT + galian, FIFO); belum disimpan — hasilnya mengisi form Monitor Ritasi.
+     *
+     * @param  Collection<int, array>  $belum  DO belum bongkar (MonitorRitasi::belumBongkar()['do'])
+     * @return array{rit: Collection<int, self>, isian: array<string, array>, per_dt: array<int, array>, do: array<string, string>}
+     *               do = id rit menunggu → DO pasangannya
+     */
+    public static function pasangkan(Collection $belum): array
+    {
+        $rit = self::aktif();
+        if ($rit->isEmpty()) {
+            return ['rit' => $rit, 'isian' => [], 'per_dt' => [], 'do' => []];
+        }
+        $sj = $rit->map(fn ($r) => [
+            'baris' => $r->id, 'dt' => $r->no_mobil, 'tanggal' => $r->tanggal->copy(), 'tanggal_asli' => $r->tanggal->format('d/m/Y'), 'jam' => $r->jam,
+            'tahap' => $r->tahap, 'jenis_tanah' => $r->jenis_tanah, 'no_seri' => $r->no_seri, 'galian' => $r->galian, 'keterangan' => $r->keterangan,
+            'kubikasi' => $r->kubikasi === null || $r->kubikasi === '' ? null : (float) $r->kubikasi, 'kubikasi_asli' => null, 'pemilik' => null, 'mk' => false,
+        ])->values()->all();
+        $hasil = UnggahBongkar::cocokkan($sj, $belum);
+        $do = [];
+        foreach ($hasil['per_dt'] as $p) {
+            foreach ($p['pasangan'] as $x) {
+                $do[$x['baris']] = $x['do'];
+            }
+        }
+
+        return ['rit' => $rit, 'isian' => $hasil['isian'], 'per_dt' => $hasil['per_dt'], 'do' => $do];
+    }
+
+    /**
      * Simpan surat jalan "menunggu uang jalan" dari satu upload (yang sudah ada diperbarui, kunci tujuan + No Surat Jalan).
      * Sopir & jenis kendaraan = uang jalan terakhir DT itu di Kas UJ.
      *

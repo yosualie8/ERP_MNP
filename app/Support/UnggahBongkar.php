@@ -218,7 +218,7 @@ class UnggahBongkar
                 $daftarSj = $daftarSj->take($doDt->count())->values();
                 $info['menunggu'] = $tunggu->map(fn ($s) => ['baris' => $s['baris'], 'no_seri' => $s['no_seri'], 'tanggal' => $s['tanggal'], 'jam' => $s['jam']])->all();
                 $info['catatan'][] = "{$tunggu->count()} surat jalan menunggu uang jalan — DO belum bongkar {$dt}".($galianSj ? " galian {$galianSj}" : '')
-                    ." hanya {$doDt->count()}. Upload lagi setelah uang jalannya diinput di Kas UJ."
+                    ." hanya {$doDt->count()}. Setelah uang jalannya diinput di Kas UJ, isikan lewat banner rit menunggu di Monitor Ritasi."
                     .($lain->isNotEmpty() ? ' DO '.$dt.' lain yang belum bongkar (galian berbeda): '.$sebutLain().' — periksa galiannya bila seharusnya cocok.' : '');
                 if ($daftarSj->isEmpty()) {
                     $perDt[] = $info;

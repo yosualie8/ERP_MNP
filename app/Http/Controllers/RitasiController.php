@@ -71,9 +71,24 @@ class RitasiController extends Controller
     }
 
     /** Monitor Ritasi: DO yang sudah ada uang jalannya di Kas UJ tetapi belum ada di data Ritasi (belum bongkar). */
-    public function monitor(Request $request): View
+    public function monitor(Request $request): View|RedirectResponse
     {
-        return $this->tampilMonitor($request, 'ritasi', MonitorRitasi::belumBongkar());
+        $belum = MonitorRitasi::belumBongkar();
+        $menunggu = \App\Models\RitasiMenunggu::pasangkan($belum['do']);
+        // Tombol "Isi ke form" (owner 12 Nov 2026): rit menunggu yang kini punya DO diisikan ke form bongkar, ditinjau lalu Simpan bongkar.
+        if ($request->boolean('menunggu')) {
+            if (! $menunggu['isian']) {
+                return redirect()->route('ritasi.monitor')->with('error', 'Belum ada rit menunggu uang jalan yang DO-nya sudah tersedia.');
+            }
+            $n = count($menunggu['isian']);
+
+            return redirect()->route('ritasi.monitor', ['unggah' => 1])
+                ->withInput(['bongkar' => $menunggu['isian'], 'mitra' => []])
+                ->with('unggah_bongkar', ['file' => 'rit menunggu uang jalan', 'sumber' => 'menunggu', 'jumlah' => $menunggu['rit']->count(), 'per_dt' => $menunggu['per_dt'],
+                    'do' => array_map('strval', array_keys($menunggu['isian'])), 'mitra' => 0, 'menunggu' => $menunggu['rit']->count() - $n, 'sudah' => 0, 'sudah_mitra' => []]);
+        }
+
+        return $this->tampilMonitor($request, 'ritasi', $belum, $menunggu);
     }
 
     /**
@@ -341,7 +356,7 @@ class RitasiController extends Controller
     }
 
     /** Halaman monitor DO bersama (Monitor Ritasi & Bayar Tanah): saringan umur, tujuan buangan, galian & pencarian. */
-    private function tampilMonitor(Request $request, string $mode, array $hasil): View
+    private function tampilMonitor(Request $request, string $mode, array $hasil, ?array $menunggu = null): View
     {
         // Monitor Ritasi (owner 21 Okt 2026): bawaan SEMUA umur — DO yang lewat batas justru yang dicari (peringatan Input UJ), dan DO lama
         // > 10 hari sudah ditutup 20 Okt. Bayar Tanah tetap ≤ 7 hari. Pencarian selalu di semua umur.
@@ -410,6 +425,8 @@ class RitasiController extends Controller
 
         return view('ritasi.monitor', [
             'unggah' => $unggah, 'doUnggah' => $doUnggah,
+            // Rit menunggu uang jalan + DO pasangannya bila kini sudah ada (RitasiMenunggu::pasangkan) — banner di atas form bongkar.
+            'menunggu' => $menunggu,
             // Bayar Tanah: rekap (RBT) terbaru & DO yang sudah ada di rekap yang menunggu dibayar.
             // Owner 2 Nov 2026: cukup 5 rekap bayar tanah terakhir.
             'rekapTanah' => $mode === 'tanah' ? \App\Models\BayarTanahRekap::with(['user', 'pengajuan'])->orderByDesc('id')->limit(5)->get() : collect(),
