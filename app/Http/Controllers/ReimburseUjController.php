@@ -18,6 +18,8 @@ class ReimburseUjController extends Controller
     {
         return view('uj.reimburse', [
             'antrean' => ReimburseUj::antrean(),
+            // Baris tanpa No DO tertahan sampai No DO-nya diisi (owner 14 Nov 2026).
+            'tertahan' => ReimburseUj::tertahan(),
             'riwayat' => UjReimburse::with('user')->latest('id')->limit(30)->get(),
             'baru' => session('batch_baru') ? UjReimburse::find(session('batch_baru')) : null,
         ]);

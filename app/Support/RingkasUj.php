@@ -28,6 +28,9 @@ class RingkasUj
             'detail' => $detailBelum->count(),
             'total' => (int) $detailBelum->sum('nominal'),
             'tertua' => $antrean->min('tanggal'),
+            // Baris tanpa No DO tertahan (tidak bisa direimburse) sampai No DO diisi — owner 14 Nov 2026.
+            'tertahan' => ($tahan = ReimburseUj::tertahan())->map(fn ($d) => collect($d)->only(['id_uj', 'tgl', 'nama', 'kategori', 'mobil', 'nominal', 'ket'])->all())->all(),
+            'total_tertahan' => (int) $tahan->sum('nominal'),
             'per_bulan' => $antrean->groupBy(fn ($t) => substr((string) $t['tanggal'], 0, 7))->sortKeysDesc()
                 ->map(fn ($g) => ['detail' => $g->sum(fn ($t) => count($t['detail'])), 'total' => (int) $g->sum('total')]),
         ];

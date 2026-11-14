@@ -20,20 +20,20 @@ use RuntimeException;
  * Reimburse uang jalan: transaksi Kas Seabank berstatus "Belum Reimburse" (kolom M) dipilih per transfer,
  * lalu kolom N (Tanggal Reimburse) diisi di sheet — status di kolom M otomatis menjadi "Sudah Reimburse".
  * Setiap batch dicatat (uj_reimburse) beserta salinan barisnya untuk file Excel yang bisa dibagikan.
+ * Owner 14 Nov 2026: baris tanpa No DO TERTAHAN (tidak bisa direimburse) sampai No DO-nya diisi, supaya asal-usulnya jelas; biaya transfer
+ * transfer itu ikut tertahan. Baris tertahan tidak menghalangi urutan — baris siap lain di transfer itu & transfer yang lebih baru tetap bisa.
  */
 class ReimburseUj
 {
-    /** Antrean: transfer yang punya baris belum reimburse, urut dari yang paling lama. */
+    /** Antrean: transfer yang punya baris belum reimburse yang SIAP (ber-No DO), urut dari yang paling lama. Detail = baris siap saja. */
     public static function antrean(): Collection
     {
-        return UjTransaksi::query()
-            ->whereHas('detail', fn ($q) => self::belum($q))
-            ->with(['detail' => fn ($q) => self::belum($q)->orderBy('baris')])
-            ->orderBy('tanggal')->orderBy('baris')->get()
+        return self::belumSemua()
+            ->filter(fn (UjTransaksi $t) => $t->detail->isNotEmpty())
             ->map(fn (UjTransaksi $t) => [
                 'id' => $t->id, 'no_uj' => $t->no_uj, 'tanggal' => $t->tanggal?->toDateString(), 'tgl' => $t->tanggal?->translatedFormat('j M Y'),
                 'nama' => $t->nama, 'bank' => $t->bank, 'rekening' => $t->rekening, 'baris' => $t->baris,
-                'total' => (int) $t->detail->sum('nominal'), 'cicil' => self::bolehCicil($t->detail),
+                'total' => (int) $t->detail->sum('nominal'), 'cicil' => self::bolehCicil($t->detail), 'tertahan' => $t->getAttribute('tertahan')->count(),
                 'detail' => $t->detail->map(fn (UjDetail $d) => [
                     'id' => $d->id, 'id_uj' => $d->id_uj, 'nama' => $d->nama, 'ket' => $d->keterangan, 'kategori' => $d->kategori,
                     'mobil' => $d->no_mobil, 'do' => $d->no_do, 'nominal' => (int) $d->nominal, 'fee' => $d->biaya_transfer,
@@ -44,7 +44,60 @@ class ReimburseUj
     /** Urutan antrean (id transfer, paling lama dulu) — dipakai untuk memaksa reimburse berurutan dari yang paling tua. @return int[] */
     public static function urutan(): array
     {
-        return UjTransaksi::query()->whereHas('detail', fn ($q) => self::belum($q))->orderBy('tanggal')->orderBy('baris')->pluck('id')->all();
+        return self::belumSemua()->filter(fn (UjTransaksi $t) => $t->detail->isNotEmpty())->pluck('id')->values()->all();
+    }
+
+    /**
+     * Semua transfer yang punya baris belum reimburse (paling lama dulu); relasi detail = baris SIAP, atribut 'tertahan' = baris tertahan.
+     *
+     * @return Collection<int, UjTransaksi>
+     */
+    private static function belumSemua(?array $idTransaksi = null): Collection
+    {
+        return UjTransaksi::query()->when($idTransaksi !== null, fn ($q) => $q->whereIn('id', $idTransaksi ?: [0]))
+            ->whereHas('detail', fn ($q) => self::belum($q))
+            ->with(['detail' => fn ($q) => self::belum($q)->orderBy('baris')])
+            ->orderBy('tanggal')->orderBy('baris')->get()
+            ->each(function (UjTransaksi $t) {
+                [$siap, $tahan] = self::pisah($t->detail);
+                $t->setRelation('detail', $siap);
+                $t->setAttribute('tertahan', $tahan);
+            });
+    }
+
+    /** Baris tanpa No DO (bukan biaya transfer) — tidak boleh direimburse sebelum No DO-nya diisi (owner 14 Nov 2026). */
+    public static function tanpaDo(UjDetail $d): bool
+    {
+        return ! $d->biaya_transfer && trim((string) $d->no_do) === '';
+    }
+
+    /**
+     * Pisahkan baris belum reimburse satu transfer: [siap, tertahan]. Bila ada baris tanpa DO, biaya transfernya ikut tertahan
+     * (biaya mengikuti transfernya, direimburse bersama baris terakhir yang tertahan).
+     *
+     * @return array{0: Collection<int, UjDetail>, 1: Collection<int, UjDetail>}
+     */
+    public static function pisah(Collection $detail): array
+    {
+        $adaTahan = $detail->contains(fn (UjDetail $d) => self::tanpaDo($d));
+        [$tahan, $siap] = $detail->partition(fn (UjDetail $d) => $adaTahan && ($d->biaya_transfer || self::tanpaDo($d)));
+
+        return [$siap->values(), $tahan->values()];
+    }
+
+    /**
+     * Semua baris tertahan (menunggu No DO), paling lama dulu, beserta saran DO rit terakhir DT-nya.
+     *
+     * @return Collection<int, array>
+     */
+    public static function tertahan(): Collection
+    {
+        return self::belumSemua()->flatMap(fn (UjTransaksi $t) => $t->getAttribute('tertahan')->map(fn (UjDetail $d) => [
+            'id_uj' => $d->id_uj, 'no_uj' => $t->no_uj, 'tgl' => ($d->tanggal ?? $t->tanggal)?->translatedFormat('j M Y'), 'nama' => $d->nama ?: $t->nama,
+            'ket' => $d->keterangan, 'kategori' => $d->biaya_transfer ? 'Biaya Transfer' : $d->kategori, 'mobil' => $d->no_mobil, 'nominal' => (int) $d->nominal,
+            'fee' => (bool) $d->biaya_transfer, 'sj' => \App\Models\RitasiMenunggu::seriDariKeterangan($d->keterangan),
+            'saran' => $d->biaya_transfer ? null : ValidasiUj::doTerakhir($d->no_mobil, $d->tanggal),
+        ]))->values();
     }
 
     public static function belum($q)
@@ -72,8 +125,12 @@ class ReimburseUj
     public static function periksaPilihan(array $detailIds): ?string
     {
         $pilih = array_flip($detailIds);
-        $transaksi = UjTransaksi::whereIn('id', UjDetail::whereIn('id', $detailIds)->pluck('uj_transaksi_id')->unique())
-            ->with(['detail' => fn ($q) => self::belum($q)->orderBy('baris')])->get()->keyBy('id');
+        $transaksi = self::belumSemua(UjDetail::whereIn('id', $detailIds)->pluck('uj_transaksi_id')->unique()->values()->all())->keyBy('id');
+        // Baris tanpa No DO (dan biaya transfernya) tertahan sampai No DO diisi (owner 14 Nov 2026).
+        if ($tahan = $transaksi->flatMap(fn (UjTransaksi $t) => $t->getAttribute('tertahan'))->first(fn (UjDetail $d) => isset($pilih[$d->id]))) {
+            return ($tahan->biaya_transfer ? 'Biaya transfer '.$tahan->id_uj.' ikut tertahan karena transfernya masih punya baris tanpa No DO' : "{$tahan->id_uj} belum punya No DO")
+                .' — transaksi tanpa No DO tidak bisa direimburse sampai No DO-nya diisi (Edit Kas UJ). Muat ulang halaman lalu pilih lagi.';
+        }
         $semua = self::urutan();
         $urut = array_values(array_filter($semua, fn ($id) => $transaksi->has($id)));
         $lewat = array_values(array_filter(array_slice($semua, 0, count($urut)), fn ($id) => ! $transaksi->has($id)));
@@ -129,6 +186,9 @@ class ReimburseUj
             $isi = $sheets->nilaiMentah(KasSeabank::id(), ["{$l}!A{$dari}:N{$sampai}"])["{$l}!A{$dari}:N{$sampai}"];
             foreach ($baris as $d) {
                 $r = $isi[$d->baris - $dari] ?? [];
+                if (! $d->biaya_transfer && trim((string) ($r[11] ?? '')) === '') {
+                    throw new RuntimeException("{$d->id_uj} (baris {$d->baris}) belum punya No DO di sheet Kas Seabank — transaksi tanpa No DO tidak bisa direimburse.");
+                }
                 $sama = $d->biaya_transfer
                     ? KasSeabank::biayaTransfer((string) ($r[8] ?? ''), (string) ($r[6] ?? '')) && KasSeabank::angka($r[7] ?? null) === (int) $d->nominal
                     : trim((string) ($r[0] ?? '')) === (string) $d->id_uj && KasSeabank::angka($r[7] ?? null) === (int) $d->nominal;

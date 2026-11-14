@@ -29,6 +29,8 @@ class Kernel extends ConsoleKernel
         $schedule->command('mnp:kunci-sheet')->everyTenMinutes()->withoutOverlapping();
         // Lembar Ritasi (Proyek ASG - Gsheet) ikut ke aplikasi.
         $schedule->command('mnp:impor-ritasi')->everyFiveMinutes()->withoutOverlapping();
+        // Uang tanah [SJ …] mendapat No DO begitu rit surat jalannya ber-DO di Ritasi (owner 14 Nov 2026) — lepas dari tahanan Reimburse UJ.
+        $schedule->command('mnp:isi-do-sj')->everyFiveMinutes()->withoutOverlapping();
         // Lembar Penggunaan BBM ikut ke aplikasi.
         $schedule->command('mnp:impor-bbm')->everyFiveMinutes()->withoutOverlapping();
         // Mutasi Rekening PT (BCA): file Drive diperiksa tiap 30 menit, diimpor hanya bila berubah.

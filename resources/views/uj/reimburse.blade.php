@@ -26,6 +26,9 @@
         .lainnya table { margin-top: 8px; font-size: 12.5px; border-collapse: collapse; width: auto; }
         .lainnya table th, .lainnya table td { padding: 3px 10px; border-bottom: 1px solid var(--garis); text-align: left; }
         .lainnya .angka { text-align: right; font-variant-numeric: tabular-nums; }
+        .tahan { font-size: 11px; padding: 1px 6px; border-radius: 9px; background: rgba(217, 83, 79, .16); color: inherit; white-space: nowrap; }
+        .kartu.tertahan { border: 1px solid rgba(217, 83, 79, .35); }
+        .kartu.tertahan table { font-size: 13px; }
     </style>
 
     @if ($baru)
@@ -47,7 +50,37 @@
         <div class="kartu"><span class="redup">Transfer</span><b>{{ $antrean->count() }}</b></div>
         <div class="kartu"><span class="redup">Baris</span><b>{{ $antrean->sum(fn ($t) => count($t['detail'])) }}</b></div>
         <div class="kartu"><span class="redup">Paling lama</span><b>{{ $antrean->first()['tgl'] ?? '–' }}</b></div>
+        @if ($tertahan->isNotEmpty())
+            <div class="kartu"><span class="redup">⏸ Tertahan (tanpa No DO)</span><b>{{ rp($tertahan->sum('nominal')) }}</b> <span class="redup">{{ $tertahan->count() }} baris</span></div>
+        @endif
     </div>
+
+    {{-- Owner 14 Nov 2026: transaksi tanpa No DO tidak boleh direimburse sampai No DO-nya diisi (asal-usulnya harus jelas). --}}
+    @if ($tertahan->isNotEmpty())
+        <div class="kartu tertahan" id="tertahan">
+            <h3 style="margin: 0 0 4px;">⏸ Tertahan — menunggu No DO ({{ $tertahan->count() }} baris, {{ rp($tertahan->sum('nominal')) }})</h3>
+            <p class="redup" style="margin: 0 0 10px; font-size: 13px;">Transaksi tanpa No DO tidak bisa direimburse. Isi No DO-nya lewat <b>Edit</b> di Kas UJ — pakai DO rit terakhir truk itu walau sudah lama. Uang tanah yang dibayar lewat No Surat Jalan terisi otomatis begitu ritnya masuk Ritasi. Biaya transfer ikut tertahan bersama transfernya. Sesudah No DO terisi, baris ini masuk antrean di bawah.</p>
+            <table>
+                <thead><tr><th>ID UJ</th><th>Tanggal</th><th>Nama</th><th>Keterangan</th><th>Kategori · Mobil</th><th class="angka">Nominal</th><th>Saran No DO</th><th></th></tr></thead>
+                <tbody>
+                    @foreach ($tertahan as $d)
+                        <tr>
+                            <td>{{ $d['id_uj'] }}</td><td>{{ $d['tgl'] }}</td><td>{{ $d['nama'] }}</td><td>{{ $d['ket'] }}</td>
+                            <td>{{ $d['kategori'] }} @if ($d['mobil'])<i>{{ $d['mobil'] }}</i>@endif</td>
+                            <td class="angka">{{ rp($d['nominal']) }}</td>
+                            <td class="redup">
+                                @if ($d['fee']) ikut transfernya
+                                @elseif ($d['sj']) otomatis dari rit SJ {{ $d['sj'] }}
+                                @elseif ($d['saran']) DO <b>{{ $d['saran']['do'] }}</b> ({{ $d['saran']['id'] }}, {{ $d['saran']['tgl'] }})
+                                @else – @endif
+                            </td>
+                            <td>@if (! $d['fee'] && $d['no_uj'])<a href="{{ route('uj.edit', $d['no_uj']) }}" class="tombol-edit">Edit</a>@endif</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    @endif
 
     <form method="POST" action="{{ route('reimburse.simpan') }}" id="form-reimburse">
         @csrf
@@ -109,7 +142,7 @@
                             <td><b>{{ $t['nama'] ?? '—' }}</b> <span class="redup">{{ $t['bank'] }} {{ $t['rekening'] }}</span></td>
                             <td>{{ $t['detail'][0]['ket'] ?? '' }}</td>
                             <td class="ringkas-gl">{{ collect($t['detail'])->reject(fn ($d) => $d['fee'])->pluck('kategori')->unique()->take(3)->implode(', ') }}</td>
-                            <td class="i">@if ($t['no_uj'])UJ-{{ $t['no_uj'] }}@endif @if ($t['cicil'])<span class="cicil">bisa dicicil</span>@endif</td>
+                            <td class="i">@if ($t['no_uj'])UJ-{{ $t['no_uj'] }}@endif @if ($t['cicil'])<span class="cicil">bisa dicicil</span>@endif @if ($t['tertahan'])<a href="#tertahan" class="tahan" title="Baris tanpa No DO (dan biaya transfernya) tertahan — lihat panel Tertahan">⏸ {{ $t['tertahan'] }} tertahan</a>@endif</td>
                             <td class="angka"><b>{{ rp($t['total']) }}</b> <span class="redup sebagian" hidden></span></td>
                         </tr>
                         <tr class="bh"><td></td><td>Transaksi detail</td><td>Nama</td><td>Keterangan</td><td>Kategori · Mobil · DO</td><td>ID UJ</td><td class="angka">Nominal</td></tr>

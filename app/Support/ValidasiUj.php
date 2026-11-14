@@ -225,10 +225,23 @@ class ValidasiUj
         $samaDo = $r['do'] !== null ? $lain->where('do', $r['do']) : collect();
 
         // 17 · Kelengkapan & format data master
-        // Uang tanah rit yang belum punya DO dibayar lewat No Surat Jalan (penanda "[SJ …]", owner 11 Nov 2026) — tertelusur lewat surat jalannya.
+        // Owner 14 Nov 2026: transaksi tanpa No DO TIDAK bisa direimburse (ReimburseUj menahannya) — pakai DO rit terakhir DT itu,
+        // walau ritnya sudah lama (mis. truk parkir di Subang). DT yang sedang perjalanan MOB ditangani aturan M; Uang MOB bernomor otomatis.
+        // Uang tanah rit yang belum punya DO dibayar lewat No Surat Jalan (penanda "[SJ …]", owner 11 Nov 2026) tertahan sampai rit itu
+        // tersimpan di Ritasi dengan DO-nya — No DO-nya lalu terisi otomatis (mnp:isi-do-sj).
         $lewatSj = $kat === 'ut' && \App\Models\RitasiMenunggu::seriDariKeterangan($r['ket']) !== null;
-        if ($terkaitTruk && $r['do'] === null && $kat !== 'um' && $kat !== 'sp' && ! $lewatSj && ! ($mobBuka && $kat !== 'uj')) {
-            $flag('17', 'sedang', 'No DO kosong untuk kategori '.$r['kategori'].' — transaksi tidak bisa ditelusuri ke DO/UJ utamanya.');
+        if ($r['do'] === null && $kat !== 'biaya' && ! self::mob($r['kategori']) && ! ($mobBuka && $kat !== 'uj')) {
+            if ($lewatSj) {
+                $t[] = ['kode' => '17', 'prioritas' => 'info', 'pesan' => 'Uang tanah dibayar lewat No Surat Jalan — tertahan di Reimburse UJ sampai rit itu tersimpan di Ritasi dengan DO-nya; No DO terisi otomatis.'];
+            } elseif ($kat === 'uj') {
+                $flag('17', 'tinggi', 'Uang Jalan tanpa No DO — tidak bisa direimburse sampai No DO-nya diisi.');
+            } else {
+                $akhir = self::doTerakhir($r['mobil'], $r['tanggal'], $lain);
+                $t[] = ['kode' => '17', 'prioritas' => 'tinggi', 'saran' => $akhir ? [['no_do' => $akhir['do'], 'id' => $akhir['id']]] : [],
+                    'pesan' => 'No DO kosong — transaksi tanpa No DO tidak bisa direimburse. '.($akhir
+                        ? "Pakai DO rit terakhir {$r['mobil']}: {$akhir['do']} ({$akhir['id']}, {$akhir['tgl']}), walau ritnya sudah lama. Klik \"Pakai DO\"."
+                        : ($r['mobil'] ? "{$r['mobil']} belum punya Uang Jalan ber-DO di Kas UJ — isi DO yang terkait." : 'Isi No Mobil dan No DO-nya.'))];
+            }
         }
         if ($terkaitTruk && $r['mobil'] === null) {
             $flag('17', 'sedang', 'No Mobil (DT) kosong untuk kategori '.$r['kategori'].'.');
@@ -405,6 +418,29 @@ class ValidasiUj
         return \App\Models\UjPengalihan::query()->where('jenis', 'pakai')->where('peruntukan', 'uj')->whereNull('uj_pengajuan_detail_id')
             ->where(fn ($q) => $kunci->each(fn ($k) => $q->orWhere('no_do', 'like', '%'.$k)))->orderBy('tanggal')->get()->toBase()
             ->groupBy(fn ($p) => self::kunciDo(str_replace(['`', "'"], '', (string) $p->no_do)))->only($kunci->all())->all();
+    }
+
+    /**
+     * DO rit terakhir DT ini s/d tanggal itu — Uang Jalan ber-DO di input ini atau di Kas UJ, seberapa pun lamanya (saran aturan 17 &
+     * baris tertahan di Reimburse UJ, owner 14 Nov 2026).
+     *
+     * @return array{do: string, id: string, tgl: string}|null
+     */
+    public static function doTerakhir(?string $mobil, ?CarbonInterface $tanggal, ?Collection $lain = null): ?array
+    {
+        $mobil = NomorMobil::rapikan($mobil);
+        if (! $mobil) {
+            return null;
+        }
+        $dariInput = ($lain ?? collect())->filter(fn ($x) => $x['mobil'] === $mobil && $x['jenisKat'] === 'uj' && $x['do'] !== null && str_starts_with((string) $x['id'], 'baris '))->last();
+        if ($dariInput) {
+            return ['do' => $dariInput['doAsli'], 'id' => $dariInput['id'], 'tgl' => 'input ini'];
+        }
+        $d = UjDetail::where('no_mobil', $mobil)->where('kategori', 'like', '%jalan%')->where('biaya_transfer', false)->whereNotNull('no_do')->where('no_do', '!=', '')
+            ->when($tanggal, fn ($q) => $q->whereDate('tanggal', '<=', $tanggal->toDateString()))
+            ->orderByDesc('tanggal')->orderByDesc('baris')->first(['id_uj', 'tanggal', 'no_do']);
+
+        return $d ? ['do' => (string) $d->no_do, 'id' => (string) $d->id_uj, 'tgl' => $d->tanggal?->translatedFormat('j M Y') ?? '-'] : null;
     }
 
     /** Kategori yang mengikuti DO uang jalannya (aturan 19). Uang MOB tidak: MOB memakai nomor MOB-nya sendiri (NomorMob). */
