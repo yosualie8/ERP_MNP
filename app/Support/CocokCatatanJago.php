@@ -11,6 +11,9 @@ use App\Models\JagoMutasi;
  *    dihitung, supaya daftar "DT 34 35 36 …" (MOB) dan "DT 039 059 061" tidak dianggap beda.
  *  - Sopir: catatan menyebut nama sopir (nama Data Karyawan / nama lainnya, mis. "naga" = Sinaga) tetapi sopir baris lain orang.
  *    Dilewati bila satu transfer untuk beberapa sopir (bayar tanah gabungan: catatan hanya menyebut pembayarnya).
+ *  - DO (owner 14 Nov 2026): catatan menyebut "DO …" tetapi No DO baris kosong → tombol "Pakai DO". Uang MOB dikecualikan (aturan 21:
+ *    MOB tanpa DO; DO di catatan MOB = DO perjalanan, lihat DoMob). Kasus asal: UJ-16761 sparepart DT 028 10 Nov, catatan
+ *    "Impek dan dongkrak DT 028 DO 17259 ban no 6", diinput tanpa DO dan keterangan "DT 026".
  * Hasilnya FLAG tinggi = wajib konfirmasi admin; bila catatan transfernya yang salah (mis. Eddy salah tulis DT), admin cukup menulis itu.
  * Uji balik 11 Nov 2026 pada 1.622 baris Kas UJ bertautan mutasi: 7 FLAG, semuanya memang berbeda dari catatan.
  */
@@ -29,7 +32,8 @@ class CocokCatatanJago
         $dt = self::dtDari($catatan);
         $angka = self::angkaDari($catatan);
         $sopir = self::sopirDari($catatan);
-        if (! $dt && ! $sopir) {
+        $doCatatan = self::doDari($catatan);
+        if (! $dt && ! $sopir && ! $doCatatan) {
             return [];
         }
         $sopirBaris = collect($input['detail'])->map(fn ($d, $i) => DaftarSopir::cari(($d['nama'] ?? null) ?: ($i === 0 ? $input['nama'] : null)));
@@ -48,8 +52,28 @@ class CocokCatatanJago
                 $beda[] = 'menyebut sopir '.implode(', ', $sopir).", tetapi baris ini atas nama {$s['nama']}";
             }
             if ($beda) {
-                $hasil[$i] = [['kode' => 'J', 'prioritas' => 'tinggi', 'pesan' => $sumber.' '.implode('; ', $beda).'. Uang jalan ini menjadi hutang sopir yang tertulis di baris — '
-                    .'pastikan nama sopir & No Mobil sesuai catatan transfer. Bila catatan transfernya yang salah, tulis konfirmasi.']];
+                $hasil[$i][] = ['kode' => 'J', 'prioritas' => 'tinggi', 'pesan' => $sumber.' '.implode('; ', $beda).'. Uang jalan ini menjadi hutang sopir yang tertulis di baris — '
+                    .'pastikan nama sopir & No Mobil sesuai catatan transfer. Bila catatan transfernya yang salah, tulis konfirmasi.'];
+            }
+            if ($doCatatan && trim((string) ($d['no_do'] ?? '')) === '' && ! preg_match('/\bmob\b|mobilisasi|biaya transfer/i', (string) ($d['kategori'] ?? ''))) {
+                $sebut = implode(', ', $doCatatan);
+                $hasil[$i][] = ['kode' => 'J', 'prioritas' => 'tinggi', 'saran' => collect($doCatatan)->take(3)->map(fn ($v) => ['no_do' => $v, 'id' => 'catatan transfer'])->values()->all(),
+                    'pesan' => $sumber." menyebut DO {$sebut}, tetapi No DO baris ini kosong — tanpa DO transaksi tidak tertelusur ke perjalanan sopirnya."
+                        .' Klik "Pakai DO"; bila memang tidak terkait DO itu, tulis konfirmasi.'];
+            }
+        }
+
+        return $hasil;
+    }
+
+    /** "DO 17259", "DO No. 15211", "do17259" → [kunci DO => nomor seperti ditulis]. */
+    public static function doDari(string $t): array
+    {
+        preg_match_all('/\bDO\s*(?:No\.?\s*)?[:.\-]?\s*(\d{3,7})\b/i', $t, $m);
+        $hasil = [];
+        foreach ($m[1] as $v) {
+            if (($k = SaldoSopir::kunciDo($v)) !== null) {
+                $hasil[$k] ??= $v;
             }
         }
 
@@ -57,7 +81,7 @@ class CocokCatatanJago
     }
 
     /** "DT 43", "dt069", "DT-064" → DT 043 / DT 069 / DT 064. */
-    private static function dtDari(string $t): array
+    public static function dtDari(string $t): array
     {
         preg_match_all('/\bDT\s*[-.]?\s*([O0-9]{1,3})(?![0-9])/i', $t, $m);
 
@@ -65,7 +89,7 @@ class CocokCatatanJago
     }
 
     /** Semua angka 1–3 digit di catatan sebagai bilangan (069 = 69) — nomor DT bisa ditulis tanpa awalan "DT" di daftar. */
-    private static function angkaDari(string $t): array
+    public static function angkaDari(string $t): array
     {
         preg_match_all('/(?<![0-9])[O0-9]{1,3}(?![0-9])/i', $t, $m);
 

@@ -237,6 +237,13 @@ class ValidasiUj
         if ($r['doAsli'] !== '' && ! preg_match('/^\d+$/', $r['doAsli'])) {
             $flag('17', 'rendah', "Format No DO \"{$r['doAsli']}\" tidak normal (seharusnya angka saja).");
         }
+        // K · Keterangan menyebut DT lain dari No Mobil (owner 14 Nov 2026; kasus UJ-16761 "Impack dan dongkrak DT 026" diisi DT 028).
+        // Semua angka keterangan dihitung, supaya daftar "DT 34 35 36" (MOB / material) tidak dianggap beda.
+        if ($r['mobil'] && preg_match('/^DT (\d{3})$/', $r['mobil'], $x) && ($dtKet = CocokCatatanJago::dtDari($r['ket']))
+            && ! isset(CocokCatatanJago::angkaDari($r['ket'])[(int) $x[1]])) {
+            $flag('K', 'tinggi', 'Keterangan "'.$r['ket'].'" menyebut '.implode(', ', $dtKet).", tetapi No Mobil diisi {$r['mobil']}. Betulkan salah satunya"
+                .' (cocokkan dengan catatan transfer); bila memang untuk truk lain (mis. dibelikan sopir truk lain), tulis konfirmasi.');
+        }
 
         // 21 · Uang MOB = pergeseran DT tanpa muatan → tidak ada bongkaran, jadi tidak memakai No DO (owner 27 Okt 2026).
         if ($r['do'] !== null && self::mob($r['kategori'])) {
@@ -307,7 +314,11 @@ class ValidasiUj
         if ($r['do'] !== null) {
             $utama = $samaDo->where('jenisKat', 'uj')->first();
             if (self::ikutDo($r['kategori']) && ! $utama && empty($pembuka[$r['do']])) {
-                $t[] = self::tanpaUangJalan($r, $lain, $pembuka);
+                // DO perjalanan MOB (dari catatan transfer Uang MOB, owner 14 Nov 2026) memang tanpa Uang Jalan.
+                $t[] = ($m = DoMob::untuk($r['doAsli']))
+                    ? ['kode' => '19', 'prioritas' => 'info', 'pesan' => "DO {$r['doAsli']} = DO perjalanan MOB ({$m['id_uj']}, ".($m['tanggal']?->translatedFormat('j M') ?? '-')
+                        .', '.($m['mobil'] ?: '-').', '.($m['nama'] ?: '-').') — tanpa Uang Jalan, tidak dipantau bongkarnya.']
+                    : self::tanpaUangJalan($r, $lain, $pembuka);
             }
             $acuan = $utama ?? $samaDo->first();
             if ($acuan && $r['namaK'] && $acuan['namaK'] && $acuan['namaK'] !== $r['namaK']) {
