@@ -7,28 +7,27 @@ use App\Models\UjDetail;
 use App\Models\UjTransaksi;
 
 /**
- * DO perjalanan MOB (owner 14 Nov 2026). Uang MOB dicatat di Kas UJ tanpa No DO (aturan 21), tetapi Eddy menulis DO perjalanannya di
- * catatan transfer Jago, mis. "MOB KENDAL PIK DT 028 bambang DO 17259". Biaya lain di perjalanan itu (sparepart, uang makan) memakai
- * DO tersebut supaya tertelusur ke perjalanannya. DO MOB tidak akan pernah bongkar: tidak dipantau di Monitor Ritasi / dipasangkan ke
- * surat jalan, dan transaksi ber-DO MOB tidak dianggap "DO tanpa Uang Jalan" (aturan 19).
+ * Nomor buku DO yang ditulis Eddy di catatan transfer Uang MOB (owner 14 Nov 2026), mis. "MOB KENDAL PIK DT 028 bambang DO 17259".
+ * Uang MOB sendiri memakai nomor MOB-xxxxx (NomorMob); nomor buku ini hanya dipetakan ke Uang MOB-nya ('do_mob') supaya transaksi yang
+ * terlanjur memakai nomor buku itu disarankan memakai nomor MOB, dan nomor buku itu tidak dipantau bongkarnya / dipasangkan ke surat jalan.
  * Kasus asal: UJ-16761 impack & dongkrak DT 028 10 Nov (catatan bank "DO 17259 ban no 6") diinput tanpa DO.
  */
 class DoMob
 {
-    /** @var array<string, array{do: string, id_uj: string, mobil: ?string, nama: ?string, tanggal: ?\Illuminate\Support\Carbon}>|null */
+    /** @var array<string, array{do: string, do_mob: ?string, id_uj: string, mobil: ?string, nama: ?string, tanggal: ?\Illuminate\Support\Carbon}>|null */
     private static ?array $cache = null;
 
     /**
      * DO MOB per kunci DO: DO yang disebut di catatan transfer Jago kantong UJ yang tertaut ke transaksi Kas UJ ber-Uang MOB.
      *
-     * @return array<string, array{do: string, id_uj: string, mobil: ?string, nama: ?string, tanggal: ?\Illuminate\Support\Carbon}>
+     * @return array<string, array{do: string, do_mob: ?string, id_uj: string, mobil: ?string, nama: ?string, tanggal: ?\Illuminate\Support\Carbon}>
      */
     public static function semua(): array
     {
         if (self::$cache !== null) {
             return self::$cache;
         }
-        $mob = UjDetail::where('kategori', 'Uang MOB')->whereNotNull('uj_transaksi_id')->get(['uj_transaksi_id', 'id_uj', 'no_mobil', 'nama', 'tanggal'])
+        $mob = UjDetail::where('kategori', 'Uang MOB')->whereNotNull('uj_transaksi_id')->get(['uj_transaksi_id', 'id_uj', 'no_mobil', 'nama', 'tanggal', 'no_do'])
             ->keyBy('uj_transaksi_id');
         if ($mob->isEmpty()) {
             return self::$cache = [];
@@ -43,7 +42,7 @@ class DoMob
                     return;
                 }
                 foreach (CocokCatatanJago::doDari((string) $m->catatan) as $k => $asli) {
-                    $hasil[$k] ??= ['do' => $asli, 'id_uj' => $d->id_uj, 'mobil' => $d->no_mobil, 'nama' => $d->nama, 'tanggal' => $d->tanggal];
+                    $hasil[$k] ??= ['do' => $asli, 'do_mob' => NomorMob::adalah($d->no_do) ? $d->no_do : null, 'id_uj' => $d->id_uj, 'mobil' => $d->no_mobil, 'nama' => $d->nama, 'tanggal' => $d->tanggal];
                 }
             });
 

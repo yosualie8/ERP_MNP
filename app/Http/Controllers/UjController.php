@@ -367,7 +367,7 @@ class UjController extends Controller
             'detail' => array_values(array_map(fn ($d) => [
                 'nama' => $rapi($d['nama'] ?? null), 'keterangan' => trim($d['keterangan']), 'nominal' => (int) $d['nominal'],
                 'kategori' => KategoriUj::baku($rapi($d['kategori'])), 'jenis_kendaraan' => NomorMobil::rapikanJenis($d['jenis_kendaraan'] ?? null),
-                'no_mobil' => NomorMobil::rapikan($d['no_mobil'] ?? null), 'no_do' => $rapi($d['no_do'] ?? null),
+                'no_mobil' => NomorMobil::rapikan($d['no_mobil'] ?? null), 'no_do' => \App\Support\NomorMob::rapikan($rapi($d['no_do'] ?? null)),
                 'konfirmasi' => $rapi($d['konfirmasi'] ?? null),
                 // Detail pengajuan UJ yang direalisasikan oleh baris ini (ditautkan lewat tombol "Tautkan" di Input UJ).
                 'pengajuan' => ! empty($d['pengajuan']) ? (int) $d['pengajuan'] : null,
@@ -431,7 +431,7 @@ class UjController extends Controller
             $detail[(int) $i] = [
                 'nama' => $rapi($d['nama'] ?? null), 'keterangan' => trim($d['keterangan']), 'nominal' => $nominal, 'kategori' => KategoriUj::baku($rapi($d['kategori'])),
                 'jenis_kendaraan' => NomorMobil::rapikanJenis($d['jenis_kendaraan'] ?? null), 'no_mobil' => NomorMobil::rapikan($d['no_mobil'] ?? null),
-                'no_do' => $rapi($d['no_do'] ?? null), 'konfirmasi' => null, 'duluan' => $this->tanyaDuluan() ? $rapi($d['duluan'] ?? null) : null,
+                'no_do' => \App\Support\NomorMob::rapikan($rapi($d['no_do'] ?? null)), 'konfirmasi' => null, 'duluan' => $this->tanyaDuluan() ? $rapi($d['duluan'] ?? null) : null,
             ];
         }
         $kecuali = $request->filled('no_uj') ? UjTransaksi::where('no_uj', $request->integer('no_uj'))->value('id') : null;
@@ -560,16 +560,23 @@ class UjController extends Controller
         return $mj;
     }
 
-    /** @return array<string, array<int, array{do: string, tgl: ?string, id: ?string}>> DT → DO uang jalan terbaru (maks. 6) */
+    /** @return array<string, array<int, array{do: string, tgl: ?string, id: ?string}>> DT → DO uang jalan / nomor perjalanan MOB terbaru (maks. 6) */
     private function doPerDt(): array
     {
-        return UjDetail::where('tanggal', '>=', now()->subDays(14)->toDateString())->where('biaya_transfer', false)->where('kategori', 'like', '%jalan%')
+        return UjDetail::where('tanggal', '>=', now()->subDays(14)->toDateString())->where('biaya_transfer', false)
+            ->where(fn ($q) => $q->where('kategori', 'like', '%jalan%')->orWhere(fn ($q2) => $q2->where('kategori', 'Uang MOB')->where('no_do', 'like', \App\Support\NomorMob::AWALAN.'%')))
             ->whereNotNull('no_do')->where('no_do', '!=', '')->whereNotNull('no_mobil')
             ->orderByDesc('tanggal')->orderByDesc('baris')->get(['id_uj', 'tanggal', 'no_mobil', 'no_do'])
             ->groupBy(fn ($d) => NomorMobil::rapikan($d->no_mobil))
             ->map(fn ($g) => $g->unique(fn ($d) => trim(str_replace(['`', "'"], '', $d->no_do)))->take(6)
                 ->map(fn ($d) => ['do' => trim(str_replace(['`', "'"], '', $d->no_do)), 'tgl' => $d->tanggal?->translatedFormat('j M'), 'id' => $d->id_uj])->values())
             ->all();
+    }
+
+    /** Pesan sesudah simpan bila ada Uang MOB yang baru diberi nomor perjalanan MOB. */
+    private function pesanMob(array $nomor): string
+    {
+        return $nomor ? ' Nomor perjalanan MOB: '.implode(', ', $nomor).' — pakai sebagai No DO transaksi DT itu selama perjalanan sampai ada Uang Jalan baru.' : '';
     }
 
     private function catatTemuan(array $temuan, array $input, array $ids, int $userId): void
@@ -625,6 +632,8 @@ class UjController extends Controller
         if ($temuan instanceof RedirectResponse) {
             return $temuan;
         }
+        // Uang MOB tanpa No DO diberi nomor perjalanan MOB-xxxxx (owner 14 Nov 2026, NomorMob).
+        [$input, $nomorMob] = \App\Support\NomorMob::beri($input);
         try {
             $sheets = GoogleSheets::wajib();
             $hasil = (new TulisUjSheet($sheets))->tulis($input);
@@ -678,7 +687,7 @@ class UjController extends Controller
         return redirect()->route('uj.index', ['bulan' => $input['tanggal']->format('Y-m')])->with($pesanImpor ? 'error' : 'success',
             'Tersimpan di Kas Seabank baris '.$hasil['baris_awal'].'–'.$hasil['baris_akhir'].' (UJ-'.reset($hasil['ids']).(count($hasil['ids']) > 1 ? ' s/d UJ-'.end($hasil['ids']) : '')
             .($hasil['id_biaya'] ? ', biaya transfer UJ-'.$hasil['id_biaya'] : '').'): '
-            .$this->ringkasanInput($input).'.'.($jumlahFoto ? " {$jumlahFoto} foto bon terlampir." : '').($rekapTanah ? ' '.$rekapTanah->kode().' tercatat dibayar.' : '')
+            .$this->ringkasanInput($input).'.'.$this->pesanMob($nomorMob).($jumlahFoto ? " {$jumlahFoto} foto bon terlampir." : '').($rekapTanah ? ' '.$rekapTanah->kode().' tercatat dibayar.' : '')
             .($terealisasi ? " {$terealisasi} detail pengajuan tercatat terealisasi".($berbeda ? " ({$berbeda} berbeda dari pengajuannya, tercatat beserta alasannya)" : '').'.' : '').$pesanImpor
             .$pesanPotong.$this->terapkanSopir($input, $request));
     }
@@ -731,6 +740,7 @@ class UjController extends Controller
         if ($temuan instanceof RedirectResponse) {
             return $temuan;
         }
+        [$input, $nomorMob] = \App\Support\NomorMob::beri($input);
         $ringkasLama = $this->ringkasan($t);
         try {
             $sheets = GoogleSheets::wajib();
@@ -758,7 +768,7 @@ class UjController extends Controller
 
         return redirect()->route('uj.index', ['bulan' => $input['tanggal']->format('Y-m')])->with($pesanImpor ? 'error' : 'success',
             'Perubahan tersimpan di Kas Seabank baris '.$hasil['baris_awal'].'–'.$hasil['baris_akhir'].': '.$this->ringkasanInput($input).'.'
-            .($jumlahFoto ? " {$jumlahFoto} foto bon ditambahkan." : '').$pesanImpor.$this->terapkanSopir($input, $request));
+            .$this->pesanMob($nomorMob).($jumlahFoto ? " {$jumlahFoto} foto bon ditambahkan." : '').$pesanImpor.$this->terapkanSopir($input, $request));
     }
 
     /** Pesan penolakan Edit/Hapus bila ada detail transaksi ini yang sudah direimburse (sama seperti Kas Harian). */

@@ -111,6 +111,13 @@ class ValidasiUj
             }
         }
 
+        // Perjalanan MOB yang masih berjalan per DT (NomorMob, owner 14 Nov 2026) — kecuali DT yang di input ini juga diberi Uang Jalan baru.
+        $mobBuka = [];
+        foreach (collect($barisInput)->pluck('mobil')->filter()->unique() as $mobil) {
+            $mobBuka[$mobil] = collect($barisInput)->contains(fn ($r) => $r['mobil'] === $mobil && $r['jenisKat'] === 'uj')
+                ? null : NomorMob::terbuka($mobil, $tgl, $kecualiTransaksi);
+        }
+
         $temuan = [];
         $sebelumnya = collect();
         // Indeks dipertahankan (bisa berlubang bila baris yang belum lengkap tidak ikut diperiksa).
@@ -166,11 +173,14 @@ class ValidasiUj
                     .(($do = $lain->pluck('no_do')->filter()->unique())->isNotEmpty() ? ', DO '.$do->implode(', ') : '').'). Pengajuan cukup sekali sehari — tambahkan lewat Edit '
                     .$kode.'. Bila memang perlu pengajuan terpisah (mis. tujuan buangan lain), tulis alasannya.'];
             }
-            $temuan[$i] = [...$tautan, ...self::aturan($r, $pembanding, $jenisDt, $pembuka, $dariUtang), ...($tanyaDuluan ? self::ujTerbuka($r) : [])];
+            $temuan[$i] = [...$tautan, ...self::aturan($r, $pembanding, $jenisDt, $pembuka, $dariUtang, $mobBuka[$r['mobil']] ?? null), ...($tanyaDuluan ? self::ujTerbuka($r) : [])];
             $sebelumnya->push($r);
         }
         foreach (CocokCatatanJago::periksa($mutasi, $input) as $i => $daftar) {
-            $temuan[$i] = [...$daftar, ...($temuan[$i] ?? [])];
+            // Saran DO yang sama dari catatan transfer (J) dan perjalanan MOB (M) cukup tampil sekali (yang J).
+            $dariJ = collect($daftar)->flatMap(fn ($x) => array_column($x['saran'] ?? [], 'no_do'))->all();
+            $sisa = collect($temuan[$i] ?? [])->reject(fn ($x) => $x['kode'] === 'M' && array_intersect(array_column($x['saran'] ?? [], 'no_do'), $dariJ))->values()->all();
+            $temuan[$i] = [...$daftar, ...$sisa];
         }
 
         return array_filter($temuan);
@@ -202,7 +212,7 @@ class ValidasiUj
      * @param  array<string, array<int, array>>  $pembuka  kunci DO → Uang Jalan ber-DO itu (seluruh histori + input ini)
      * @param  array<string, Collection>  $dariUtang  kunci DO → potongan utang sopir untuk uang jalan DO itu (Pengalihan UJ)
      */
-    private static function aturan(array $r, Collection $lain, Collection $jenisDt, array $pembuka = [], array $dariUtang = []): array
+    private static function aturan(array $r, Collection $lain, Collection $jenisDt, array $pembuka = [], array $dariUtang = [], ?UjDetail $mobBuka = null): array
     {
         $t = [];
         $flag = function (string $kode, string $prioritas, string $pesan) use (&$t) {
@@ -217,7 +227,7 @@ class ValidasiUj
         // 17 · Kelengkapan & format data master
         // Uang tanah rit yang belum punya DO dibayar lewat No Surat Jalan (penanda "[SJ …]", owner 11 Nov 2026) — tertelusur lewat surat jalannya.
         $lewatSj = $kat === 'ut' && \App\Models\RitasiMenunggu::seriDariKeterangan($r['ket']) !== null;
-        if ($terkaitTruk && $r['do'] === null && $kat !== 'um' && $kat !== 'sp' && ! $lewatSj) {
+        if ($terkaitTruk && $r['do'] === null && $kat !== 'um' && $kat !== 'sp' && ! $lewatSj && ! ($mobBuka && $kat !== 'uj')) {
             $flag('17', 'sedang', 'No DO kosong untuk kategori '.$r['kategori'].' — transaksi tidak bisa ditelusuri ke DO/UJ utamanya.');
         }
         if ($terkaitTruk && $r['mobil'] === null) {
@@ -234,7 +244,7 @@ class ValidasiUj
                 $flag('17', 'tinggi', "{$r['mobil']} berstatus Dijual / keluar di Data Aset.");
             }
         }
-        if ($r['doAsli'] !== '' && ! preg_match('/^\d+$/', $r['doAsli'])) {
+        if ($r['doAsli'] !== '' && ! preg_match('/^\d+$/', $r['doAsli']) && ! NomorMob::adalah($r['doAsli'])) {
             $flag('17', 'rendah', "Format No DO \"{$r['doAsli']}\" tidak normal (seharusnya angka saja).");
         }
         // K · Keterangan menyebut DT lain dari No Mobil (owner 14 Nov 2026; kasus UJ-16761 "Impack dan dongkrak DT 026" diisi DT 028).
@@ -245,10 +255,21 @@ class ValidasiUj
                 .' (cocokkan dengan catatan transfer); bila memang untuk truk lain (mis. dibelikan sopir truk lain), tulis konfirmasi.');
         }
 
-        // 21 · Uang MOB = pergeseran DT tanpa muatan → tidak ada bongkaran, jadi tidak memakai No DO (owner 27 Okt 2026).
-        if ($r['do'] !== null && self::mob($r['kategori'])) {
-            $flag('21', 'sedang', 'Uang MOB adalah pergeseran DT tanpa muatan, jadi tidak memakai No DO. Kosongkan No DO '.$r['doAsli']
-                .' — DO baru dipakai mulai Uang Jalan rit berikutnya.');
+        // 21 · Uang MOB = pergeseran DT tanpa muatan → tidak memakai DO buku (owner 27 Okt 2026); sejak 14 Nov 2026 diberi nomor
+        //      MOB-xxxxx otomatis saat disimpan (NomorMob). Sebaliknya nomor MOB tidak boleh dipakai Uang Jalan (rit baru = DO buku).
+        if ($r['do'] !== null && self::mob($r['kategori']) && ! NomorMob::adalah($r['doAsli'])) {
+            $flag('21', 'sedang', 'Uang MOB tidak memakai DO buku — No DO-nya diberi nomor MOB-xxxxx otomatis saat disimpan. Kosongkan No DO '.$r['doAsli'].'.');
+        }
+        if ($kat === 'uj' && NomorMob::adalah($r['doAsli'])) {
+            $flag('21', 'tinggi', "No DO {$r['doAsli']} adalah nomor perjalanan MOB — Uang Jalan rit baru wajib memakai nomor DO buku.");
+        }
+        // M · Transaksi selama perjalanan MOB (owner 14 Nov 2026): DT yang sedang MOB dan belum punya Uang Jalan baru → No DO = nomor MOB-nya.
+        if ($mobBuka && ! in_array($kat, ['uj', 'biaya'], true) && ! self::mob($r['kategori']) && ! NomorMob::adalah($r['doAsli'])
+            && ($r['do'] === null || (! $samaDo->contains('jenisKat', 'uj') && empty($pembuka[$r['do']])))) {
+            $t[] = ['kode' => 'M', 'prioritas' => 'tinggi', 'saran' => [['no_do' => $mobBuka->no_do, 'id' => $mobBuka->id_uj]],
+                'pesan' => "{$r['mobil']} sedang dalam perjalanan MOB {$mobBuka->no_do} ({$mobBuka->id_uj}, ".$mobBuka->tanggal?->translatedFormat('j M').', '
+                    .($mobBuka->nama ?: '-').', "'.$mobBuka->keterangan.'") dan belum punya Uang Jalan baru — transaksi selama perjalanan memakai No DO '
+                    .$mobBuka->no_do.($r['do'] !== null ? " (DO {$r['doAsli']} belum punya Uang Jalan)" : '').'. Klik "Pakai DO"; bila memang bukan bagian perjalanan itu, tulis konfirmasi.'];
         }
 
         // 3 · Total Uang Jalan per DO  &  2 · Frekuensi Uang Jalan per DO
@@ -314,11 +335,24 @@ class ValidasiUj
         if ($r['do'] !== null) {
             $utama = $samaDo->where('jenisKat', 'uj')->first();
             if (self::ikutDo($r['kategori']) && ! $utama && empty($pembuka[$r['do']])) {
-                // DO perjalanan MOB (dari catatan transfer Uang MOB, owner 14 Nov 2026) memang tanpa Uang Jalan.
-                $t[] = ($m = DoMob::untuk($r['doAsli']))
-                    ? ['kode' => '19', 'prioritas' => 'info', 'pesan' => "DO {$r['doAsli']} = DO perjalanan MOB ({$m['id_uj']}, ".($m['tanggal']?->translatedFormat('j M') ?? '-')
-                        .', '.($m['mobil'] ?: '-').', '.($m['nama'] ?: '-').') — tanpa Uang Jalan, tidak dipantau bongkarnya.']
-                    : self::tanpaUangJalan($r, $lain, $pembuka);
+                // Nomor perjalanan MOB (owner 14 Nov 2026) memang tanpa Uang Jalan; nomor buku DO yang ditulis Eddy di catatan transfer MOB
+                // (DoMob) diganti nomor MOB-nya. DT yang sedang perjalanan MOB sudah ditangani aturan M.
+                if (NomorMob::adalah($r['doAsli'])) {
+                    $m = NomorMob::pemilik($r['doAsli']);
+                    $t[] = $m ? ['kode' => '19', 'prioritas' => 'info', 'pesan' => "DO {$r['doAsli']} = perjalanan MOB {$m->id_uj} (".$m->tanggal?->translatedFormat('j M').', '
+                            .($m->no_mobil ?: '-').', '.($m->nama ?: '-').') — tanpa Uang Jalan, tidak dipantau bongkarnya.']
+                        : ['kode' => '19', 'prioritas' => 'tinggi', 'pesan' => "Nomor MOB {$r['doAsli']} tidak dikenal (belum ada Uang MOB bernomor itu) — periksa ketikannya."];
+                } elseif ($mobBuka) {
+                    // sudah ditangani aturan M (saran nomor MOB perjalanan ini)
+                } elseif (($m = DoMob::untuk($r['doAsli'])) && NomorMob::adalah($m['do_mob'])) {
+                    $t[] = ['kode' => '19', 'prioritas' => 'tinggi', 'saran' => [['no_do' => $m['do_mob'], 'id' => $m['id_uj']]],
+                        'pesan' => "DO {$r['doAsli']} adalah nomor yang ditulis di catatan transfer Uang MOB {$m['id_uj']} — perjalanan MOB memakai No DO {$m['do_mob']}. Klik \"Pakai DO\"."];
+                } elseif ($m) {
+                    $t[] = ['kode' => '19', 'prioritas' => 'info', 'pesan' => "DO {$r['doAsli']} = DO perjalanan MOB ({$m['id_uj']}, ".($m['tanggal']?->translatedFormat('j M') ?? '-')
+                        .', '.($m['mobil'] ?: '-').', '.($m['nama'] ?: '-').') — tanpa Uang Jalan, tidak dipantau bongkarnya.'];
+                } else {
+                    $t[] = self::tanpaUangJalan($r, $lain, $pembuka);
+                }
             }
             $acuan = $utama ?? $samaDo->first();
             if ($acuan && $r['namaK'] && $acuan['namaK'] && $acuan['namaK'] !== $r['namaK']) {
@@ -373,7 +407,7 @@ class ValidasiUj
             ->groupBy(fn ($p) => self::kunciDo(str_replace(['`', "'"], '', (string) $p->no_do)))->only($kunci->all())->all();
     }
 
-    /** Kategori yang mengikuti DO uang jalannya (aturan 19). Uang MOB tidak: MOB tidak memakai DO. */
+    /** Kategori yang mengikuti DO uang jalannya (aturan 19). Uang MOB tidak: MOB memakai nomor MOB-nya sendiri (NomorMob). */
     private static function ikutDo(?string $kategori): bool
     {
         return in_array(self::jenisKategori($kategori), ['ut', 'um', 'pr', 'sp'], true) || (bool) preg_match('/material|geser/i', (string) $kategori);

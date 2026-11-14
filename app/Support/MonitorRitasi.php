@@ -112,7 +112,10 @@ class MonitorRitasi
         foreach ([...$detail, ...$tambahan] as $d) {
             $k = $kunci($d->no_do);
             if ($k === null || ! ctype_digit($k)) {
-                $bukanAngka->push(trim((string) $d->no_do));
+                // Nomor perjalanan MOB (MOB-00001, NomorMob) memang bukan DO rit — tidak perlu ikut daftar "bukan nomor DO".
+                if (! NomorMob::adalah($k)) {
+                    $bukanAngka->push(trim((string) $d->no_do));
+                }
 
                 continue;
             }

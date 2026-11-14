@@ -11,8 +11,8 @@ use App\Models\JagoMutasi;
  *    dihitung, supaya daftar "DT 34 35 36 …" (MOB) dan "DT 039 059 061" tidak dianggap beda.
  *  - Sopir: catatan menyebut nama sopir (nama Data Karyawan / nama lainnya, mis. "naga" = Sinaga) tetapi sopir baris lain orang.
  *    Dilewati bila satu transfer untuk beberapa sopir (bayar tanah gabungan: catatan hanya menyebut pembayarnya).
- *  - DO (owner 14 Nov 2026): catatan menyebut "DO …" tetapi No DO baris kosong → tombol "Pakai DO". Uang MOB dikecualikan (aturan 21:
- *    MOB tanpa DO; DO di catatan MOB = DO perjalanan, lihat DoMob). Kasus asal: UJ-16761 sparepart DT 028 10 Nov, catatan
+ *  - DO (owner 14 Nov 2026): catatan menyebut "DO …" tetapi No DO baris kosong → tombol "Pakai DO". Uang MOB dikecualikan (diberi
+ *    nomor MOB otomatis, NomorMob); nomor buku DO perjalanan MOB (DoMob) disarankan sebagai nomor MOB-nya. Kasus asal: UJ-16761 sparepart DT 028 10 Nov, catatan
  *    "Impek dan dongkrak DT 028 DO 17259 ban no 6", diinput tanpa DO dan keterangan "DT 026".
  * Hasilnya FLAG tinggi = wajib konfirmasi admin; bila catatan transfernya yang salah (mis. Eddy salah tulis DT), admin cukup menulis itu.
  * Uji balik 11 Nov 2026 pada 1.622 baris Kas UJ bertautan mutasi: 7 FLAG, semuanya memang berbeda dari catatan.
@@ -57,7 +57,10 @@ class CocokCatatanJago
             }
             if ($doCatatan && trim((string) ($d['no_do'] ?? '')) === '' && ! preg_match('/\bmob\b|mobilisasi|biaya transfer/i', (string) ($d['kategori'] ?? ''))) {
                 $sebut = implode(', ', $doCatatan);
-                $hasil[$i][] = ['kode' => 'J', 'prioritas' => 'tinggi', 'saran' => collect($doCatatan)->take(3)->map(fn ($v) => ['no_do' => $v, 'id' => 'catatan transfer'])->values()->all(),
+                // Nomor buku DO perjalanan MOB (DoMob) → sarankan nomor MOB-nya (NomorMob), bukan nomor buku itu.
+                $saran = collect($doCatatan)->map(fn ($v) => ($mob = DoMob::untuk($v)) && $mob['do_mob'] ? ['no_do' => $mob['do_mob'], 'id' => $mob['id_uj']] : ['no_do' => $v, 'id' => 'catatan transfer'])
+                    ->unique('no_do')->take(3)->values()->all();
+                $hasil[$i][] = ['kode' => 'J', 'prioritas' => 'tinggi', 'saran' => $saran,
                     'pesan' => $sumber." menyebut DO {$sebut}, tetapi No DO baris ini kosong — tanpa DO transaksi tidak tertelusur ke perjalanan sopirnya."
                         .' Klik "Pakai DO"; bila memang tidak terkait DO itu, tulis konfirmasi.'];
             }
