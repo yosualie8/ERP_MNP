@@ -125,7 +125,17 @@
     zh: { kodeTerjemah: 'zh-CN', kodeSuara: 'zh-CN', lawan: 'id', nama: '中文',
           teks: { dengar: '请说话…', baca: '朗读中…' } },
   };
-  const BATAS_HENING = 3;   // berapa kali berturut-turut tidak ada suara sebelum mic mati sendiri
+  const BATAS_TUNGGU_MS = 120000;   // giliran menunggu suara paling lama 2 menit sebelum mic mati sendiri
+  const kodeDengar = { id: 'id-ID', zh: 'zh-CN' };   // kode pengenalan suara (zh bisa diganti cmn-Hans-CN)
+
+  // Catatan kejadian ke log akses server (berkas kosong catat.txt + query) untuk menelusuri masalah di ponsel.
+  const idSesi = Math.random().toString(36).slice(2, 8);
+  function catat(kejadian, data = {}) {
+    try {
+      const q = new URLSearchParams({ s: idSesi, k: kejadian, ...data });
+      fetch('catat.txt?' + q, { cache: 'no-store', keepalive: true }).catch(() => {});
+    } catch (e) {}
+  }
 
   const el = id => document.getElementById(id);
   // Tinggi kotak teks mengikuti isi supaya pinyin tepat di bawah aksara.
@@ -245,7 +255,9 @@
   let sesi = false;          // mic sedang dipakai
   let giliran = 'id';        // bahasa yang sedang/akan didengarkan
   let generasi = 0;          // naik tiap giliran baru / sesi berhenti → hasil lama diabaikan
-  let pengenal = null, hening = 0, sedangBaca = false;
+  let pengenal = null, sedangBaca = false;
+  let awalTunggu = 0;        // sejak kapan giliran ini menunggu suara
+  let gagalCepat = 0;        // berapa kali berturut-turut mic berhenti seketika
 
   function tampilkanMic() {
     mic.classList.toggle('aktif', sesi);
@@ -253,19 +265,23 @@
     for (const b of ['id', 'zh']) ui[b].kotak.classList.toggle('giliran', sesi && !sedangBaca && giliran === b);
   }
 
-  function dengar(b) {
+  function dengar(b, { kodeLain = null } = {}) {
+    if (giliran !== b || !awalTunggu) awalTunggu = Date.now();
     giliran = b;
     sedangBaca = false;
     const gen = ++generasi;
     const p = new Pengenal();
-    p.lang = BAHASA[b].kodeSuara;
+    p.lang = kodeLain || kodeDengar[b];
     p.interimResults = true;
     p.continuous = false;      // berhenti sendiri saat pembicara diam → giliran pindah
     p.maxAlternatives = 1;
-    let adaHasil = false;
+    let adaHasil = false, galat = '';
+    const mulaiPada = Date.now();
+    catat('mulai', { b, lang: p.lang });
 
     p.onresult = ev => {
       if (pengenal !== p) return;
+      if (!adaHasil) catat('suara', { b, ms: Date.now() - mulaiPada });
       let final = '', sementara = '';
       for (let i = 0; i < ev.results.length; i++) {
         const r = ev.results[i];
@@ -280,32 +296,43 @@
     };
     p.onerror = ev => {
       if (pengenal !== p) return;
-      if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') { hentikanSesi(); pesan('Izin mikrofon ditolak. Izinkan mic untuk situs ini di pengaturan peramban.'); }
-      else if (ev.error === 'network') { hentikanSesi(); pesan('Pengenalan suara butuh internet.'); }
-      else if (ev.error === 'language-not-supported') { hentikanSesi(); pesan('Bahasa ini belum didukung pengenalan suara di perangkat ini.'); }
+      galat = ev.error || '?';
+      catat('galat', { b, lang: p.lang, e: galat, ms: Date.now() - mulaiPada });
+      if (galat === 'not-allowed' || galat === 'service-not-allowed') { pengenal = null; hentikanSesi(); pesan('Izin mikrofon ditolak. Izinkan mic untuk situs ini di pengaturan peramban.'); }
+      else if (galat === 'language-not-supported' && b === 'zh' && p.lang !== 'cmn-Hans-CN') {
+        // Sebagian perangkat Android hanya mengenal kode Mandarin "cmn-Hans-CN".
+        kodeDengar.zh = 'cmn-Hans-CN';
+        pengenal = null;
+        setTimeout(() => { if (sesi) dengar('zh'); }, 200);
+      }
+      else if (galat === 'language-not-supported') { pengenal = null; hentikanSesi(); pesan('Bahasa ini belum didukung pengenalan suara di perangkat ini.'); }
     };
     p.onend = () => {
       if (pengenal !== p) return;          // sesi berhenti / giliran diganti manual
       pengenal = null;
       const teks = ui[b].teks.value.trim();
+      catat('akhir', { b, hasil: adaHasil ? teks.length : 0, ms: Date.now() - mulaiPada });
       ui[b].kotak.classList.remove('sementara');
-      setStatus(b, null);
       if (adaHasil && teks) {
-        hening = 0;
+        setStatus(b, null);
+        awalTunggu = 0; gagalCepat = 0;
         selesaiGiliran(b, teks);
-      } else if (++hening >= BATAS_HENING) {
-        hentikanSesi();
-        pesan('Mic dimatikan karena tidak ada suara.');
-      } else {
-        dengar(b);
+        return;
       }
+      // Belum ada yang bicara: tetap giliran yang sama, mic dinyalakan lagi (Chrome Android mematikan
+      // mic setelah beberapa detik hening). Sesi baru berhenti sesudah lama sekali tanpa suara,
+      // atau bila mic terus gagal seketika (mis. dipakai aplikasi lain).
+      gagalCepat = Date.now() - mulaiPada < 700 ? gagalCepat + 1 : 0;
+      if (Date.now() - awalTunggu > BATAS_TUNGGU_MS) { hentikanSesi(); pesan('Mic dimatikan — 2 menit tanpa suara.'); return; }
+      if (gagalCepat >= 6) { hentikanSesi(); pesan('Mic tidak bisa mendengar' + (galat ? ' (' + galat + ')' : '') + '. Coba tekan mic lagi.'); return; }
+      setTimeout(() => { if (sesi && !pengenal && giliran === b) dengar(b); }, gagalCepat ? 400 : 150);
     };
 
     pengenal = p;
     tampilkanMic();
     setStatus(b, 'dengar');
     setStatus(BAHASA[b].lawan, null);
-    try { p.start(); } catch (e) { pengenal = null; hentikanSesi(); pesan('Mic tidak bisa dinyalakan.'); }
+    try { p.start(); } catch (e) { catat('galat-start', { b, e: String(e && e.message || e) }); pengenal = null; hentikanSesi(); pesan('Mic tidak bisa dinyalakan.'); }
   }
 
   // Pembicara berhenti: terjemahan akhir (utuh), bacakan, lalu mic pindah ke pihak lain.
@@ -323,6 +350,7 @@
         setStatus(ke, null);
       }
     } catch (e) {
+      catat('terjemah-gagal', { b: dari, e: String(e && e.message || e) });
       if (!sesi || gen !== generasi) return;
       pesan('Terjemahan gagal — periksa koneksi internet.');
     }
@@ -336,12 +364,14 @@
     }
     // iOS hanya mengizinkan suara baca yang dipicu sentuhan — "pancing" sekali di sini.
     if (window.speechSynthesis && !window.__suaraSiap) { speechSynthesis.speak(new SpeechSynthesisUtterance('')); window.__suaraSiap = true; }
-    sesi = true; hening = 0;
+    sesi = true; awalTunggu = 0; gagalCepat = 0;
+    catat('sesi', { b, suara: daftarSuara.filter(v => /^(zh|cmn|id)/i.test(v.lang)).map(v => v.lang).join(',') || '-' });
     dengar(b);
   }
 
   function hentikanSesi() {
-    sesi = false; sedangBaca = false; generasi++;
+    if (sesi) catat('stop', {});
+    sesi = false; sedangBaca = false; generasi++; awalTunggu = 0;
     const p = pengenal; pengenal = null;
     if (p) try { p.abort(); } catch (e) {}
     window.speechSynthesis?.cancel();
@@ -361,7 +391,8 @@
     if (p) try { p.abort(); } catch (e) {}
     window.speechSynthesis?.cancel();
     for (const b of ['id', 'zh']) ui[b].kotak.classList.remove('sementara');
-    hening = 0;
+    catat('ganti', { b: baru });
+    awalTunggu = 0; gagalCepat = 0;
     dengar(baru);
   });
 
