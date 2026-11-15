@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#ffffff">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Penerjemah Indonesia ⇄ Mandarin</title>
+<!--
+  Penerjemah percakapan Indonesia ⇄ Mandarin (owner 15 Nov 2026, sementara di web MNP).
+  Ponsel diletakkan di meja di antara dua orang: separuh atas diputar 180° untuk lawan bicara (Mandarin),
+  separuh bawah untuk pengguna (Indonesia). Masing-masing punya mic; mode "Bergantian" menyalakan mic
+  pihak lain otomatis sesudah terjemahan selesai dibacakan.
+  Pengenalan suara & suara baca = Web Speech API peramban (gratis); terjemahan + pinyin = Google Translate (client gtx).
+-->
+<style>
+  :root { --garis: #111; --teks: #111; --redup: #6b7280; --kotak: #fafafa; --aksen: #dc2626; --biru: #2563eb; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: #fff; color: var(--teks);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Noto Sans SC", "Microsoft YaHei", sans-serif; }
+  body { display: flex; flex-direction: column; height: 100dvh; overflow: hidden; }
+
+  .sisi { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; gap: 10px;
+    padding: 14px 16px calc(14px + env(safe-area-inset-bottom)); }
+  .sisi.atas { transform: rotate(180deg); }
+
+  .kepala { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .label { font-size: 22px; font-weight: 600; }
+  .status { font-size: 14px; color: var(--redup); min-height: 1.2em; text-align: right; }
+  .status.dengar { color: var(--aksen); font-weight: 600; }
+
+  .kotak { flex: 1 1 auto; min-height: 0; border: 2px solid var(--garis); border-radius: 14px; background: var(--kotak);
+    padding: 12px 14px; display: flex; flex-direction: column; overflow-y: auto; }
+  .kotak { cursor: text; }
+  .kotak textarea { flex: 0 0 auto; min-height: 1.4em; overflow: hidden; width: 100%; border: 0; outline: 0; resize: none; background: transparent;
+    color: inherit; font: inherit; font-size: 26px; line-height: 1.35; padding: 0; }
+  .kotak textarea::placeholder { color: #b6bcc6; }
+  .zh textarea { font-size: 34px; }
+  .pinyin { font-size: 19px; color: var(--biru); line-height: 1.35; margin-top: 6px; }
+  .pinyin:empty { display: none; }
+  .sementara textarea { color: var(--redup); }
+
+  .bawah { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+  .tombol { border: 2px solid var(--garis); background: #fff; color: var(--teks); border-radius: 14px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+  .tombol:active { transform: scale(.96); }
+  .tombol svg { width: 26px; height: 26px; }
+  .baca { width: 52px; height: 52px; }
+  .mic { width: 72px; height: 72px; flex-direction: column; gap: 2px; font-size: 12px; font-weight: 600; }
+  .mic svg { width: 30px; height: 30px; }
+  .mic.aktif { background: var(--aksen); border-color: var(--aksen); color: #fff; animation: denyut 1.2s ease-in-out infinite; }
+  @keyframes denyut { 0%,100% { box-shadow: 0 0 0 0 rgba(220,38,38,.45); } 50% { box-shadow: 0 0 0 12px rgba(220,38,38,0); } }
+
+  .pemisah { flex: 0 0 auto; position: relative; height: 6px; background: var(--garis); }
+  .kendali { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; gap: 8px; }
+  .pil { border: 2px solid var(--garis); background: #fff; color: var(--teks); border-radius: 999px; padding: 5px 12px;
+    font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .pil[aria-pressed="true"] { background: var(--garis); color: #fff; }
+
+  .pesan { position: fixed; left: 50%; bottom: 50%; transform: translate(-50%, 60px); background: #111; color: #fff;
+    padding: 8px 14px; border-radius: 10px; font-size: 14px; max-width: 90vw; text-align: center; opacity: 0;
+    transition: opacity .2s; pointer-events: none; z-index: 5; }
+  .pesan.tampil { opacity: .92; }
+
+  @media (min-height: 760px) { .kotak textarea { font-size: 30px; } .zh textarea { font-size: 40px; } .pinyin { font-size: 21px; } }
+</style>
+</head>
+<body>
+
+<!-- Separuh atas: lawan bicara berbahasa Mandarin (diputar 180°) -->
+<section class="sisi atas" data-bahasa="zh">
+  <div class="kepala">
+    <span class="label">中文 · Mandarin</span>
+    <span class="status" id="status-zh"></span>
+  </div>
+  <div class="kotak zh" id="kotak-zh">
+    <textarea id="teks-zh" placeholder="按麦克风说话…" aria-label="Teks Mandarin"></textarea>
+    <div class="pinyin" id="pinyin-zh"></div>
+  </div>
+  <div class="bawah">
+    <button class="tombol baca" id="baca-zh" type="button" aria-label="Bacakan teks Mandarin">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+    </button>
+    <button class="tombol mic" id="mic-zh" type="button" aria-label="Mic Mandarin">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v4"/></svg>
+      <span>说话</span>
+    </button>
+  </div>
+</section>
+
+<div class="pemisah">
+  <div class="kendali">
+    <button class="pil" id="tgl-gantian" type="button" aria-pressed="true" title="Sesudah terjemahan dibacakan, mic pihak lain menyala sendiri">⇅ Bergantian</button>
+    <button class="pil" id="tgl-suara" type="button" aria-pressed="true" title="Bacakan hasil terjemahan">🔊 Suara</button>
+  </div>
+</div>
+
+<!-- Separuh bawah: pengguna berbahasa Indonesia -->
+<section class="sisi bawah-sisi" data-bahasa="id">
+  <div class="kepala">
+    <span class="label">Bahasa Indonesia</span>
+    <span class="status" id="status-id"></span>
+  </div>
+  <div class="kotak" id="kotak-id">
+    <textarea id="teks-id" placeholder="Tekan mic lalu bicara…" aria-label="Teks Indonesia"></textarea>
+  </div>
+  <div class="bawah">
+    <button class="tombol baca" id="baca-id" type="button" aria-label="Bacakan teks Indonesia">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4V5z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>
+    </button>
+    <button class="tombol mic" id="mic-id" type="button" aria-label="Mic Indonesia">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v4"/></svg>
+      <span>mic</span>
+    </button>
+  </div>
+</section>
+
+<div class="pesan" id="pesan" role="status"></div>
+
+<script>
+(() => {
+  'use strict';
+
+  const BAHASA = {
+    id: { kodeTerjemah: 'id',    kodeSuara: 'id-ID', lawan: 'zh',
+          teks: { dengar: 'Mendengarkan…', terjemah: 'Menerjemahkan…', baca: 'Membacakan…', gagal: 'Gagal menerjemahkan', mic: 'mic', stop: 'stop' } },
+    zh: { kodeTerjemah: 'zh-CN', kodeSuara: 'zh-CN', lawan: 'id',
+          teks: { dengar: '正在听…', terjemah: '翻译中…', baca: '朗读中…', gagal: '翻译失败', mic: '说话', stop: '停止' } },
+  };
+
+  const el = id => document.getElementById(id);
+  // Tinggi kotak teks mengikuti isi supaya pinyin tepat di bawah aksara.
+  const rapikan = ta => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
+  const isi = (ta, teks) => { ta.value = teks; rapikan(ta); };
+  const ui = {};
+  for (const b of ['id', 'zh']) {
+    ui[b] = { teks: el('teks-' + b), status: el('status-' + b), mic: el('mic-' + b), baca: el('baca-' + b),
+              kotak: el('kotak-' + b), pinyin: el('pinyin-' + b) };
+  }
+
+  const tglGantian = el('tgl-gantian');
+  const tglSuara = el('tgl-suara');
+  const pakai = tombol => tombol.getAttribute('aria-pressed') === 'true';
+  for (const t of [tglGantian, tglSuara]) {
+    const kunci = 'penerjemah.' + t.id;
+    if (localStorage.getItem(kunci) === '0') t.setAttribute('aria-pressed', 'false');
+    t.addEventListener('click', () => {
+      const nyala = !pakai(t);
+      t.setAttribute('aria-pressed', String(nyala));
+      localStorage.setItem(kunci, nyala ? '1' : '0');
+      if (t === tglSuara && !nyala) speechSynthesis?.cancel();
+    });
+  }
+
+  let timerPesan;
+  function pesan(teks) {
+    const p = el('pesan');
+    p.textContent = teks;
+    p.classList.add('tampil');
+    clearTimeout(timerPesan);
+    timerPesan = setTimeout(() => p.classList.remove('tampil'), 3500);
+  }
+
+  function setStatus(b, kunci) {
+    ui[b].status.textContent = kunci ? BAHASA[b].teks[kunci] : '';
+    ui[b].status.classList.toggle('dengar', kunci === 'dengar');
+  }
+
+  // ---------- Terjemahan (Google Translate, client gtx — CORS terbuka, tanpa kunci) ----------
+  let nomorPermintaan = 0;
+  async function terjemah(teks, dari, ke) {
+    const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&dt=rm'
+      + '&sl=' + BAHASA[dari].kodeTerjemah + '&tl=' + BAHASA[ke].kodeTerjemah + '&q=' + encodeURIComponent(teks);
+    const r = await fetch(url);
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const data = await r.json();
+    let hasil = '', latinHasil = '', latinAsal = '';
+    for (const s of data[0] || []) {
+      if (typeof s[0] === 'string') hasil += s[0];
+      else { latinHasil = s[2] || latinHasil; latinAsal = s[3] || latinAsal; }
+    }
+    return { hasil, latinHasil, latinAsal };
+  }
+
+  // Terjemahkan isi sisi `dari` ke sisi lawan, lalu (opsional) bacakan.
+  async function prosesTerjemah(dari, { bacakan = false, lanjutGantian = false } = {}) {
+    const ke = BAHASA[dari].lawan;
+    const teks = ui[dari].teks.value.trim();
+    const nomor = ++nomorPermintaan;
+    if (!teks) { isi(ui[ke].teks, ''); ui.zh.pinyin.textContent = ''; return; }
+    setStatus(ke, 'terjemah');
+    try {
+      const t = await terjemah(teks, dari, ke);
+      if (nomor !== nomorPermintaan) return;           // sudah ada permintaan lebih baru
+      isi(ui[ke].teks, t.hasil);
+      ui.zh.pinyin.textContent = dari === 'zh' ? t.latinAsal : t.latinHasil;
+      setStatus(ke, null);
+      if (bacakan && pakai(tglSuara)) {
+        setStatus(ke, 'baca');
+        await bacakanTeks(t.hasil, ke);
+        setStatus(ke, null);
+      }
+      if (lanjutGantian && pakai(tglGantian) && !sedangDengar) mulaiDengar(ke);
+    } catch (e) {
+      if (nomor !== nomorPermintaan) return;
+      setStatus(ke, 'gagal');
+      pesan('Terjemahan gagal — periksa koneksi internet.');
+    }
+  }
+
+  // ---------- Suara baca (speechSynthesis) ----------
+  let daftarSuara = [];
+  const muatSuara = () => { daftarSuara = window.speechSynthesis ? speechSynthesis.getVoices() : []; };
+  if (window.speechSynthesis) { muatSuara(); speechSynthesis.addEventListener?.('voiceschanged', muatSuara); }
+
+  function pilihSuara(kode) {
+    const awalan = kode.slice(0, 2).toLowerCase();
+    const cocok = daftarSuara.filter(v => v.lang.replace('_', '-').toLowerCase().startsWith(awalan));
+    return cocok.find(v => v.lang.replace('_', '-').toLowerCase() === kode.toLowerCase()) || cocok[0] || null;
+  }
+
+  function bacakanTeks(teks, b) {
+    return new Promise(selesai => {
+      if (!window.speechSynthesis || !teks) return selesai();
+      speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(teks);
+      u.lang = BAHASA[b].kodeSuara;
+      const v = pilihSuara(u.lang);
+      if (v) u.voice = v;
+      u.rate = b === 'zh' ? 0.9 : 1;
+      let tuntas = false;
+      const akhiri = () => { if (!tuntas) { tuntas = true; selesai(); } };
+      u.onend = akhiri;
+      u.onerror = akhiri;
+      // Pengaman bila peramban tidak pernah memicu onend.
+      setTimeout(akhiri, 2500 + teks.length * 220);
+      speechSynthesis.speak(u);
+    });
+  }
+
+  for (const b of ['id', 'zh']) {
+    ui[b].baca.addEventListener('click', async () => {
+      hentikanDengar();
+      setStatus(b, 'baca');
+      await bacakanTeks(ui[b].teks.value.trim(), b);
+      setStatus(b, null);
+    });
+  }
+
+  // ---------- Pengenalan suara (SpeechRecognition) ----------
+  const Pengenal = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let pengenal = null, sedangDengar = null, teksFinal = '';
+
+  function mulaiDengar(b) {
+    if (!Pengenal) {
+      pesan('Peramban ini tidak mendukung pengenalan suara. Pakai Chrome (Android) atau Safari (iPhone), atau ketik di kotak.');
+      return;
+    }
+    hentikanDengar();
+    if (window.speechSynthesis) speechSynthesis.cancel();
+    const p = new Pengenal();
+    p.lang = BAHASA[b].kodeSuara;
+    p.interimResults = true;
+    p.continuous = false;
+    p.maxAlternatives = 1;
+    teksFinal = '';
+    let adaHasil = false;
+
+    p.onresult = ev => {
+      let sementara = '';
+      teksFinal = '';
+      for (let i = 0; i < ev.results.length; i++) {
+        const r = ev.results[i];
+        if (r.isFinal) teksFinal += r[0].transcript; else sementara += r[0].transcript;
+      }
+      adaHasil = true;
+      isi(ui[b].teks, (teksFinal + sementara).trim());
+      ui[b].kotak.classList.toggle('sementara', !!sementara);
+      if (b === 'zh') ui.zh.pinyin.textContent = '';
+    };
+    p.onerror = ev => {
+      if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') pesan('Izin mikrofon ditolak. Izinkan mic untuk situs ini di pengaturan peramban.');
+      else if (ev.error === 'network') pesan('Pengenalan suara butuh internet.');
+      else if (ev.error === 'language-not-supported') pesan('Bahasa ini belum didukung pengenalan suara di perangkat ini.');
+    };
+    p.onend = () => {
+      if (pengenal !== p) return;                       // sudah diganti sesi lain
+      pengenal = null; sedangDengar = null;
+      tampilkanMic();
+      setStatus(b, null);
+      ui[b].kotak.classList.remove('sementara');
+      if (adaHasil && ui[b].teks.value.trim()) prosesTerjemah(b, { bacakan: true, lanjutGantian: true });
+    };
+
+    // Kotak tidak dikosongkan di sini: terjemahan sebelumnya tetap terbaca sampai suara pertama tertangkap.
+    pengenal = p; sedangDengar = b;
+    tampilkanMic();
+    setStatus(b, 'dengar');
+    try { p.start(); } catch (e) { pengenal = null; sedangDengar = null; tampilkanMic(); setStatus(b, null); }
+  }
+
+  function hentikanDengar() {
+    if (!pengenal) return;
+    const p = pengenal, b = sedangDengar;
+    pengenal = null; sedangDengar = null;
+    try { p.abort(); } catch (e) {}
+    tampilkanMic();
+    setStatus(b, null);
+    ui[b].kotak.classList.remove('sementara');
+  }
+
+  function tampilkanMic() {
+    for (const b of ['id', 'zh']) {
+      const aktif = sedangDengar === b;
+      ui[b].mic.classList.toggle('aktif', aktif);
+      ui[b].mic.querySelector('span').textContent = aktif ? BAHASA[b].teks.stop : BAHASA[b].teks.mic;
+    }
+  }
+
+  for (const b of ['id', 'zh']) {
+    ui[b].mic.addEventListener('click', () => {
+      // iOS hanya mengizinkan suara baca yang dipicu sentuhan — "pancing" sekali di sini.
+      if (window.speechSynthesis && !window.__suaraSiap) { speechSynthesis.speak(new SpeechSynthesisUtterance('')); window.__suaraSiap = true; }
+      if (sedangDengar === b) {
+        // Tekan lagi = selesai bicara: hentikan dan langsung terjemahkan yang sudah tertangkap.
+        const p = pengenal;
+        try { p.stop(); } catch (e) { hentikanDengar(); }
+      } else {
+        mulaiDengar(b);
+      }
+    });
+  }
+
+  // ---------- Mengetik langsung di kotak ----------
+  for (const b of ['id', 'zh']) {
+    let jeda;
+    ui[b].teks.addEventListener('input', () => {
+      rapikan(ui[b].teks);
+      if (sedangDengar === b) return;
+      if (b === 'zh') ui.zh.pinyin.textContent = '';
+      clearTimeout(jeda);
+      jeda = setTimeout(() => prosesTerjemah(b), 700);
+    });
+    ui[b].kotak.addEventListener('click', ev => { if (ev.target === ui[b].kotak) ui[b].teks.focus(); });
+    ui[b].teks.addEventListener('focus', () => { if (sedangDengar) hentikanDengar(); });
+  }
+
+  // ---------- Layar tetap menyala selama dipakai ----------
+  let kunciLayar = null;
+  async function jagaLayar() {
+    try { if ('wakeLock' in navigator && document.visibilityState === 'visible') kunciLayar = await navigator.wakeLock.request('screen'); } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') jagaLayar(); else hentikanDengar(); });
+  document.addEventListener('click', () => { if (!kunciLayar) jagaLayar(); }, { once: true });
+
+  if (!Pengenal) setTimeout(() => pesan('Pengenalan suara tidak tersedia di peramban ini — ketik di kotak untuk menerjemahkan.'), 400);
+})();
+</script>
+</body>
+</html>
