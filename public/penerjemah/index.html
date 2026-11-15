@@ -38,7 +38,8 @@
   .kotak textarea::placeholder { color: #b6bcc6; }
   .zh textarea { font-size: 34px; }
   .pinyin { font-size: 19px; color: var(--biru); line-height: 1.35; margin-top: 6px; }
-  .pinyin:empty { display: none; }
+  .pinyin:empty, .baku:empty { display: none; }
+  .baku { font-size: 15px; color: var(--redup); margin-top: 6px; font-style: italic; }
   .sementara textarea { color: var(--redup); }
 
   .bawah { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
@@ -101,6 +102,7 @@
   </div>
   <div class="kotak" id="kotak-id">
     <textarea id="teks-id" placeholder="Tekan mic lalu bicara…" aria-label="Teks Indonesia"></textarea>
+    <div class="baku" id="baku-id"></div>
   </div>
   <div class="bawah">
     <button class="tombol baca" id="baca-id" type="button" aria-label="Bacakan teks Indonesia">
@@ -115,6 +117,7 @@
 
 <div class="pesan" id="pesan" role="status"></div>
 
+<script src="bakukan.js?v=1"></script>
 <script>
 (() => {
   'use strict';
@@ -146,6 +149,9 @@
     ui[b] = { teks: el('teks-' + b), status: el('status-' + b), baca: el('baca-' + b), kotak: el('kotak-' + b) };
   }
   const pinyin = el('pinyin-zh');
+  const bakuId = el('baku-id');
+  // Ucapan Indonesia sehari-hari (gaul / campur Sunda-Jawa) dibakukan dulu — lihat bakukan.js.
+  const bakukan = window.bakukan || (t => t);
   const mic = el('mic'), micLabel = el('mic-label');
 
   const tglSuara = el('tgl-suara');
@@ -175,6 +181,8 @@
   // ---------- Terjemahan (Google Translate, client gtx — CORS terbuka, tanpa kunci) ----------
   async function terjemah(teks, dari) {
     const ke = BAHASA[dari].lawan;
+    const baku = dari === 'id' ? bakukan(teks) : teks;
+    teks = baku || teks;
     const url = 'https://translate.googleapis.com/translate_a/single?client=gtx&dt=t&dt=rm'
       + '&sl=' + BAHASA[dari].kodeTerjemah + '&tl=' + BAHASA[ke].kodeTerjemah + '&q=' + encodeURIComponent(teks);
     const r = await fetch(url);
@@ -185,7 +193,7 @@
       if (typeof s[0] === 'string') hasil += s[0];
       else { latinHasil = s[2] || latinHasil; latinAsal = s[3] || latinAsal; }
     }
-    return { hasil, latinHasil, latinAsal };
+    return { hasil, latinHasil, latinAsal, baku };
   }
 
   // Tulis hasil terjemahan di sisi lawan; `sementara` = masih berubah selagi pembicara bicara (abu-abu).
@@ -193,6 +201,9 @@
     const ke = BAHASA[dari].lawan;
     isi(ui[ke].teks, t.hasil);
     pinyin.textContent = dari === 'zh' ? t.latinAsal : t.latinHasil;
+    const asli = ui.id.teks.value.trim().toLowerCase().replace(/[.,!?\s]+/g, ' ').trim();
+    const baku = (t.baku || '').toLowerCase().replace(/[.,!?\s]+/g, ' ').trim();
+    bakuId.textContent = dari === 'id' && baku && baku !== asli ? 'Dibaca: ' + t.baku : '';
     ui[ke].kotak.classList.toggle('sementara', sementara);
   }
 
