@@ -7,6 +7,7 @@ use App\Models\KasReimburseUj;
 use App\Models\KasTransfer;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 /**
@@ -82,7 +83,7 @@ class CerminReimburse
     {
         return Cache::lock('tulis-reimburse', 120)->block(60, function () use ($transfer) {
             $peta = $this->peta();
-            $baru = collect($transfer)->flatMap(fn (KasTransfer $t) => self::baris($t))
+            $baru = self::segar($transfer)->flatMap(fn (KasTransfer $t) => self::baris($t))
                 ->reject(fn ($r) => isset($peta['baris'][$r['id']]))->unique('id')
                 ->sortBy(fn ($r) => [(int) $r['no'], $r['id']])->values();
             if ($baru->isEmpty()) {
@@ -188,7 +189,7 @@ class CerminReimburse
         Cache::lock('tulis-reimburse', 120)->block(60, function () use ($idLama, $transferBaru) {
             $peta = $this->peta();
             $pos = collect($idLama)->map(fn ($i) => $peta['baris'][$i] ?? null)->filter()->unique()->sort()->values();
-            $baru = collect($transferBaru)->flatMap(fn (KasTransfer $t) => self::baris($t))->unique('id')->values();
+            $baru = self::segar($transferBaru)->flatMap(fn (KasTransfer $t) => self::baris($t))->unique('id')->values();
             if ($pos->isEmpty()) {
                 return; // belum pernah dicerminkan → ditambahkan oleh tambahYangBelum()
             }
@@ -315,6 +316,22 @@ class CerminReimburse
                     9 => $teks($u->galian), 10 => $teks($u->kategori), 11 => $u->tanggal_reimburse->format('Y-m-d')] : []),
             ];
         })->all();
+    }
+
+    /**
+     * Transfer-transfer ini dibaca ulang beserta detailnya dalam satu snapshot (transaksi REPEATABLE READ). Impor Kas Harian
+     * berkala menghapus lalu mengisi ulang kas_transfer/kas_bon dengan id baru; model yang diambil sebelum impor itu selesai
+     * lalu detailnya dimuat belakangan tampak TANPA detail → baris transfer utuh ikut tertulis di samping detailnya (kasus
+     * NO ID 36658 "9 rit Haji Rudy" 23,4 jt, 16 Nov 2026: saldo Mutasi Reimburse minus).
+     *
+     * @param  iterable<KasTransfer>  $transfer
+     * @return Collection<int, KasTransfer>
+     */
+    private static function segar(iterable $transfer): Collection
+    {
+        $noIds = collect($transfer)->pluck('no_id')->filter()->unique()->values()->all();
+
+        return DB::transaction(fn () => KasTransfer::with('bon.kodeGl')->whereIn('no_id', $noIds ?: [0])->orderBy('no_id')->get());
     }
 
     /** Range A1 → isi untuk satu baris. $lengkap: baris baru (semua kolom + rumus); selain itu kolom admin dibiarkan. */
