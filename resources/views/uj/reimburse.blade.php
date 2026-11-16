@@ -21,7 +21,7 @@
         @media (max-width: 900px) { .panel-pilih { grid-template-columns: 1fr 1fr; } }
         .lainnya { margin-top: 10px; padding: 8px 12px; border: 1px dashed var(--garis-kuat); border-radius: 8px; font-size: 13.5px; }
         .lainnya .baris-lainnya { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-        .lainnya input[type=date] { padding: 4px 8px; font-size: 13px; }
+        .lainnya input[type=date], .lainnya input[data-tanggal-asli] { padding: 4px 8px; font-size: 13px; }
         .lainnya #total-lainnya { font-size: 17px; font-variant-numeric: tabular-nums; }
         .lainnya table { margin-top: 8px; font-size: 12.5px; border-collapse: collapse; width: auto; }
         .lainnya table th, .lainnya table td { padding: 3px 10px; border-bottom: 1px solid var(--garis); text-align: left; }

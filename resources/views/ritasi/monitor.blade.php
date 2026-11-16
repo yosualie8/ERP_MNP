@@ -468,7 +468,6 @@
             ({{ $bukanAngka->take(12)->implode(', ') }}{{ $bukanAngka->count() > 12 ? ', …' : '' }}).</p>
     @endif
 
-    <script src="{{ asset('js/tanggal-id.js') }}"></script>
     <script src="{{ asset('js/saring-kolom.js') }}?v={{ filemtime(public_path('js/saring-kolom.js')) }}"></script>
     <script>
         (() => {

@@ -7,6 +7,8 @@
  *   kolom yang ada di detail disaring per baris detail, yang tidak cocok disembunyikan.
  * Sel boleh membawa data-v (teks untuk dicari) & data-n (nilai angka/tanggal yyyy-mm-dd untuk > <).
  * Teks: "mengandung" (huruf besar/kecil diabaikan). Angka: boleh ">100000", "<= 50.000".
+ * Tanggal: kolom bertanggal boleh disaring dengan ketikan angka saja — "12112026" (= 12 Nov 2026), ">01112026", "<=15/11/2026",
+ * "12 nov 2026", "1211" (tahun ini); sama seperti isian tanggal (TanggalId.urai).
  * Tombol ▾ di tiap kolom: pilih nilai seperti filter Excel (daftar nilai unik + jumlahnya, centang, cari, pilih semua).
  */
 (() => {
@@ -50,6 +52,21 @@
         const m = String(s).replace(/\./g, '').replace(',', '.').match(/-?\d+(\.\d+)?/);
         return m ? parseFloat(m[0]) : NaN;
     };
+    // Tanggal di teks sel ("21 Okt", "21 Okt 2026", "21-Okt-2026", 21/10/2026, 2026-10-21) → ["yyyy-mm-dd", sisa teks] atau null.
+    const BULAN = {jan: 1, feb: 2, mar: 3, apr: 4, mei: 5, may: 5, jun: 6, jul: 7, agu: 8, agt: 8, ags: 8, aug: 8, sep: 9, okt: 10, oct: 10, nov: 11, des: 12, dec: 12};
+    const dua = n => String(n).padStart(2, '0');
+    const tanggalTeks = t => {
+        let m = t.match(/^(\d{1,2})[\s-]+([A-Za-z]{3})[a-z]*\.?(?:[\s-]+(\d{4}))?/);
+        if (m && BULAN[m[2].toLowerCase()]) return [`${m[3] || new Date().getFullYear()}-${dua(BULAN[m[2].toLowerCase()])}-${dua(m[1])}`, t.slice(m[0].length)];
+        if ((m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/))) return [`${m[3]}-${dua(m[2])}-${dua(m[1])}`, t.slice(m[0].length)];
+        if (/^\d{4}-\d{2}-\d{2}/.test(t)) return [t.slice(0, 10), t.slice(10)];
+        return null;
+    };
+    // Ketikan saringan → "yyyy-mm-dd" (12112026, 121126, 1211, 12/11/2026, 12 nov 2026, 2026-11-12) atau null.
+    const tanggalKetik = q => {
+        const d = window.TanggalId?.urai(q);
+        return d ? `${d.getFullYear()}-${dua(d.getMonth() + 1)}-${dua(d.getDate())}` : null;
+    };
     // Sel berisi kotak isian (mis. grid form Monitor Ritasi) ikut disaring berdasarkan isiannya.
     const isianSel = td => td.querySelector('input[type=text], input[type=search], input:not([type]), textarea, select');
     const teksSel = td => td.dataset.v ?? (td.textContent + (isianSel(td) ? ' ' + isianSel(td).value : ''));
@@ -58,6 +75,10 @@
         if (!q) return true;
         if (!td) return false;
         const m = q.match(/^([<>]=?)\s*(.+)$/);
+        // Kolom tanggal + ketikan tanggal (mis. 12112026) → dibandingkan sebagai tanggal; sel tanpa tanggal lanjut seperti biasa.
+        const tq = tanggalKetik(m ? m[2].trim() : q);
+        const ts = tq ? tanggalSel(td) : null;
+        if (ts) return !m ? ts === tq : m[1] === '>' ? ts > tq : m[1] === '<' ? ts < tq : m[1] === '>=' ? ts >= tq : ts <= tq;
         if (m) {
             // Tanggal yyyy-mm-dd dibandingkan sebagai teks (data-n), selain itu angka.
             const tgl = /^\d{4}-\d{2}(-\d{2})?$/.test(m[2].trim());
@@ -76,6 +97,13 @@
         c.querySelectorAll('.panah, .jumlah-bon, input, button, select').forEach(x => x.remove());
         const t = c.textContent.replace(/\s+/g, ' ').trim();
         return t || (isianSel(td)?.value ?? '').trim();
+    };
+    // Tanggal sel "yyyy-mm-dd": dari data-n (bila berbentuk tanggal) atau dari teks/isiannya.
+    const tanggalSel = td => {
+        const n = td.dataset.n;
+        if (n && /^\d{4}-\d{2}-\d{2}/.test(n)) return n.slice(0, 10);
+        const t = nilaiSel(td);
+        return t ? tanggalTeks(t)?.[0] ?? null : null;
     };
     const esc = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
 
@@ -222,7 +250,6 @@
             });
         const elUrut = b => grup ? b : b.baris[0];
         const tetap = b => !grup && b.baris[0].cells.length > 1 && /^(total|jumlah|sub ?total|grand total)\b/i.test(nilaiSel(b.baris[0].cells[0]));
-        const BULAN = {jan: 1, feb: 2, mar: 3, apr: 4, mei: 5, may: 5, jun: 6, jul: 7, agu: 8, agt: 8, ags: 8, aug: 8, sep: 9, okt: 10, oct: 10, nov: 11, des: 12, dec: 12};
         const kunciUrut = td => {
             if (!td) return null;
             if (td.dataset.n !== undefined && td.dataset.n !== '') return /^-?\d+(\.\d+)?$/.test(td.dataset.n) ? +td.dataset.n : td.dataset.n;
@@ -230,10 +257,8 @@
             if (t === '' || t === '-' || t === '—') return null;
             // Tanggal (+ jam bila ada di sel yang sama, mis. "21 Okt 9:14") → "yyyy-mm-dd hh:mm" supaya bisa dibandingkan sebagai teks.
             const jam = s => { const j = s.match(/\b(\d{1,2})[:.](\d{2})\b/); return j ? ` ${j[1].padStart(2, '0')}:${j[2]}` : ''; };
-            let m = t.match(/^(\d{1,2})\s+([A-Za-z]{3})[a-z]*\.?(?:\s+(\d{4}))?/);
-            if (m && BULAN[m[2].toLowerCase()]) return `${m[3] || new Date().getFullYear()}-${String(BULAN[m[2].toLowerCase()]).padStart(2, '0')}-${m[1].padStart(2, '0')}${jam(t.slice(m[0].length))}`;
-            if ((m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/))) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}${jam(t.slice(m[0].length))}`;
-            if (/^\d{4}-\d{2}-\d{2}/.test(t)) return t.slice(0, 10) + jam(t.slice(10));
+            const tg = tanggalTeks(t);
+            if (tg) return tg[0] + jam(tg[1]);
             // Angka: rupiah, satuan, No DO bertanda petik di depan (`0018).
             if (/^[`']?[-+]?\s*(rp\.?\s*)?[\d.,]+\s*(%|m³|m3|l|liter|jam|rit|kg|hari|x)?$/i.test(t)) { const a = angka(t); if (!isNaN(a)) return a; }
             return t.toLowerCase();

@@ -102,7 +102,6 @@
             </form>
         </div>
     @endif
-    <script src="{{ asset('js/tanggal-id.js') }}"></script>
     <script>
         (() => {
             TanggalId.pasangSemua(document.querySelector('form.form-p'));

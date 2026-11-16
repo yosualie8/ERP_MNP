@@ -92,7 +92,7 @@
         .ingat.habis { background: #3a1f22; color: #ffd6d6; }
         .masa { margin-top: 18px; background: var(--kartu); border-radius: 16px; padding: 14px 16px; font-size: 14px; color: var(--redup); line-height: 1.5; }
         .masa form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 10px; }
-        .masa input[type=date] { background: #0f1115; color: var(--teks); border: 1px solid var(--garis); border-radius: 10px; padding: 9px 10px; font-size: 15px; }
+        .masa input[type=date], .masa input[data-tanggal-asli] { background: #0f1115; color: var(--teks); border: 1px solid var(--garis); border-radius: 10px; padding: 9px 10px; font-size: 15px; }
         .ubin.listrik { grid-column: span 2; min-height: 170px; }
         .ubin .watt { font-size: 34px; font-weight: 700; letter-spacing: -.5px; margin-top: 8px; font-variant-numeric: tabular-nums; }
         .ubin .watt small { font-size: 16px; font-weight: 600; color: var(--redup); margin-left: 3px; }
@@ -100,6 +100,7 @@
         .ubin canvas.grafik { width: 100%; height: 56px; display: block; margin-top: 8px; }
         .kosong { background: var(--kartu); border-radius: 18px; padding: 22px; color: var(--redup); line-height: 1.6; }
     </style>
+    <script src="{{ asset('js/tanggal-id.js') }}?v={{ filemtime(public_path('js/tanggal-id.js')) }}"></script>
 </head>
 <body>
     <div class="atas">

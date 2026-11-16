@@ -362,5 +362,4 @@
             if (!AWAL.length) tambah();
         })();
     </script>
-    <script src="{{ asset('js/tanggal-id.js') }}"></script>
 @endsection

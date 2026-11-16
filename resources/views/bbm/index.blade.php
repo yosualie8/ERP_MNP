@@ -117,5 +117,4 @@
             f.submit();
         }));
     </script>
-    <script src="{{ asset('js/tanggal-id.js') }}"></script>
 @endsection

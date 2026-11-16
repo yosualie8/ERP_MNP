@@ -133,5 +133,4 @@
     @empty
         <div class="kartu redup">Belum ada kiriman Lapor Lapangan pada tanggal ini{{ $tahapId ? ' untuk proyek ini' : '' }}.</div>
     @endforelse
-    <script src="{{ asset('js/tanggal-id.js') }}"></script>
 @endsection
