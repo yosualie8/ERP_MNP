@@ -188,6 +188,13 @@ Route::middleware(['auth', 'menu'])->group(function () {
     // Database Sparepart (menu Plant & Sparepart): cari sparepart + histori harga, isi dari mnp:impor-sparepart.
     Route::get('/sparepart', [\App\Http\Controllers\SparepartController::class, 'index'])->name('sparepart.index');
     Route::get('/sparepart/riwayat', [\App\Http\Controllers\SparepartController::class, 'riwayat'])->name('sparepart.riwayat');
+    Route::post('/sparepart/item', [\App\Http\Controllers\SparepartController::class, 'simpanItem'])->name('sparepart-ubah.simpan');
+    // Master Supplier (owner 16 Nov 2026, menu Plant & Sparepart): rekening dari Daftar Rekening, pembelian dari Database Sparepart.
+    Route::get('/supplier', [\App\Http\Controllers\SupplierController::class, 'index'])->name('supplier.index');
+    Route::get('/supplier/tambah', [\App\Http\Controllers\SupplierController::class, 'create'])->name('supplier.create');
+    Route::post('/supplier', [\App\Http\Controllers\SupplierController::class, 'store'])->name('supplier.store');
+    Route::get('/supplier/{supplier}/edit', [\App\Http\Controllers\SupplierController::class, 'edit'])->whereNumber('supplier')->name('supplier.edit');
+    Route::put('/supplier/{supplier}', [\App\Http\Controllers\SupplierController::class, 'update'])->whereNumber('supplier')->name('supplier.update');
     // Daftar Rekening: database rekening bersama Kas Harian & Kas UJ (satu nomor = satu nama pemilik).
     Route::get('/rekening', [\App\Http\Controllers\RekeningController::class, 'index'])->name('rekening.index');
     Route::post('/rekening', [\App\Http\Controllers\RekeningController::class, 'simpan'])->name('rekening.simpan');
