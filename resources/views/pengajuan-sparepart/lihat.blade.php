@@ -19,10 +19,30 @@
             header, .samping, .psp-aksi, .form-putus, .tak-cetak { display: none !important; }
             .kartu { border: 0 !important; box-shadow: none !important; }
         }
+        /* Nota untuk gambar WhatsApp: selalu terang (warna tetap, tidak ikut tema gelap), hanya tampil di salinan html2canvas. */
+        #nota-wa { width: 720px; padding: 22px 24px; background: #fff; color: #1f2329; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; line-height: 1.4; }
+        #nota-wa .atas { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 3px solid #c62828; padding-bottom: 10px; margin-bottom: 12px; }
+        #nota-wa .pt { font-size: 12px; color: #6b7280; letter-spacing: .5px; }
+        #nota-wa h2 { margin: 2px 0 0; font-size: 20px; color: #1f2329; }
+        #nota-wa .status { font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 12px; background: #fef3c7; color: #92400e; white-space: nowrap; }
+        #nota-wa .status.hijau { background: #dcfce7; color: #166534; }
+        #nota-wa .status.merah { background: #fee2e2; color: #991b1b; }
+        #nota-wa .status.abu { background: #e5e7eb; color: #374151; }
+        #nota-wa .info { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; margin-bottom: 12px; }
+        #nota-wa .info .k { font-size: 11.5px; color: #6b7280; }
+        #nota-wa table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        #nota-wa th { background: #f3f4f6; color: #374151; text-align: left; font-weight: 600; padding: 6px 7px; border: 1px solid #d1d5db; }
+        #nota-wa td { padding: 6px 7px; border: 1px solid #d1d5db; color: #1f2329; vertical-align: top; background: #fff; }
+        #nota-wa .angka { text-align: right; white-space: nowrap; }
+        #nota-wa .sub { font-size: 11.5px; color: #6b7280; }
+        #nota-wa tfoot td { font-weight: 700; background: #fff7ed; font-size: 14.5px; }
+        #nota-wa .catatan { margin-top: 10px; font-size: 13px; }
+        #nota-wa .kaki { margin-top: 12px; font-size: 11px; color: #9ca3af; }
     </style>
 
     <div class="psp-aksi">
         <a href="{{ route('pengajuan-sparepart.index') }}" class="tombol polos">← Daftar pengajuan</a>
+        <button type="button" class="tombol" id="bagikan-wa">📤 Bagikan ke WhatsApp</button>
         <button type="button" class="tombol polos" onclick="window.print()">🖨 Cetak</button>
         @if ($bolehUbah)
             <a href="{{ route('pengajuan-sparepart.ubah', $p) }}" class="tombol polos">✎ Ubah</a>
@@ -95,4 +115,102 @@
             </form>
         @endif
     </div>
+
+    {{-- Gambar yang dibagikan ke WhatsApp (tersembunyi; dimunculkan hanya di salinan html2canvas). --}}
+    @php($status = \App\Models\PengajuanSparepart::STATUS[$p->status])
+    <div id="nota-wa" hidden>
+        <div class="atas">
+            <div><div class="pt">PT MULTI NIAGA PUTRA</div><h2>Pengajuan Sparepart {{ $p->nomor }}</h2></div>
+            <span class="status {{ ['disetujui' => 'hijau', 'ditolak' => 'merah', 'batal' => 'abu'][$p->status] ?? '' }}">{{ $status }}</span>
+        </div>
+        <div class="info">
+            <div><div class="k">Tanggal</div>{{ $p->tanggal->translatedFormat('j F Y') }}</div>
+            <div><div class="k">Diajukan oleh</div>{{ $p->pembuat?->name ?? '—' }}</div>
+            <div style="grid-column: 1 / -1;"><div class="k">Keperluan / unit</div>{{ $p->keperluan ?? '—' }}</div>
+        </div>
+        <table data-tanpa-saring-kolom data-tanpa-beku>
+            <thead><tr><th class="angka">No</th><th>Nama Sparepart</th><th class="angka">Qty</th><th class="angka">Harga Satuan</th><th class="angka">Subtotal</th></tr></thead>
+            <tbody>
+                @foreach ($p->detail as $i => $d)
+                    <tr>
+                        <td class="angka">{{ $i + 1 }}</td>
+                        <td><b>{{ $d->nama_item }}</b>
+                            @php($rinci = collect([$d->jenis, $d->part_number, $d->merk, $d->keterangan])->filter()->implode(' · '))
+                            @if ($rinci !== '')<div class="sub">{{ $rinci }}</div>@endif</td>
+                        <td class="angka">{{ $qty($d->qty) }} {{ $d->satuan }}</td>
+                        <td class="angka">{{ rp($d->harga) }}</td>
+                        <td class="angka"><b>{{ rp($d->subtotal) }}</b></td>
+                    </tr>
+                @endforeach
+            </tbody>
+            <tfoot><tr><td colspan="4" class="angka">TOTAL ({{ $p->detail->count() }} item)</td><td class="angka">Rp {{ rp($p->total) }}</td></tr></tfoot>
+        </table>
+        @if ($p->catatan)<div class="catatan"><b>Catatan:</b> {{ $p->catatan }}</div>@endif
+        @if ($p->diputus_pada)
+            <div class="catatan"><b>{{ $status }} oleh</b> {{ $p->pemutus?->name ?? '—' }} · {{ $p->diputus_pada->translatedFormat('j M Y H:i') }}@if ($p->catatan_putusan) — “{{ $p->catatan_putusan }}”@endif</div>
+        @endif
+        <div class="kaki">ERP MNP · dibuat {{ now()->translatedFormat('j M Y H:i') }}</div>
+    </div>
+
+    @php($teksWa = collect([
+        "*Pengajuan Sparepart {$p->nomor}*",
+        'Tanggal: '.$p->tanggal->translatedFormat('j F Y'),
+        'Diajukan oleh: '.($p->pembuat?->name ?? '—'),
+        $p->keperluan ? "Keperluan: {$p->keperluan}" : null,
+        "Status: {$status}",
+        '',
+        '*Total: Rp '.rp($p->total).'* ('.$p->detail->count().' item)',
+        $p->catatan ? "Catatan: {$p->catatan}" : null,
+        '',
+        'Detail: '.route('pengajuan-sparepart.lihat', $p),
+    ])->reject(fn ($x) => $x === null)->implode("\n"))
+
+    <script src="{{ asset('js/html2canvas.min.js') }}"></script>
+    <script>
+        (() => {
+            const teks = @json($teksWa), namaFile = @json($p->nomor.'.png');
+            const gambar = async () => {
+                const kanvas = await html2canvas(document.getElementById('nota-wa'), {
+                    scale: 2, backgroundColor: '#ffffff', windowWidth: 800,
+                    onclone: d => { d.getElementById('nota-wa').hidden = false; },
+                });
+                return new Promise(ok => kanvas.toBlob(ok, 'image/png'));
+            };
+            const unduh = blob => Object.assign(document.createElement('a'), {href: URL.createObjectURL(blob), download: namaFile}).click();
+            // HP: menu bagikan bawaan (pilih WhatsApp → gambar + teks terkirim bersama). Laptop: menu bagikan Windows sering gagal,
+            // jadi gambar disalin ke clipboard + diunduh, lalu WhatsApp Web dibuka dengan teks terisi — tinggal Ctrl+V gambarnya.
+            const hp = navigator.userAgentData?.mobile ?? /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+            document.getElementById('bagikan-wa').addEventListener('click', async e => {
+                const tombol = e.currentTarget, asli = tombol.textContent;
+                tombol.disabled = true; tombol.textContent = 'Membuat gambar…';
+                try {
+                    // HP: teks disalin juga (WhatsApp iPhone kadang membuang teks yang dikirim bersama gambar → tinggal tempel).
+                    if (hp) navigator.clipboard?.writeText(teks).catch(() => {});
+                    const janji = gambar();
+                    // Salin ke clipboard harus dimulai langsung saat klik (izin browser); gambarnya menyusul lewat promise.
+                    const salin = !hp && window.ClipboardItem && navigator.clipboard?.write
+                        ? navigator.clipboard.write([new ClipboardItem({'image/png': janji})]).then(() => true, () => false)
+                        : Promise.resolve(false);
+                    const blob = await janji;
+                    if (hp) {
+                        const file = new File([blob], namaFile, {type: 'image/png'});
+                        if (navigator.canShare?.({files: [file]})) {
+                            try { await navigator.share({files: [file], title: namaFile, text: teks}); return; }
+                            catch (err) { if (err.name === 'AbortError') return; }
+                        }
+                    }
+                    const tersalin = await salin;
+                    unduh(blob);
+                    window.open('https://wa.me/?text=' + encodeURIComponent(teks), '_blank');
+                    alert(tersalin
+                        ? 'Gambar pengajuan sudah disalin. Di tab WhatsApp yang baru terbuka, pilih chat tujuan — teks total sudah terisi — lalu tekan Ctrl+V untuk menempelkan gambarnya, dan kirim.\n\nGambar juga sudah diunduh bila ingin dilampirkan manual.'
+                        : 'Gambar pengajuan sudah diunduh. Di tab WhatsApp yang baru terbuka, pilih chat tujuan (teks total sudah terisi), lalu lampirkan gambar itu.');
+                } catch (err) {
+                    alert('Gagal membuat gambar: ' + err.message);
+                } finally {
+                    tombol.disabled = false; tombol.textContent = asli;
+                }
+            });
+        })();
+    </script>
 @endsection

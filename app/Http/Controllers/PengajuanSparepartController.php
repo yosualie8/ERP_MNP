@@ -47,7 +47,7 @@ class PengajuanSparepartController extends Controller
         });
         $this->catat($request, 'pengajuan-sp', "Pengajuan sparepart {$p->nomor}: ".count($baris).' item, Rp '.rp($p->total), $p->load('detail')->toArray());
 
-        return redirect()->route('pengajuan-sparepart.lihat', $p)->with('success', "Pengajuan {$p->nomor} terkirim ke manajemen.");
+        return redirect()->route('pengajuan-sparepart.lihat', $p)->with('success', "Pengajuan {$p->nomor} terkirim ke manajemen. Tekan 📤 Bagikan ke WhatsApp untuk mengirim gambar pengajuan + total harganya.");
     }
 
     public function lihat(Request $request, PengajuanSparepart $p): View
