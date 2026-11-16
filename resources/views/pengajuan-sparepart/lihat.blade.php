@@ -67,12 +67,13 @@
                             <td class="angka tak-cetak">
                                 @if ($d->harga_saran !== null)
                                     {{ rp($d->harga_saran) }}
+                                    @if ($d->dasar_harga)<div class="kecil">{{ $d->dasar_harga }}</div>@endif
                                     @if (round($d->harga) != round($d->harga_saran) && $d->harga_saran > 0)
                                         @php($pct = ($d->harga - $d->harga_saran) / $d->harga_saran * 100)
-                                        <div class="kecil {{ $pct > 0 ? 'beda-naik' : 'beda-turun' }}">{{ $pct > 0 ? '+' : '' }}{{ number_format($pct, 0, ',', '.') }}% dari harga terakhir</div>
+                                        <div class="kecil {{ $pct > 0 ? 'beda-naik' : 'beda-turun' }}">{{ $pct > 0 ? '+' : '' }}{{ number_format($pct, 0, ',', '.') }}% dari harga database</div>
                                     @endif
                                 @else
-                                    <span class="kecil">tidak ada di database</span>
+                                    <span class="kecil">tanpa usulan (belum pernah dibeli untuk jenis ini)</span>
                                 @endif
                             </td>
                             <td style="font-size: 12.5px;">{{ $d->keterangan }}</td>

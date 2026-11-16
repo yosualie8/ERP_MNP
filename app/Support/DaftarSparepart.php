@@ -93,9 +93,15 @@ class DaftarSparepart
      */
     public static function usulJenis(Collection $bs): ?string
     {
-        $ada = $bs->map(fn ($b) => self::GOLONGAN_JENIS[$b->golongan] ?? (str_starts_with((string) $b->golongan, 'Motor') ? 'Motor' : null))->filter()->unique();
+        $ada = $bs->map(fn ($b) => self::jenisGolongan($b->golongan))->filter()->unique();
 
         return $ada->isEmpty() ? null : ($ada->count() >= 4 ? 'Umum' : implode(', ', array_values(array_intersect(self::JENIS, $ada->all()))));
+    }
+
+    /** Jenis alat satu pembelian dari golongan unitnya (DT → Truck, Alat Berat, LV → Kendaraan Ringan, …); null = unit tidak disebut. */
+    public static function jenisGolongan(?string $golongan): ?string
+    {
+        return self::GOLONGAN_JENIS[$golongan] ?? (str_starts_with((string) $golongan, 'Motor') ? 'Motor' : null);
     }
 
     /**
