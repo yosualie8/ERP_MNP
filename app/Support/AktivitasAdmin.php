@@ -35,6 +35,8 @@ class AktivitasAdmin
         'truk-buangan' => ['Ritasi', 'Ubah Tujuan Buangan'],
         'aset-tambah' => ['Aset', 'Tambah Aset'],
         'aset-ubah' => ['Aset', 'Edit Aset'],
+        'meter-catat' => ['Aset', 'Catat HM / KM'],
+        'meter-hapus' => ['Aset', 'Hapus HM / KM'],
         'proyek-tambah' => ['Proyek', 'Tambah Tahap Proyek'],
         'proyek-ubah' => ['Proyek', 'Edit Tahap Proyek'],
         'proyek-alias' => ['Proyek', 'Pemetaan Nama Proyek'],

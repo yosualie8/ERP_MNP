@@ -52,6 +52,11 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/dashboard/performa-dt', \App\Http\Controllers\DashboardPerformaDtController::class)->name('dashboard.performa-dt');
     Route::get('/dashboard/performa-dt/rinci', [\App\Http\Controllers\DashboardPerformaDtController::class, 'rinci'])->name('dashboard.performa-dt.rinci');
     Route::get('/dashboard/performa-dt/truk', [\App\Http\Controllers\DashboardPerformaDtController::class, 'truk'])->name('dashboard.performa-dt.truk');
+    // Dashboard HM & KM (owner 16 Nov 2026): HM alat berat (Data BBM) + KM truk & kendaraan lain yang dicatat di halaman ini.
+    Route::get('/dashboard/hm-km', [\App\Http\Controllers\DashboardHmKmController::class, 'index'])->name('dashboard.hm-km');
+    Route::get('/dashboard/hm-km/riwayat', [\App\Http\Controllers\DashboardHmKmController::class, 'riwayat'])->name('dashboard.hm-km.riwayat');
+    Route::post('/hm-km', [\App\Http\Controllers\DashboardHmKmController::class, 'simpan'])->name('hm-km-catat.simpan');
+    Route::delete('/hm-km/{meter}', [\App\Http\Controllers\DashboardHmKmController::class, 'hapus'])->whereNumber('meter')->name('hm-km-catat.hapus');
     Route::get('/dashboard/aktivitas', AktivitasAdminController::class)->name('dashboard.aktivitas')->middleware('can:super-admin');
     Route::get('/kas', [KasController::class, 'index'])->name('kas.index');
     Route::post('/kas/unduh', [KasController::class, 'unduh'])->name('kas.unduh');
