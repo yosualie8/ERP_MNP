@@ -8,6 +8,7 @@ use App\Models\MutasiPtTanda;
 use App\Models\ProyekTahap;
 use App\Support\ImporMutasiPt;
 use App\Support\TandaMutasiPt;
+use App\Support\TulisMutasiPtDrive;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,7 +18,7 @@ use Illuminate\View\View;
 
 /**
  * Mutasi Rekening PT (BCA): lihat per bulan / cari, dan tandai tiap transaksi (sejak 2026) Dihitung / Tidak dihitung
- * sebagai biaya + Cost Center (+ tahap opsional). Data dari file Drive (mnp:impor-mutasi-pt).
+ * sebagai biaya + Cost Center (+ tahap opsional). Data dari upload KlikBCA (dulu file Drive); transaksi baru ditulis balik ke sheet Drive.
  */
 class MutasiPtController extends Controller
 {
@@ -48,6 +49,7 @@ class MutasiPtController extends Controller
             'baris' => $baris, 'bulan' => $bulan, 'rentang' => $rentang, 'dari' => $dari, 'bulanAda' => $bulanAda, 'q' => $q, 'status' => $status, 'hitung' => $hitung,
             'rpDihitung' => TandaMutasiPt::dihitung()->sum('rp'),
             'impor' => Cache::get(ImporMutasiPt::KUNCI),
+            'keDrive' => Cache::get(TulisMutasiPtDrive::KUNCI),
             'unggahan' => \App\Models\MutasiPtUnggah::with('user')->latest('id')->take(5)->get(),
             'saldoAkhir' => MutasiPt::orderByDesc('tanggal')->orderByDesc('baris')->first(),
             // Pilihan Cost Center = semua tahap detail: yang berjalan dulu, lalu pos biaya umum, lalu lainnya.
@@ -128,6 +130,10 @@ class MutasiPtController extends Controller
         $pesan = "Mutasi BCA {$u->dari->translatedFormat('j M Y')} s/d {$u->sampai->translatedFormat('j M Y')} tersimpan: {$u->baris} transaksi ({$h['baru']} baru, {$h['sama']} sudah ada"
             .($h['diganti'] ? ", {$h['diganti']} baris lama diganti" : '').'). Saldo akhir '.rp((int) round($u->saldo_akhir)).'.';
 
+        // Transaksi baru ikut ditulis ke sheet Drive "Mutasi Rek PT Gabungan MNP" sesudah respons (owner 16 Nov 2026).
+        dispatch(fn () => TulisMutasiPtDrive::jalankanAman())->afterResponse();
+        $pesan .= ' Sheet Drive "Mutasi Rekening PT" diperbarui otomatis dalam beberapa detik.';
+
         $r = redirect()->route('mutasi-pt.index', ['bulan' => $u->sampai->format('Y-m')])->with('success', $pesan);
 
         return $h['peringatan'] ? $r->with('error', '⚠ '.implode(' ⚠ ', $h['peringatan'])) : $r;
@@ -136,10 +142,13 @@ class MutasiPtController extends Controller
     public function perbarui(): RedirectResponse
     {
         try {
-            $h = ImporMutasiPt::jalankan(true);
-            if ($h['status'] === 'upload') {
-                return back()->with('error', 'Mutasi PT kini dari upload file KlikBCA Bisnis — perbarui dari Drive dimatikan supaya hasil upload tidak terhapus.');
+            // Sejak ada upload KlikBCA arahnya dibalik: ERP → sheet Drive (hanya menambah transaksi baru).
+            if (\App\Models\MutasiPtUnggah::exists()) {
+                $t = TulisMutasiPtDrive::jalankan(true);
+
+                return back()->with(in_array($t['status'], ['ditambah', 'sama'], true) ? 'success' : 'error', 'Sheet Drive: '.$t['pesan']);
             }
+            $h = ImporMutasiPt::jalankan(true);
         } catch (\Throwable $e) {
             report($e);
 

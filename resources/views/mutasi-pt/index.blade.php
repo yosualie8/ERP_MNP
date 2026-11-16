@@ -93,9 +93,18 @@
         @if ($unggahan->isNotEmpty())
             Sumber: <b>upload file mutasi KlikBCA Bisnis</b> (Informasi Rekening → Mutasi Rekening → unduh CSV). Upload periode yang sama / tumpang tindih aman — baris di periode itu diganti isi file; transaksi <b>PEND</b> (belum dibukukan bank) diganti saat diupload lagi.
             Data sebelum upload pertama dari file Drive "{{ $impor['nama'] ?? 'Mutasi Rek PT Gabungan MNP.xlsx' }}" (impor Drive kini dimatikan).
+            Transaksi baru (bukan PEND) <b>ditambahkan otomatis ke sheet Drive itu</b> (lembar "Mutasi Rekening PT") sesudah upload & tiap 30 menit{{ $keDrive ? '' : '.' }} @if ($keDrive) —
+                <span style="{{ in_array($keDrive['status'], ['ditambah', 'sama'], true) ? '' : 'color: var(--merah);' }}">terakhir {{ \Illuminate\Support\Carbon::parse($keDrive['waktu'])->translatedFormat('d-M H:i') }}:
+                    {{ $keDrive['pesan'] }}@if (! empty($keDrive['sampai']) && $keDrive['status'] === 'sama') Sheet s/d {{ \Illuminate\Support\Carbon::parse($keDrive['sampai'])->translatedFormat('j M Y') }}.@endif</span>@endif
+            @if ($bolehTandai)
+                <button type="submit" form="form-tulis-sheet" class="tombol polos" style="padding: 1px 8px; font-size: 11.5px;">Tulis ke sheet sekarang</button>
+            @endif
         @else
             Sumber: file Drive "{{ $impor['nama'] ?? 'Mutasi Rek PT Gabungan MNP.xlsx' }}"@if ($impor), diimpor {{ \Illuminate\Support\Carbon::parse($impor['waktu'])->translatedFormat('d-M H:i') }}, diperiksa tiap 30 menit @endif — atau upload file mutasi KlikBCA Bisnis (.csv).
         @endif</p>
+    @if ($unggahan->isNotEmpty() && $bolehTandai)
+        <form id="form-tulis-sheet" method="POST" action="{{ route('mutasi-pt.perbarui') }}" hidden>@csrf</form>
+    @endif
 
     <div class="kartu gulir" style="padding: 0;">
         <table class="kas" data-saring-kolom>
