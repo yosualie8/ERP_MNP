@@ -20,9 +20,11 @@ class GajiTanpaTahap
     public static function daftar(): Collection
     {
         $tahap = ProyekTahap::get(['id', 'nama', 'pos_overhead', 'proyek_id', 'status'])->keyBy('id');
-        // Tahap bawaan cost center hanya "belum jelas" bila proyeknya punya tahap lain yang berjalan (mis. PM2 - Infra vs Marina / Regatta);
-        // cost center bertahap tunggal (mis. Kawasan Industri Kendal) sudah jelas.
-        $punyaSaudara = fn ($t) => $tahap->contains(fn ($x) => $x->id !== $t->id && $x->proyek_id === $t->proyek_id && ! $x->pos_overhead && $x->status === 'progress');
+        // Tahap bawaan cost center hanya "belum jelas" bila ada pecahannya yang berjalan — tahap proyek yang sama yang namanya diawali nama
+        // tahap itu (mis. "Pantai Mutiara 2 - Infra" vs "… - Infra Marina" / "… - Infra Regatta"). Tahap lain yang berdiri sendiri tidak
+        // dihitung (owner 16 Nov 2026: Gaji Kendal ikut tertandai karena Kandang Kebo berjalan di Proyek Lain-lain, padahal sudah jelas).
+        $punyaSaudara = fn ($t) => $tahap->contains(fn ($x) => $x->id !== $t->id && $x->proyek_id === $t->proyek_id && ! $x->pos_overhead
+            && $x->status === 'progress' && str_starts_with(mb_strtolower($x->nama), mb_strtolower(trim($t->nama)).' '));
 
         return DaftarProyek::queryKas()->where('b.tanggal', '>=', self::MULAI)->where('a.nama', 'like', 'Gaji%')->whereNull('al.proyek_tahap_id')
             ->selectRaw('b.tanggal, b.nominal, b.keterangan, k.kode_asli gl, a.nama akun, c.kode cc, k.ref')->orderBy('b.tanggal')->get()
