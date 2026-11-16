@@ -38,21 +38,59 @@ class AlatMnp
         'ringkasan_rekening_pt' => 'mutasi-pt', 'cari_mutasi_rekening_pt' => 'mutasi-pt', 'saldo_sopir' => 'pengalihan-uj', 'biaya_dt' => 'dashboard-biaya-dt',
         'uj_belum_bongkar' => 'monitor-ritasi', 'data_sopir' => 'karyawan',
         'update_biaya_report_proyek' => 'dashboard-proyek',
+        // 16 Nov 2026: Plant — Database Sparepart & Dashboard HM & KM
+        'cari_sparepart' => 'sparepart', 'histori_harga_sparepart' => 'sparepart', 'hm_km' => 'dashboard-hm-km',
     ];
+
+    /** Tool tanpa menu sendiri (hasilnya disaring per menu di dalamnya). Tool baru yang lupa diberi menu tidak tampil untuk selain Super Admin. */
+    private const UMUM = ['search', 'fetch'];
 
     /** Tool khusus Super Admin (akses baca seluruh database, owner 27 Okt 2026). */
     private const KHUSUS_SUPER = ['daftar_tabel', 'query_database'];
 
-    /** Tool yang boleh dipakai pengguna ini (mengikuti menu yang boleh dibukanya di aplikasi). */
+    /**
+     * Tool yang boleh dipakai pengguna ini = mengikuti menu JABATANNYA di Hak Akses Jabatan (owner 16 Nov 2026: tiap orang hanya bisa bertanya
+     * sesuai jabatannya). Tanpa menu Tanya AI = tanpa tool sama sekali (token MCP lama ikut tertutup bila menunya dicabut).
+     */
     public static function untuk(\App\Models\User $u): array
     {
-        return array_filter(self::daftar(), fn ($t, $nama) => (! isset(self::MENU[$nama]) || $u->bolehMenu(self::MENU[$nama]))
-            && (! in_array($nama, self::KHUSUS_SUPER, true) || $u->isSuperAdmin()), ARRAY_FILTER_USE_BOTH);
+        if (! $u->bolehMenu('tanya-ai')) {
+            return [];
+        }
+
+        return array_filter(self::daftar(), fn ($t, $nama) => match (true) {
+            in_array($nama, self::KHUSUS_SUPER, true) => $u->isSuperAdmin(),
+            isset(self::MENU[$nama]) => $u->bolehMenu(self::MENU[$nama]),
+            default => in_array($nama, self::UMUM, true) || $u->isSuperAdmin(),
+        } && (empty($t['syarat']) || ($t['syarat'])()), ARRAY_FILTER_USE_BOTH);
+    }
+
+    /** Menu data yang boleh ditanyakan akun ini (untuk instruksi AI): [kunci => label]. */
+    public static function menuData(\App\Models\User $u): array
+    {
+        $menu = array_unique([...array_values(self::MENU), 'kas-harian', 'kas-uj', 'pengajuan-uj', 'mutasi-pt', 'pengalihan-uj', 'monitor-ritasi', 'dashboard-biaya-dt']);
+        $boleh = array_values(array_filter($menu, fn ($m) => isset(\App\Support\MenuAkses::DAFTAR[$m]) && $u->bolehMenu($m)));
+
+        return $boleh ? array_combine($boleh, array_map(fn ($m) => \App\Support\MenuAkses::DAFTAR[$m][0], $boleh)) : [];
+    }
+
+    /** Kalimat batas akses untuk instruksi AI (MCP & Tanya AI). */
+    public static function batasAkses(\App\Models\User $u): string
+    {
+        if ($u->isSuperAdmin()) {
+            return 'Akun ini Super Admin: boleh menanyakan semua data.';
+        }
+        $jabatan = $u->karyawanAktif()?->jabatan ?: '(belum ada jabatan)';
+        $menu = self::menuData($u);
+
+        return "Akun ini berjabatan {$jabatan} dan HANYA boleh menanyakan data dari menu: ".($menu ? implode(', ', $menu) : '(tidak ada)').'. '
+            .'Pertanyaan di luar menu itu jangan dijawab (juga jangan dari ingatan / perkiraan); katakan aksesnya tidak diberikan untuk jabatan ini '
+            .'dan sarankan meminta owner menambah menu di Hak Akses Jabatan.';
     }
 
     private static function boleh(string $menu): bool
     {
-        return ! self::$pengguna || self::$pengguna->bolehMenu($menu);
+        return self::$pengguna && self::$pengguna->bolehMenu($menu);
     }
 
     /** @return array<string, array{judul: string, deskripsi: string, skema: array, jalankan: callable}> */
@@ -205,6 +243,38 @@ class AlatMnp
                 'ubah' => true,
                 'jalankan' => fn (array $a) => self::reportProyek($a),
             ],
+            'cari_sparepart' => [
+                'judul' => 'Cari sparepart & harganya',
+                'deskripsi' => 'Database Sparepart (menu Plant & Sparepart): daftar harga per item sparepart dari riwayat pembelian Kas Harian + Kas UJ (nama item baku). '
+                    .'Per item & satuan: harga terakhir, termurah (+ tanggal & supplier), tertinggi, rata-rata, kali beli, harga terakhir per tipe unit, merk / spesifikasi, '
+                    .'supplier. Supplier hanya yang sudah diverifikasi Admin Plant (lainnya kosong = belum diketahui). Kata dicari di nama item, keterangan asli, '
+                    .'spesifikasi, unit ("DT 26", "FAW", "PC200"), supplier; statistik dihitung dari pembelian yang cocok saja (mis. "filter solar faw" = harga untuk FAW). '
+                    .'Paket = satu nominal untuk beberapa barang (harga bukan harga satu item). Untuk histori lengkap satu item pakai histori_harga_sparepart.',
+                'skema' => $obj(['kata' => $kata, 'golongan' => ['type' => 'string', 'description' => 'DT / Alat Berat / LV / Genset / …'], 'dari' => $tanggal,
+                    'batas' => ['type' => 'integer', 'minimum' => 1, 'maximum' => 300, 'description' => 'Jumlah item maksimal (bawaan 50)']]),
+                'jalankan' => fn (array $a) => self::cariSparepart($a),
+            ],
+            'histori_harga_sparepart' => [
+                'judul' => 'Histori harga satu sparepart',
+                'deskripsi' => 'Semua pembelian satu item sparepart (nama baku dari cari_sparepart, mis. "Filter Solar") urut terbaru: tanggal, unit & tipe unit, qty, satuan, '
+                    .'harga satuan, total, supplier (hanya yang terverifikasi), PIC, keterangan asli, sumber & ref; ditambah paket yang memuat item itu (paket=true, harga satuan '
+                    .'tidak berlaku). Bisa disaring tipe unit / no unit / periode.',
+                'skema' => ['type' => 'object', 'properties' => ['nama' => ['type' => 'string', 'description' => 'Nama item baku'], 'satuan' => ['type' => 'string'],
+                    'unit' => ['type' => 'string', 'description' => 'Tipe / no unit, mis. FAW, DT 026, PC200'], 'dari' => $tanggal, 'sampai' => $tanggal, 'batas' => $batas],
+                    'required' => ['nama'], 'additionalProperties' => false],
+                'jalankan' => fn (array $a) => self::historiSparepart($a),
+            ],
+            'hm_km' => [
+                'judul' => 'HM & KM aset',
+                'deskripsi' => 'Dashboard HM & KM: angka HM (jam, alat berat & mesin — otomatis dari Data BBM + catatan manual) dan KM (dump truck & kendaraan) per aset: '
+                    .'angka terakhir, tanggal & umur catatan (hari), pemakaian bulan dipilih & bulan sebelumnya + rata-rata per hari, jumlah bacaan janggal (turun / lompat). '
+                    .'Isi "unit" (no lambung, mis. DT 026) untuk riwayat bacaannya.',
+                'skema' => $obj(['unit' => ['type' => 'string'], 'kelompok' => ['type' => 'string', 'enum' => ['semua', 'alat', 'truk', 'lain'], 'description' => 'alat = alat berat (HM), truk = dump truck (KM), lain = kendaraan & aset lain'],
+                    'bulan' => ['type' => 'string', 'description' => 'YYYY-MM (bawaan bulan ini)'], 'termasuk_nonaktif' => ['type' => 'boolean']]),
+                // Dashboard HM & KM dibangun terpisah — tool tampil otomatis begitu kelasnya terpasang
+                'syarat' => fn () => class_exists(\App\Support\MeterAset::class),
+                'jalankan' => fn (array $a) => self::hmKm($a),
+            ],
             'daftar_tabel' => [
                 'judul' => 'Daftar tabel database ERP',
                 'deskripsi' => 'Semua tabel database ERP MNP beserta kolom & perkiraan jumlah baris (khusus Super Admin). Isi "tabel" untuk melihat kolom lengkap (tipe, kunci) '
@@ -223,13 +293,13 @@ class AlatMnp
             ],
             'search' => [
                 'judul' => 'Cari di ERP MNP',
-                'deskripsi' => 'Pencarian umum di ERP MNP: Kas Harian (Bank Jago), Uang Jalan, Pengajuan UJ, MUTASI REKENING PT BCA (kata kunci di keterangan bank / catatan; tambahkan kata "BCA" untuk ringkasan rekening), saldo sopir (nama sopir / "saldo sopir"), biaya truk ("DT 041" / "biaya DT") dan "belum bongkar". Mengembalikan {id, title, url}; buka isinya dengan tool fetch.',
+                'deskripsi' => 'Pencarian umum di ERP MNP: Kas Harian (Bank Jago), Uang Jalan, Pengajuan UJ, MUTASI REKENING PT BCA (kata kunci di keterangan bank / catatan; tambahkan kata "BCA" untuk ringkasan rekening), saldo sopir (nama sopir / "saldo sopir"), biaya truk ("DT 041" / "biaya DT"), "belum bongkar", sparepart (nama barang / unit, mis. "filter solar FAW") dan HM / KM aset ("HM DT 026"). Hasil mengikuti menu jabatan akun. Mengembalikan {id, title, url}; buka isinya dengan tool fetch.',
                 'skema' => ['type' => 'object', 'properties' => ['query' => ['type' => 'string']], 'required' => ['query'], 'additionalProperties' => false],
                 'jalankan' => fn (array $a) => self::search($a),
             ],
             'fetch' => [
                 'judul' => 'Buka data ERP MNP',
-                'deskripsi' => 'Ambil isi lengkap satu hasil dari tool search berdasarkan id-nya (mis. kas:30827, uj:UJ-13361, pengajuan:27, bca:1234, sopir:Tobing, dt:DT 041, ringkasan:rekening_pt / saldo_sopir / uj_belum_bongkar / biaya_dt).',
+                'deskripsi' => 'Ambil isi lengkap satu hasil dari tool search berdasarkan id-nya (mis. kas:30827, uj:UJ-13361, pengajuan:27, bca:1234, sopir:Tobing, dt:DT 041, sparepart:Filter Solar|pcs, hm:DT 026, ringkasan:rekening_pt / saldo_sopir / uj_belum_bongkar / biaya_dt / hm_km).',
                 'skema' => ['type' => 'object', 'properties' => ['id' => ['type' => 'string']], 'required' => ['id'], 'additionalProperties' => false],
                 'jalankan' => fn (array $a) => self::fetch($a),
             ],
@@ -633,6 +703,109 @@ class AlatMnp
             'keterangan' => $r->ringkasan])];
     }
 
+    // ===== Plant: sparepart & HM / KM =====
+
+    private static function cariSparepart(array $a): array
+    {
+        $q = \App\Support\DaftarSparepart::saringKata(\App\Models\SparepartBeli::query(), $a['kata'] ?? null)
+            ->when($a['golongan'] ?? null, fn ($q, $g) => $q->where('golongan', 'like', '%'.$g.'%'))
+            ->when($a['dari'] ?? null, fn ($q, $d) => $q->where('tanggal', '>=', self::tgl($d)));
+        $baris = $q->orderBy('tanggal')->orderBy('id')->toBase()->get();
+        $item = \App\Support\DaftarSparepart::item($baris);
+        $batas = max(1, min(300, (int) ($a['batas'] ?? 50)));
+        $paket = $baris->where('kategori', \App\Models\SparepartBeli::PAKET)->sortByDesc('tanggal')->take(10);
+
+        return [
+            'data_sampai' => \App\Models\SparepartBeli::max('tanggal'), 'jumlah_item' => $item->count(), 'ditampilkan' => min($batas, $item->count()),
+            'item' => $item->sortByDesc('n')->take($batas)->values()->map(fn ($x) => [
+                'kategori' => $x->kategori, 'nama' => $x->nama, 'satuan' => $x->satuan, 'harga_terakhir' => (int) round($x->akhir->harga_satuan), 'tgl_terakhir' => $x->akhir->tanggal,
+                'unit_terakhir' => trim(($x->akhir->tipe_unit ?? '').' '.($x->akhir->no_unit ?? '')) ?: null,
+                'supplier_terakhir_terverifikasi' => $x->akhir_sup ? ['supplier' => $x->akhir_sup->supplier, 'tanggal' => $x->akhir_sup->tanggal, 'harga' => (int) round($x->akhir_sup->harga_satuan)] : null,
+                'termurah' => ['harga' => (int) round($x->murah->harga_satuan), 'tanggal' => $x->murah->tanggal, 'supplier' => $x->murah->supplier, 'unit' => $x->murah->tipe_unit],
+                'tertinggi' => (int) round($x->tinggi), 'rata_rata' => (int) round($x->rata), 'kali_beli' => $x->n, 'total_belanja' => (int) round($x->total),
+                'harga_terakhir_per_tipe_unit' => $x->per_unit->map(fn ($u) => ['tipe_unit' => $u['tu'], 'harga' => (int) round($u['harga']), 'kali' => $u['n']])->all(),
+                'spesifikasi' => $x->spek->all(), 'supplier_terverifikasi' => $x->supplier->all(),
+            ])->all(),
+            'paket_cocok' => $paket->map(fn ($b) => ['tanggal' => $b->tanggal, 'isi' => $b->nama_item, 'total' => (int) round($b->total), 'unit' => $b->tipe_unit, 'supplier' => $b->supplier, 'keterangan' => $b->keterangan])->values()->all(),
+        ];
+    }
+
+    private static function historiSparepart(array $a): array
+    {
+        $paket = \App\Models\SparepartBeli::PAKET;
+        $nama = trim((string) ($a['nama'] ?? ''));
+        $suka = '%'.addcslashes($nama, '%_\\').'%';
+        // nama baku persis → item itu + paket yang memuatnya; selain itu cari sebagian nama (tanpa paket)
+        $persis = \App\Models\SparepartBeli::where('nama_item', $nama)->exists();
+        $rows = \App\Models\SparepartBeli::query()
+            ->where(fn ($q) => $persis
+                ? $q->where('nama_item', $nama)->orWhere(fn ($q) => $q->where('kategori', $paket)->where('nama_item', 'like', $suka))
+                : $q->where('nama_item', 'like', $suka)->where('kategori', '!=', $paket))
+            ->when($a['satuan'] ?? null, fn ($q, $s) => $q->where(fn ($q) => $q->where('satuan', $s)->orWhere('kategori', $paket)))
+            ->when($a['unit'] ?? null, fn ($q, $u) => \App\Support\DaftarSparepart::saringKata($q, $u))
+            ->when($a['dari'] ?? null, fn ($q, $d) => $q->where('tanggal', '>=', self::tgl($d)))
+            ->when($a['sampai'] ?? null, fn ($q, $d) => $q->where('tanggal', '<=', self::tgl($d)))
+            ->orderByDesc('tanggal')->orderByDesc('id')->get()
+            ->filter(fn ($b) => $b->kategori !== $paket || in_array($nama, explode(' + ', $b->nama_item), true));
+        $item = $rows->where('kategori', '!=', $paket);
+        if ($rows->isEmpty()) {
+            throw new InvalidArgumentException("Sparepart \"{$nama}\" tidak ditemukan; cari nama bakunya dulu dengan cari_sparepart.");
+        }
+
+        return [
+            'nama' => $nama, 'jumlah_pembelian' => $item->count(), 'jumlah_paket' => $rows->count() - $item->count(),
+            'harga_terakhir' => $item->first() ? (int) round($item->first()->harga_satuan) : null, 'termurah' => $item->count() ? (int) round($item->min('harga_satuan')) : null,
+            'tertinggi' => $item->count() ? (int) round($item->max('harga_satuan')) : null, 'rata_rata' => $item->count() ? (int) round($item->avg('harga_satuan')) : null,
+            'pembelian' => $rows->take(self::batas($a))->values()->map(fn ($b) => [
+                'tanggal' => $b->tanggal->toDateString(), 'paket' => $b->kategori === $paket, 'nama' => $b->nama_item, 'spesifikasi' => $b->spesifikasi,
+                'golongan' => $b->golongan, 'tipe_unit' => $b->tipe_unit, 'no_unit' => $b->no_unit, 'qty' => $b->qty, 'satuan' => $b->satuan,
+                'harga_satuan' => $b->kategori === $paket ? null : (int) round($b->harga_satuan), 'total' => (int) round($b->total),
+                'supplier' => $b->supplier, 'pic' => $b->pic, 'keterangan' => $b->keterangan, 'sumber' => $b->sumber, 'ref' => $b->ref,
+            ])->all(),
+        ];
+    }
+
+    private static function hmKm(array $a): array
+    {
+        $M = \App\Support\MeterAset::class;
+        $bulan = preg_match('/^\d{4}-\d{2}$/', (string) ($a['bulan'] ?? '')) ? $a['bulan'] : now()->format('Y-m');
+        $awal = Carbon::parse($bulan.'-01');
+        $lalu = $awal->copy()->subMonth();
+        $periode = fn ($langkah) => [
+            $bulan => $M::pakai($langkah, $awal->toDateString(), $awal->copy()->endOfMonth()->toDateString()),
+            $lalu->format('Y-m') => $M::pakai($langkah, $lalu->toDateString(), $lalu->copy()->endOfMonth()->toDateString()),
+        ];
+        $semua = AsetTruk::orderBy('no_lambung')->get();
+        if ($unit = trim((string) ($a['unit'] ?? ''))) {
+            $baku = fn ($v) => strtoupper(preg_replace('/[\s\-]+/', '', preg_replace('/(\D)0+(\d)/', '$1$2', (string) $v)));
+            $aset = $semua->first(fn ($x) => $baku($x->no_lambung) === $baku($unit) || ($x->plat && $baku($x->plat) === $baku($unit)));
+            if (! $aset) {
+                throw new InvalidArgumentException("Aset \"{$unit}\" tidak ditemukan di Data Aset.");
+            }
+            $satuan = \App\Models\AsetMeter::satuan($aset->kategori);
+            $langkah = $M::langkah($M::bacaan(collect([$aset]))[$aset->id], $satuan);
+
+            return ['aset' => $aset->no_lambung, 'kategori' => $aset->labelKategori(), 'jenis' => $aset->jenis, 'satuan' => $satuan, 'pemakaian_per_bulan' => $periode($langkah),
+                'bacaan_terbaru' => $langkah->reverse()->take(100)->values()->map(fn ($b) => ['tanggal' => $b->tanggal, 'nilai' => $b->nilai, 'selisih' => $b->selisih,
+                    'hari' => $b->hari, 'janggal' => $b->janggal, 'reset' => (bool) $b->reset, 'sumber' => $b->sumber === 'bbm' ? 'Data BBM' : 'catatan manual', 'catatan' => $b->catatan])->all()];
+        }
+        $kel = $M::KELOMPOK;
+        $kategori = isset($kel[$a['kelompok'] ?? '']) ? $kel[$a['kelompok']][1] : array_merge(...array_column($kel, 1));
+        $aset = $semua->whereIn('kategori', $kategori)->when(empty($a['termasuk_nonaktif']), fn ($c) => $c->whereIn('status', ['aktif', 'perbaikan']))->values();
+        $bacaan = $M::bacaan($aset);
+
+        return ['bulan' => $bulan, 'aset' => $aset->map(function ($x) use ($M, $bacaan, $periode) {
+            $satuan = \App\Models\AsetMeter::satuan($x->kategori);
+            $langkah = $M::langkah($bacaan[$x->id], $satuan);
+            $akhir = $langkah->reject(fn ($b) => $b->janggal)->last();
+
+            return ['aset' => $x->no_lambung, 'kategori' => $x->labelKategori(), 'jenis' => $x->jenis, 'status' => $x->status, 'satuan' => $satuan,
+                'angka_terakhir' => $akhir?->nilai, 'tanggal_terakhir' => $akhir?->tanggal,
+                'umur_hari' => $akhir ? Carbon::parse($akhir->tanggal)->diffInDays(now()->startOfDay()) : null,
+                'pemakaian_per_bulan' => $periode($langkah), 'bacaan_janggal' => $langkah->filter(fn ($b) => $b->janggal)->count()];
+        })->all()];
+    }
+
     // ===== search / fetch (format konektor ChatGPT) =====
 
     private static function search(array $a): array
@@ -697,14 +870,32 @@ class AlatMnp
             $hasil[] = ['id' => 'ringkasan:biaya_dt', 'title' => 'Biaya dump truck 3 bulan terakhir per kategori, bulan & truk', 'url' => route('dashboard.biaya-dt')];
         }
 
+        if (self::boleh('sparepart')) {
+            $kataSp = trim(preg_replace('/\b(harga|sparepart|spare part|berapa|beli|terakhir|termurah|supplier|untuk|yang|di|dan)\b/i', ' ', $q));
+            foreach ($kataSp !== '' ? self::cariSparepart(['kata' => $kataSp, 'batas' => 8])['item'] : [] as $it) {
+                $hasil[] = ['id' => 'sparepart:'.$it['nama'].'|'.$it['satuan'], 'title' => "Sparepart {$it['nama']} · terakhir ".$rp($it['harga_terakhir'])."/{$it['satuan']} ({$it['tgl_terakhir']}) · termurah ".$rp($it['termurah']['harga']),
+                    'url' => route('sparepart.index')];
+            }
+        }
+        if (self::boleh('dashboard-hm-km') && class_exists(\App\Support\MeterAset::class)) {
+            $teks = preg_replace('/\s+/', ' ', $q);
+            $unit = AsetTruk::all()->first(fn ($x) => $x->no_lambung && preg_match('/\b'.preg_quote(preg_replace('/\s+/', ' ', $x->no_lambung), '/').'\b/i', $teks));
+            if ($unit) {
+                $hasil[] = ['id' => 'hm:'.$unit->no_lambung, 'title' => "HM / KM {$unit->no_lambung}: angka terakhir & riwayat bacaan", 'url' => route('dashboard.hm-km')];
+            } elseif (preg_match('/\b(hm|km|hour ?meter|kilometer|speedometer)\b/i', $q)) {
+                $hasil[] = ['id' => 'ringkasan:hm_km', 'title' => 'HM & KM semua aset: angka terakhir, pemakaian bulan ini & bulan lalu', 'url' => route('dashboard.hm-km')];
+            }
+        }
+
         return ['results' => $hasil];
     }
 
     private static function fetch(array $a): array
     {
         [$jenis, $kunci] = array_pad(explode(':', (string) ($a['id'] ?? ''), 2), 2, '');
-        $ringkasan = ['rekening_pt' => 'mutasi-pt', 'saldo_sopir' => 'pengalihan-uj', 'uj_belum_bongkar' => 'monitor-ritasi', 'biaya_dt' => 'dashboard-biaya-dt'];
+        $ringkasan = ['rekening_pt' => 'mutasi-pt', 'saldo_sopir' => 'pengalihan-uj', 'uj_belum_bongkar' => 'monitor-ritasi', 'biaya_dt' => 'dashboard-biaya-dt', 'hm_km' => 'dashboard-hm-km'];
         $menu = ['kas' => 'kas-harian', 'uj' => 'kas-uj', 'pengajuan' => 'pengajuan-uj', 'bca' => 'mutasi-pt', 'sopir' => 'pengalihan-uj', 'dt' => 'dashboard-biaya-dt',
+            'sparepart' => 'sparepart', 'hm' => 'dashboard-hm-km',
             'ringkasan' => $ringkasan[$kunci] ?? 'kas-harian'][$jenis] ?? 'kas-harian';
         if (! self::boleh($menu)) {
             throw new InvalidArgumentException('Akun Anda tidak punya akses ke data ini.');
@@ -714,7 +905,10 @@ class AlatMnp
                 ->firstWhere('id', $m->id) ?? null) : null,
             'sopir' => self::saldoSopir(['sopir' => $kunci]),
             'dt' => self::biayaDt(['no_mobil' => $kunci, 'batas' => 100]),
+            'sparepart' => self::historiSparepart(['nama' => explode('|', $kunci)[0], 'satuan' => explode('|', $kunci)[1] ?? null, 'batas' => 300]),
+            'hm' => class_exists(\App\Support\MeterAset::class) ? self::hmKm(['unit' => $kunci]) : null,
             'ringkasan' => match ($kunci) {
+                'hm_km' => class_exists(\App\Support\MeterAset::class) ? self::hmKm([]) : null,
                 'rekening_pt' => self::ringkasanBca(), 'saldo_sopir' => self::saldoSopir([]), 'uj_belum_bongkar' => self::ujBelumBongkar(['batas' => 100]),
                 'biaya_dt' => self::biayaDt(['batas' => 50]), default => null,
             },
@@ -730,7 +924,7 @@ class AlatMnp
 
         return ['id' => $a['id'], 'title' => $a['id'], 'text' => json_encode($isi, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT), 'url' => match ($jenis) {
             'kas' => route('kas.index', ['q' => $kunci]), 'uj' => route('uj.index', ['q' => $kunci]), 'bca' => route('mutasi-pt.index'), 'sopir' => route('pengalihan-uj.index', ['tab' => 'saldo', 'sopir' => $kunci]),
-            'dt' => route('dashboard.biaya-dt', ['mobil' => $kunci]), 'ringkasan' => url('/'), default => route('pengajuan-uj.daftar'),
+            'dt' => route('dashboard.biaya-dt', ['mobil' => $kunci]), 'sparepart' => route('sparepart.index'), 'hm' => url('/dashboard/hm-km'), 'ringkasan' => url('/'), default => route('pengajuan-uj.daftar'),
         }, 'metadata' => ['sumber' => 'ERP MNP']];
     }
 

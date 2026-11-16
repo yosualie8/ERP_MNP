@@ -70,7 +70,10 @@ class McpController extends Controller
                     .'Kas Harian = rekening Bank Jago PT (transfer + transaksi detail/bon dengan Kode GL; "reimburse" = penggantian dana kas, dari BCA). '
                     .'Kas UJ = uang jalan dump truck (lembar Kas Seabank). Pengajuan UJ (PUJ) = permintaan uang jalan sebelum ditransfer. Saldo sopir = UJ belum bongkar '
                     .'yang dijadikan saldo (uang di tangan sopir). Ritasi = perjalanan dump truck (galian → tujuan buangan). Nominal dalam rupiah; tanggal YYYY-MM-DD. '
-                    .'Mulai dari ringkasan_rekening_pt / ringkasan_kas_harian / ringkasan_uj untuk gambaran umum. Sebut transaksi UJ dengan ID UJ-nya (UJ-xxxxx).',
+                    .'Mulai dari ringkasan_rekening_pt / ringkasan_kas_harian / ringkasan_uj untuk gambaran umum. Sebut transaksi UJ dengan ID UJ-nya (UJ-xxxxx). '
+                    .'Sparepart: cari_sparepart / histori_harga_sparepart (supplier kosong = belum diverifikasi). HM & KM aset: hm_km. '
+                    // owner 16 Nov 2026: tiap orang hanya bisa bertanya sesuai menu jabatannya
+                    .AlatMnp::batasAkses($this->pengguna),
             ]),
             'ping' => self::hasil($id, (object) []),
             'tools/list' => self::hasil($id, ['tools' => collect(AlatMnp::untuk($this->pengguna))->map(fn ($t, $nama) => [

@@ -191,6 +191,9 @@ class OpenAi
             .'Anda tidak bisa mengubah data; arahkan pengguna ke menu aplikasi bila perlu mengubah.'."\n"
             .'Konteks: Kas Harian = rekening Bank Jago PT (transfer + transaksi detail/bon ber-Kode GL); "reimburse" = penggantian dana kas oleh owner. '
             .'Kas UJ = uang jalan dump truck (lembar Kas Seabank). Pengajuan UJ (PUJ) = permintaan uang jalan sebelum ditransfer. '
-            .'Ritasi = perjalanan dump truck dari galian ke tujuan buangan. No Mobil truk ditulis "DT 068".';
+            .'Ritasi = perjalanan dump truck dari galian ke tujuan buangan. No Mobil truk ditulis "DT 068". '
+            .'Sparepart = Database Sparepart (supplier kosong = belum diverifikasi Admin Plant). HM = hour meter alat berat, KM = kilometer kendaraan.'."\n"
+            // owner 16 Nov 2026: tiap orang hanya bisa bertanya sesuai menu jabatannya
+            .AlatMnp::batasAkses($u);
     }
 }

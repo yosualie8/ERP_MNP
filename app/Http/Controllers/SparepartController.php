@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\SparepartBeli;
+use App\Support\DaftarSparepart;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -20,32 +21,7 @@ class SparepartController extends Controller
         $semua = SparepartBeli::query()->orderBy('tanggal')->orderBy('id')->toBase()->get();
         $info = ['baris' => $semua->count(), 'awal' => $semua->first()?->tanggal, 'akhir' => $semua->last()?->tanggal, 'ditarik' => $semua->max('ditarik')];
 
-        $urut = array_flip(SparepartBeli::URUT_KATEGORI);
-        $item = $semua->reject(fn ($b) => in_array($b->kategori, SparepartBeli::BUKAN_ITEM, true))
-            ->groupBy(fn ($b) => $b->nama_item.'|'.$b->satuan)
-            ->map(function ($bs) {
-                $akhir = $bs->last();
-                $murah = $bs->sortBy('harga_satuan')->first();
-                $perUnit = $bs->groupBy(fn ($b) => $b->tipe_unit ?: '(unit tidak disebut)')->sortByDesc(fn ($x) => $x->count());
-                // supplier hanya yang diverifikasi Admin Plant (lainnya kosong) → supplier terakhir = pembelian terakhir yang suppliernya diketahui
-                $supplier = $bs->whereNotNull('supplier')->countBy('supplier')->sortDesc();
-
-                return (object) [
-                    'kategori' => $akhir->kategori, 'nama' => $akhir->nama_item, 'satuan' => $akhir->satuan,
-                    'akhir' => $akhir, 'murah' => $murah, 'akhir_sup' => $bs->whereNotNull('supplier')->last(), 'tinggi' => (float) $bs->max('harga_satuan'), 'rata' => (float) $bs->avg('harga_satuan'),
-                    'n' => $bs->count(), 'qty' => (float) $bs->sum('qty'), 'total' => (float) $bs->sum('total'),
-                    // harga terakhir per tipe unit (hanya bila ada lebih dari satu tipe atau tipenya disebut)
-                    'per_unit' => $perUnit->count() > 1 || ! $perUnit->has('(unit tidak disebut)')
-                        ? $perUnit->map(fn ($x, $tu) => ['tu' => $tu, 'harga' => (float) $x->last()->harga_satuan, 'n' => $x->count()])->values() : collect(),
-                    'golongan' => $bs->pluck('golongan')->filter()->unique()->values(),
-                    'spek' => $bs->pluck('spesifikasi')->filter()->countBy()->sortDesc()->keys()->take(8),
-                    'supplier' => $supplier->take(4),
-                    // kata-kata keterangan asli supaya pencarian juga menemukan istilah lapangan ("vbelt", "saringan solar")
-                    'cari' => $bs->pluck('keterangan')->filter()->map(fn ($k) => mb_strtolower($k))->unique()->take(40)->implode(' | '),
-                ];
-            })
-            ->sortBy(fn ($x) => sprintf('%02d %s', $urut[$x->kategori] ?? 99, mb_strtolower($x->nama)))
-            ->values();
+        $item = DaftarSparepart::item($semua);
 
         // Riwayat: bawaan 6 bulan terakhir (semua baris = ±5 MB HTML, berat di HP); histori lengkap per item tetap lewat dialog.
         $periode = in_array($request->query('periode'), ['12', 'semua'], true) ? $request->query('periode') : '6';
