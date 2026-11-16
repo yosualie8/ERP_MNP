@@ -65,6 +65,7 @@ class MenuAkses
         'lokasi-absen' => ['Lokasi Absen', 'lokasi-absen.index', ['lokasi-absen.*'], 'Titik GPS + radius per proyek tempat karyawan boleh absen'],
         'karyawan' => ['Data Karyawan', 'karyawan.index', ['karyawan.*'], 'Data induk karyawan (NIK, site, jabatan, rekening) — dasar modul absensi'],
         'jabatan' => ['Master Jabatan', 'jabatan.index', ['jabatan.*'], 'Daftar jabatan karyawan: tambah, ganti nama, hapus (jabatan Data Karyawan dipilih dari sini)'],
+        'sparepart' => ['Database Sparepart', 'sparepart.index', ['sparepart.*'], 'Cari sparepart berdasarkan nama baku / istilah lapangan / unit: harga terakhir, termurah & per tipe unit, supplier, dan histori harga tiap item (dari pembelian Kas Harian & Kas UJ)'],
         'aset' => ['Data Aset', 'aset.index', ['aset.*'], 'Semua aset MNP (dump truck, alat berat, LV, engkel, …): lihat, tambah & ubah'],
         'mutasi-pt' => ['Mutasi Rekening PT (BCA)', 'mutasi-pt.index', ['mutasi-pt.*'], 'Mutasi rekening PT BCA dari file Drive — hanya dilihat, per bulan & cari keterangan'],
         'mutasi-jago' => ['Mutasi Jago', 'mutasi-jago.index', ['mutasi-jago.*'], 'Unggah PDF riwayat transaksi kantong Jago & cocokkan dengan Kas UJ (kantong Kas MNP hanya untuk akun ber-menu Kas Harian)'],
@@ -83,6 +84,7 @@ class MenuAkses
         'ritasi' => ['Ritasi', '⛰️', ['input-ritasi', 'ritasi', 'buangan-truk', 'monitor-ritasi', 'muatan-kurang', 'mk-ubah-nominal', 'bayar-tanah', 'performa-ritasi', 'potongan-muatan', 'kubikasi-kendaraan']],
         'bbm' => ['BBM & HM', '⛽', ['input-bbm', 'bbm']],
         'karyawan' => ['Karyawan', '👷', ['absen', 'absen-mandor', 'absensi', 'review-absen', 'gaji-mingguan', 'absen-ubah-jam', 'karyawan', 'jabatan', 'lokasi-absen']],
+        'plant' => ['Plant & Sparepart', '🔧', ['sparepart']],
         'aset' => ['Aset', '🚛', ['aset']],
     ];
 

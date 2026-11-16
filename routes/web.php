@@ -182,6 +182,9 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/penawaran-spk', [\App\Http\Controllers\PenawaranSpkController::class, 'index'])->name('penawaran-spk.index');
     Route::get('/penawaran-spk/{dok}/pdf', [\App\Http\Controllers\PenawaranSpkController::class, 'pdf'])->whereNumber('dok')->name('penawaran-spk.pdf');
     Route::patch('/penawaran-spk/{dok}', [\App\Http\Controllers\PenawaranSpkController::class, 'ubah'])->whereNumber('dok')->name('penawaran-spk.ubah');
+    // Database Sparepart (menu Plant & Sparepart): cari sparepart + histori harga, isi dari mnp:impor-sparepart.
+    Route::get('/sparepart', [\App\Http\Controllers\SparepartController::class, 'index'])->name('sparepart.index');
+    Route::get('/sparepart/riwayat', [\App\Http\Controllers\SparepartController::class, 'riwayat'])->name('sparepart.riwayat');
     // Daftar Rekening: database rekening bersama Kas Harian & Kas UJ (satu nomor = satu nama pemilik).
     Route::get('/rekening', [\App\Http\Controllers\RekeningController::class, 'index'])->name('rekening.index');
     Route::post('/rekening', [\App\Http\Controllers\RekeningController::class, 'simpan'])->name('rekening.simpan');
