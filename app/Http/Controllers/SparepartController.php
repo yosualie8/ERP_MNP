@@ -27,11 +27,12 @@ class SparepartController extends Controller
                 $akhir = $bs->last();
                 $murah = $bs->sortBy('harga_satuan')->first();
                 $perUnit = $bs->groupBy(fn ($b) => $b->tipe_unit ?: '(unit tidak disebut)')->sortByDesc(fn ($x) => $x->count());
-                $supplier = $bs->countBy('supplier')->sortDesc();
+                // supplier hanya yang diverifikasi Admin Plant (lainnya kosong) → supplier terakhir = pembelian terakhir yang suppliernya diketahui
+                $supplier = $bs->whereNotNull('supplier')->countBy('supplier')->sortDesc();
 
                 return (object) [
                     'kategori' => $akhir->kategori, 'nama' => $akhir->nama_item, 'satuan' => $akhir->satuan,
-                    'akhir' => $akhir, 'murah' => $murah, 'tinggi' => (float) $bs->max('harga_satuan'), 'rata' => (float) $bs->avg('harga_satuan'),
+                    'akhir' => $akhir, 'murah' => $murah, 'akhir_sup' => $bs->whereNotNull('supplier')->last(), 'tinggi' => (float) $bs->max('harga_satuan'), 'rata' => (float) $bs->avg('harga_satuan'),
                     'n' => $bs->count(), 'qty' => (float) $bs->sum('qty'), 'total' => (float) $bs->sum('total'),
                     // harga terakhir per tipe unit (hanya bila ada lebih dari satu tipe atau tipenya disebut)
                     'per_unit' => $perUnit->count() > 1 || ! $perUnit->has('(unit tidak disebut)')

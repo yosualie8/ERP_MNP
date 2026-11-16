@@ -31,7 +31,7 @@
     </style>
 
     <p class="redup" style="margin-top: 0;">Riwayat pembelian sparepart dari <b>Kas Harian</b> (akun Biaya Sparepart*) dan <b>Kas UJ</b> (kategori Sparepart, dibeli sopir di jalan),
-        nama barang sudah dibakukan. Data {{ $tgl($info['awal']) }} s.d. <b>{{ $tgl($info['akhir']) }}</b> · {{ rp($info['baris']) }} transaksi.
+        nama barang sudah dibakukan dan dikoreksi Admin Plant. Supplier hanya ditampilkan bila sudah diverifikasi Admin Plant (lainnya kosong, harga tetap tercatat). Data {{ $tgl($info['awal']) }} s.d. <b>{{ $tgl($info['akhir']) }}</b> · {{ rp($info['baris']) }} transaksi.
         Harga satuan = nominal ÷ jumlah yang tertulis (tanpa jumlah dianggap 1). Klik baris item untuk melihat <b>histori harganya</b>.</p>
 
     <div class="sp-atas">
@@ -46,7 +46,7 @@
     @elseif ($tab === 'item')
         <div class="kartu gulir" style="padding: 0;">
             <table class="kas" id="sp-tabel">
-                <thead><tr><th>Kategori</th><th>Nama Item</th><th>Satuan</th><th class="angka">Harga Terakhir</th><th>Tgl Terakhir</th><th>Supplier Terakhir</th>
+                <thead><tr><th>Kategori</th><th>Nama Item</th><th>Satuan</th><th class="angka">Harga Terakhir</th><th>Tgl Terakhir</th><th>Supplier Terakhir (terverifikasi)</th>
                     <th class="angka">Termurah</th><th>Supplier Termurah</th><th class="angka">Tertinggi</th><th class="angka">Rata-rata</th><th class="angka">Kali Beli</th>
                     <th>Harga Terakhir per Tipe Unit</th><th>Unit</th><th>Spesifikasi / Merk</th><th>Supplier (sering)</th></tr></thead>
                 <tbody>
@@ -57,9 +57,9 @@
                             <td>{{ $x->satuan }}</td>
                             <td class="angka" data-n="{{ $x->akhir->harga_satuan }}"><b>{{ rp($x->akhir->harga_satuan) }}</b></td>
                             <td data-n="{{ $x->akhir->tanggal }}" style="white-space: nowrap;">{{ $tgl($x->akhir->tanggal) }}</td>
-                            <td>{{ $x->akhir->supplier }}</td>
+                            <td>@if ($x->akhir_sup){{ $x->akhir_sup->supplier }}<div class="kecil">{{ $tgl($x->akhir_sup->tanggal) }} · Rp {{ rp($x->akhir_sup->harga_satuan) }}</div>@else<span class="redup">—</span>@endif</td>
                             <td class="angka" data-n="{{ $x->murah->harga_satuan }}">{{ rp($x->murah->harga_satuan) }}</td>
-                            <td>{{ $x->murah->supplier }}<div class="kecil">{{ $tgl($x->murah->tanggal) }}</div></td>
+                            <td>{!! $x->murah->supplier ? e($x->murah->supplier) : '<span class="redup">—</span>' !!}<div class="kecil">{{ $tgl($x->murah->tanggal) }}</div></td>
                             <td class="angka" data-n="{{ $x->tinggi }}">{{ rp($x->tinggi) }}</td>
                             <td class="angka" data-n="{{ round($x->rata) }}">{{ rp($x->rata) }}</td>
                             <td class="angka" data-n="{{ $x->n }}">{{ $x->n }}</td>
@@ -190,9 +190,9 @@
                     const rata = item.reduce((s, d) => s + d.harga, 0) / item.length;
                     document.getElementById('d-sub').textContent = [satuan ? 'per ' + satuan : '', `${item.length}× beli`, paket.length ? `+ ${paket.length} paket` : ''].filter(Boolean).join(' · ');
                     ubin = `<div class="ubin">
-                        <div><span class="kecil">Harga terakhir</span><b>Rp ${rp(akhir.harga)}${sat}</b><span class="kecil">${esc(akhir.tgl)} · ${esc(akhir.supplier)}</span></div>
-                        <div><span class="kecil">Termurah</span><b>Rp ${rp(murah.harga)}${sat}</b><span class="kecil">${esc(murah.tgl)} · ${esc(murah.supplier)}</span></div>
-                        <div><span class="kecil">Tertinggi</span><b>Rp ${rp(mahal.harga)}${sat}</b><span class="kecil">${esc(mahal.tgl)} · ${esc(mahal.supplier)}</span></div>
+                        <div><span class="kecil">Harga terakhir</span><b>Rp ${rp(akhir.harga)}${sat}</b><span class="kecil">${[akhir.tgl, akhir.supplier].filter(Boolean).map(esc).join(' · ')}</span></div>
+                        <div><span class="kecil">Termurah</span><b>Rp ${rp(murah.harga)}${sat}</b><span class="kecil">${[murah.tgl, murah.supplier].filter(Boolean).map(esc).join(' · ')}</span></div>
+                        <div><span class="kecil">Tertinggi</span><b>Rp ${rp(mahal.harga)}${sat}</b><span class="kecil">${[mahal.tgl, mahal.supplier].filter(Boolean).map(esc).join(' · ')}</span></div>
                         <div><span class="kecil">Rata-rata</span><b>Rp ${rp(rata)}${sat}</b><span class="kecil">dari ${item.length} pembelian</span></div>
                     </div>`;
                 }
