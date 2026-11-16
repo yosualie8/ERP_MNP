@@ -18,6 +18,14 @@ class DaftarSparepart
         'SHELL', 'MEDITRAN', 'CASTROL', 'FEDERAL', 'BRIDGESTONE', 'DUNLOP', 'MICHELIN', 'ACHILLES', 'KYB', 'NACHI', 'SKF', 'NTN', 'KOYO', 'FAG',
         'TIMKEN', 'OSRAM', 'PHILIPS', 'STANLEY', 'KENMASTER', 'KRISBOW', 'WIPRO', 'TOP1', 'PRESTONE'];
 
+    /** Jenis pemakai sparepart (owner 16 Nov 2026: untuk alat berat, truck, atau jenis lain) — pilihan isian kolom Jenis. */
+    public const JENIS = ['Alat Berat', 'Truck', 'Kendaraan Ringan', 'Motor', 'Mesin', 'Umum'];
+
+    /** Golongan unit di pembelian → Jenis (usulan bila Admin Plant belum mengisi). Golongan lain / tidak disebut tidak dihitung. */
+    private const GOLONGAN_JENIS = ['Alat Berat' => 'Alat Berat', 'DT' => 'Truck', 'Engkel Tata' => 'Truck', 'Lube Truck' => 'Truck', 'Selfloader' => 'Truck',
+        'Water Tank' => 'Truck', 'LV' => 'Kendaraan Ringan', 'Panther' => 'Kendaraan Ringan', 'Verza' => 'Motor', 'Genset' => 'Mesin', 'Kompresor' => 'Mesin',
+        'Mesin Diesel' => 'Mesin', 'Mesin Las' => 'Mesin', 'Pompa Air / Alkon' => 'Mesin'];
+
     /** Kata di keterangan pembelian yang menandakan barang asli / tiruan (usulan kolom Ori/KW). */
     private const ORI = '/\b(ori|original|orisinil|asli|genuine)\b/i';
 
@@ -40,6 +48,8 @@ class DaftarSparepart
                 $isian = $atribut[SparepartItem::kunci($akhir->nama_item, $akhir->satuan)] ?? null;
                 $usulMerk = self::usulMerk($bs);
                 $usulKualitas = self::usulKualitas($bs);
+                $usulPart = self::usulPart($bs);
+                $usulJenis = self::usulJenis($bs);
                 $perUnit = $bs->groupBy(fn ($b) => $b->tipe_unit ?: '(unit tidak disebut)')->sortByDesc(fn ($x) => $x->count());
 
                 return (object) [
@@ -48,6 +58,8 @@ class DaftarSparepart
                     // supplier hanya yang diverifikasi Admin Plant (lainnya kosong) → supplier terakhir = pembelian terakhir yang suppliernya diketahui
                     'akhir_sup' => $bs->whereNotNull('supplier')->last(),
                     // Merk & Ori/KW: isian Admin Plant (sparepart_item); kosong → usulan dari spesifikasi / keterangan pembelian (ditandai usulan)
+                    'jenis' => $isian?->jenis ?? $usulJenis, 'jenis_usul' => ! $isian?->jenis && $usulJenis,
+                    'part' => $isian?->part_number ?? $usulPart, 'part_usul' => ! $isian?->part_number && $usulPart,
                     'merk' => $isian?->merk ?? $usulMerk, 'merk_usul' => ! $isian?->merk && $usulMerk,
                     'kualitas' => $isian?->kualitas ?? $usulKualitas, 'kualitas_usul' => ! $isian?->kualitas && $usulKualitas,
                     'catatan' => $isian?->catatan,
@@ -71,6 +83,32 @@ class DaftarSparepart
     {
         $pola = '/\b('.implode('|', self::MERK).')\b/i';
         $hit = $bs->flatMap(fn ($b) => preg_match_all($pola, (string) $b->spesifikasi, $m) ? array_unique(array_map('strtoupper', $m[1])) : []);
+
+        return $hit->isEmpty() ? null : $hit->countBy()->sortDesc()->keys()->first();
+    }
+
+    /**
+     * Jenis dari golongan unit pembelian ("Alat Berat, Truck" bila dipakai keduanya; urutan tetap ikut JENIS); dipakai ≥ 4 jenis = "Umum"
+     * (rinciannya tetap di "Dipakai untuk" pada dialog); null bila unit tak pernah disebut.
+     */
+    public static function usulJenis(Collection $bs): ?string
+    {
+        $ada = $bs->map(fn ($b) => self::GOLONGAN_JENIS[$b->golongan] ?? (str_starts_with((string) $b->golongan, 'Motor') ? 'Motor' : null))->filter()->unique();
+
+        return $ada->isEmpty() ? null : ($ada->count() >= 4 ? 'Umum' : implode(', ', array_values(array_intersect(self::JENIS, $ada->all()))));
+    }
+
+    /**
+     * Part number tersering di spesifikasi pembelian: huruf 1–3 + angka ≥ 4 (P502466, SK20386, J8621314). Ukuran (14X50, M12X100),
+     * tipe mesin diesel (S1110, ZS1110) dan satuan (120AH, 60WATT) tidak dianggap part number.
+     */
+    public static function usulPart(Collection $bs): ?string
+    {
+        $hit = $bs->flatMap(function ($b) {
+            preg_match_all('/\b([A-Z]{1,3}\d{4,}[A-Z]?)\b/', strtoupper((string) $b->spesifikasi), $m);
+
+            return array_unique(array_filter($m[1], fn ($p) => ! preg_match('/^Z?S1\d{3,4}$/', $p)));
+        });
 
         return $hit->isEmpty() ? null : $hit->countBy()->sortDesc()->keys()->first();
     }

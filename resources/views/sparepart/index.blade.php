@@ -15,7 +15,7 @@
         table.kas tr.t.bisa-buka:hover td { background: var(--kartu-2); }
         .nama-item { font-weight: 600; color: var(--teks); }
         .kecil { font-size: 11px; color: var(--redup); }
-        #dialog-sp { border: 1px solid var(--garis); border-radius: 12px; background: var(--kartu); color: var(--teks); padding: 0; width: min(1200px, 96vw); max-height: 92vh; }
+        #dialog-sp { border: 1px solid var(--garis); border-radius: 12px; background: var(--kartu); color: var(--teks); padding: 0; width: min(1200px, 96vw); max-height: 92vh; max-height: calc(100dvh - 32px); margin: auto; }
         #dialog-sp::backdrop { background: rgba(0, 0, 0, .6); }
         #dialog-sp .kepala { display: flex; gap: 12px; align-items: flex-start; padding: 16px 18px 10px; position: sticky; top: 0; background: var(--kartu); z-index: 3; border-bottom: 1px solid var(--garis); }
         #dialog-sp .kepala h3 { margin: 0; font-size: 18px; }
@@ -29,6 +29,8 @@
         .grafik .tip[hidden] { display: none; }
         .grafik-judul { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--redup); padding: 2px 4px 6px; flex-wrap: wrap; }
         .usul { font-style: italic; opacity: .8; }
+        .periode-sp { font-size: 12.5px; color: var(--redup); margin: 0 0 10px; }
+        .form-sp input[name=part_number]::placeholder { text-transform: none; }
         .info-sp { display: grid; grid-template-columns: 200px 1fr; gap: 6px 14px; background: var(--kartu-2); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; font-size: 13px; }
         .info-sp .k { color: var(--redup); }
         .form-sp { border: 1px solid var(--garis); border-radius: 8px; padding: 12px 14px; margin-bottom: 14px; }
@@ -47,7 +49,7 @@
     <p class="redup" style="margin-top: 0;">Riwayat pembelian sparepart dari <b>Kas Harian</b> (akun Biaya Sparepart*) dan <b>Kas UJ</b> (kategori Sparepart, dibeli sopir di jalan),
         nama barang sudah dibakukan dan dikoreksi Admin Plant. Supplier hanya ditampilkan bila sudah diverifikasi Admin Plant (lainnya kosong, harga tetap tercatat). Data {{ $tgl($info['awal']) }} s.d. <b>{{ $tgl($info['akhir']) }}</b> · {{ rp($info['baris']) }} transaksi.
         Harga satuan = nominal ÷ jumlah yang tertulis (tanpa jumlah dianggap 1). Klik item untuk melihat <b>ringkasan & histori pembeliannya</b>.
-        Merk / Ori-KW <i>miring</i> = usulan dari keterangan pembelian, belum dipastikan.</p>
+        Jenis / Part Number / Merk / Ori-KW <i>miring</i> = usulan dari unit & keterangan pembelian, belum dipastikan. Histori di detail item = 12 bulan terakhir.</p>
 
     <div class="sp-atas">
         <a href="{{ route('sparepart.index') }}" @class(['chip', 'aktif' => $tab === 'item'])>Daftar Item · {{ $item->count() }}</a>
@@ -61,7 +63,7 @@
     @elseif ($tab === 'item')
         <div class="kartu gulir" style="padding: 0;">
             <table class="kas" id="sp-tabel">
-                <thead><tr><th>Kategori</th><th>Nama Item</th><th>Satuan</th><th class="angka">Harga Terakhir</th><th>Tgl Pembelian Terakhir</th><th>Supplier Terakhir</th>
+                <thead><tr><th>Kategori</th><th>Jenis</th><th>Part Number</th><th>Nama Item</th><th>Satuan</th><th class="angka">Harga Terakhir</th><th>Tgl Pembelian Terakhir</th><th>Supplier Terakhir</th>
                     <th>Merk</th><th>Ori / KW</th></tr></thead>
                 <tbody>
                     @foreach ($item as $x)
@@ -69,6 +71,8 @@
                         <tr class="t bisa-buka" data-nama="{{ $x->nama }}" data-satuan="{{ $x->satuan }}"
                             data-cari="{{ $x->cari }} | {{ $x->golongan->implode(' ') }} {{ $x->per_unit->pluck('tu')->implode(' ') }} {{ $x->spek->implode(' ') }} {{ $x->supplier->keys()->implode(' ') }}">
                             <td class="kecil">{{ $x->kategori }}</td>
+                            <td data-v="{{ $x->jenis }}">@if ($x->jenis)<span @class(['usul' => $x->jenis_usul]) @if ($x->jenis_usul) title="Usulan dari unit di pembelian — belum dipastikan Admin Plant" @endif>{{ $x->jenis }}</span>@endif</td>
+                            <td data-v="{{ $x->part }}" style="white-space: nowrap;">@if ($x->part)<span @class(['usul' => $x->part_usul]) @if ($x->part_usul) title="Usulan dari spesifikasi pembelian — belum dipastikan Admin Plant" @endif>{{ $x->part }}</span>@endif</td>
                             <td><span class="nama-item">{{ $x->nama }}</span></td>
                             <td>{{ $x->satuan }}</td>
                             <td class="angka" data-n="{{ $x->akhir->harga_satuan }}"><b>{{ rp($x->akhir->harga_satuan) }}</b></td>
@@ -129,6 +133,9 @@
         </div>
         <div class="badan" id="d-badan"></div>
     </dialog>
+    <datalist id="daftar-jenis">
+        @foreach (collect(\App\Support\DaftarSparepart::JENIS)->merge(\App\Models\SparepartItem::whereNotNull('jenis')->distinct()->pluck('jenis'))->unique() as $j)<option value="{{ $j }}">@endforeach
+    </datalist>
     <datalist id="daftar-merk">
         @foreach (collect(\App\Support\DaftarSparepart::MERK)->map(fn ($m) => ucfirst(strtolower($m)))->merge(\App\Models\SparepartItem::whereNotNull('merk')->distinct()->pluck('merk'))->unique()->sort() as $m)<option value="{{ $m }}">@endforeach
     </datalist>
@@ -197,38 +204,46 @@
 
             const KUALITAS = {ori: 'Ori', kw: 'KW'};
             function tampil(nama, satuan, data, j) {
+                // urut tanggal pembelian terbaru dulu (server sudah urut; dijaga lagi di sini, sort stabil → urutan id per tanggal tetap)
+                data = [...data].sort((a, b) => b.tanggal.localeCompare(a.tanggal));
                 const item = data.filter(d => !d.paket), paket = data.filter(d => d.paket);
                 const sat = satuan ? '/' + esc(satuan) : '';
-                const rs = j.ringkas;
-                let ubin = '';
+                const rs = j.ringkas, at = j.atribut || {};
+                let ubin = `<div class="periode-sp">Data <b>12 bulan terakhir</b> (sejak ${esc(j.sejak)}) · urut tanggal pembelian terbaru</div>`;
+                if (!item.length) {
+                    document.getElementById('d-sub').textContent = satuan ? 'per ' + satuan : '';
+                    ubin += `<p class="pesan">Tidak ada pembelian item ini dalam 12 bulan terakhir.${j.terakhir ? ` Pembelian terakhir <b>${esc(j.terakhir.tgl)}</b> · Rp ${rp(j.terakhir.harga)}${sat}${j.terakhir.supplier ? ' · ' + esc(j.terakhir.supplier) : ''}.` : ''}</p>`;
+                }
                 if (item.length) {
                     const akhir = item[0], murah = item.reduce((a, b) => b.harga < a.harga ? b : a), mahal = item.reduce((a, b) => b.harga > a.harga ? b : a);
                     const rata = item.reduce((s, d) => s + d.harga, 0) / item.length;
                     document.getElementById('d-sub').textContent = [rs?.kategori, satuan ? 'per ' + satuan : '', `${item.length}× beli`, paket.length ? `+ ${paket.length} paket` : ''].filter(Boolean).join(' · ');
-                    ubin = `<div class="ubin">
+                    ubin += `<div class="ubin">
                         <div><span class="kecil">Harga terakhir</span><b>Rp ${rp(akhir.harga)}${sat}</b><span class="kecil">${[akhir.tgl, akhir.supplier].filter(Boolean).map(esc).join(' · ')}</span></div>
                         <div><span class="kecil">Termurah</span><b>Rp ${rp(murah.harga)}${sat}</b><span class="kecil">${[murah.tgl, murah.supplier].filter(Boolean).map(esc).join(' · ')}</span></div>
                         <div><span class="kecil">Tertinggi</span><b>Rp ${rp(mahal.harga)}${sat}</b><span class="kecil">${[mahal.tgl, mahal.supplier].filter(Boolean).map(esc).join(' · ')}</span></div>
                         <div><span class="kecil">Rata-rata</span><b>Rp ${rp(rata)}${sat}</b><span class="kecil">dari ${item.length} pembelian</span></div>
-                        <div><span class="kecil">Jumlah dibeli</span><b>${qty(rs?.qty ?? 0)} ${esc(satuan || '')}</b><span class="kecil">${item.length}× sejak ${esc(rs?.awal || '')}</span></div>
-                        <div><span class="kecil">Total belanja</span><b>Rp ${rp(rs?.total ?? 0)}</b><span class="kecil">tanpa paket</span></div>
+                        <div><span class="kecil">Jumlah dibeli</span><b>${qty(rs?.qty ?? 0)} ${esc(satuan || '')}</b><span class="kecil">${item.length}× dalam 12 bulan</span></div>
+                        <div><span class="kecil">Total belanja</span><b>Rp ${rp(rs?.total ?? 0)}</b><span class="kecil">12 bulan, tanpa paket</span></div>
                     </div>`;
                 }
-                // ringkasan item: merk, Ori/KW, unit pemakai, spesifikasi tertulis, supplier
-                if (rs) {
-                    const pil = (v, usul) => v ? `<span class="${usul ? 'usul' : ''}" ${usul ? 'title="Usulan dari keterangan pembelian — belum dipastikan"' : ''}>${esc(v)}</span>${usul ? ' <span class="kecil">(usulan)</span>' : ''}` : '<span class="redup">—</span>';
-                    const baris = [
-                        ['Merk', pil(rs.merk, rs.merk_usul)],
-                        ['Ori / KW', rs.kualitas ? `<span class="label ${rs.kualitas === 'ori' ? 'hijau' : 'kuning'} ${rs.kualitas_usul ? 'usul' : ''}">${KUALITAS[rs.kualitas]}</span>${rs.kualitas_usul ? ' <span class="kecil">(usulan)</span>' : ''}` : '<span class="redup">—</span>'],
-                        ['Harga terakhir per tipe unit', rs.per_unit.length ? rs.per_unit.map(u => `${esc(u.tu)}: <b>Rp ${rp(u.harga)}</b> <span class="kecil">(${u.n}×)</span>`).join(' · ') : '<span class="redup">unit tidak disebut</span>'],
-                        ['Dipakai untuk', rs.golongan.length ? rs.golongan.map(esc).join(', ') : '<span class="redup">—</span>'],
-                        ['Spesifikasi tertulis', rs.spek.length ? rs.spek.map(esc).join(', ') : '<span class="redup">—</span>'],
-                        ['Supplier (terverifikasi)', rs.supplier.length ? rs.supplier.map(s => `${esc(s.nama)} <span class="kecil">(${s.n}×)</span>`).join(', ') : '<span class="redup">belum ada yang terverifikasi</span>'],
-                    ];
-                    if (j.isian.catatan) baris.push(['Catatan Admin Plant', esc(j.isian.catatan)]);
-                    ubin += `<div class="info-sp">${baris.map(([k, v]) => `<div class="k">${k}</div><div>${v}</div>`).join('')}</div>`;
-                    if (j.bisa_ubah) ubin += formItem(nama, satuan, j.isian, rs);
-                }
+                // ringkasan item: jenis, part number, merk, Ori/KW (dari semua pembelian) + unit pemakai, spesifikasi, supplier (12 bulan)
+                const pil = (v, usul) => v ? `<span class="${usul ? 'usul' : ''}" ${usul ? 'title="Usulan dari keterangan pembelian — belum dipastikan"' : ''}>${esc(v)}</span>${usul ? ' <span class="kecil">(usulan)</span>' : ''}` : '<span class="redup">—</span>';
+                const info = [
+                    ['Jenis', pil(at.jenis, at.jenis_usul)],
+                    ['Part number', pil(at.part, at.part_usul)],
+                    ['Merk', pil(at.merk, at.merk_usul)],
+                    ['Ori / KW', at.kualitas ? `<span class="label ${at.kualitas === 'ori' ? 'hijau' : 'kuning'} ${at.kualitas_usul ? 'usul' : ''}">${KUALITAS[at.kualitas]}</span>${at.kualitas_usul ? ' <span class="kecil">(usulan)</span>' : ''}` : '<span class="redup">—</span>'],
+                ];
+                if (rs) info.push(
+                    ['Harga terakhir per tipe unit', rs.per_unit.length ? rs.per_unit.map(u => `${esc(u.tu)}: <b>Rp ${rp(u.harga)}</b> <span class="kecil">(${u.n}×)</span>`).join(' · ') : '<span class="redup">unit tidak disebut</span>'],
+                    ['Dipakai untuk', rs.golongan.length ? rs.golongan.map(esc).join(', ') : '<span class="redup">—</span>'],
+                    ['Spesifikasi tertulis', rs.spek.length ? rs.spek.map(esc).join(', ') : '<span class="redup">—</span>'],
+                    ['Supplier (terverifikasi)', rs.supplier.length ? rs.supplier.map(s => `${esc(s.nama)} <span class="kecil">(${s.n}×)</span>`).join(', ') : '<span class="redup">belum ada yang terverifikasi</span>'],
+                );
+                if (j.isian.catatan) info.push(['Catatan Admin Plant', esc(j.isian.catatan)]);
+                ubin += `<div class="info-sp">${info.map(([k, v]) => `<div class="k">${k}</div><div>${v}</div>`).join('')}</div>`;
+                if (j.bisa_ubah) ubin += formItem(nama, satuan, j.isian, at);
                 const baris = data.map(d => `<tr class="t">
                     <td data-n="${d.tanggal}" style="white-space: nowrap;">${esc(d.tgl)}</td>
                     <td>${d.paket ? '<span class="label kuning" title="Satu nominal untuk beberapa barang — harga bukan harga item ini saja">Paket</span> ' + esc(d.nama) : esc(d.spek)}</td>
@@ -241,18 +256,20 @@
                     <div class="gulir" style="padding: 0; border: 1px solid var(--garis); border-radius: 8px;">
                     <table class="kas" id="d-tabel"><thead><tr><th>Tanggal</th><th>Spesifikasi / Isi Paket</th><th>Unit</th><th>Tipe Unit</th><th>No Unit</th><th class="angka">Qty</th><th>Satuan</th>
                         <th class="angka">Harga Satuan</th><th class="angka">Total</th><th>Supplier</th><th>PIC</th><th>Keterangan Asli</th><th>Sumber</th></tr></thead>
-                    <tbody>${baris || '<tr><td colspan="13" class="redup">Tidak ada data.</td></tr>'}</tbody></table></div>`;
+                    <tbody>${baris || '<tr><td colspan="13" class="redup">Tidak ada pembelian dalam 12 bulan terakhir.</td></tr>'}</tbody></table></div>`;
                 pasangTip();
                 pasangForm();
                 window.SaringKolom?.pindai();
             }
 
-            // ---- Isi Merk / Ori-KW (hak 'sparepart-ubah'); semua kosong = kembali ke usulan otomatis
+            // ---- Isi Jenis / Part Number / Merk / Ori-KW (hak 'sparepart-ubah'); semua kosong = kembali ke usulan otomatis
             function formItem(nama, satuan, isian, rs) {
                 const k = isian.kualitas || '';
                 return `<form class="form-sp" data-nama="${esc(nama)}" data-satuan="${esc(satuan || '')}">
-                    <div class="judul-form">Merk & Ori / KW item ini ${isian.oleh ? `<span class="kecil">· terakhir diubah ${esc(isian.oleh)}, ${esc(isian.kapan)}</span>` : ''}</div>
+                    <div class="judul-form">Jenis, part number, merk & Ori / KW item ini ${isian.oleh ? `<span class="kecil">· terakhir diubah ${esc(isian.oleh)}, ${esc(isian.kapan)}</span>` : ''}</div>
                     <div class="isian-sp">
+                        <label>Jenis<input name="jenis" list="daftar-jenis" maxlength="80" autocomplete="off" value="${esc(isian.jenis || '')}" placeholder="${esc(rs.jenis_usul ? 'usulan: ' + rs.jenis : 'Alat Berat / Truck / …')}"></label>
+                        <label>Part number<input name="part_number" maxlength="80" autocomplete="off" value="${esc(isian.part_number || '')}" placeholder="${esc(rs.part_usul ? 'usulan: ' + rs.part : 'mis. P502466')}" style="text-transform: uppercase;"></label>
                         <label>Merk<input name="merk" list="daftar-merk" maxlength="80" autocomplete="off" value="${esc(isian.merk || '')}" placeholder="${esc(rs.merk_usul ? 'usulan: ' + rs.merk : 'mis. Sakura, Donaldson')}"></label>
                         <div><span class="lbl">Ori / KW</span><div class="pil">${[['', '—'], ['ori', 'Ori'], ['kw', 'KW']].map(([v, l]) => `<label><input type="radio" name="kualitas" value="${v}" ${k === v ? 'checked' : ''}> ${l}</label>`).join('')}</div></div>
                         <label class="lebar-isian">Catatan<input name="catatan" maxlength="300" autocomplete="off" value="${esc(isian.catatan || '')}" placeholder="opsional, mis. pakai yang Ori untuk PC200"></label>

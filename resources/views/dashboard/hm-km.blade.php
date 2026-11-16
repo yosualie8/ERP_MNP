@@ -27,7 +27,7 @@
         .bar-hk { height: 5px; border-radius: 3px; background: var(--kartu-2); margin-top: 4px; min-width: 70px; }
         .bar-hk span { display: block; height: 100%; border-radius: 3px; background: var(--aksen); }
         #dialog-hk { border: 1px solid var(--garis); border-radius: 12px; background: var(--kartu); color: var(--teks); padding: 0; }
-        #dialog-hk { width: min(1000px, 96vw); max-height: 92vh; }
+        #dialog-hk { width: min(1000px, 96vw); max-height: 92vh; max-height: calc(100dvh - 32px); margin: auto; }
         #dialog-hk::backdrop { background: rgba(0, 0, 0, .6); }
         .dlg-kepala { display: flex; gap: 12px; align-items: flex-start; padding: 16px 18px 10px; position: sticky; top: 0; background: var(--kartu); z-index: 3; border-bottom: 1px solid var(--garis); }
         .dlg-kepala h3 { margin: 0; font-size: 18px; }

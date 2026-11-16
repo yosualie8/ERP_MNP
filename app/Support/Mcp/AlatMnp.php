@@ -246,7 +246,7 @@ class AlatMnp
             'cari_sparepart' => [
                 'judul' => 'Cari sparepart & harganya',
                 'deskripsi' => 'Database Sparepart (menu Plant & Sparepart): daftar harga per item sparepart dari riwayat pembelian Kas Harian + Kas UJ (nama item baku). '
-                    .'Per item & satuan: harga terakhir, termurah (+ tanggal & supplier), tertinggi, rata-rata, kali beli, harga terakhir per tipe unit, merk / spesifikasi, '
+                    .'Per item & satuan: harga terakhir, termurah (+ tanggal & supplier), tertinggi, rata-rata, kali beli, harga terakhir per tipe unit, jenis (Alat Berat / Truck / Kendaraan Ringan / Motor / Mesin / Umum), part number, merk / spesifikasi, '
                     .'supplier. Supplier hanya yang sudah diverifikasi Admin Plant (lainnya kosong = belum diketahui). Kata dicari di nama item, keterangan asli, '
                     .'spesifikasi, unit ("DT 26", "FAW", "PC200"), supplier; statistik dihitung dari pembelian yang cocok saja (mis. "filter solar faw" = harga untuk FAW). '
                     .'Paket = satu nominal untuk beberapa barang (harga bukan harga satu item). Untuk histori lengkap satu item pakai histori_harga_sparepart.',
@@ -733,6 +733,8 @@ class AlatMnp
                 'harga_terakhir_per_tipe_unit' => $x->per_unit->map(fn ($u) => ['tipe_unit' => $u['tu'], 'harga' => (int) round($u['harga']), 'kali' => $u['n']])->all(),
                 'spesifikasi' => $x->spek->all(), 'supplier_terverifikasi' => $x->supplier->all(),
                 // Merk & Ori/KW: isian Admin Plant; *_usulan = true bila hanya tebakan dari keterangan pembelian
+                'jenis' => $x->jenis, 'jenis_usulan' => (bool) $x->jenis_usul,
+                'part_number' => $x->part, 'part_number_usulan' => (bool) $x->part_usul,
                 'merk' => $x->merk, 'merk_usulan' => (bool) $x->merk_usul, 'ori_kw' => \App\Models\SparepartItem::KUALITAS[$x->kualitas] ?? null,
                 'ori_kw_usulan' => (bool) $x->kualitas_usul, 'catatan_admin_plant' => $x->catatan,
             ])->all(),
