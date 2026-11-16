@@ -16,8 +16,7 @@ class MenuAkses
         'dashboard-proyek' => ['Dashboard Progres Proyek', 'dashboard.proyek', ['dashboard.proyek'], 'Tahap berstatus progress: persen progres, biaya yang sudah keluar & rinciannya per komponen, tombol ke Anggaran'],
         'dashboard-biaya-dt' => ['Dashboard Biaya DT', 'dashboard.biaya-dt', ['dashboard.biaya-dt'], 'Biaya dump truck per bulan & per kategori (Kas UJ + Kas Harian ber-No Mobil), per DT, jumlah rit & biaya per rit, rincian transaksi per truk'],
         'dashboard-performa-dt' => ['Dashboard Laba Rugi DT', 'dashboard.performa-dt', ['dashboard.performa-dt', 'dashboard.performa-dt.*'], 'Laba rugi per dump truck: harga jual rit (lembar Ritasi) dikurangi biaya langsung truk (Kas UJ, Kas Harian, BCA ber-DT); buka DT → pendapatan per proyek, biaya per kategori & semua transaksinya'],
-        'dashboard-hm-km' => ['Dashboard HM & KM', 'dashboard.hm-km', ['dashboard.hm-km', 'dashboard.hm-km.*'], 'HM alat berat (otomatis dari Data BBM), KM dump truck, dan HM / KM kendaraan & aset lain: angka terakhir, kapan dicatat, pemakaian per bulan & rata-rata per hari, riwayat per unit'],
-        'hm-km-catat' => ['Catat HM & KM', 'dashboard.hm-km', ['hm-km-catat.*'], 'Mencatat / menghapus angka HM & KM aset di Dashboard HM & KM (tombol + Catat)'],
+        'dashboard-hm-km' => ['Dashboard HM & KM', 'dashboard.hm-km', ['dashboard.hm-km', 'dashboard.hm-km.*'], 'HM alat berat (otomatis dari Data BBM), KM dump truck, dan HM / KM kendaraan & aset lain: angka terakhir, kapan dicatat, pemakaian per bulan & rata-rata per hari, riwayat per unit (hanya melihat)'],
         'dashboard-aktivitas' => ['Dashboard Aktivitas Admin', 'dashboard.aktivitas', ['dashboard.aktivitas'], 'Log kegiatan semua pengguna (khusus Super Admin)'],
         'tanya-ai' => ['Tanya AI', 'tanya-ai', ['tanya-ai', 'tanya-ai.*'], 'Chat tanya data ERP (hanya baca, sesuai menu akun) + 🎤 speech to text; pertanyaan & jawaban dicatat'],
         'input-kas' => ['Input Kas', 'kas.input', ['kas.input', 'kas.input.*', 'kas.edit', 'kas.update', 'kas.hapus', 'kas.bon', 'kas.bon.*'], 'Input, edit & hapus transaksi Kas Harian (Bank Jago), foto bon'],
@@ -79,7 +78,7 @@ class MenuAkses
     /** Kelompok menu di sidebar: kunci => [judul, ikon, menu di dalamnya]. */
     public const KATEGORI = [
         'asisten' => ['Asisten AI', '🤖', ['tanya-ai']],
-        'dashboard' => ['Dashboard', '📊', ['dashboard-proyek', 'dashboard-biaya-dt', 'dashboard-performa-dt', 'dashboard-bbm', 'dashboard-hm-km', 'hm-km-catat', 'dashboard-aktivitas']],
+        'dashboard' => ['Dashboard', '📊', ['dashboard-proyek', 'dashboard-biaya-dt', 'dashboard-performa-dt', 'dashboard-bbm', 'dashboard-hm-km', 'dashboard-aktivitas']],
         'proyek' => ['Proyek', '🏗️', ['daftar-proyek', 'penawaran-spk', 'anggaran-proyek', 'pilah-transaksi', 'boq-proyek', 'alokasi-overhead', 'komponen-anggaran', 'pengaturan-proyek']],
         'kas' => ['Kas Harian', '🏦', ['input-kas', 'kas-harian', 'validasi-reimburse', 'riwayat-reimburse', 'kas-belum-reimburse', 'rekap', 'mutasi-jago', 'jago-catatan', 'mutasi-pt', 'kode-gl', 'daftar-rekening']],
         'uj' => ['Uang Jalan', '🚚', ['pengajuan-uj', 'ajukan-uj', 'input-uj', 'kas-uj', 'reimburse-uj', 'pengalihan-uj', 'rapikan-uj']],
@@ -98,7 +97,7 @@ class MenuAkses
     public const KHUSUS_SUPER = ['dashboard-aktivitas'];
 
     /** Hak akses yang diatur per jabatan tetapi tidak tampil di sidebar (dibuka lewat tombol di halaman lain). */
-    public const TANPA_SIDEBAR = ['jago-catatan', 'absen-ubah-jam', 'mk-ubah-nominal', 'hm-km-catat']; // 'ajukan-uj' tampil lagi di sidebar (owner 25 Okt 2026)
+    public const TANPA_SIDEBAR = ['jago-catatan', 'absen-ubah-jam', 'mk-ubah-nominal']; // 'ajukan-uj' tampil lagi di sidebar (owner 25 Okt 2026)
 
     public static function boleh(?User $user, string $menu): bool
     {
