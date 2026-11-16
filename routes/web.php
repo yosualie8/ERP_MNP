@@ -189,6 +189,15 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/sparepart', [\App\Http\Controllers\SparepartController::class, 'index'])->name('sparepart.index');
     Route::get('/sparepart/riwayat', [\App\Http\Controllers\SparepartController::class, 'riwayat'])->name('sparepart.riwayat');
     Route::post('/sparepart/item', [\App\Http\Controllers\SparepartController::class, 'simpanItem'])->name('sparepart-ubah.simpan');
+    // Pengajuan Sparepart (owner 16 Nov 2026, menu Plant & Sparepart): usulan harga dari Database Sparepart, diputus manajemen.
+    Route::get('/pengajuan-sparepart', [\App\Http\Controllers\PengajuanSparepartController::class, 'index'])->name('pengajuan-sparepart.index');
+    Route::get('/pengajuan-sparepart/buat', [\App\Http\Controllers\PengajuanSparepartController::class, 'buat'])->name('pengajuan-sparepart.buat');
+    Route::post('/pengajuan-sparepart', [\App\Http\Controllers\PengajuanSparepartController::class, 'simpan'])->name('pengajuan-sparepart.simpan');
+    Route::get('/pengajuan-sparepart/{p}', [\App\Http\Controllers\PengajuanSparepartController::class, 'lihat'])->whereNumber('p')->name('pengajuan-sparepart.lihat');
+    Route::get('/pengajuan-sparepart/{p}/ubah', [\App\Http\Controllers\PengajuanSparepartController::class, 'ubah'])->whereNumber('p')->name('pengajuan-sparepart.ubah');
+    Route::put('/pengajuan-sparepart/{p}', [\App\Http\Controllers\PengajuanSparepartController::class, 'perbarui'])->whereNumber('p')->name('pengajuan-sparepart.perbarui');
+    Route::post('/pengajuan-sparepart/{p}/batal', [\App\Http\Controllers\PengajuanSparepartController::class, 'batal'])->whereNumber('p')->name('pengajuan-sparepart.batal');
+    Route::post('/pengajuan-sparepart/{p}/putus', [\App\Http\Controllers\PengajuanSparepartController::class, 'putus'])->whereNumber('p')->name('pengajuan-sparepart-putus.simpan');
     // Master Supplier (owner 16 Nov 2026, menu Plant & Sparepart): rekening dari Daftar Rekening, pembelian dari Database Sparepart.
     Route::get('/supplier', [\App\Http\Controllers\SupplierController::class, 'index'])->name('supplier.index');
     Route::get('/supplier/tambah', [\App\Http\Controllers\SupplierController::class, 'create'])->name('supplier.create');
