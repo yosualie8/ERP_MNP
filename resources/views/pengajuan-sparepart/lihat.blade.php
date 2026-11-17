@@ -19,25 +19,26 @@
             header, .samping, .psp-aksi, .form-putus, .tak-cetak { display: none !important; }
             .kartu { border: 0 !important; box-shadow: none !important; }
         }
-        /* Nota untuk gambar WhatsApp: selalu terang (warna tetap, tidak ikut tema gelap), hanya tampil di salinan html2canvas. */
-        #nota-wa { width: 720px; padding: 22px 24px; background: #fff; color: #1f2329; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; line-height: 1.4; }
-        #nota-wa .atas { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 3px solid #c62828; padding-bottom: 10px; margin-bottom: 12px; }
-        #nota-wa .pt { font-size: 12px; color: #6b7280; letter-spacing: .5px; }
-        #nota-wa h2 { margin: 2px 0 0; font-size: 20px; color: #1f2329; }
-        #nota-wa .status { font-size: 13px; font-weight: 700; padding: 3px 10px; border-radius: 12px; background: #fef3c7; color: #92400e; white-space: nowrap; }
+        /* Nota untuk gambar WhatsApp: selalu terang (warna tetap, tidak ikut tema gelap), hanya tampil di salinan html2canvas.
+           Font besar (owner 17 Nov 2026): gambar 720px dikecilkan ±setengahnya di layar HP, jadi teks dasar 21px ≈ 11px saat dibaca. */
+        #nota-wa { width: 720px; padding: 22px 24px; background: #fff; color: #1f2329; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 21px; line-height: 1.35; }
+        #nota-wa .atas { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; border-bottom: 4px solid #c62828; padding-bottom: 12px; margin-bottom: 14px; }
+        #nota-wa .pt { font-size: 16px; color: #6b7280; letter-spacing: .5px; }
+        #nota-wa h2 { margin: 2px 0 0; font-size: 30px; color: #1f2329; }
+        #nota-wa .status { font-size: 19px; font-weight: 700; padding: 4px 14px; border-radius: 16px; background: #fef3c7; color: #92400e; white-space: nowrap; }
         #nota-wa .status.hijau { background: #dcfce7; color: #166534; }
         #nota-wa .status.merah { background: #fee2e2; color: #991b1b; }
         #nota-wa .status.abu { background: #e5e7eb; color: #374151; }
-        #nota-wa .info { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 18px; margin-bottom: 12px; }
-        #nota-wa .info .k { font-size: 11.5px; color: #6b7280; }
-        #nota-wa table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        #nota-wa th { background: #f3f4f6; color: #374151; text-align: left; font-weight: 600; padding: 6px 7px; border: 1px solid #d1d5db; }
-        #nota-wa td { padding: 6px 7px; border: 1px solid #d1d5db; color: #1f2329; vertical-align: top; background: #fff; }
+        #nota-wa .info { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 18px; margin-bottom: 14px; }
+        #nota-wa .info .k { font-size: 16px; color: #6b7280; }
+        #nota-wa table { width: 100%; border-collapse: collapse; font-size: 20px; }
+        #nota-wa th { background: #f3f4f6; color: #374151; text-align: left; font-weight: 600; padding: 7px 8px; border: 1px solid #d1d5db; }
+        #nota-wa td { padding: 7px 8px; border: 1px solid #d1d5db; color: #1f2329; vertical-align: top; background: #fff; }
         #nota-wa .angka { text-align: right; white-space: nowrap; }
-        #nota-wa .sub { font-size: 11.5px; color: #6b7280; }
-        #nota-wa tfoot td { font-weight: 700; background: #fff7ed; font-size: 14.5px; }
-        #nota-wa .catatan { margin-top: 10px; font-size: 13px; }
-        #nota-wa .kaki { margin-top: 12px; font-size: 11px; color: #9ca3af; }
+        #nota-wa .sub { font-size: 16px; color: #6b7280; }
+        #nota-wa tfoot td { font-weight: 700; background: #fff7ed; font-size: 22px; }
+        #nota-wa .catatan { margin-top: 12px; font-size: 19px; }
+        #nota-wa .kaki { margin-top: 14px; font-size: 15px; color: #9ca3af; }
     </style>
 
     <div class="psp-aksi">

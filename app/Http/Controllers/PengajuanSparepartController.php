@@ -40,7 +40,7 @@ class PengajuanSparepartController extends Controller
     {
         [$kepala, $baris] = $this->baca($request);
         $p = DB::transaction(function () use ($request, $kepala, $baris) {
-            $p = PengajuanSparepart::create([...$kepala, 'nomor' => PengajuanSparepart::nomorBaru(), 'status' => 'diajukan', 'user_id' => $request->user()->id]);
+            $p = PengajuanSparepart::create([...$kepala, 'nomor' => PengajuanSparepart::nomorBaru($kepala['tanggal']), 'status' => 'diajukan', 'user_id' => $request->user()->id]);
             $p->detail()->createMany($baris);
 
             return $p;

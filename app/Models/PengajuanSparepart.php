@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-/** Pengajuan Sparepart ke manajemen (menu Plant & Sparepart): satu nomor PSP berisi beberapa baris sparepart. */
+/** Pengajuan Sparepart ke manajemen (menu Plant & Sparepart): satu nomor (yyMMdd + urut) berisi beberapa baris sparepart. */
 class PengajuanSparepart extends Model
 {
     protected $table = 'pengajuan_sparepart';
@@ -35,11 +35,16 @@ class PengajuanSparepart extends Model
         return $this->belongsTo(User::class, 'diputus_oleh');
     }
 
-    /** Nomor berikutnya: PSP-00001, PSP-00002, … (melanjutkan nomor terbesar yang ada). */
-    public static function nomorBaru(): string
+    /**
+     * Nomor berikutnya (owner 17 Nov 2026): yyMMdd tanggal pengajuan + urut 3 digit per tanggal itu, mis. 261117001, 261117002.
+     * Dipanggil di dalam transaksi: lockForUpdate menahan pengajuan lain bertanggal sama sampai nomor ini tersimpan.
+     */
+    public static function nomorBaru($tanggal): string
     {
-        $akhir = (int) static::query()->selectRaw("MAX(CAST(SUBSTRING(nomor, 5) AS UNSIGNED)) AS n")->value('n');
+        $awal = \Illuminate\Support\Carbon::parse($tanggal)->format('ymd');
+        $akhir = static::query()->where('nomor', 'like', $awal.'%')->lockForUpdate()->pluck('nomor')
+            ->map(fn ($n) => (int) substr($n, 6))->max() ?? 0;
 
-        return 'PSP-'.str_pad((string) ($akhir + 1), 5, '0', STR_PAD_LEFT);
+        return $awal.str_pad((string) ($akhir + 1), 3, '0', STR_PAD_LEFT);
     }
 }
