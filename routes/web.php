@@ -197,6 +197,11 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/pengajuan-sparepart/{p}/ubah', [\App\Http\Controllers\PengajuanSparepartController::class, 'ubah'])->whereNumber('p')->name('pengajuan-sparepart.ubah');
     Route::put('/pengajuan-sparepart/{p}', [\App\Http\Controllers\PengajuanSparepartController::class, 'perbarui'])->whereNumber('p')->name('pengajuan-sparepart.perbarui');
     Route::post('/pengajuan-sparepart/{p}/batal', [\App\Http\Controllers\PengajuanSparepartController::class, 'batal'])->whereNumber('p')->name('pengajuan-sparepart.batal');
+    Route::get('/pengajuan-sparepart/foto/{foto}', [\App\Http\Controllers\PengajuanSparepartController::class, 'foto'])->whereNumber('foto')->name('pengajuan-sparepart.foto');
+    // Tandai status barang & foto progres: hak 'pengajuan-sparepart-tandai' (owner 17 Nov 2026: sementara hanya Admin Plant)
+    Route::post('/pengajuan-sparepart/{p}/progres', [\App\Http\Controllers\PengajuanSparepartController::class, 'progres'])->whereNumber('p')->name('pengajuan-sparepart-tandai.progres');
+    Route::post('/pengajuan-sparepart/{p}/foto', [\App\Http\Controllers\PengajuanSparepartController::class, 'unggahFoto'])->whereNumber('p')->name('pengajuan-sparepart-tandai.foto');
+    Route::delete('/pengajuan-sparepart/foto/{foto}', [\App\Http\Controllers\PengajuanSparepartController::class, 'hapusFoto'])->whereNumber('foto')->name('pengajuan-sparepart-tandai.foto-hapus');
     Route::post('/pengajuan-sparepart/{p}/putus', [\App\Http\Controllers\PengajuanSparepartController::class, 'putus'])->whereNumber('p')->name('pengajuan-sparepart-putus.simpan');
     // Master Supplier (owner 16 Nov 2026, menu Plant & Sparepart): rekening dari Daftar Rekening, pembelian dari Database Sparepart.
     Route::get('/supplier', [\App\Http\Controllers\SupplierController::class, 'index'])->name('supplier.index');

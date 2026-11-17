@@ -70,6 +70,7 @@ class MenuAkses
         'sparepart-ubah' => ['Isi Merk & Ori/KW sparepart', 'sparepart.index', ['sparepart-ubah.*'], 'Mengisi / mengubah Merk, Ori / KW & catatan per item di dialog Database Sparepart'],
         'pengajuan-sparepart' => ['Pengajuan Sparepart', 'pengajuan-sparepart.index', ['pengajuan-sparepart.*'], 'Ajukan daftar sparepart ke manajemen: ketik nama & jenis → usulan item + harga dari Database Sparepart, subtotal & total otomatis; ubah / batalkan selama belum diputus'],
         'pengajuan-sparepart-putus' => ['Setujui / tolak Pengajuan Sparepart', 'pengajuan-sparepart.index', ['pengajuan-sparepart-putus.*'], 'Manajemen menyetujui atau menolak Pengajuan Sparepart (tombol di halaman detail pengajuan)'],
+        'pengajuan-sparepart-tandai' => ['Tandai status & foto progres Pengajuan Sparepart', 'pengajuan-sparepart.index', ['pengajuan-sparepart-tandai.*'], 'Menandai tiap sparepart Disetujui / Dibeli / Terpasang / Ditolak dan mengunggah / menghapus foto progres pekerjaan di halaman detail pengajuan (owner 17 Nov 2026: sementara hanya Admin Plant)'],
         'supplier' => ['Master Supplier', 'supplier.index', ['supplier.*'], 'Data induk supplier sparepart: kontak, telepon, alamat, barang; rekening dari Daftar Rekening & riwayat pembelian dari Database Sparepart; tambah & ubah'],
         'aset' => ['Data Aset', 'aset.index', ['aset.*'], 'Semua aset MNP (dump truck, alat berat, LV, engkel, …): lihat, tambah & ubah'],
         'mutasi-pt' => ['Mutasi Rekening PT (BCA)', 'mutasi-pt.index', ['mutasi-pt.*'], 'Mutasi rekening PT BCA dari file Drive — hanya dilihat, per bulan & cari keterangan'],
@@ -89,7 +90,7 @@ class MenuAkses
         'ritasi' => ['Ritasi', '⛰️', ['input-ritasi', 'ritasi', 'buangan-truk', 'monitor-ritasi', 'muatan-kurang', 'mk-ubah-nominal', 'bayar-tanah', 'performa-ritasi', 'potongan-muatan', 'kubikasi-kendaraan']],
         'bbm' => ['BBM & HM', '⛽', ['input-bbm', 'bbm']],
         'karyawan' => ['Karyawan', '👷', ['absen', 'absen-mandor', 'absensi', 'review-absen', 'gaji-mingguan', 'absen-ubah-jam', 'karyawan', 'jabatan', 'lokasi-absen']],
-        'plant' => ['Plant & Sparepart', '🔧', ['sparepart', 'sparepart-ubah', 'pengajuan-sparepart', 'pengajuan-sparepart-putus', 'supplier']],
+        'plant' => ['Plant & Sparepart', '🔧', ['sparepart', 'sparepart-ubah', 'pengajuan-sparepart', 'pengajuan-sparepart-putus', 'pengajuan-sparepart-tandai', 'supplier']],
         'aset' => ['Aset', '🚛', ['aset']],
     ];
 
@@ -101,7 +102,7 @@ class MenuAkses
     public const KHUSUS_SUPER = ['dashboard-aktivitas'];
 
     /** Hak akses yang diatur per jabatan tetapi tidak tampil di sidebar (dibuka lewat tombol di halaman lain). */
-    public const TANPA_SIDEBAR = ['jago-catatan', 'absen-ubah-jam', 'mk-ubah-nominal', 'sparepart-ubah', 'pengajuan-sparepart-putus']; // 'ajukan-uj' tampil lagi di sidebar (owner 25 Okt 2026)
+    public const TANPA_SIDEBAR = ['jago-catatan', 'absen-ubah-jam', 'mk-ubah-nominal', 'sparepart-ubah', 'pengajuan-sparepart-putus', 'pengajuan-sparepart-tandai']; // 'ajukan-uj' tampil lagi di sidebar (owner 25 Okt 2026)
 
     public static function boleh(?User $user, string $menu): bool
     {

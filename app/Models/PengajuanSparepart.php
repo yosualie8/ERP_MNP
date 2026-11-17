@@ -11,7 +11,7 @@ class PengajuanSparepart extends Model
 {
     protected $table = 'pengajuan_sparepart';
 
-    protected $fillable = ['nomor', 'tanggal', 'keperluan', 'catatan', 'status', 'total', 'user_id', 'diputus_oleh', 'diputus_pada', 'catatan_putusan'];
+    protected $fillable = ['nomor', 'tanggal', 'keperluan', 'catatan', 'status', 'total', 'user_id', 'diputus_oleh', 'diputus_pada', 'catatan_putusan', 'asal_id'];
 
     protected $casts = ['tanggal' => 'date', 'diputus_pada' => 'datetime', 'total' => 'float'];
 
@@ -25,6 +25,12 @@ class PengajuanSparepart extends Model
         return $this->hasMany(PengajuanSparepartDetail::class)->orderBy('urut')->orderBy('id');
     }
 
+    /** Foto progres pekerjaan, terbaru di depan. */
+    public function foto(): HasMany
+    {
+        return $this->hasMany(PengajuanSparepartFoto::class)->orderByDesc('id');
+    }
+
     public function pembuat(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
@@ -33,6 +39,30 @@ class PengajuanSparepart extends Model
     public function pemutus(): BelongsTo
     {
         return $this->belongsTo(User::class, 'diputus_oleh');
+    }
+
+    /** Pengajuan sebelumnya yang baris belum di-ACC-nya diajukan ulang di sini. */
+    public function asal(): BelongsTo
+    {
+        return $this->belongsTo(self::class, 'asal_id');
+    }
+
+    /** Pengajuan berikutnya yang membawa baris belum di-ACC dari pengajuan ini (yang tidak dibatalkan). */
+    public function lanjutan(): HasMany
+    {
+        return $this->hasMany(self::class, 'asal_id')->where('status', '!=', 'batal')->orderBy('id');
+    }
+
+    /**
+     * Ringkasan status baris: [kunci progres ('' = belum) => jumlah], urut alur (belum, disetujui, dibeli, terpasang, ditolak, diulang).
+     * Butuh relasi detail (cukup kolom progres).
+     */
+    public function progres(): array
+    {
+        $n = $this->detail->countBy(fn ($d) => $d->progres ?? '');
+
+        return collect(['', ...array_keys(PengajuanSparepartDetail::PROGRES), PengajuanSparepartDetail::DIULANG])
+            ->mapWithKeys(fn ($k) => [$k => $n[$k] ?? 0])->filter()->all();
     }
 
     /**

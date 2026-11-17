@@ -96,6 +96,12 @@
     <form method="POST" action="{{ $p->exists ? route('pengajuan-sparepart.perbarui', $p) : route('pengajuan-sparepart.simpan') }}" id="form-psp" autocomplete="off">
         @csrf
         @if ($p->exists) @method('PUT') @endif
+        @if (! $p->exists && $p->asal_id)
+            <input type="hidden" name="asal_id" value="{{ $p->asal_id }}">
+            <div class="pesan" style="margin-bottom: 12px; background: rgba(167, 139, 250, .12); border-color: rgba(167, 139, 250, .4);">↻ Mengajukan ulang <b>{{ count($baris) }} sparepart yang belum di-ACC</b> dari pengajuan
+                <a href="{{ route('pengajuan-sparepart.lihat', $p->asal_id) }}"><b>{{ $p->asal?->nomor }}</b></a>. Hapus baris yang tidak jadi diajukan; boleh menambah sparepart lain.
+                Sesudah dikirim, baris itu di pengajuan {{ $p->asal?->nomor }} bertanda <b>Diajukan ulang</b>.</div>
+        @endif
         <div class="kartu">
             <div class="psp-kepala">
                 <div><label for="tanggal">Tanggal</label><input type="date" id="tanggal" name="tanggal" value="{{ old('tanggal', $p->tanggal?->toDateString()) }}" required></div>
@@ -138,7 +144,8 @@
             <button type="button" class="tombol polos hapus a-hapus" title="Hapus baris" aria-label="Hapus baris">✕</button>
             <div class="a-info usulan"></div>
             <div class="a-ket"><input data-f="ket" maxlength="300" placeholder="keterangan (opsional)"></div>
-            <input type="hidden" data-f="part"><input type="hidden" data-f="merk"><input type="hidden" data-f="saran"><input type="hidden" data-f="dasar">
+            <input type="hidden" data-f="part"><input type="hidden" data-f="merk"><input type="hidden" data-f="supplier"><input type="hidden" data-f="saran"><input type="hidden" data-f="dasar">
+            <input type="hidden" data-f="id"><input type="hidden" data-f="asal">
         </div>
     </template>
 
@@ -203,13 +210,16 @@
                 return sama.find(x => (x.s || '').toLowerCase() === s) || (sama.length === 1 && !s ? sama[0] : null);
             };
 
-            /** Harga usulan item untuk jenis alat ini: tipe unit di Keperluan (bila pernah dibeli untuk tipe itu), selain itu pembelian terakhir jenis itu. */
+            /**
+             * Harga usulan item untuk jenis alat ini: tipe unit di Keperluan (bila pernah dibeli untuk tipe itu), selain itu pembelian terakhir jenis itu.
+             * sup = supplier pembelian yang menjadi dasar harga (tampil di nota pengajuan).
+             */
             function usulan(x, jenis) {
                 const d = x?.J[jenis];
                 if (!d) return null;
                 const u = unitAktif();
                 const t = u && u.jenis === jenis ? d.u.find(r => r[0] === u.tipe) : null;
-                return t ? {h: t[1], dasar: `${jenis} · ${t[0]}`, d} : {h: d.h, dasar: jenis === 'Umum' ? 'Umum · semua pembelian' : `${jenis} · terakhir`, d};
+                return t ? {h: t[1], sup: t[4], dasar: `${jenis} · ${t[0]}`, d} : {h: d.h, sup: d.sup, dasar: jenis === 'Umum' ? 'Umum · semua pembelian' : `${jenis} · terakhir`, d};
             }
 
             function saran(nama, jenis) {
@@ -228,7 +238,7 @@
                 const i = nomor++;
                 el.querySelectorAll('[data-f]').forEach(inp => { inp.name = `item[${i}][${inp.dataset.f}]`; });
                 const f = k => el.querySelector(`[data-f="${k}"]`);
-                for (const k of ['nama', 'jenis', 'satuan', 'part', 'merk', 'saran', 'dasar', 'ket']) f(k).value = isi[k] ?? '';
+                for (const k of ['nama', 'jenis', 'satuan', 'part', 'merk', 'supplier', 'saran', 'dasar', 'ket', 'id', 'asal']) f(k).value = isi[k] ?? '';
                 f('qty').value = isi.qty ? tulisQty(isi.qty) : '';
                 f('harga').value = isi.harga !== undefined && isi.harga !== null && isi.harga !== '' ? rp(isi.harga) : '';
                 // baris baru: jenis alat mengikuti unit di Keperluan, kalau tidak ada mengikuti baris sebelumnya
@@ -250,7 +260,7 @@
                 const otomatis = paksa || !f('harga').value || angkaRp(f('harga').value) === Math.round(Number(f('saran').value) || -1);
                 f('part').value = x?.p || ''; f('merk').value = x?.m || '';
                 if (otomatis) f('harga').value = u ? rp(u.h) : (paksa || f('saran').value ? '' : f('harga').value);
-                f('saran').value = u ? u.h : ''; f('dasar').value = u ? u.dasar : '';
+                f('saran').value = u ? u.h : ''; f('dasar').value = u ? u.dasar : ''; f('supplier').value = u?.sup || '';
                 hitung(el);
             }
 
@@ -340,7 +350,7 @@
                 }));
                 el.querySelector('.usulan').addEventListener('click', e => {
                     const b = e.target.closest('.harga');
-                    if (b) { f('harga').value = rp(b.dataset.h); f('saran').value = b.dataset.h; f('dasar').value = b.dataset.dasar; hitung(el); cadangan(); }
+                    if (b) { f('harga').value = rp(b.dataset.h); f('saran').value = b.dataset.h; f('dasar').value = b.dataset.dasar; f('supplier').value = b.dataset.sup; hitung(el); cadangan(); }
                 });
                 el.querySelector('.hapus').addEventListener('click', () => {
                     if (wadah.children.length > 1) el.remove(); else { el.querySelectorAll('[data-f]').forEach(x => { x.value = ''; }); hitung(el); }
@@ -364,16 +374,18 @@
                 else {
                     const d = x.J[j], sat = x.s ? '/' + esc(x.s) : '', unit = unitAktif();
                     const dasarNow = f('dasar').value;
-                    const tombol = (h, dasar, label) => `<button type="button" class="harga ${harga === Math.round(h) && dasarNow === dasar ? 'dipakai' : ''}" data-h="${h}" data-dasar="${esc(dasar)}" title="Pakai harga ini">${label} <b>Rp ${rp(h)}</b>${sat}</button>`;
+                    // supplier tiap tombol = supplier pembelian dasar harganya (rata-rata = supplier terakhir)
+                    const tombol = (h, dasar, label, sup) => `<button type="button" class="harga ${harga === Math.round(h) && dasarNow === dasar ? 'dipakai' : ''}" data-h="${h}" data-dasar="${esc(dasar)}" data-sup="${esc(sup)}" title="Pakai harga ini${sup ? ' — supplier ' + esc(sup) : ''}">${label} <b>Rp ${rp(h)}</b>${sat}</button>`;
                     const brs1 = [`<span class="dasar">Harga ${esc(j)}</span>`,
-                        tombol(d.h, j === 'Umum' ? 'Umum · semua pembelian' : `${j} · terakhir`, 'Terakhir') + ` <span>${esc([d.t, d.sup].filter(Boolean).join(' · '))}</span>`,
-                        d.b > 1 && d.mu !== d.h ? tombol(d.mu, `${j} · termurah`, 'Termurah') + ` <span>${esc(d.tm)}</span>` : '',
-                        d.b > 1 ? tombol(d.r, `${j} · rata-rata`, 'Rata-rata') : '',
+                        tombol(d.h, j === 'Umum' ? 'Umum · semua pembelian' : `${j} · terakhir`, 'Terakhir', d.sup) + ` <span>${esc([d.t, d.sup].filter(Boolean).join(' · '))}</span>`,
+                        d.b > 1 && d.mu !== d.h ? tombol(d.mu, `${j} · termurah`, 'Termurah', d.sm) + ` <span>${esc([d.tm, d.sm].filter(Boolean).join(' · '))}</span>` : '',
+                        d.b > 1 ? tombol(d.r, `${j} · rata-rata`, 'Rata-rata', d.sup) : '',
                         `<span>${d.b}× beli</span>`].filter(Boolean).join('<span class="sep">|</span>');
                     const perTipe = d.u.length > 1 || (d.u.length === 1 && d.u[0][1] !== d.h)
-                        ? `<div class="brs"><span>Per tipe unit:</span>${d.u.slice(0, 6).map(t => tombol(t[1], `${j} · ${t[0]}`, (unit && unit.tipe === t[0] ? '★ ' : '') + esc(t[0])) + `<span>${t[2]}×</span>`).join(' ')}</div>` : '';
+                        ? `<div class="brs"><span>Per tipe unit:</span>${d.u.slice(0, 6).map(t => tombol(t[1], `${j} · ${t[0]}`, (unit && unit.tipe === t[0] ? '★ ' : '') + esc(t[0]), t[4]) + `<span>${t[2]}×</span>`).join(' ')}</div>` : '';
                     const saranN = Number(f('saran').value) || 0, beda = harga && saranN ? (harga - saranN) / saranN * 100 : 0;
-                    const info = [x.p ? `<span class="tag">PN ${esc(x.p)}</span>` : '', x.m ? `<span class="tag">${esc(x.m)}</span>` : '',
+                    const info = [f('supplier').value ? `<span class="tag">Supplier ${esc(f('supplier').value)}</span>` : '',
+                        x.p ? `<span class="tag">PN ${esc(x.p)}</span>` : '', x.m ? `<span class="tag">${esc(x.m)}</span>` : '',
                         unit && unit.jenis === j && !d.u.some(t => t[0] === unit.tipe) ? `<span class="peringatan">Belum pernah dibeli untuk ${esc(unit.tipe)} — memakai harga ${esc(j)} terakhir</span>` : '',
                         Math.abs(beda) >= 1 ? `<span class="${beda > 0 ? 'naik' : 'turun'}">${beda > 0 ? '+' : ''}${Math.round(beda).toLocaleString('id-ID')}% dari usulan</span>` : ''].filter(Boolean).join(' ');
                     us.innerHTML = `<div class="brs">${brs1}</div>${perTipe}${info ? `<div class="brs">${info}</div>` : ''}`;
@@ -407,7 +419,7 @@
             });
 
             // Draf disimpan di perangkat supaya isian tidak hilang bila halaman tertutup (hanya pengajuan baru).
-            const KUNCI_DRAF = @json($p->exists ? null : 'psp-draf-'.auth()->id());
+            const KUNCI_DRAF = @json($p->exists || $p->asal_id ? null : 'psp-draf-'.auth()->id());
             let jedaDraf;
             function cadangan() {
                 if (!KUNCI_DRAF) return;
