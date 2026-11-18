@@ -185,6 +185,18 @@ Route::middleware(['auth', 'menu'])->group(function () {
     Route::get('/penawaran-spk', [\App\Http\Controllers\PenawaranSpkController::class, 'index'])->name('penawaran-spk.index');
     Route::get('/penawaran-spk/{dok}/pdf', [\App\Http\Controllers\PenawaranSpkController::class, 'pdf'])->whereNumber('dok')->name('penawaran-spk.pdf');
     Route::patch('/penawaran-spk/{dok}', [\App\Http\Controllers\PenawaranSpkController::class, 'ubah'])->whereNumber('dok')->name('penawaran-spk.ubah');
+    // Kebutuhan Material (owner 18 Nov 2026, menu Proyek): 🎤 per material → teks → item + saran harga dari riwayat; rekaman offline dikirim saat ada sinyal.
+    Route::get('/kebutuhan-material', [\App\Http\Controllers\KebutuhanMaterialController::class, 'index'])->name('kebutuhan-material.index');
+    Route::get('/kebutuhan-material/data', [\App\Http\Controllers\KebutuhanMaterialController::class, 'data'])->name('kebutuhan-material.data');
+    Route::get('/kebutuhan-material/saran', [\App\Http\Controllers\KebutuhanMaterialController::class, 'saran'])->name('kebutuhan-material.saran');
+    Route::get('/kebutuhan-material/token', [\App\Http\Controllers\KebutuhanMaterialController::class, 'token'])->name('kebutuhan-material.token');
+    Route::post('/kebutuhan-material/rekaman', [\App\Http\Controllers\KebutuhanMaterialController::class, 'rekaman'])->name('kebutuhan-material.rekaman');
+    Route::post('/kebutuhan-material/rekaman/{rekaman}/ulang', [\App\Http\Controllers\KebutuhanMaterialController::class, 'ulang'])->whereNumber('rekaman')->name('kebutuhan-material.ulang');
+    Route::delete('/kebutuhan-material/rekaman/{rekaman}', [\App\Http\Controllers\KebutuhanMaterialController::class, 'hapusRekaman'])->whereNumber('rekaman')->name('kebutuhan-material.hapus-rekaman');
+    Route::get('/kebutuhan-material/rekaman/{rekaman}/audio', [\App\Http\Controllers\KebutuhanMaterialController::class, 'audio'])->whereNumber('rekaman')->name('kebutuhan-material.audio');
+    Route::post('/kebutuhan-material/item', [\App\Http\Controllers\KebutuhanMaterialController::class, 'tambah'])->name('kebutuhan-material.tambah');
+    Route::patch('/kebutuhan-material/item/{item}', [\App\Http\Controllers\KebutuhanMaterialController::class, 'ubah'])->whereNumber('item')->name('kebutuhan-material.ubah');
+    Route::delete('/kebutuhan-material/item/{item}', [\App\Http\Controllers\KebutuhanMaterialController::class, 'hapus'])->whereNumber('item')->name('kebutuhan-material.hapus');
     // Database Sparepart (menu Plant & Sparepart): cari sparepart + histori harga, isi dari mnp:impor-sparepart.
     Route::get('/sparepart', [\App\Http\Controllers\SparepartController::class, 'index'])->name('sparepart.index');
     Route::get('/sparepart/riwayat', [\App\Http\Controllers\SparepartController::class, 'riwayat'])->name('sparepart.riwayat');

@@ -157,15 +157,38 @@ class OpenAi
     }
 
     /** Suara → teks. Kosakata khusus MNP (nomor truk, nama driver/PIC, galian, istilah) dikirim sebagai prompt. */
-    public static function transkripsi(UploadedFile $audio): string
+    public static function transkripsi(UploadedFile $audio, ?string $kosakata = null): string
     {
         $r = self::http()->attach('file', fopen($audio->getRealPath(), 'r'), 'suara.'.($audio->getClientOriginalExtension() ?: 'webm'))
-            ->post('/audio/transcriptions', ['model' => self::modelSuara(), 'language' => 'id', 'prompt' => self::kosakata(), 'response_format' => 'json']);
+            ->post('/audio/transcriptions', ['model' => self::modelSuara(), 'language' => 'id', 'prompt' => $kosakata ?? self::kosakata(), 'response_format' => 'json']);
         if ($r->failed()) {
             throw new RuntimeException('Transkripsi gagal: '.($r->json('error.message') ?? 'HTTP '.$r->status()));
         }
 
         return trim((string) $r->json('text'));
+    }
+
+    /**
+     * Satu permintaan tanpa tool, jawaban dipaksa mengikuti skema JSON (structured output). Dipakai mis. memecah ucapan menjadi item material.
+     *
+     * @param  array  $skema  JSON Schema objek (strict: semua properti wajib, additionalProperties false)
+     */
+    public static function json(string $instruksi, string $input, string $nama, array $skema): array
+    {
+        $model = self::model() ?? throw new RuntimeException('Model AI belum dipilih (Super Admin: menu Tanya AI → Pengaturan).');
+        $r = self::http()->post('/responses', ['model' => $model, 'instructions' => $instruksi, 'input' => $input, 'store' => false,
+            'text' => ['format' => ['type' => 'json_schema', 'name' => $nama, 'schema' => $skema, 'strict' => true]]]);
+        if ($r->failed()) {
+            throw new RuntimeException('OpenAI: '.($r->json('error.message') ?? 'HTTP '.$r->status()));
+        }
+        $teks = collect($r->json('output'))->where('type', 'message')->flatMap(fn ($m) => $m['content'] ?? [])
+            ->where('type', 'output_text')->pluck('text')->implode('');
+        $hasil = json_decode($teks, true);
+        if (! is_array($hasil)) {
+            throw new RuntimeException('AI tidak mengembalikan data yang bisa dibaca.');
+        }
+
+        return $hasil;
     }
 
     private static function kosakata(): string
