@@ -154,9 +154,12 @@ class GajiMingguanController extends Controller
             $w = new Writer;
             $w->openToFile('php://output');
 
+            // 0. "UM format admin" (owner 18 Nov 2026): format file UM yang selama ini dibuat admin sendiri, lembar pertama.
+            \App\Support\LembarUmAdmin::tulis($w, $d);
+
             // 1. Harian (seperti file UM admin): per hari yang dibayar — UM, Lemburan, Total, keterangan jam & keterangan perhitungan
             // (owner 11 Nov 2026: termasuk UM / lembur yang diubah admin + alasannya), subtotal per hari.
-            $s = $w->getCurrentSheet();
+            $s = $w->addNewSheetAndMakeItCurrent();
             $s->setName('Harian');
             foreach ([5, 26, 26, 22, 12, 12, 13, 26, 60, 26] as $i => $l) {
                 $s->setColumnWidth($l, $i + 1);
@@ -177,12 +180,7 @@ class GajiMingguanController extends Controller
                 $awal = $n + 1;
                 foreach ($hariIni as [$b, $x]) {
                     $n++;
-                    $ket = $x->masuk || $x->pulang ? ($x->masuk ?? '?').' - '.($x->pulang ?? '?').($x->tunggu === false && $x->absen === 'kurang' ? ' (disetujui)' : '')
-                        : ($x->jam_mandor ? ($x->jam_mandor['masuk'] ?? '?').' - '.($x->jam_mandor['pulang'] ?? '?').' (ikut '.$x->jam_mandor['nama'].')'
-                            : ($x->sumber === 'mandor' ? 'diisi mandor (tidak ada yang absen di lokasi)' : 'disetujui admin'));
-                    if ($x->lembur_mulai || $x->lembur_selesai) {
-                        $ket .= ' · lembur '.($x->lembur_mulai ?? '?').' - '.($x->lembur_selesai ?? '?');
-                    }
+                    $ket = \App\Support\LembarUmAdmin::keterangan($x);
                     // Asal hitungan: UM per hari (jabatan / khusus orang) + lembur ½ UM, atau nominal ubahan admin + alasan.
                     $hitung = collect([
                         $x->bayar_ubah !== null ? 'UM diubah admin '.$rpTeks($x->bayar_ubah).' (biasa '.$rpTeks($x->um_biasa).')'
@@ -217,8 +215,9 @@ class GajiMingguanController extends Controller
                 $w->addRow(new Row([$angka($i + 1), $teks($b->k->nama), $teks($b->k->jabatan), $teks($b->k->site), $angka($b->um, $rp), $angka($b->hadir), $angka($b->lembur),
                     $angka($b->total_um, $rp), $angka($b->total_lembur, $rp), $angka($m['basic_mingguan'] ?: null, $rp), $angka($m['transport_mingguan'] ?: null, $rp),
                     $angka($m['kesehatan_mingguan'] ?: null, $rp), $angka($b->jam_hm ?: null), $angka($b->tarif_hm ?: null, $rp),
-                    $b->tarif_hm ? new Cell\FormulaCell("=M{$n}*N{$n}", $rp, $b->total_hm) : $teks(''),
-                    new Cell\FormulaCell("=SUM(H{$n}:L{$n})+O{$n}", $rpTebal, $b->total),
+                    // N() & SUM(…,O): sel kosong (teks '') tidak membuat #VALUE! (dulu kolom Total #VALUE! untuk non-operator).
+                    $b->tarif_hm ? new Cell\FormulaCell("=N(M{$n})*N{$n}", $rp, $b->total_hm) : $teks(''),
+                    new Cell\FormulaCell("=SUM(H{$n}:L{$n},O{$n})", $rpTebal, $b->total),
                     $teks(trim(implode(' ', array_filter([$b->k->bank, $b->k->no_rekening, $b->k->nama_rekening ? 'a.n. '.$b->k->nama_rekening : null]))))]));
             }
             $akhir = max($dibayar->count() + 1, 2);
