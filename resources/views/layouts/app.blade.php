@@ -6,32 +6,27 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <script>
         // Tinggi layar nyata → --tinggi-layar (pakai: calc(var(--tinggi-layar, 100vh) - …)).
-        // Chrome Android dengan zoom halaman ≠ 100% (mis. 70%) melaporkan 100vh DAN innerHeight hanya ±zoom% dari layar, sehingga
-        // sidebar & tabel terpotong (owner 18 Nov 2026). Batas bawah layar yang sebenarnya dicari dengan elementFromPoint
-        // (titik di luar layar → null): di browser normal hasilnya = innerHeight, di browser yang salah lapor hasilnya lebih besar.
+        // yBrowser (browser owner) men-zoom halaman dengan CSS zoom di <html> (mis. 0.7). 100vh & innerHeight tetap ukuran 100%,
+        // lalu ikut diperkecil zoom → sidebar & tabel hanya ±70% layar (owner 18 Nov 2026). Maka tinggi dibagi faktor zoom <html>,
+        // dan dihitung ulang saat zoom diubah (slider yBrowser mengubah style <html> tanpa event resize).
         (function () {
-            var akar = document.documentElement;
-            var ukur = function () {
-                var h = window.innerHeight, x = 2;
-                if (!document.body || !document.elementFromPoint || !document.elementFromPoint(x, h - 2)) return h;
-                var lo = h - 2, hi = h * 3;
-                if (document.elementFromPoint(x, hi)) return h; // tak masuk akal → percaya innerHeight
-                while (hi - lo > 1) { var m = (lo + hi) >> 1; if (document.elementFromPoint(x, m)) lo = m; else hi = m; }
-                return Math.max(h, lo + 1);
+            var akar = document.documentElement, terakhir = '';
+            var zoom = function () {
+                var z = parseFloat(getComputedStyle(akar).zoom) || parseFloat(akar.style.zoom) || 1;
+                if (/%\s*$/.test(akar.style.zoom) && z > 5) z /= 100;
+                return z > 0.1 && z < 10 ? z : 1;
             };
             var atur = function () {
-                var t = ukur();
-                akar.style.setProperty('--tinggi-layar', t + 'px');
+                var z = zoom(), t = Math.round(window.innerHeight / z);
+                if (t + 'px' !== terakhir) { terakhir = t + 'px'; akar.style.setProperty('--tinggi-layar', terakhir); }
                 if (/[?&]ukur=1/.test(location.search) && document.body) {
                     var k = document.getElementById('info-ukur') || document.body.appendChild(Object.assign(document.createElement('pre'), { id: 'info-ukur' }));
                     k.style.cssText = 'position:fixed;right:8px;top:60px;z-index:99;background:#000c;color:#0f0;padding:8px;font:12px monospace;margin:0';
-                    var vv = window.visualViewport;
-                    k.textContent = ['terukur ' + t, 'innerHeight ' + innerHeight, 'innerWidth ' + innerWidth, 'clientHeight ' + akar.clientHeight,
-                        'clientWidth ' + akar.clientWidth, 'visualViewport ' + (vv ? Math.round(vv.width) + 'x' + Math.round(vv.height) + ' skala ' + vv.scale : '-'),
-                        'outer ' + outerWidth + 'x' + outerHeight, 'screen ' + screen.width + 'x' + screen.height, 'dpr ' + devicePixelRatio].join('\n');
+                    k.textContent = ['tinggi-layar ' + t, 'zoom html ' + z, 'innerHeight ' + innerHeight, 'innerWidth ' + innerWidth, 'dpr ' + devicePixelRatio].join('\n');
                 }
             };
             atur();
+            new MutationObserver(atur).observe(akar, { attributes: true, attributeFilter: ['style', 'class'] });
             document.addEventListener('DOMContentLoaded', atur);
             window.addEventListener('load', atur);
             window.addEventListener('resize', function () { atur(); setTimeout(atur, 300); });
