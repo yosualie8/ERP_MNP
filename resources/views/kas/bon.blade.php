@@ -5,7 +5,7 @@
 @section('isi')
     <style>
         .tata-bon { display: grid; grid-template-columns: 380px minmax(0, 1fr); gap: 16px; align-items: start; }
-        .tata-bon .penampil { height: calc(100vh - 200px); }
+        .tata-bon .penampil { height: calc(var(--tinggi-layar, 100vh) - 200px); }
         .tata-bon .gambar-kecil img { width: 72px; height: 72px; }
         @media (max-width: 1000px) { .tata-bon { grid-template-columns: minmax(0, 1fr); } .tata-bon .penampil { height: 60vh; } }
     </style>

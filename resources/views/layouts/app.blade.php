@@ -4,6 +4,14 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <script>
+        // Tinggi layar nyata → --tinggi-layar. 100vh salah di Chrome Android saat zoom halaman ≠ 100% (mis. 60%: sidebar & tabel
+        // hanya ~60% layar, sisanya hitam). innerHeight sudah memperhitungkan zoom. Pakai: calc(var(--tinggi-layar, 100vh) - …).
+        (function () {
+            var atur = function () { document.documentElement.style.setProperty('--tinggi-layar', window.innerHeight + 'px'); };
+            atur(); window.addEventListener('resize', atur);
+        })();
+    </script>
     {{-- Dimuat di head karena dipakai skrip di dalam halaman (Input Kas, halaman Bon). --}}
     <script src="{{ asset('js/penampil-foto.js') }}?v={{ filemtime(public_path('js/penampil-foto.js')) }}"></script>
     <script src="{{ asset('js/tebak-kode-gl.js') }}?v={{ filemtime(public_path('js/tebak-kode-gl.js')) }}"></script>
@@ -60,7 +68,7 @@
         /* Sidebar: menu per kategori, tiap kategori bisa dibuka/ditutup; sidebar sendiri bisa disembunyikan (☰). */
         .tata { display: flex; align-items: flex-start; }
         .isi-utama { flex: 1; min-width: 0; }
-        aside.samping { width: 228px; flex: none; position: sticky; top: 52px; height: calc(100vh - 52px); overflow-y: auto; background: #101114; border-right: 1px solid var(--garis); padding: 12px 10px 24px; }
+        aside.samping { width: 228px; flex: none; position: sticky; top: 52px; height: calc(var(--tinggi-layar, 100vh) - 52px); overflow-y: auto; background: #101114; border-right: 1px solid var(--garis); padding: 12px 10px 24px; }
         body.samping-tutup aside.samping { display: none; }
         .tombol-samping { background: none; border: 1px solid var(--garis); color: var(--teks); border-radius: 7px; font-size: 17px; line-height: 1; padding: 6px 9px; cursor: pointer; }
         .tombol-samping:hover { border-color: var(--aksen); color: var(--aksen-terang); }
@@ -142,7 +150,7 @@
         input[type=search] { min-width: 260px; }
         /* Penampil foto bon (public/js/penampil-foto.js): zoom & geser seperti Photoshop. */
         .penampil { display: flex; flex-direction: column; border: 1px solid var(--garis); border-radius: 10px; overflow: hidden; background: #0a0b0d; height: 70vh; min-height: 320px; }
-        .penampil:fullscreen { height: 100vh; border-radius: 0; }
+        .penampil:fullscreen { height: var(--tinggi-layar, 100vh); border-radius: 0; }
         .penampil.kosong img { display: none; }
         .penampil.kosong .penampil-kanvas::after { content: 'Belum ada foto — klik "📷 Pilih / ambil foto"'; color: #9aa5b1; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 14px; }
         .penampil-alat { display: flex; align-items: center; gap: 4px; padding: 6px 8px; background: #15171b; }

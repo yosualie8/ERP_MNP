@@ -124,7 +124,7 @@
         }
         if (kotak && kotak !== document.body && ['auto', 'scroll'].includes(getComputedStyle(kotak).overflowX)) {
             kotak.classList.add('grid-gulir');
-            kotak.style.maxHeight = `calc(100vh - ${atasApp + 16}px)`;
+            kotak.style.maxHeight = `calc(var(--tinggi-layar, 100vh) - ${atasApp + 16}px)`;
         } else {
             tabel.style.setProperty('--beku-atas', atasApp + 'px');
         }

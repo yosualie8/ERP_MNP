@@ -6,13 +6,13 @@
     <style>
         .ai-tata { display: grid; grid-template-columns: 280px 1fr; gap: 14px; align-items: start; }
         @media (max-width: 900px) { .ai-tata { grid-template-columns: 1fr; } .ai-daftar { max-height: 220px; } }
-        .ai-daftar { padding: 10px; max-height: calc(100vh - 160px); overflow: auto; }
+        .ai-daftar { padding: 10px; max-height: calc(var(--tinggi-layar, 100vh) - 160px); overflow: auto; }
         .ai-daftar a.item { display: block; padding: 8px 10px; border-radius: 8px; color: var(--teks); text-decoration: none; font-size: 13px; margin-bottom: 2px; }
         .ai-daftar a.item:hover { background: var(--kartu-2); }
         .ai-daftar a.item.aktif { background: var(--aksen-muda); border-left: 3px solid var(--aksen); }
         .ai-daftar .meta { color: var(--redup); font-size: 11px; }
-        .ai-chat { display: flex; flex-direction: column; min-height: calc(100vh - 160px); padding: 0; }
-        .ai-pesan { flex: 1; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - 290px); }
+        .ai-chat { display: flex; flex-direction: column; min-height: calc(var(--tinggi-layar, 100vh) - 160px); padding: 0; }
+        .ai-pesan { flex: 1; overflow: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; max-height: calc(var(--tinggi-layar, 100vh) - 290px); }
         .gelembung { max-width: 88%; padding: 10px 14px; border-radius: 12px; line-height: 1.55; font-size: 14px; }
         .gelembung.tanya { align-self: flex-end; background: var(--aksen-muda); border: 1px solid var(--aksen); }
         .gelembung .teks { white-space: pre-wrap; }
