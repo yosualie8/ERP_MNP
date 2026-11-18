@@ -5,11 +5,36 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <script>
-        // Tinggi layar nyata → --tinggi-layar. 100vh salah di Chrome Android saat zoom halaman ≠ 100% (mis. 60%: sidebar & tabel
-        // hanya ~60% layar, sisanya hitam). innerHeight sudah memperhitungkan zoom. Pakai: calc(var(--tinggi-layar, 100vh) - …).
+        // Tinggi layar nyata → --tinggi-layar (pakai: calc(var(--tinggi-layar, 100vh) - …)).
+        // Chrome Android dengan zoom halaman ≠ 100% (mis. 70%) melaporkan 100vh DAN innerHeight hanya ±zoom% dari layar, sehingga
+        // sidebar & tabel terpotong (owner 18 Nov 2026). Batas bawah layar yang sebenarnya dicari dengan elementFromPoint
+        // (titik di luar layar → null): di browser normal hasilnya = innerHeight, di browser yang salah lapor hasilnya lebih besar.
         (function () {
-            var atur = function () { document.documentElement.style.setProperty('--tinggi-layar', window.innerHeight + 'px'); };
-            atur(); window.addEventListener('resize', atur);
+            var akar = document.documentElement;
+            var ukur = function () {
+                var h = window.innerHeight, x = 2;
+                if (!document.body || !document.elementFromPoint || !document.elementFromPoint(x, h - 2)) return h;
+                var lo = h - 2, hi = h * 3;
+                if (document.elementFromPoint(x, hi)) return h; // tak masuk akal → percaya innerHeight
+                while (hi - lo > 1) { var m = (lo + hi) >> 1; if (document.elementFromPoint(x, m)) lo = m; else hi = m; }
+                return Math.max(h, lo + 1);
+            };
+            var atur = function () {
+                var t = ukur();
+                akar.style.setProperty('--tinggi-layar', t + 'px');
+                if (/[?&]ukur=1/.test(location.search) && document.body) {
+                    var k = document.getElementById('info-ukur') || document.body.appendChild(Object.assign(document.createElement('pre'), { id: 'info-ukur' }));
+                    k.style.cssText = 'position:fixed;right:8px;top:60px;z-index:99;background:#000c;color:#0f0;padding:8px;font:12px monospace;margin:0';
+                    var vv = window.visualViewport;
+                    k.textContent = ['terukur ' + t, 'innerHeight ' + innerHeight, 'innerWidth ' + innerWidth, 'clientHeight ' + akar.clientHeight,
+                        'clientWidth ' + akar.clientWidth, 'visualViewport ' + (vv ? Math.round(vv.width) + 'x' + Math.round(vv.height) + ' skala ' + vv.scale : '-'),
+                        'outer ' + outerWidth + 'x' + outerHeight, 'screen ' + screen.width + 'x' + screen.height, 'dpr ' + devicePixelRatio].join('\n');
+                }
+            };
+            atur();
+            document.addEventListener('DOMContentLoaded', atur);
+            window.addEventListener('load', atur);
+            window.addEventListener('resize', function () { atur(); setTimeout(atur, 300); });
         })();
     </script>
     {{-- Dimuat di head karena dipakai skrip di dalam halaman (Input Kas, halaman Bon). --}}
@@ -69,12 +94,6 @@
         .tata { display: flex; align-items: flex-start; }
         .isi-utama { flex: 1; min-width: 0; }
         aside.samping { width: 228px; flex: none; position: sticky; top: 52px; height: calc(var(--tinggi-layar, 100vh) - 52px); overflow-y: auto; background: #101114; border-right: 1px solid var(--garis); padding: 12px 10px 24px; }
-        /* Layar sentuh (tablet): tinggi layar tak bisa dipercaya — Chrome Android dengan zoom halaman ≠ 100% melaporkan 100vh
-           DAN innerHeight sebesar ±zoom% layar, sehingga sidebar terpotong (owner 18 Nov 2026). Di sini sidebar setinggi isinya
-           (memanjang sampai bawah halaman) dan ikut digulir bersama halaman — tidak bergantung pada ukuran layar sama sekali. */
-        @media (pointer: coarse) and (min-width: 901px) {
-            aside.samping { position: static; height: auto; align-self: stretch; overflow: visible; }
-        }
         body.samping-tutup aside.samping { display: none; }
         .tombol-samping { background: none; border: 1px solid var(--garis); color: var(--teks); border-radius: 7px; font-size: 17px; line-height: 1; padding: 6px 9px; cursor: pointer; }
         .tombol-samping:hover { border-color: var(--aksen); color: var(--aksen-terang); }
@@ -91,7 +110,7 @@
         aside.samping details.ada-aktif > summary { color: var(--aksen-terang); }
         aside.samping .jumlah { font-size: 10px; color: var(--redup); font-weight: 400; letter-spacing: 0; text-transform: none; }
         @media (max-width: 900px) {
-            aside.samping { position: fixed; left: 0; top: 52px; bottom: 0; height: auto; z-index: 25; box-shadow: 6px 0 24px rgba(0, 0, 0, .5); }
+            aside.samping { position: fixed; left: 0; top: 52px; z-index: 25; box-shadow: 6px 0 24px rgba(0, 0, 0, .5); }
             body:not(.samping-buka) aside.samping { display: none; }
             body.samping-buka.samping-tutup aside.samping { display: block; }
             header .surel { display: none; }
