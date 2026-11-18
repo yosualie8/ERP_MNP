@@ -246,19 +246,19 @@
             <thead><tr><th class="angka">No</th><th>Nama Sparepart</th><th>Supplier</th><th class="angka">Qty</th><th class="angka">Harga Satuan</th><th class="angka">Subtotal</th></tr></thead>
             <tbody>
                 @foreach ($p->detail as $i => $d)
-                    <tr class="pg-{{ $d->progres ?? 'belum' }}" data-id="{{ $d->id }}">
+                    <tr class="pg-{{ $d->progres ?? 'belum' }}" data-id="{{ $d->id }}" data-harga="{{ (float) $d->harga }}" data-subtotal="{{ (float) $d->subtotal }}">
                         <td class="angka">{{ $i + 1 }}</td>
                         <td><b>{{ $d->nama_item }}</b><span class="pg-wa pg-{{ $d->progres ?? 'belum' }}">{{ \App\Models\PengajuanSparepartDetail::labelProgres($d->progres) }}</span>
                             @php($rinci = collect([$d->jenis, $d->part_number, $d->merk, $d->keterangan])->filter()->implode(' · '))
                             @if ($rinci !== '')<div class="sub">{{ $rinci }}</div>@endif</td>
                         <td class="supplier">{{ $d->supplier }}</td>
                         <td class="angka">{{ $qty($d->qty) }} {{ $d->satuan }}</td>
-                        <td class="angka">{{ rp($d->harga) }}</td>
-                        <td class="angka"><b>{{ rp($d->subtotal) }}</b></td>
+                        <td class="angka h-satuan">{{ rp($d->harga) }}</td>
+                        <td class="angka"><b class="h-sub">{{ rp($d->subtotal) }}</b></td>
                     </tr>
                 @endforeach
             </tbody>
-            <tfoot><tr><td colspan="5" class="angka">TOTAL ({{ $p->detail->count() }} item)</td><td class="angka">Rp {{ rp($p->total) }}</td></tr></tfoot>
+            <tfoot><tr><td colspan="5" class="angka" id="total-wa-label">TOTAL ({{ $p->detail->count() }} item)</td><td class="angka" id="total-wa">Rp {{ rp($p->total) }}</td></tr></tfoot>
         </table>
         @if ($p->catatan)<div class="catatan"><b>Catatan:</b> {{ $p->catatan }}</div>@endif
         @if ($p->diputus_pada)
@@ -274,7 +274,7 @@
         $p->keperluan ? "Keperluan: {$p->keperluan}" : null,
         "Status: {$status}",
         '',
-        '*Total: Rp '.rp($p->total).'* ('.$p->detail->count().' item)',
+        '%%TOTAL%%',
         $p->catatan ? "Catatan: {$p->catatan}" : null,
         '',
         'Detail: '.route('pengajuan-sparepart.lihat', $p),
@@ -355,12 +355,35 @@
 
         (() => {
             const teksDasar = @json($teksWa), namaFile = @json($p->nomor.'.png');
+            // Owner 18 Nov 2026: barang yang sudah Dibeli / Terpasang harganya dinolkan di gambar & teks WhatsApp,
+            // supaya total yang dikirim = total sparepart yang belum dibeli. Halaman & database tetap memakai harga asli.
+            const SUDAH = ['dibeli', 'terpasang'], rupiah = n => Math.round(n).toLocaleString('id-ID');
+            const hargaNota = () => {
+                const baris = [...document.querySelectorAll('#nota-wa tbody tr')];
+                let total = 0, nol = 0;
+                baris.forEach(tr => {
+                    const sudah = SUDAH.some(k => tr.classList.contains('pg-' + k));
+                    const harga = sudah ? 0 : Number(tr.dataset.harga), sub = sudah ? 0 : Number(tr.dataset.subtotal);
+                    tr.querySelector('.h-satuan').textContent = rupiah(harga);
+                    tr.querySelector('.h-sub').textContent = rupiah(sub);
+                    total += sub; nol += sudah;
+                });
+                document.getElementById('total-wa').textContent = 'Rp ' + rupiah(total);
+                document.getElementById('total-wa-label').textContent = nol
+                    ? `TOTAL BELUM DIBELI (${baris.length - nol} dari ${baris.length} item)` : `TOTAL (${baris.length} item)`;
+                return {total, nol, n: baris.length};
+            };
             // ringkasan status barang disisipkan sesudah baris Status (ikut tanda terbaru tanpa muat ulang halaman)
             const teksWa = () => {
+                const h = hargaNota();
+                const baris = h.nol
+                    ? `*Total belum dibeli: Rp ${rupiah(h.total)}* (${h.n - h.nol} dari ${h.n} item; ${h.nol} item sudah dibeli/terpasang = Rp 0)`
+                    : `*Total: Rp ${rupiah(h.total)}* (${h.n} item)`;
+                const teks = teksDasar.replace('%%TOTAL%%', baris);
                 const r = JSON.parse(document.getElementById('psp-progres').dataset.ringkas || '{}');
                 const urut = Object.keys(LABEL_PG).filter(k => r[k]);
-                if (!urut.some(k => k)) return teksDasar;
-                return teksDasar.replace(/^(Status: .*)$/m, `$1\nStatus barang: ${urut.map(k => `${r[k]} ${LABEL_PG[k].toLowerCase()}`).join(', ')}`);
+                if (!urut.some(k => k)) return teks;
+                return teks.replace(/^(Status: .*)$/m, `$1\nStatus barang: ${urut.map(k => `${r[k]} ${LABEL_PG[k].toLowerCase()}`).join(', ')}`);
             };
             const gambar = async () => {
                 const kanvas = await html2canvas(document.getElementById('nota-wa'), {
