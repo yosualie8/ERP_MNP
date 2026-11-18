@@ -69,6 +69,12 @@
         .tata { display: flex; align-items: flex-start; }
         .isi-utama { flex: 1; min-width: 0; }
         aside.samping { width: 228px; flex: none; position: sticky; top: 52px; height: calc(var(--tinggi-layar, 100vh) - 52px); overflow-y: auto; background: #101114; border-right: 1px solid var(--garis); padding: 12px 10px 24px; }
+        /* Layar sentuh (tablet): tinggi layar tak bisa dipercaya — Chrome Android dengan zoom halaman ≠ 100% melaporkan 100vh
+           DAN innerHeight sebesar ±zoom% layar, sehingga sidebar terpotong (owner 18 Nov 2026). Di sini sidebar setinggi isinya
+           (memanjang sampai bawah halaman) dan ikut digulir bersama halaman — tidak bergantung pada ukuran layar sama sekali. */
+        @media (pointer: coarse) and (min-width: 901px) {
+            aside.samping { position: static; height: auto; align-self: stretch; overflow: visible; }
+        }
         body.samping-tutup aside.samping { display: none; }
         .tombol-samping { background: none; border: 1px solid var(--garis); color: var(--teks); border-radius: 7px; font-size: 17px; line-height: 1; padding: 6px 9px; cursor: pointer; }
         .tombol-samping:hover { border-color: var(--aksen); color: var(--aksen-terang); }
@@ -85,7 +91,7 @@
         aside.samping details.ada-aktif > summary { color: var(--aksen-terang); }
         aside.samping .jumlah { font-size: 10px; color: var(--redup); font-weight: 400; letter-spacing: 0; text-transform: none; }
         @media (max-width: 900px) {
-            aside.samping { position: fixed; left: 0; top: 52px; z-index: 25; box-shadow: 6px 0 24px rgba(0, 0, 0, .5); }
+            aside.samping { position: fixed; left: 0; top: 52px; bottom: 0; height: auto; z-index: 25; box-shadow: 6px 0 24px rgba(0, 0, 0, .5); }
             body:not(.samping-buka) aside.samping { display: none; }
             body.samping-buka.samping-tutup aside.samping { display: block; }
             header .surel { display: none; }
