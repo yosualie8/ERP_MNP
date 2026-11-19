@@ -309,7 +309,9 @@
             document.getElementById('unduh-gambar').addEventListener('click', e => jalan(e.currentTarget, async blob => unduh(blob)));
             // HP: menu bagikan bawaan (langsung pilih WhatsApp). Laptop: menu bagikan Windows sering gagal ("Try that again"),
             // jadi gambar disalin ke clipboard + diunduh, lalu WhatsApp Web dibuka — tinggal Ctrl+V di chat.
-            const hp = navigator.userAgentData?.mobile ?? /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+            // Tablet Android mode desktop ("X11; Linux") & iPad ("Macintosh") juga HP: layar sentuh selain Windows (owner 19 Nov 2026).
+            const ua = navigator.userAgent;
+            const hp = navigator.userAgentData?.mobile || /Android|iPhone|iPad|iPod/i.test(ua) || (navigator.maxTouchPoints > 1 && !/Windows/i.test(ua));
             // Laptop: teks rekap bulanan dibawa lewat tautan resmi wa.me (terisi di kotak pesan setelah memilih chat),
             // gambarnya ditempel dari clipboard.
             const selesaiLaptop = (blob, tersalin) => {

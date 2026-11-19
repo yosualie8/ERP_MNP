@@ -395,9 +395,20 @@
             const unduh = blob => Object.assign(document.createElement('a'), {href: URL.createObjectURL(blob), download: namaFile}).click();
             // HP: menu bagikan bawaan (pilih WhatsApp → gambar + teks terkirim bersama). Laptop: menu bagikan Windows sering gagal,
             // jadi gambar disalin ke clipboard + diunduh, lalu WhatsApp Web dibuka dengan teks terisi — tinggal Ctrl+V gambarnya.
-            const hp = navigator.userAgentData?.mobile ?? /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+            // Owner 19 Nov 2026: tablet Android (Chrome "situs desktop" → UA "X11; Linux", userAgentData.mobile = false) dan iPad
+            // (UA "Macintosh") dulu dianggap laptop → hanya teks yang terkirim. Layar sentuh selain Windows = HP/tablet.
+            const ua = navigator.userAgent;
+            const hp = navigator.userAgentData?.mobile || /Android|iPhone|iPad|iPod/i.test(ua) || (navigator.maxTouchPoints > 1 && !/Windows/i.test(ua));
+            // Izin "bagikan" dari browser kedaluwarsa bila pembuatan gambar terlalu lama → gambar disimpan, tekan tombol sekali lagi.
+            let siap = null;
             document.getElementById('bagikan-wa').addEventListener('click', async e => {
-                const tombol = e.currentTarget, asli = tombol.textContent;
+                const tombol = e.currentTarget;
+                if (siap) {
+                    const s = siap; siap = null; tombol.textContent = tombol.dataset.asli;
+                    try { await navigator.share(s); } catch (err) { if (err.name !== 'AbortError') alert('Gagal membagikan: ' + err.message); }
+                    return;
+                }
+                const asli = tombol.dataset.asli ??= tombol.textContent;
                 tombol.disabled = true; tombol.textContent = 'Membuat gambar…';
                 const teks = teksWa();
                 try {
@@ -412,8 +423,16 @@
                     if (hp) {
                         const file = new File([blob], namaFile, {type: 'image/png'});
                         if (navigator.canShare?.({files: [file]})) {
-                            try { await navigator.share({files: [file], title: namaFile, text: teks}); return; }
-                            catch (err) { if (err.name === 'AbortError') return; }
+                            const data = {files: [file], title: namaFile, text: teks};
+                            try { await navigator.share(data); return; }
+                            catch (err) {
+                                if (err.name === 'AbortError') return;
+                                if (err.name === 'NotAllowedError') {
+                                    siap = data;
+                                    tombol.disabled = false; tombol.textContent = '📤 Gambar siap — tekan lagi untuk kirim';
+                                    return;
+                                }
+                            }
                         }
                     }
                     const tersalin = await salin;
@@ -425,7 +444,8 @@
                 } catch (err) {
                     alert('Gagal membuat gambar: ' + err.message);
                 } finally {
-                    tombol.disabled = false; tombol.textContent = asli;
+                    tombol.disabled = false;
+                    if (!siap) tombol.textContent = asli;
                 }
             });
         })();
