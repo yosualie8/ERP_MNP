@@ -17,6 +17,8 @@ class MenuAkses
         'dashboard-biaya-dt' => ['Dashboard Biaya DT', 'dashboard.biaya-dt', ['dashboard.biaya-dt'], 'Biaya dump truck per bulan & per kategori (Kas UJ + Kas Harian ber-No Mobil), per DT, jumlah rit & biaya per rit, rincian transaksi per truk'],
         'dashboard-performa-dt' => ['Dashboard Laba Rugi DT', 'dashboard.performa-dt', ['dashboard.performa-dt', 'dashboard.performa-dt.*'], 'Laba rugi per dump truck: harga jual rit (lembar Ritasi) dikurangi biaya langsung truk (Kas UJ, Kas Harian, BCA ber-DT); buka DT → pendapatan per proyek, biaya per kategori & semua transaksinya'],
         'dashboard-hm-km' => ['Dashboard HM & KM', 'dashboard.hm-km', ['dashboard.hm-km', 'dashboard.hm-km.*'], 'HM alat berat (otomatis dari Data BBM), KM dump truck, dan HM / KM kendaraan & aset lain: angka terakhir, kapan dicatat, pemakaian per bulan & rata-rata per hari, riwayat per unit (hanya melihat)'],
+        // Owner 19 Nov 2026: tinjau foto absen (mis. foto HM / indikator solar operator alat berat).
+        'dashboard-foto-absen' => ['Dashboard Foto Absensi', 'dashboard.foto-absen', ['dashboard.foto-absen'], 'Foto kiriman absen (Lapor Lapangan & absen langsung) per orang per hari: saring nama / jabatan / tanggal / jenis, klik foto untuk memperbesar (hanya melihat)'],
         'dashboard-aktivitas' => ['Dashboard Aktivitas Admin', 'dashboard.aktivitas', ['dashboard.aktivitas'], 'Log kegiatan semua pengguna (khusus Super Admin)'],
         'tanya-ai' => ['Tanya AI', 'tanya-ai', ['tanya-ai', 'tanya-ai.*'], 'Chat tanya data ERP (hanya baca, sesuai menu akun) + 🎤 speech to text; pertanyaan & jawaban dicatat'],
         'input-kas' => ['Input Kas', 'kas.input', ['kas.input', 'kas.input.*', 'kas.edit', 'kas.update', 'kas.hapus', 'kas.bon', 'kas.bon.*'], 'Input, edit & hapus transaksi Kas Harian (Bank Jago), foto bon'],
@@ -86,7 +88,7 @@ class MenuAkses
     /** Kelompok menu di sidebar: kunci => [judul, ikon, menu di dalamnya]. */
     public const KATEGORI = [
         'asisten' => ['Asisten AI', '🤖', ['tanya-ai']],
-        'dashboard' => ['Dashboard', '📊', ['dashboard-proyek', 'dashboard-biaya-dt', 'dashboard-performa-dt', 'dashboard-bbm', 'dashboard-penggunaan-bbm', 'dashboard-hm-km', 'dashboard-aktivitas']],
+        'dashboard' => ['Dashboard', '📊', ['dashboard-proyek', 'dashboard-biaya-dt', 'dashboard-performa-dt', 'dashboard-bbm', 'dashboard-penggunaan-bbm', 'dashboard-hm-km', 'dashboard-foto-absen', 'dashboard-aktivitas']],
         'proyek' => ['Proyek', '🏗️', ['daftar-proyek', 'kebutuhan-material', 'penawaran-spk', 'anggaran-proyek', 'pilah-transaksi', 'boq-proyek', 'alokasi-overhead', 'komponen-anggaran', 'pengaturan-proyek']],
         'kas' => ['Kas Harian', '🏦', ['input-kas', 'kas-harian', 'validasi-reimburse', 'riwayat-reimburse', 'kas-belum-reimburse', 'rekap', 'mutasi-jago', 'jago-catatan', 'mutasi-pt', 'kode-gl', 'daftar-rekening']],
         'uj' => ['Uang Jalan', '🚚', ['pengajuan-uj', 'ajukan-uj', 'input-uj', 'kas-uj', 'reimburse-uj', 'pengalihan-uj', 'rapikan-uj']],
@@ -99,7 +101,7 @@ class MenuAkses
 
     /** Foto bon dipakai Input Kas dan Input UJ: boleh bila salah satunya boleh. */
     // oauth.* = izin ChatGPT (MCP) membaca data ERP → hanya akun dengan menu Tanya AI.
-    private const BERSAMA = ['oauth.izin' => ['tanya-ai'], 'oauth.putuskan' => ['tanya-ai'], 'absen.foto' => ['absen', 'absensi'], 'lapor.foto' => ['absen', 'absensi'], 'kas.foto' => ['input-kas', 'kas-harian', 'input-uj', 'kas-uj'], 'kas.foto.destroy' => ['input-kas', 'input-uj']];
+    private const BERSAMA = ['oauth.izin' => ['tanya-ai'], 'oauth.putuskan' => ['tanya-ai'], 'absen.foto' => ['absen', 'absensi', 'dashboard-foto-absen'], 'lapor.foto' => ['absen', 'absensi', 'dashboard-foto-absen'], 'kas.foto' => ['input-kas', 'kas-harian', 'input-uj', 'kas-uj'], 'kas.foto.destroy' => ['input-kas', 'input-uj']];
 
     /** Menu yang hanya untuk Super Admin (tidak bisa diberikan ke Admin). */
     public const KHUSUS_SUPER = ['dashboard-aktivitas'];

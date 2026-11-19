@@ -55,6 +55,8 @@ Route::middleware(['auth', 'menu'])->group(function () {
     // Dashboard HM & KM (owner 16 Nov 2026): HM alat berat (Data BBM) + KM truk & kendaraan lain — hanya untuk melihat.
     Route::get('/dashboard/hm-km', [\App\Http\Controllers\DashboardHmKmController::class, 'index'])->name('dashboard.hm-km');
     Route::get('/dashboard/hm-km/riwayat', [\App\Http\Controllers\DashboardHmKmController::class, 'riwayat'])->name('dashboard.hm-km.riwayat');
+    // Dashboard Foto Absensi (owner 19 Nov 2026): tinjau foto absen per orang per hari, saring nama / jabatan.
+    Route::get('/dashboard/foto-absen', \App\Http\Controllers\DashboardFotoAbsenController::class)->name('dashboard.foto-absen');
     Route::get('/dashboard/aktivitas', AktivitasAdminController::class)->name('dashboard.aktivitas')->middleware('can:super-admin');
     Route::get('/kas', [KasController::class, 'index'])->name('kas.index');
     Route::post('/kas/unduh', [KasController::class, 'unduh'])->name('kas.unduh');
