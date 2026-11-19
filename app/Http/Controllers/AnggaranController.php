@@ -94,6 +94,7 @@ class AnggaranController extends Controller
                 'tahap' => $tahap, 'r' => \App\Support\RitasiProyek::hitung($tahap),
                 'kasTahap' => Anggaran::transaksiKas([$tahap->id])[$tahap->id] ?? collect(),
                 'overheadBulan' => Overhead::rincianTeralokasi()[$tahap->id] ?? [],
+                'pv' => \App\Support\PivotRitasi::hitung($tahap),
             ]);
         }
         // Anggaran belum pernah disimpan → baris awal otomatis dari template tipe tahap (tombol template dihapus, owner 15 Okt 2026).
@@ -115,6 +116,7 @@ class AnggaranController extends Controller
             'overheadBulan' => Overhead::rincianTeralokasi()[$tahap->id] ?? [],
             'rekomendasi' => Anggaran::rekomendasi($tahap),
             'm3' => $ritasi['per_tahap'][$tahap->id]['m3'] ?? 0,
+            'pv' => \App\Support\PivotRitasi::hitung($tahap),
         ]);
     }
 

@@ -112,6 +112,8 @@
         </div>
     @endif
 
+    @include('anggaran._pivot-ritasi')
+
     <div class="kartu">
         @include('anggaran._rincian-biaya', ['kas' => $kasTahap, 'overheadBulan' => $overheadBulan])
     </div>

@@ -98,6 +98,8 @@
         </table>
     </div>
 
+    @include('anggaran._pivot-ritasi')
+
     @if ($r['belum']->isNotEmpty())
         <details class="kartu">
             <summary style="cursor: pointer;"><b>{{ $r['belum']->count() }} UJ belum bongkar</b> <span class="redup" style="font-size: 12px;">(DO belum ada di Ritasi tahap ini)</span></summary>
