@@ -55,7 +55,7 @@ class ReimburseUjController extends Controller
         ], ['detail.required' => 'Pilih minimal satu transaksi untuk direimburse.']);
         $target = (int) preg_replace('/\D/', '', (string) ($data['target'] ?? '')) ?: null;
         $ids = array_values(array_unique(array_map('intval', $data['detail'])));
-        // Owner 25 Okt 2026: reimburse wajib berurutan dari transaksi paling tua; 29 Okt 2026: transfer bayar tanah terakhir boleh dicicil per baris.
+        // Owner 25 Okt 2026: reimburse wajib berurutan dari transaksi paling tua; transfer terakhir boleh dicicil per baris (29 Okt: bayar tanah; 19 Nov 2026: semua transfer banyak baris).
         if ($salah = ReimburseUj::periksaPilihan($ids)) {
             return back()->with('error', $salah);
         }

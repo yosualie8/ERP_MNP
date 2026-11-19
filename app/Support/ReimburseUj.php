@@ -106,19 +106,17 @@ class ReimburseUj
     }
 
     /**
-     * Owner 29 Okt 2026: transfer bayar tanah (semua baris Uang Tanah; biaya transfer boleh ikut) boleh direimburse dicicil per baris —
-     * satu transfer bisa berisi puluhan DO senilai belasan juta, jadi tidak harus diambil utuh untuk mencapai nominal.
+     * Owner 29 Okt 2026: transfer bayar tanah boleh direimburse dicicil per baris. Owner 19 Nov 2026: berlaku untuk SEMUA transfer yang
+     * berisi lebih dari satu baris (mis. uang material 12,95 jt untuk 7 sopir) — tidak harus satu transfer utuh supaya nominal tidak jauh lebih.
      */
     public static function bolehCicil(Collection $detail): bool
     {
-        $isi = $detail->reject(fn (UjDetail $d) => $d->biaya_transfer);
-
-        return $isi->count() > 1 && $isi->every(fn (UjDetail $d) => ValidasiUj::jenisKategori($d->kategori) === 'ut');
+        return $detail->reject(fn (UjDetail $d) => $d->biaya_transfer)->count() > 1;
     }
 
     /**
      * Periksa pilihan baris: transfer harus berurutan dari yang paling lama, dan hanya transfer terakhir yang boleh diambil sebagian
-     * (transfer bayar tanah, baris teratas dulu). Mengembalikan pesan salah, atau null bila pilihan sah.
+     * (transfer berisi lebih dari satu baris, baris teratas dulu). Mengembalikan pesan salah, atau null bila pilihan sah.
      *
      * @param  int[]  $detailIds
      */
@@ -152,7 +150,7 @@ class ReimburseUj
                 return "Transfer {$nama} hanya dipilih sebagian, padahal ada transfer yang lebih baru ikut dipilih. Hanya transfer terakhir yang boleh dicicil.";
             }
             if (! self::bolehCicil($t->detail)) {
-                return "Transfer {$nama} tidak bisa dicicil (hanya transfer bayar tanah). Pilih semua barisnya atau lepas transfer itu.";
+                return "Transfer {$nama} hanya berisi satu baris, tidak bisa dicicil. Pilih semua barisnya atau lepas transfer itu.";
             }
             if (! $awalan) {
                 return "Cicilan transfer {$nama} harus berurutan dari baris paling atas. Muat ulang halaman lalu pilih lagi.";
@@ -164,7 +162,7 @@ class ReimburseUj
 
     /**
      * Tandai baris-baris ini sudah reimburse pada $tanggal: isi kolom N di sheet, perbarui aplikasi, catat batch. Biasanya semua baris
-     * satu transfer; transfer bayar tanah boleh sebagian (dicicil, lihat bolehCicil()).
+     * satu transfer; transfer berisi banyak baris boleh sebagian (dicicil, lihat bolehCicil()).
      *
      * @param  int[]  $detailIds
      */

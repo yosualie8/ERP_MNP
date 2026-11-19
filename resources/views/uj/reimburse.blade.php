@@ -99,7 +99,7 @@
                     <button type="button" class="tombol polos" id="pilih-semua">Pilih semua</button>
                     <button type="button" class="tombol polos" id="kosongkan">Kosongkan</button>
                 </div>
-                <div class="redup" style="font-size: 12px;">Ketik nominal → transfer dipilih <b>berurutan dari yang paling lama</b> sampai totalnya mencapai nominal; bila masih kurang, <b>1 transfer berikutnya tetap diambil</b> (total boleh lebih). Transfer <b>bayar tanah</b> (<span class="cicil">bisa dicicil</span>) diambil <b>per baris</b> dari atas, jadi tidak harus utuh. Centang ikut urutan: mencentang mengikutkan semua yang lebih lama, melepas centang ikut melepas yang lebih baru.</div>
+                <div class="redup" style="font-size: 12px;">Ketik nominal → transfer dipilih <b>berurutan dari yang paling lama</b> sampai totalnya mencapai nominal; bila masih kurang, <b>1 transfer/baris berikutnya tetap diambil</b> (total boleh lebih). Transfer yang berisi <b>lebih dari satu baris</b> bisa <span class="cicil">dicicil</span>: diambil <b>per baris</b> dari atas, jadi tidak harus utuh — lepas centang baris terakhir bila tidak mau lebih dari nominal. Centang ikut urutan: mencentang mengikutkan semua yang lebih lama, melepas centang ikut melepas yang lebih baru.</div>
             </div>
             {{-- Owner 25 Okt 2026: jumlah transaksi Kas UJ di luar uang jalan & uang tanah pada satu tanggal (bawaan H-1) sebagai bahan nominal. --}}
             <div class="lainnya" id="lainnya">
@@ -142,11 +142,11 @@
                             <td><b>{{ $t['nama'] ?? '—' }}</b> <span class="redup">{{ $t['bank'] }} {{ $t['rekening'] }}</span></td>
                             <td>{{ $t['detail'][0]['ket'] ?? '' }}</td>
                             <td class="ringkas-gl">{{ collect($t['detail'])->reject(fn ($d) => $d['fee'])->pluck('kategori')->unique()->take(3)->implode(', ') }}</td>
-                            <td class="i">@if ($t['no_uj'])UJ-{{ $t['no_uj'] }}@endif @if ($t['cicil'])<span class="cicil">bisa dicicil</span>@endif @if ($t['tertahan'])<a href="#tertahan" class="tahan" title="Baris tanpa No DO (dan biaya transfernya) tertahan — lihat panel Tertahan">⏸ {{ $t['tertahan'] }} tertahan</a>@endif</td>
+                            <td class="i">@if ($t['no_uj'])UJ-{{ $t['no_uj'] }}@endif @if ($t['tertahan'])<a href="#tertahan" class="tahan" title="Baris tanpa No DO (dan biaya transfernya) tertahan — lihat panel Tertahan">⏸ {{ $t['tertahan'] }} tertahan</a>@endif</td>
                             <td class="angka"><b>{{ rp($t['total']) }}</b> <span class="redup sebagian" hidden></span></td>
                         </tr>
                         <tr class="bh"><td></td><td>Transaksi detail</td><td>Nama</td><td>Keterangan</td><td>Kategori · Mobil · DO</td><td>ID UJ</td><td class="angka">Nominal</td></tr>
-                        {{-- Yang dikirim = baris (ID UJ); baris transfer biasa ikut kotak transfer (kotaknya tersembunyi), baris bayar tanah bisa dicentang sendiri. --}}
+                        {{-- Yang dikirim = baris (ID UJ); transfer satu baris ikut kotak transfer (kotaknya tersembunyi), transfer banyak baris bisa dicentang per baris (owner 19 Nov 2026). --}}
                         @foreach ($t['detail'] as $d)
                             <tr class="b"><td><input type="checkbox" name="detail[]" value="{{ $d['id'] }}" data-nominal="{{ $d['nominal'] }}" aria-label="Pilih baris" @unless ($t['cicil']) hidden @endunless></td><td></td><td class="p">{{ $d['nama'] }}</td><td>{{ $d['ket'] }}</td>
                                 <td>{{ $d['kategori'] }} @if ($d['mobil'])<i>{{ $d['mobil'] }}</i>@endif @if ($d['do'])<span class="redup">DO {{ $d['do'] }}</span>@endif</td>
@@ -218,7 +218,7 @@
             const setel = (g, cek) => baris(g).forEach(x => x.checked = cek);
             // Pilih otomatis (owner 25 Okt 2026): berurutan dari transfer PALING LAMA sampai total >= nominal. Bila sesudah n transfer
             // total masih kurang (mis. 17.999.999 dari 18 jt), transfer berikutnya tetap diambil walau totalnya jadi melebihi nominal.
-            // Owner 29 Okt 2026: transfer bayar tanah diambil per baris (dicicil) — berhenti di baris yang membuat total >= nominal.
+            // Owner 29 Okt 2026 (bayar tanah) → 19 Nov 2026 (semua transfer banyak baris): diambil per baris (dicicil) — berhenti di baris yang membuat total >= nominal.
             const pilihOtomatis = () => {
                 const t = angka(target.value);
                 let total = 0;
@@ -278,7 +278,7 @@
                     urut.forEach((x, j) => { if (cek ? j < i : j > i) setel(x, cek); });
                     hitung();
                 });
-                // Baris bayar tanah (dicicil): mencentang → baris di atasnya & transfer yang lebih lama ikut; melepas → baris di bawahnya & transfer yang lebih baru ikut lepas.
+                // Baris transfer yang bisa dicicil: mencentang → baris di atasnya & transfer yang lebih lama ikut; melepas → baris di bawahnya & transfer yang lebih baru ikut lepas.
                 baris(g).forEach((b, k) => b.addEventListener('change', () => {
                     const i = urut.indexOf(g), cek = b.checked;
                     baris(g).forEach((x, m) => { if (cek ? m < k : m > k) x.checked = cek; });
