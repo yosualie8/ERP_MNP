@@ -41,10 +41,13 @@
         table.rinci th, table.rinci td { padding: 3px 12px 3px 0; border: 0; text-align: left; }
         table.rinci .angka { text-align: right; }
         table.rinci tr.total td { border-top: 1px solid var(--garis); font-weight: 700; }
+        table.grid tr.cari-sembunyi { display: none !important; }
+        .cari-tahap { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+        .cari-tahap input { width: 320px; max-width: 100%; }
     </style>
 
     <div class="dash-kartu">
-        <div class="kartu"><h4>Semua tahap</h4><div class="angka-besar">{{ $baris->count() }}</div>
+        <div class="kartu"><h4>{{ $cari !== '' ? 'Hasil cari "'.$cari.'"' : 'Tahap '.$bulan.' bulan terakhir' }}</h4><div class="angka-besar">{{ $baris->count() }}</div>
             <div class="dash-baris"><span>Progress · belum mulai · selesai · batal</span><b>{{ collect(['progress', 'belum', 'selesai', 'batal'])->map(fn ($s) => $baris->filter(fn ($x) => $x->t->status === $s)->count())->implode(' · ') }}</b></div>
             <div class="dash-baris"><span>Sudah punya anggaran</span><b>{{ $baris->where('ada', true)->count() }}</b></div>
             <div class="dash-baris"><span>Dengan progres fisik</span><b>{{ $denganFisik->count() }}</b></div></div>
@@ -58,6 +61,16 @@
             <div class="dash-baris"><span>Belum ada anggaran</span><b @class(['angka-perhatian', 'kuning' => $nTanpa])>{{ $nTanpa }}</b></div></div>
     </div>
 
+    <form method="GET" action="{{ route('dashboard.proyek') }}" class="cari-tahap" id="form-cari">
+        <input type="search" name="cari" id="cari" value="{{ $cari }}" placeholder="Cari tahap / proyek / lokasi / surveyor…" autocomplete="off">
+        <button type="submit" class="tombol polos" style="padding: 5px 12px; font-size: 13px;">Cari di semua tahap</button>
+        @if ($cari !== '')
+            <a href="{{ route('dashboard.proyek') }}" style="font-size: 13px;">← kembali ke {{ $bulan }} bulan terakhir</a>
+            <span class="redup" style="font-size: 13px;">{{ $baris->count() }} tahap cocok dari semua tahap (semua tanggal & status)</span>
+        @else
+            <span class="redup" style="font-size: 13px;" id="cari-ket">Tampil: tahap beraktivitas sejak {{ \Illuminate\Support\Carbon::parse($batas)->translatedFormat('j M Y') }} + status Progress / Belum mulai. Ketik untuk menyaring; tahap lama → tekan Enter / Cari di semua tahap.</span>
+        @endif
+    </form>
     <div style="display: flex; gap: 6px; justify-content: flex-end; margin-bottom: 8px; align-items: center;">
         <span class="redup" style="font-size: 13px; margin-right: auto;">Klik baris untuk rincian biaya. Bar <b style="color: #5b8def;">biru</b> = berjalan, <b style="color: var(--sukses);">hijau</b> = ≥ 100%, <b style="color: #f0c05a;">kuning</b> = biaya lebih cepat dari progres, <b style="color: var(--merah);">merah</b> = melebihi HPP. Tanda $ = serapan biaya (belum ada progres fisik).</span>
         <button type="button" class="tombol polos" id="buka-semua" style="padding: 5px 12px; font-size: 13px;">⊞ Buka semua</button>
@@ -133,6 +146,23 @@
     <script>
         (() => {
             const master = [...document.querySelectorAll('#grid tbody tr.m')];
+            // Kotak cari: saring baris yang tampil; bila tidak ada yang cocok, Enter = cari di semua tahap (server).
+            const cari = document.getElementById('cari'), ket = document.getElementById('cari-ket'), ketAwal = ket?.textContent;
+            const saring = () => {
+                const kata = cari.value.toLowerCase().split(/\s+/).filter(Boolean);
+                let n = 0;
+                master.forEach(tr => {
+                    const teks = (tr.cells[0].dataset.v + ' ' + tr.cells[0].textContent).toLowerCase();
+                    const ok = kata.every(k => teks.includes(k));
+                    tr.classList.toggle('cari-sembunyi', !ok); tr.nextElementSibling.classList.toggle('cari-sembunyi', !ok);
+                    n += ok;
+                });
+                if (ket) {
+                    ket.textContent = !kata.length ? ketAwal : (n ? `${n} tahap cocok di daftar ini — tekan Enter untuk cari juga di tahap lama.` : 'Tidak ada di daftar ini — tekan Enter / Cari di semua tahap untuk mencari di tahap lama.');
+                    ket.style.color = kata.length && !n ? '#f0c05a' : '';
+                }
+            };
+            if (ket) { cari.addEventListener('input', saring); }
             const buka = (tr, b) => { tr.classList.toggle('buka', b); tr.nextElementSibling.classList.toggle('buka', b); };
             master.forEach(tr => tr.addEventListener('click', e => { if (!e.target.closest('a, button')) buka(tr, !tr.classList.contains('buka')); }));
             document.getElementById('buka-semua').addEventListener('click', () => master.forEach(m => buka(m, true)));

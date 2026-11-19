@@ -6,20 +6,41 @@ use App\Models\ProyekTahap;
 use App\Support\Anggaran;
 use App\Support\DaftarProyek;
 use App\Support\Overhead;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 /**
- * Dashboard Progres Proyek: semua tahap tanpa saring status (owner 19 Nov 2026), urut aktivitas awal terbaru — persen progres (fisik: kubikasi bongkaran ÷ m³ HPP tanah; bila belum
+ * Dashboard Progres Proyek: tahap beraktivitas 6 bulan terakhir + status Progress / Belum mulai, tanpa saring status lain; kotak cari
+ * mencari di SEMUA tahap (owner 19 Nov 2026); urut aktivitas awal terbaru — persen progres (fisik: kubikasi bongkaran ÷ m³ HPP tanah; bila belum
  * ada baris tanah m³: serapan biaya), biaya yang sudah keluar (realisasi HPP) & rinciannya per komponen.
  */
 class DashboardProyekController extends Controller
 {
-    public function __invoke(): View
+    /** Bulan ke belakang yang ditampilkan tanpa pencarian (aktivitas terakhir ritasi / BBM / Kas Harian). */
+    public const BULAN = 6;
+
+    public function __invoke(Request $request): View
     {
         [$ritasi, $kas, $bbm] = [DaftarProyek::ritasi(), DaftarProyek::kas(), DaftarProyek::bbm()];
         $overhead = Overhead::teralokasi();
         $rincianOh = Overhead::rincianTeralokasi();
-        $tahap = ProyekTahap::with(['proyek', 'anggaran.komponen'])->whereNull('pos_overhead')->where('tipe', '!=', 'biaya')->get();
+        // Tanpa pencarian: tahap beraktivitas BULAN terakhir + status Progress / Belum mulai (walau belum ada aktivitas).
+        // Dengan pencarian: semua tahap yang setiap katanya cocok dengan nama tahap / proyek / lokasi / surveyor.
+        $cari = trim(preg_replace('/\s+/', ' ', (string) $request->query('cari', '')));
+        $batas = now()->subMonths(self::BULAN)->toDateString();
+        $akhir = fn ($id) => max($ritasi['per_tahap'][$id]['selesai'] ?? '', $bbm['per_tahap'][$id]['selesai'] ?? '', $kas['per_tahap'][$id]['selesai'] ?? '');
+        $tahap = ProyekTahap::with(['proyek', 'anggaran.komponen'])->whereNull('pos_overhead')->where('tipe', '!=', 'biaya')
+            ->when($cari !== '', function ($q) use ($cari) {
+                foreach (explode(' ', mb_substr($cari, 0, 100)) as $kata) {
+                    $l = '%'.addcslashes($kata, '%_\\').'%';
+                    $q->where(fn ($w) => $w->where('nama', 'like', $l)->orWhere('lokasi', 'like', $l)->orWhere('surveyor', 'like', $l)
+                        ->orWhereHas('proyek', fn ($p) => $p->where('nama', 'like', $l)));
+                }
+            })
+            ->get();
+        if ($cari === '') {
+            $tahap = $tahap->filter(fn ($t) => in_array($t->status, ['progress', 'belum'], true) || $akhir($t->id) >= $batas)->values();
+        }
         // Transaksi Kas Harian yang jelas untuk tahap ini (alokasi / Kode GL tahap), tanpa akun yang diabaikan (HPP ritasi, BBM, sparepart, DT).
         $trx = Anggaran::transaksiKas($tahap->pluck('id')->all());
         $baris = $tahap
@@ -56,6 +77,6 @@ class DashboardProyekController extends Controller
             // aktivitas awal terbaru di atas; tahap tanpa aktivitas di bawah
             ->sort(fn ($a, $b) => [$b->awal !== null, $b->awal, $a->t->proyek->urutan, $a->t->nama] <=> [$a->awal !== null, $a->awal, $b->t->proyek->urutan, $b->t->nama])->values();
 
-        return view('dashboard.proyek', ['baris' => $baris]);
+        return view('dashboard.proyek', ['baris' => $baris, 'cari' => $cari, 'batas' => $batas, 'bulan' => self::BULAN]);
     }
 }

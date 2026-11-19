@@ -13,7 +13,7 @@ class MenuAkses
 {
     /** kunci => [label di navigasi, rute tujuan, pola nama rute yang termasuk menu ini, keterangan] */
     public const DAFTAR = [
-        'dashboard-proyek' => ['Dashboard Progres Proyek', 'dashboard.proyek', ['dashboard.proyek'], 'Semua tahap (urut aktivitas awal terbaru): status, persen progres, biaya yang sudah keluar & rinciannya per komponen, tombol ke Anggaran'],
+        'dashboard-proyek' => ['Dashboard Progres Proyek', 'dashboard.proyek', ['dashboard.proyek'], 'Tahap beraktivitas 6 bulan terakhir + Progress / Belum mulai (cari = semua tahap), urut aktivitas awal terbaru: status, persen progres, biaya yang sudah keluar & rinciannya per komponen, tombol ke Anggaran'],
         'dashboard-biaya-dt' => ['Dashboard Biaya DT', 'dashboard.biaya-dt', ['dashboard.biaya-dt'], 'Biaya dump truck per bulan & per kategori (Kas UJ + Kas Harian ber-No Mobil), per DT, jumlah rit & biaya per rit, rincian transaksi per truk'],
         'dashboard-performa-dt' => ['Dashboard Laba Rugi DT', 'dashboard.performa-dt', ['dashboard.performa-dt', 'dashboard.performa-dt.*'], 'Laba rugi per dump truck: harga jual rit (lembar Ritasi) dikurangi biaya langsung truk (Kas UJ, Kas Harian, BCA ber-DT); buka DT → pendapatan per proyek, biaya per kategori & semua transaksinya'],
         'dashboard-hm-km' => ['Dashboard HM & KM', 'dashboard.hm-km', ['dashboard.hm-km', 'dashboard.hm-km.*'], 'HM alat berat (otomatis dari Data BBM), KM dump truck, dan HM / KM kendaraan & aset lain: angka terakhir, kapan dicatat, pemakaian per bulan & rata-rata per hari, riwayat per unit (hanya melihat)'],
