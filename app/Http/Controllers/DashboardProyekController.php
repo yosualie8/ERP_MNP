@@ -9,7 +9,7 @@ use App\Support\Overhead;
 use Illuminate\View\View;
 
 /**
- * Dashboard Progres Proyek: tahap berstatus Progress — persen progres (fisik: kubikasi bongkaran ÷ m³ HPP tanah; bila belum
+ * Dashboard Progres Proyek: semua tahap tanpa saring status (owner 19 Nov 2026), urut aktivitas awal terbaru — persen progres (fisik: kubikasi bongkaran ÷ m³ HPP tanah; bila belum
  * ada baris tanah m³: serapan biaya), biaya yang sudah keluar (realisasi HPP) & rinciannya per komponen.
  */
 class DashboardProyekController extends Controller
@@ -19,7 +19,7 @@ class DashboardProyekController extends Controller
         [$ritasi, $kas, $bbm] = [DaftarProyek::ritasi(), DaftarProyek::kas(), DaftarProyek::bbm()];
         $overhead = Overhead::teralokasi();
         $rincianOh = Overhead::rincianTeralokasi();
-        $tahap = ProyekTahap::with(['proyek', 'anggaran.komponen'])->where('status', 'progress')->whereNull('pos_overhead')->where('tipe', '!=', 'biaya')->get();
+        $tahap = ProyekTahap::with(['proyek', 'anggaran.komponen'])->whereNull('pos_overhead')->where('tipe', '!=', 'biaya')->get();
         // Transaksi Kas Harian yang jelas untuk tahap ini (alokasi / Kode GL tahap), tanpa akun yang diabaikan (HPP ritasi, BBM, sparepart, DT).
         $trx = Anggaran::transaksiKas($tahap->pluck('id')->all());
         $baris = $tahap
@@ -53,7 +53,8 @@ class DashboardProyekController extends Controller
                     'overheadBulan' => $rincianOh[$t->id] ?? [],
                 ];
             })
-            ->sortBy(fn ($x) => [$x->t->proyek->urutan, (int) preg_replace('/\D/', '', $x->t->nama) ?: 99999, $x->t->nama])->values();
+            // aktivitas awal terbaru di atas; tahap tanpa aktivitas di bawah
+            ->sort(fn ($a, $b) => [$b->awal !== null, $b->awal, $a->t->proyek->urutan, $a->t->nama] <=> [$a->awal !== null, $a->awal, $b->t->proyek->urutan, $b->t->nama])->values();
 
         return view('dashboard.proyek', ['baris' => $baris]);
     }

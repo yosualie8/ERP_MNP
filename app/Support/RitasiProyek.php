@@ -21,10 +21,52 @@ class RitasiProyek
 {
     private static array $cache = [];
 
+    /** @var list<string>|null nama tahap di Ritasi (distinct), dipakai ulang selama satu permintaan */
+    private static ?array $namaRitasi = null;
+
+    /** @var array|null Kas UJ sejak tanggal tertentu + indeks per DO / id UJ / kata kunci, dipakai ulang semua tahap dalam satu permintaan */
+    private static ?array $ujMemo = null;
+
+    /** Nama tahap di lembar Ritasi yang dialiaskan ke tahap ini. */
+    private static function namaTahap(ProyekTahap $t): \Illuminate\Support\Collection
+    {
+        self::$namaRitasi ??= Ritasi::distinct()->pluck('tahap')->all();
+
+        return collect(self::$namaRitasi)->filter(fn ($n) => DaftarProyek::tahapId('ritasi', $n) === $t->id)->values();
+    }
+
+    /**
+     * Kas UJ sejak $mulai, dimuat SEKALI per permintaan (dashboard / ringkasan Anggaran menghitung ±20 tahap ritasi; dulu tiap tahap
+     * memuat ulang ±17 rb baris & menyaringnya — 13 detik, owner 19 Nov 2026). Dimuat ulang hanya bila diminta tanggal lebih awal.
+     */
+    private static function ujMemo(string $mulai): array
+    {
+        if (self::$ujMemo === null || $mulai < self::$ujMemo['mulai']) {
+            $m = ['mulai' => $mulai, 'rows' => [], 'do' => [], 'id' => [], 'jalan' => []];
+            // baris mentah (array), bukan model: 17 rb model Eloquent ±40 MB, PHP-FPM produksi dibatasi 128 MB
+            $rows = UjDetail::where('tanggal', '>=', $mulai)->toBase()->get(['id_uj', 'tanggal', 'nama', 'keterangan', 'nominal', 'kategori', 'no_mobil', 'no_do'])
+                ->map(fn ($r) => (array) $r)->all();
+            foreach ($rows as $i => $a) {
+                $d = ltrim(trim((string) $a['no_do']), '0');
+                if ($d !== '') {
+                    $m['do'][$d][] = $i;
+                }
+                $m['id'][(string) $a['id_uj']][] = $i;
+                if (in_array($a['kategori'], ['Uang Jalan', 'Uang MOB'], true)) {
+                    $m['jalan'][] = [$i, (string) $a['keterangan'], $d];
+                }
+            }
+            $m['rows'] = $rows;
+            self::$ujMemo = $m;
+        }
+
+        return self::$ujMemo;
+    }
+
     /** Omset realisasi saja (dasar pembagian biaya umum — tanpa memanggil Overhead supaya tidak berputar). */
     public static function omset(ProyekTahap $t): float
     {
-        $nama = Ritasi::distinct()->pluck('tahap')->filter(fn ($n) => DaftarProyek::tahapId('ritasi', $n) === $t->id)->values();
+        $nama = self::namaTahap($t);
         $urug = Ritasi::whereIn('tahap', $nama)->whereRaw("LOWER(COALESCE(jenis_buangan, '')) <> 'ngepok'");
 
         return $t->dasar_bayar === 'rit' ? $urug->count() * (float) $t->harga_rit : (float) $urug->sum('kubikasi') * (float) $t->harga_m3;
@@ -36,7 +78,7 @@ class RitasiProyek
             return self::$cache[$t->id];
         }
         $do = fn ($v) => ltrim(trim((string) $v), '0');
-        $nama = Ritasi::distinct()->pluck('tahap')->filter(fn ($n) => DaftarProyek::tahapId('ritasi', $n) === $t->id)->values();
+        $nama = self::namaTahap($t);
         $rit = Ritasi::whereIn('tahap', $nama)->orderBy('tanggal')->orderBy('baris')->get(['tanggal', 'no_do', 'kubikasi', 'jenis_buangan', 'no_seri']);
         $urug = $rit->reject(fn ($r) => strcasecmp((string) $r->jenis_buangan, 'Ngepok') === 0);
         $ritDo = $rit->map(fn ($r) => $do($r->no_do))->filter()->flip();
@@ -76,8 +118,39 @@ class RitasiProyek
         // Dialihkan SEBAGIAN (mis. Uang MOB PIK→Kendal Rp2,1 jt yang sudah termasuk UJ rit pertama: hanya Rp270rb UJ-nya yang gantung):
         // sisanya tetap biaya tahap ini, dan UJ itu tidak lagi dihitung belum bongkar.
         $sebagian = [];
-        $uj = UjDetail::where('tanggal', '>=', $mulai)->orWhereIn('id_uj', $alih->keys()->filter()->all() ?: ['-'])
-            ->get(['id_uj', 'tanggal', 'nama', 'keterangan', 'nominal', 'kategori', 'no_mobil', 'no_do'])
+        // Kas UJ tanggal >= $mulai ATAU UJ saldo sopir yang masuk. Hanya baris yang mungkin terpakai di bawah yang diambil dari memo:
+        // DO-nya bongkar di sini / dialihkan keluar / milik UJ berkata kunci, UJ jalan / MOB berkata kunci, dan id UJ yang dialihkan.
+        // Model dibuat baru per tahap dari baris memo, jadi nominal yang diubah (dialihkan) tidak terbawa ke tahap lain.
+        $memo = self::ujMemo($mulai);
+        $pilih = [];
+        $doCari = $ritDo->all() + $doKeluar;
+        if ($kata) {
+            foreach ($memo['jalan'] as [$i, $ket, $d]) {
+                if (preg_match("/\b({$kata})\b/i", $ket)) {
+                    $pilih[$i] = true;
+                    if ($d !== '') {
+                        $doCari[$d] = true;
+                    }
+                }
+            }
+        }
+        foreach (array_keys($doCari) as $d) {
+            foreach ($memo['do'][$d] ?? [] as $i) {
+                $pilih[$i] = true;
+            }
+        }
+        foreach ($keluar->keys()->merge($alih->keys())->filter() as $id) {
+            foreach ($memo['id'][(string) $id] ?? [] as $i) {
+                $pilih[$i] = true;
+            }
+        }
+        ksort($pilih);
+        $lama = $alih->isEmpty() ? [] : UjDetail::whereIn('id_uj', $alih->keys()->filter()->all() ?: ['-'])
+            ->where(fn ($q) => $q->whereNull('tanggal')->orWhere('tanggal', '<', $memo['mulai']))
+            ->get(['id_uj', 'tanggal', 'nama', 'keterangan', 'nominal', 'kategori', 'no_mobil', 'no_do'])->all();
+        $uj = UjDetail::hydrate(array_values(array_filter(array_map(fn ($i) => $memo['rows'][$i], array_keys($pilih)),
+            fn ($a) => isset($alih[$a['id_uj']]) || substr((string) $a['tanggal'], 0, 10) >= $mulai)))
+            ->concat($lama)
             ->reject(function ($u) use ($keluar, $alih, &$sebagian) {
                 if (isset($alih[$u->id_uj])) {
                     // di tahap tujuan hanya bagian yang dialihkan yang dihitung

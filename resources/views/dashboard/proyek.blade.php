@@ -44,7 +44,8 @@
     </style>
 
     <div class="dash-kartu">
-        <div class="kartu"><h4>Tahap berstatus progress</h4><div class="angka-besar">{{ $baris->count() }}</div>
+        <div class="kartu"><h4>Semua tahap</h4><div class="angka-besar">{{ $baris->count() }}</div>
+            <div class="dash-baris"><span>Progress · belum mulai · selesai · batal</span><b>{{ collect(['progress', 'belum', 'selesai', 'batal'])->map(fn ($s) => $baris->filter(fn ($x) => $x->t->status === $s)->count())->implode(' · ') }}</b></div>
             <div class="dash-baris"><span>Sudah punya anggaran</span><b>{{ $baris->where('ada', true)->count() }}</b></div>
             <div class="dash-baris"><span>Dengan progres fisik</span><b>{{ $denganFisik->count() }}</b></div></div>
         <div class="kartu"><h4>Biaya sudah keluar</h4><div class="angka-besar">{{ rp((int) round($totReal)) }}</div>
@@ -64,7 +65,7 @@
     </div>
     <div class="kartu gulir bulat" style="padding: 0;">
         <table class="grid" id="grid" data-saring-kolom>
-            <thead><tr><th>Tahap</th><th style="width: 190px;">Progres</th><th class="angka">Biaya keluar</th><th class="angka">HPP rencana</th><th class="angka">Serapan biaya</th><th>Aktivitas awal</th><th>Aktivitas terakhir</th><th data-tanpa-saring style="width: 90px;"></th></tr></thead>
+            <thead><tr><th>Tahap</th><th>Status</th><th style="width: 190px;">Progres</th><th class="angka">Biaya keluar</th><th class="angka">HPP rencana</th><th class="angka">Serapan biaya</th><th>Aktivitas awal</th><th>Aktivitas terakhir</th><th data-tanpa-saring style="width: 90px;"></th></tr></thead>
             <tbody>
                 @foreach ($baris as $x)
                     @php
@@ -75,6 +76,7 @@
                     <tr class="m">
                         <td data-v="{{ $x->t->nama }} {{ $x->t->proyek->nama }} {{ $x->t->lokasi }} {{ $x->t->surveyor }}"><span class="panah">▸</span> <b>{{ $x->t->nama }}</b> <span class="redup" style="font-size: 11px;">· {{ $x->t->proyek->nama }}</span>
                             <div style="padding-left: 16px;">@include('proyek._sub', ['t' => $x->t])</div></td>
+                        <td style="white-space: nowrap;">{{ \App\Models\ProyekTahap::STATUS[$x->t->status] ?? $x->t->status }}</td>
                         <td data-n="{{ $p }}" data-v="{{ $persen($p) }}" title="{{ $x->fisik !== null ? $x->fisikKet : ($p !== null ? 'serapan biaya — belum ada dasar progres fisik' : 'belum ada anggaran') }}">
                             @if (isset($x->ritasi))
                                 @php($rr = $x->ritasi)
@@ -97,7 +99,7 @@
                             @if ($x->boq && auth()->user()->bolehMenu('boq-proyek'))<a href="{{ route('boq.index', ['tahap' => $x->t->id]) }}" class="tombol-edit" style="margin-top: 4px; display: inline-block;">BOQ</a>@endif</td>
                     </tr>
                     <tr class="d">
-                        <td colspan="8">
+                        <td colspan="9">
                             <table class="rinci">
                                 <tr><th>Komponen</th><th class="angka">Rencana</th><th class="angka">Realisasi</th><th class="angka">Rencana (Rp)</th><th class="angka">Biaya keluar (Rp)</th><th class="angka">% terpakai</th></tr>
                                 @forelse ($x->rincian as $k)
