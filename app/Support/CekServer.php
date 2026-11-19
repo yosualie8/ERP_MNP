@@ -35,6 +35,8 @@ class CekServer
                 $masalah[] = "{$lama->count()} {$label} ({$mb} MB) tertahan di server lebih dari ".self::BATAS_MENIT_FOTO.' menit — unggahan ke Google Drive macet (cek koneksi Google Drive foto di Beranda).';
             }
         }
+        // Cadangan Google Drive (owner 19 Nov 2026): cadangan database basi / uji pulih gagal atau terlewat.
+        array_push($masalah, ...CadanganDrive::masalah());
 
         return ['disk' => $disk, 'masalah' => $masalah];
     }

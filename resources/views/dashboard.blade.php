@@ -35,6 +35,11 @@
         @endforeach
         <p class="redup" style="margin: 0 0 10px; font-size: 13px;">💾 Disk server: {{ $server['disk']['terpakai'] }} GB dari {{ $server['disk']['total'] }} GB terpakai
             · sisa {{ $server['disk']['sisa'] }} GB ({{ $server['disk']['persen_sisa'] }}%) — peringatan muncul di sini bila sisa &lt; {{ \App\Support\CekServer::BATAS_PERSEN }}%.</p>
+        @php($cadangan = \App\Support\CadanganDrive::status())
+        <p class="redup" style="margin: -6px 0 10px; font-size: 13px;">☁ Cadangan Google Drive (folder pribadi „{{ \App\Support\CadanganDrive::NAMA_AKAR }}” akun perusahaan):
+            database {{ isset($cadangan['db_berhasil']) ? \Carbon\Carbon::parse($cadangan['db_berhasil']['waktu'])->translatedFormat('j M H:i').' ('.$cadangan['db_berhasil']['mb'].' MB)' : 'belum ada' }}
+            · file + .env {{ isset($cadangan['file_berhasil']) ? \Carbon\Carbon::parse($cadangan['file_berhasil']['waktu'])->translatedFormat('j M H:i').' ('.$cadangan['file_berhasil']['mb'].' MB)' : 'belum ada' }}
+            · uji pulih {{ isset($cadangan['uji']) ? \Carbon\Carbon::parse($cadangan['uji']['waktu'])->translatedFormat('j M H:i').(($cadangan['uji']['lulus'] ?? false) ? ' ✓ lulus ('.($cadangan['uji']['db']['tabel'] ?? '?').' tabel, '.number_format($cadangan['uji']['db']['baris'] ?? 0, 0, ',', '.').' baris)' : ' ✗ gagal') : 'belum pernah' }}.</p>
     @endif
     @if ($bulanTerakhir)
         <div class="kartu">

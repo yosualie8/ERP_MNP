@@ -39,6 +39,11 @@ class Kernel extends ConsoleKernel
         $schedule->command('mnp:isi-rekening')->hourlyAt(20)->withoutOverlapping();
         // Sisa disk & foto yang tertahan (unggahan Drive macet) — peringatan di Beranda Super Admin + riwayat.
         $schedule->command('mnp:cek-server')->hourlyAt(40)->withoutOverlapping();
+        // Cadangan ke folder pribadi "Cadangan ERP MNP" di Google Drive perusahaan (owner 19 Nov 2026): database tiap malam,
+        // file aplikasi + .env tiap Minggu; Senin dini hari cadangan terbaru diunduh lagi dari Drive dan diuji pulih ke database mnp_uji.
+        $schedule->command('mnp:cadangan-drive')->dailyAt('02:30')->days([1, 2, 3, 4, 5, 6])->withoutOverlapping(120);
+        $schedule->command('mnp:cadangan-drive --file')->sundays()->at('02:30')->withoutOverlapping(120);
+        $schedule->command('mnp:uji-cadangan')->mondays()->at('03:30')->withoutOverlapping(120);
         // Penawaran terkirim & SPK masuk baru dari Gmail MNP (SPK di-OCR) → menu Penawaran & SPK + banner Beranda.
         $schedule->command('mnp:sinkron-gmail')->everyFifteenMinutes()->withoutOverlapping(30);
     }
