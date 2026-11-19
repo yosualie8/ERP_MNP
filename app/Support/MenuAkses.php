@@ -55,6 +55,8 @@ class MenuAkses
         'kubikasi-kendaraan' => ['Kubikasi Kendaraan', 'kubikasi.index', ['kubikasi.*'], 'Kubikasi standar per jenis kendaraan (nilai awal kolom Kubikasi saat input ritasi)'],
         'input-bbm' => ['Input BBM & HM', 'bbm.input', ['bbm.input', 'bbm.store', 'bbm.edit', 'bbm.update', 'bbm.hapus', 'bbm.opname'], 'Input, edit & hapus pemakaian / solar masuk dan stock opname (ditulis ke sheet Penggunaan BBM)'],
         'dashboard-bbm' => ['Dashboard BBM & HM', 'bbm.dashboard', ['bbm.dashboard'], 'Tren konsumsi solar & jam HM proyek dan per alat, rasio liter/jam, kelengkapan data HM'],
+        // Owner 19 Nov 2026: isi N liter → N liter solar keluar terakhir habis ke mana (unit, proyek, jenis).
+        'dashboard-penggunaan-bbm' => ['Dashboard Penggunaan BBM', 'bbm.penggunaan', ['bbm.penggunaan'], 'Isi jumlah liter (mis. 1.000) → riwayat N liter solar keluar terakhir habis ke mana: per unit, per proyek, per jenis, dan rincian tiap isi'],
         'bbm' => ['Data BBM & HM', 'bbm.index', ['bbm.index'], 'Penggunaan BBM per bulan: pemakaian per unit, solar masuk, stok solar, baris yang perlu dilengkapi'],
         'absen' => ['Lapor Lapangan', 'lapor.index', ['absen.index', 'lapor.index', 'lapor.simpan', 'lapor.cek'], 'Kirim foto absen, laporan kerja & kejadian lapangan (banyak foto, kamera depan/belakang atau galeri) — sistem yang memilah masuk, pulang, lembur & progres'],
         // Data Absensi & Data Lapor Lapangan disatukan (owner 19 Okt 2026) — kunci 'absensi' dipertahankan supaya hak akses jabatan tetap.
@@ -84,7 +86,7 @@ class MenuAkses
     /** Kelompok menu di sidebar: kunci => [judul, ikon, menu di dalamnya]. */
     public const KATEGORI = [
         'asisten' => ['Asisten AI', '🤖', ['tanya-ai']],
-        'dashboard' => ['Dashboard', '📊', ['dashboard-proyek', 'dashboard-biaya-dt', 'dashboard-performa-dt', 'dashboard-bbm', 'dashboard-hm-km', 'dashboard-aktivitas']],
+        'dashboard' => ['Dashboard', '📊', ['dashboard-proyek', 'dashboard-biaya-dt', 'dashboard-performa-dt', 'dashboard-bbm', 'dashboard-penggunaan-bbm', 'dashboard-hm-km', 'dashboard-aktivitas']],
         'proyek' => ['Proyek', '🏗️', ['daftar-proyek', 'kebutuhan-material', 'penawaran-spk', 'anggaran-proyek', 'pilah-transaksi', 'boq-proyek', 'alokasi-overhead', 'komponen-anggaran', 'pengaturan-proyek']],
         'kas' => ['Kas Harian', '🏦', ['input-kas', 'kas-harian', 'validasi-reimburse', 'riwayat-reimburse', 'kas-belum-reimburse', 'rekap', 'mutasi-jago', 'jago-catatan', 'mutasi-pt', 'kode-gl', 'daftar-rekening']],
         'uj' => ['Uang Jalan', '🚚', ['pengajuan-uj', 'ajukan-uj', 'input-uj', 'kas-uj', 'reimburse-uj', 'pengalihan-uj', 'rapikan-uj']],

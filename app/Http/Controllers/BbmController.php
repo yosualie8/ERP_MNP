@@ -195,6 +195,83 @@ class BbmController extends Controller
         ]);
     }
 
+    /**
+     * Dashboard Penggunaan BBM (owner 19 Nov 2026): owner mengisi N liter (bawaan 1.000) → N liter solar KELUAR terakhir habis ke mana.
+     * Ditelusuri mundur dari isian terbaru (tanggal lalu baris) semua baris ber-liter keluar: pemakaian aset, pindah lokasi, susut,
+     * kendaraan operasional, dan selisih stock opname. Baris paling lama yang melewati N hanya dihitung sebagian supaya total = N.
+     */
+    public function penggunaan(Request $request): View
+    {
+        $isian = trim((string) $request->query('liter', '1000'));
+        // "1.000" / "2.500" (titik ribuan) atau "1000,5" (koma desimal)
+        $angka = preg_match('/^\d{1,3}(\.\d{3})+(,\d+)?$/', $isian) ? str_replace(['.', ','], ['', '.'], $isian) : str_replace(',', '.', $isian);
+        $target = is_numeric($angka) ? (float) $angka : 1000.0;
+        $target = round(max(1, min(500000, $target)), 1);
+
+        $kategori = AsetTruk::pluck('kategori', 'no_lambung');
+        $namaTahap = ProyekTahap::pluck('nama', 'id');
+        $rinci = [];
+        $sisa = $target;
+        $kumulatif = 0.0;
+        $query = Bbm::where('keluar', '>', 0)->whereNotNull('tanggal')->orderByDesc('tanggal')->orderByDesc('baris')
+            ->select(['baris', 'tanggal', 'unit', 'jenis', 'keluar', 'total_hm', 'proyek', 'tahap_ids', 'keterangan', 'keterangan_kerja']);
+        foreach ($query->cursor() as $b) {
+            $dihitung = round(min((float) $b->keluar, $sisa), 1);
+            $kumulatif += $dihitung;
+            $sisa = round($sisa - $dihitung, 1);
+            // proyek: nama tahap dari Daftar Proyek; bila belum dipetakan, tulisan PROYEK di sheet ("A + B" = gabungan)
+            $proyek = collect($b->tahap_ids ?: [])->map(fn ($id) => $namaTahap[$id] ?? null)->filter()->values()->all();
+            if (! $proyek && $b->proyek) {
+                $proyek = array_values(array_filter(array_map('trim', explode(' + ', $b->proyek))));
+            }
+            $kat = $b->jenis === 'pakai' ? (AsetTruk::KATEGORI[$kategori[$b->unit] ?? ''] ?? 'Lainnya') : null;
+            $rinci[] = [
+                'baris' => $b->baris, 'tanggal' => $b->tanggal->toDateString(), 'unit' => $b->unit ?: '(tanpa unit)', 'jenis' => $b->jenis,
+                'kelompok' => $b->jenis === 'pakai' ? 'Pemakaian — '.$kat : (BbmUnitPeta::JENIS[$b->jenis] ?? $b->jenis),
+                'kategori' => $kat, 'proyek' => $proyek, 'liter' => (float) $b->keluar, 'dihitung' => $dihitung, 'kumulatif' => round($kumulatif, 1),
+                'hm' => $b->total_hm > 0 && $b->total_hm <= 24 ? (float) $b->total_hm : null,
+                'keterangan' => trim(implode(' · ', array_filter([$b->keterangan_kerja, $b->keterangan]))),
+            ];
+            if ($sisa <= 0) {
+                break;
+            }
+        }
+
+        $total = round($kumulatif, 1);
+        $kelompok = fn (string $kunci) => collect($rinci)->groupBy($kunci)
+            ->map(fn ($g, $k) => ['nama' => $k, 'liter' => round($g->sum('dihitung'), 1), 'kali' => $g->count()])->sortByDesc('liter')->values();
+        // per proyek: baris gabungan beberapa proyek dibagi rata
+        $perProyek = [];
+        foreach ($rinci as $r) {
+            $daftar = $r['proyek'] ?: ['(tanpa proyek)'];
+            foreach ($daftar as $p) {
+                $perProyek[$p]['nama'] = $p;
+                $perProyek[$p]['liter'] = ($perProyek[$p]['liter'] ?? 0) + $r['dihitung'] / count($daftar);
+                $perProyek[$p]['kali'] = ($perProyek[$p]['kali'] ?? 0) + 1;
+                $perProyek[$p]['unit'][$r['unit']] = true;
+            }
+        }
+        $perProyek = collect($perProyek)->map(fn ($x) => [...$x, 'liter' => round($x['liter'], 1), 'unit' => array_keys($x['unit'])])->sortByDesc('liter')->values();
+        $perUnit = collect($rinci)->groupBy('unit')->map(fn ($g, $u) => [
+            'nama' => $u, 'kelompok' => $g->first()['kategori'] ?? (BbmUnitPeta::JENIS[$g->first()['jenis']] ?? $g->first()['jenis']),
+            'liter' => round($g->sum('dihitung'), 1), 'kali' => $g->count(), 'hm' => round($g->sum('hm'), 1),
+            'proyek' => $g->pluck('proyek')->flatten()->unique()->values()->all(),
+        ])->sortByDesc('liter')->values();
+
+        $awal = $rinci ? end($rinci)['tanggal'] : null;
+        $akhir = $rinci ? $rinci[0]['tanggal'] : null;
+        $hari = $awal ? Carbon::parse($awal)->diffInDays(Carbon::parse($akhir)) + 1 : 0;
+
+        return view('bbm.penggunaan', [
+            'target' => $target, 'total' => $total, 'kurang' => $sisa > 0, 'rinci' => $rinci,
+            'perKelompok' => $kelompok('kelompok'), 'perUnit' => $perUnit, 'perProyek' => $perProyek,
+            'awal' => $awal, 'akhir' => $akhir, 'hari' => $hari,
+            'masuk' => $awal ? (float) Bbm::where('jenis', 'masuk')->whereBetween('tanggal', [$awal, $akhir])->sum('masuk') : 0,
+            'stok' => Bbm::whereNotNull('stok')->orderByDesc('baris')->value('stok'),
+            'bolehData' => $request->user()->bolehMenu('bbm'),
+        ]);
+    }
+
     /** Nama unit master + info terakhirnya (jenis, HM akhir, proyek) untuk mengisi otomatis. */
     private function infoUnit(): array
     {
