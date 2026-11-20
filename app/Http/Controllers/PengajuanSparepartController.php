@@ -35,8 +35,10 @@ class PengajuanSparepartController extends Controller
 
     public function index(Request $request): View
     {
-        $status = array_key_exists($request->query('status'), PengajuanSparepart::STATUS) ? $request->query('status') : null;
-        $semua = PengajuanSparepart::query()->with(['pembuat:id,name', 'pemutus:id,name', 'detail:id,pengajuan_sparepart_id,progres'])->withCount(['detail', 'foto'])
+        // Owner 20 Nov 2026: pengajuan Dibatalkan disembunyikan dari daftar (membingungkan Admin Plant — status barangnya terkunci);
+        // detailnya tetap bisa dibuka lewat tautan langsung.
+        $status = $request->query('status') !== 'batal' && array_key_exists($request->query('status'), PengajuanSparepart::STATUS) ? $request->query('status') : null;
+        $semua = PengajuanSparepart::query()->where('status', '!=', 'batal')->with(['pembuat:id,name', 'pemutus:id,name', 'detail:id,pengajuan_sparepart_id,progres'])->withCount(['detail', 'foto'])
             ->orderByDesc('tanggal')->orderByDesc('id')->get();
 
         return view('pengajuan-sparepart.index', [
